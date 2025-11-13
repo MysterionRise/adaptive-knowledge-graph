@@ -1,6 +1,7 @@
 """
 Test Poetry configuration and dependency resolution.
 """
+
 import subprocess
 from pathlib import Path
 

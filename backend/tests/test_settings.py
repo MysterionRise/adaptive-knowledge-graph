@@ -1,7 +1,6 @@
 """
 Test configuration and settings.
 """
-import pytest
 
 from backend.app.core.settings import Settings
 

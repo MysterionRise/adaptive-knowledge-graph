@@ -1,8 +1,6 @@
 """
 Test logging configuration.
 """
-import sys
-from pathlib import Path
 
 import pytest
 from loguru import logger

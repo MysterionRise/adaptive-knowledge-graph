@@ -1,6 +1,7 @@
 """
 Test Docker configuration and builds.
 """
+
 from pathlib import Path
 
 import pytest

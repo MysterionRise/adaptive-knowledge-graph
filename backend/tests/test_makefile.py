@@ -1,10 +1,9 @@
 """
 Test Makefile commands are valid and executable.
 """
+
 import subprocess
 from pathlib import Path
-
-import pytest
 
 
 def run_make_target(target: str, check: bool = False) -> subprocess.CompletedProcess:

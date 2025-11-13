@@ -1,6 +1,7 @@
 """
 Application settings and configuration.
 """
+
 from typing import Literal
 
 from pydantic import Field
