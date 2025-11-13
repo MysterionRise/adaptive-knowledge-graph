@@ -72,6 +72,10 @@ pre-commit = "^3.6.0"
 # Type stubs
 types-beautifulsoup4 = "^4.12.0"
 types-requests = "^2.31.0"
+types-toml = "^0.10.8"
+
+# Testing utilities
+toml = "^0.10.2"
 
 # Jupyter for evaluation
 jupyter = "^1.0.0"
@@ -154,6 +158,11 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --cov=backend/app --cov-report=term-missing"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
 
 [tool.coverage.run]
 source = ["backend/app"]

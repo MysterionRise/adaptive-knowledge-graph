@@ -1,0 +1,64 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist
+build
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.coverage
+htmlcov/
+.tox/
+
+# Documentation
+*.md
+docs/
+
+# CI/CD
+.github/
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data (will be mounted as volumes)
+data/raw/*
+data/processed/*
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Misc
+.DS_Store
+*.bak
+*.tmp
