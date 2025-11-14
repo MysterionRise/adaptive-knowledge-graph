@@ -68,7 +68,7 @@ pytest-mock = "^3.12.0"
 # Code quality
 ruff = "^0.2.0"
 mypy = "^1.8.0"
-pre-commit = "^3.6.0"
+pre-commit = "^4.4.0"
 
 # Type stubs
 types-beautifulsoup4 = "^4.12.0"
