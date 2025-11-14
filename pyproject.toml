@@ -8,7 +8,7 @@ license = "MIT"
 packages = [{include = "backend"}]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.15"
+python = ">=3.10,<3.14"
 # Web framework
 fastapi = "^0.109.0"
 uvicorn = {extras = ["standard"], version = "^0.27.0"}
