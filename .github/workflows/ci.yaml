@@ -39,10 +39,10 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root
+        run: poetry install --no-interaction --no-root --without pyirt,pybkt
 
       - name: Install project
-        run: poetry install --no-interaction
+        run: poetry install --no-interaction --without pyirt,pybkt
 
       - name: Run ruff linting
         run: poetry run ruff check backend/ scripts/
@@ -78,10 +78,10 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root
+        run: poetry install --no-interaction --no-root --without pyirt,pybkt
 
       - name: Install project
-        run: poetry install --no-interaction
+        run: poetry install --no-interaction --without pyirt,pybkt
 
       - name: Run mypy
         run: poetry run mypy backend/app scripts/ || true  # Allow to pass for now
@@ -117,10 +117,10 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root
+        run: poetry install --no-interaction --no-root --without pyirt,pybkt
 
       - name: Install project
-        run: poetry install --no-interaction
+        run: poetry install --no-interaction --without pyirt,pybkt
 
       - name: Run tests with coverage
         run: poetry run pytest --cov=backend/app --cov-report=xml --cov-report=term
