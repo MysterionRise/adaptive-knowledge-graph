@@ -123,6 +123,7 @@ def test_poetry_check():
         capture_output=True,
         text=True,
     )
-    # This might fail if poetry isn't installed, which is ok in CI
-    if result.returncode == 0:
-        assert "All set!" in result.stdout
+    # Poetry check should return 0 for valid config
+    # Poetry 1.x outputs "All set!" to stdout
+    # Poetry 2.x outputs warnings to stderr but still returns 0
+    assert result.returncode == 0, f"poetry check failed: {result.stderr}"

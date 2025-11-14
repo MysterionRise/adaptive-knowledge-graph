@@ -7,15 +7,15 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install production dependencies (excluding optional groups)
-	poetry install --no-root --only main --without pyirt,pybkt
+	poetry install --only main --without pyirt,pybkt
 
 install-dev: ## Install all dependencies including dev tools (excluding optional groups)
-	poetry install --no-root --without pyirt,pybkt
+	poetry install --without pyirt,pybkt
 	poetry run pre-commit install
 
 install-student: ## Install optional student modeling dependencies (requires Python 3.11)
 	@echo "⚠️  Note: pyBKT and py-irt require Python 3.11 specifically"
-	poetry install --no-root --with pybkt --with pyirt
+	poetry install --with pybkt --with pyirt
 
 test: ## Run tests with coverage
 	poetry run pytest

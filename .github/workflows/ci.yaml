@@ -48,7 +48,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root --without pyirt,pybkt
+        run: poetry install --no-interaction --without pyirt,pybkt
         env:
           PIP_DEFAULT_TIMEOUT: 100
           PIP_RETRIES: 5
@@ -96,7 +96,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root --without pyirt,pybkt
+        run: poetry install --no-interaction --without pyirt,pybkt
         env:
           PIP_DEFAULT_TIMEOUT: 100
           PIP_RETRIES: 5
@@ -144,7 +144,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root --without pyirt,pybkt
+        run: poetry install --no-interaction --without pyirt,pybkt
         env:
           PIP_DEFAULT_TIMEOUT: 100
           PIP_RETRIES: 5
@@ -259,7 +259,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root --without pyirt,pybkt
+        run: poetry install --no-interaction --without pyirt,pybkt
         env:
           PIP_DEFAULT_TIMEOUT: 100
           PIP_RETRIES: 5
