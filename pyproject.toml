@@ -35,7 +35,7 @@ qdrant-client = "^1.7.3"
 
 # LLM Integration
 outlines = "^0.0.34"
-instructor = "^0.5.0"
+instructor = "^1.11.3"
 openai = "^1.10.0"  # For OpenRouter compatibility
 
 # Student Modeling
