@@ -21,8 +21,8 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock* ./
+# Copy dependency files and README (required by Poetry)
+COPY pyproject.toml poetry.lock* README.md ./
 
 # Install dependencies with GPU support
 RUN poetry config virtualenvs.create false \

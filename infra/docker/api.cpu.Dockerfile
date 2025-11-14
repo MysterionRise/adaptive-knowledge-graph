@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y \
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock* ./
+# Copy dependency files and README (required by Poetry)
+COPY pyproject.toml poetry.lock* README.md ./
 
 # Install dependencies (CPU versions)
 RUN poetry config virtualenvs.create false \
