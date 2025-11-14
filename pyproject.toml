@@ -5,7 +5,7 @@ description = "PoC Adaptive Knowledge Graph in Education using local LLMs and Op
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
 license = "MIT"
-package-mode = false
+packages = []
 
 [tool.poetry.dependencies]
 python = "^3.11"
