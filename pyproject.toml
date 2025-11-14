@@ -52,7 +52,7 @@ pydantic = "^2.6.0"
 pydantic-settings = "^2.1.0"
 
 # Utilities
-httpx = "^0.26.0"
+httpx = "^0.28.1"
 aiohttp = "^3.9.3"
 python-dotenv = "^1.0.1"
 loguru = "^0.7.2"
