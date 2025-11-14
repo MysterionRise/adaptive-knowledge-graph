@@ -109,7 +109,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -143,29 +143,13 @@ jobs:
           key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        run: |
-          # For Python 3.8-3.10, some packages might need special handling
-          if [[ "${{ matrix.python-version }}" == "3.8" ]] || \
-             [[ "${{ matrix.python-version }}" == "3.9" ]] || \
-             [[ "${{ matrix.python-version }}" == "3.10" ]]; then
-            echo "Installing dependencies for Python ${{ matrix.python-version }}"
-            poetry install --no-interaction --without pyirt,pybkt || poetry install --no-interaction --only main,dev --without pyirt,pybkt || true
-          else
-            poetry install --no-interaction --without pyirt,pybkt
-          fi
+        run: poetry install --no-interaction --without pyirt,pybkt
         env:
           PIP_DEFAULT_TIMEOUT: 100
           PIP_RETRIES: 5
-        continue-on-error: ${{ matrix.python-version == '3.8' || matrix.python-version == '3.9' || matrix.python-version == '3.10' }}
 
       - name: Run tests with coverage
-        run: |
-          if poetry run pytest --version > /dev/null 2>&1; then
-            poetry run pytest --cov=backend/app --cov-report=xml --cov-report=term || echo "Tests failed or dependencies not fully installed"
-          else
-            echo "Pytest not available, skipping tests for Python ${{ matrix.python-version }}"
-          fi
-        continue-on-error: ${{ matrix.python-version == '3.8' || matrix.python-version == '3.9' || matrix.python-version == '3.10' }}
+        run: poetry run pytest --cov=backend/app --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

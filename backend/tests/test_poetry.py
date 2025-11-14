@@ -80,7 +80,7 @@ def test_ruff_configuration():
     assert "ruff" in data["tool"]
     ruff_config = data["tool"]["ruff"]
     assert "line-length" in ruff_config
-    assert ruff_config["target-version"] == "py311"
+    assert ruff_config["target-version"] == "py310"
 
 
 def test_mypy_configuration():
@@ -90,7 +90,7 @@ def test_mypy_configuration():
 
     assert "mypy" in data["tool"]
     mypy_config = data["tool"]["mypy"]
-    assert mypy_config["python_version"] == "3.11"
+    assert mypy_config["python_version"] == "3.10"
 
 
 def test_pytest_configuration():
