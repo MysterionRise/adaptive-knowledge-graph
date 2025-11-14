@@ -91,14 +91,16 @@ optional = true
 
 [tool.poetry.group.pyirt.dependencies]
 # IRT modeling - optional due to potential conflicts
-py-irt = {git = "https://github.com/nd-ball/py-irt.git"}
+# Requires Python 3.11 specifically (incompatible with 3.12+)
+py-irt = {git = "https://github.com/nd-ball/py-irt.git", python = ">=3.11,<3.12"}
 
 [tool.poetry.group.pybkt]
 optional = true
 
 [tool.poetry.group.pybkt.dependencies]
 # BKT modeling - optional
-pyBKT = {git = "https://github.com/CAHLR/pyBKT.git"}
+# Requires Python 3.11 specifically (incompatible with 3.12+)
+pyBKT = {git = "https://github.com/CAHLR/pyBKT.git", python = ">=3.11,<3.12"}
 
 [build-system]
 requires = ["poetry-core"]
