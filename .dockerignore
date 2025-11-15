@@ -33,9 +33,10 @@ ENV/
 htmlcov/
 .tox/
 
-# Documentation
-*.md
+# Documentation (exclude most, but keep README.md for Poetry)
 docs/
+*.md
+!README.md
 
 # CI/CD
 .github/
