@@ -17,14 +17,17 @@ ENV PATH="/root/.local/bin:$PATH"
 # Copy dependency files and README (required by Poetry)
 COPY pyproject.toml poetry.lock* README.md ./
 
-# Install dependencies (CPU versions)
+# Install dependencies (CPU versions) - skip root package for now
 RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-interaction --no-ansi --without pyirt,pybkt
+    && poetry install --only main --no-interaction --no-ansi --without pyirt,pybkt --no-root
 
 # Copy application code
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
 COPY data/ ./data/
+
+# Install the project package now that backend/ exists
+RUN poetry install --only-root --no-interaction --no-ansi
 
 # Create logs directory
 RUN mkdir -p logs

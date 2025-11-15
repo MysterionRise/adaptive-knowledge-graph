@@ -3,7 +3,7 @@
 **PoC: Personalized Learning with Knowledge Graphs, Local LLMs, and OpenStax Content**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10-3.13](https://img.shields.io/badge/python-3.10--3.13-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com)
 [![CI](https://github.com/yourusername/adaptive-knowledge-graph/workflows/CI/badge.svg)](https://github.com/yourusername/adaptive-knowledge-graph/actions)
 
@@ -99,7 +99,7 @@ This software is licensed under the [MIT License](./LICENSE). See [LICENSE](./LI
 ## Quick Start
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.10-3.13 (3.11+ recommended for full feature support)
 - Docker & Docker Compose
 - (Optional) NVIDIA GPU with 12GB+ VRAM and nvidia-docker for GPU mode
 
