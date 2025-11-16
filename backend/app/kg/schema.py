@@ -6,7 +6,6 @@ Biology Knowledge Graph.
 """
 
 from enum import Enum
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -34,14 +33,14 @@ class ConceptNode(BaseModel):
 
     name: str = Field(..., description="Concept name")
     type: str = Field(default=NodeType.CONCEPT, description="Node type")
-    definition: Optional[str] = Field(None, description="Concept definition")
+    definition: str | None = Field(None, description="Concept definition")
     key_term: bool = Field(default=False, description="Is this a key term from textbook?")
     frequency: int = Field(default=1, description="Number of times mentioned")
     importance_score: float = Field(default=0.0, description="Computed importance (0-1)")
 
     # Metadata
-    source_modules: List[str] = Field(default_factory=list, description="Modules mentioning this")
-    aliases: List[str] = Field(default_factory=list, description="Alternative names")
+    source_modules: list[str] = Field(default_factory=list, description="Modules mentioning this")
+    aliases: list[str] = Field(default_factory=list, description="Alternative names")
 
 
 class SectionNode(BaseModel):
@@ -51,7 +50,7 @@ class SectionNode(BaseModel):
     title: str = Field(..., description="Section title")
     type: str = Field(default=NodeType.SECTION, description="Node type")
     module_id: str = Field(..., description="Parent module ID")
-    learning_objectives: List[str] = Field(default_factory=list, description="Learning objectives")
+    learning_objectives: list[str] = Field(default_factory=list, description="Learning objectives")
 
 
 class ModuleNode(BaseModel):
@@ -60,7 +59,7 @@ class ModuleNode(BaseModel):
     module_id: str = Field(..., description="Module identifier")
     title: str = Field(..., description="Module title")
     type: str = Field(default=NodeType.MODULE, description="Node type")
-    key_terms: List[str] = Field(default_factory=list, description="Key terms in module")
+    key_terms: list[str] = Field(default_factory=list, description="Key terms in module")
 
 
 class Relationship(BaseModel):
@@ -71,16 +70,16 @@ class Relationship(BaseModel):
     type: RelationshipType = Field(..., description="Relationship type")
     weight: float = Field(default=1.0, description="Relationship strength (0-1)")
     confidence: float = Field(default=1.0, description="Confidence score (0-1)")
-    evidence: Optional[str] = Field(None, description="Text evidence for this relationship")
+    evidence: str | None = Field(None, description="Text evidence for this relationship")
 
 
 class KnowledgeGraph(BaseModel):
     """Complete knowledge graph representation."""
 
-    concepts: Dict[str, ConceptNode] = Field(default_factory=dict, description="Concept nodes")
-    sections: Dict[str, SectionNode] = Field(default_factory=dict, description="Section nodes")
-    modules: Dict[str, ModuleNode] = Field(default_factory=dict, description="Module nodes")
-    relationships: List[Relationship] = Field(default_factory=list, description="All relationships")
+    concepts: dict[str, ConceptNode] = Field(default_factory=dict, description="Concept nodes")
+    sections: dict[str, SectionNode] = Field(default_factory=dict, description="Section nodes")
+    modules: dict[str, ModuleNode] = Field(default_factory=dict, description="Module nodes")
+    relationships: list[Relationship] = Field(default_factory=list, description="All relationships")
 
     def add_concept(self, concept: ConceptNode):
         """Add or update a concept node."""
@@ -108,7 +107,7 @@ class KnowledgeGraph(BaseModel):
 
         self.relationships.append(relationship)
 
-    def get_concept_neighbors(self, concept_name: str, relationship_types: Optional[List[RelationshipType]] = None) -> List[str]:
+    def get_concept_neighbors(self, concept_name: str, relationship_types: list[RelationshipType] | None = None) -> list[str]:
         """
         Get neighboring concepts for a given concept.
 
@@ -131,7 +130,7 @@ class KnowledgeGraph(BaseModel):
 
         return list(set(neighbors))
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get graph statistics."""
         return {
             "concept_count": len(self.concepts),

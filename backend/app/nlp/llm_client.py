@@ -4,8 +4,6 @@ LLM client for question answering and text generation.
 Supports local Ollama and remote OpenRouter APIs.
 """
 
-import json
-from typing import Dict, List, Optional
 
 import aiohttp
 from loguru import logger
@@ -18,8 +16,8 @@ class LLMClient:
 
     def __init__(
         self,
-        mode: Optional[str] = None,
-        model_name: Optional[str] = None,
+        mode: str | None = None,
+        model_name: str | None = None,
     ):
         """
         Initialize LLM client.
@@ -38,7 +36,7 @@ class LLMClient:
     async def generate(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         temperature: float = None,
         max_tokens: int = None,
     ) -> str:
@@ -71,7 +69,7 @@ class LLMClient:
     async def _generate_ollama(
         self,
         prompt: str,
-        system_prompt: Optional[str],
+        system_prompt: str | None,
         temperature: float,
     ) -> str:
         """Generate using local Ollama."""
@@ -97,7 +95,7 @@ class LLMClient:
     async def _generate_openrouter(
         self,
         prompt: str,
-        system_prompt: Optional[str],
+        system_prompt: str | None,
         temperature: float,
         max_tokens: int,
     ) -> str:
@@ -136,9 +134,9 @@ class LLMClient:
     async def answer_question(
         self,
         question: str,
-        context: List[str],
+        context: list[str],
         attribution: str,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Answer a question using retrieved context.
 
@@ -188,7 +186,7 @@ Please answer the question based on the context above. End your response with th
 
 
 # Global singleton
-_llm_client: Optional[LLMClient] = None
+_llm_client: LLMClient | None = None
 
 
 def get_llm_client() -> LLMClient:

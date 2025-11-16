@@ -4,7 +4,6 @@ Retriever for semantic search using Qdrant vector database.
 Handles document retrieval and reranking for RAG.
 """
 
-from typing import Dict, List, Optional
 
 from loguru import logger
 from qdrant_client import QdrantClient
@@ -19,9 +18,9 @@ class QdrantRetriever:
 
     def __init__(
         self,
-        collection_name: Optional[str] = None,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        collection_name: str | None = None,
+        host: str | None = None,
+        port: int | None = None,
     ):
         """
         Initialize Qdrant retriever.
@@ -35,7 +34,7 @@ class QdrantRetriever:
         self.host = host or settings.qdrant_host
         self.port = port or settings.qdrant_port
 
-        self.client: Optional[QdrantClient] = None
+        self.client: QdrantClient | None = None
         self.embedding_model = get_embedding_model()
 
     def connect(self):
@@ -65,7 +64,7 @@ class QdrantRetriever:
         else:
             logger.info(f"Collection already exists: {self.collection_name}")
 
-    def index_chunks(self, chunks: List[Dict], show_progress: bool = True):
+    def index_chunks(self, chunks: list[dict], show_progress: bool = True):
         """
         Index text chunks into Qdrant.
 
@@ -88,7 +87,7 @@ class QdrantRetriever:
 
         # Create points for Qdrant
         points = []
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=False)):
             point = PointStruct(
                 id=idx,
                 vector=embedding,
@@ -118,8 +117,8 @@ class QdrantRetriever:
         self,
         query: str,
         top_k: int = None,
-        filter_dict: Optional[Dict] = None,
-    ) -> List[Dict]:
+        filter_dict: dict | None = None,
+    ) -> list[dict]:
         """
         Retrieve relevant chunks for a query.
 
@@ -162,7 +161,7 @@ class QdrantRetriever:
         logger.info(f"Retrieved {len(retrieved)} chunks for query: '{query[:50]}...'")
         return retrieved
 
-    def get_collection_info(self) -> Dict:
+    def get_collection_info(self) -> dict:
         """Get collection information."""
         if not self.client.collection_exists(self.collection_name):
             return {"exists": False}
@@ -176,7 +175,7 @@ class QdrantRetriever:
 
 
 # Global singleton
-_retriever: Optional[QdrantRetriever] = None
+_retriever: QdrantRetriever | None = None
 
 
 def get_retriever() -> QdrantRetriever:

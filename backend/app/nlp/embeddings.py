@@ -5,7 +5,6 @@ Uses BGE-M3 multilingual embeddings for semantic search.
 Supports both CPU and GPU inference.
 """
 
-from typing import List, Optional, Union
 
 import torch
 from loguru import logger
@@ -19,9 +18,9 @@ class EmbeddingModel:
 
     def __init__(
         self,
-        model_name: Optional[str] = None,
-        device: Optional[str] = None,
-        batch_size: Optional[int] = None,
+        model_name: str | None = None,
+        device: str | None = None,
+        batch_size: int | None = None,
     ):
         """
         Initialize embedding model.
@@ -40,8 +39,8 @@ class EmbeddingModel:
             logger.warning("CUDA not available, falling back to CPU")
             self.device = "cpu"
 
-        self.model: Optional[SentenceTransformer] = None
-        self.embedding_dim: Optional[int] = None
+        self.model: SentenceTransformer | None = None
+        self.embedding_dim: int | None = None
 
     def load(self):
         """Load the embedding model."""
@@ -61,10 +60,10 @@ class EmbeddingModel:
 
     def encode(
         self,
-        texts: Union[str, List[str]],
+        texts: str | list[str],
         normalize: bool = True,
         show_progress: bool = False,
-    ) -> Union[torch.Tensor, List[List[float]]]:
+    ) -> torch.Tensor | list[list[float]]:
         """
         Encode text(s) into embeddings.
 
@@ -98,7 +97,7 @@ class EmbeddingModel:
             logger.error(f"Encoding failed: {e}")
             raise
 
-    def encode_query(self, query: str) -> List[float]:
+    def encode_query(self, query: str) -> list[float]:
         """
         Encode a single query text.
 
@@ -111,7 +110,7 @@ class EmbeddingModel:
         embeddings = self.encode(query, normalize=True)
         return embeddings[0]
 
-    def encode_batch(self, texts: List[str]) -> List[List[float]]:
+    def encode_batch(self, texts: list[str]) -> list[list[float]]:
         """
         Encode a batch of texts.
 
@@ -131,7 +130,7 @@ class EmbeddingModel:
 
 
 # Global singleton instance (lazy loaded)
-_embedding_model: Optional[EmbeddingModel] = None
+_embedding_model: EmbeddingModel | None = None
 
 
 def get_embedding_model() -> EmbeddingModel:

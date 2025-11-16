@@ -4,7 +4,6 @@ Neo4j adapter for persisting knowledge graphs.
 Handles connection to Neo4j and CRUD operations for graph data.
 """
 
-from typing import Dict, List, Optional
 
 from loguru import logger
 from neo4j import GraphDatabase, Session
@@ -18,9 +17,9 @@ class Neo4jAdapter:
 
     def __init__(
         self,
-        uri: Optional[str] = None,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
+        uri: str | None = None,
+        user: str | None = None,
+        password: str | None = None,
     ):
         """
         Initialize Neo4j adapter.
@@ -83,7 +82,7 @@ class Neo4jAdapter:
 
     def _create_concept_nodes(self, session: Session, kg: KnowledgeGraph):
         """Create concept nodes in Neo4j."""
-        for concept_name, concept in kg.concepts.items():
+        for _, concept in kg.concepts.items():
             query = """
             MERGE (c:Concept {name: $name})
             SET c.key_term = $key_term,
@@ -103,7 +102,7 @@ class Neo4jAdapter:
 
     def _create_module_nodes(self, session: Session, kg: KnowledgeGraph):
         """Create module nodes in Neo4j."""
-        for module_id, module in kg.modules.items():
+        for _, module in kg.modules.items():
             query = """
             MERGE (m:Module {module_id: $module_id})
             SET m.title = $title,
@@ -162,7 +161,7 @@ class Neo4jAdapter:
 
     def query_concept_neighbors(
         self, concept_name: str, max_hops: int = 1
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Query neighboring concepts.
 
@@ -186,7 +185,7 @@ class Neo4jAdapter:
             neighbors = [dict(record) for record in result]
             return neighbors
 
-    def get_graph_stats(self) -> Dict:
+    def get_graph_stats(self) -> dict:
         """Get graph statistics from Neo4j."""
         with self.driver.session() as session:
             stats = {}

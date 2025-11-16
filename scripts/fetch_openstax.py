@@ -9,10 +9,8 @@ The content is licensed under CC BY 4.0.
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, List
 
 import aiohttp
-from bs4 import BeautifulSoup
 from loguru import logger
 
 from backend.app.core.settings import settings
@@ -41,7 +39,7 @@ DEMO_CHAPTERS = [
 ]
 
 
-async def fetch_html(session: aiohttp.ClientSession, module_id: str) -> Dict[str, str]:
+async def fetch_html(session: aiohttp.ClientSession, module_id: str) -> dict[str, str]:
     """
     Fetch a single module's HTML content.
 
@@ -69,7 +67,7 @@ async def fetch_html(session: aiohttp.ClientSession, module_id: str) -> Dict[str
         return {"module_id": module_id, "html": "", "url": url, "error": str(e)}
 
 
-async def fetch_all_modules(module_ids: List[str]) -> List[Dict[str, str]]:
+async def fetch_all_modules(module_ids: list[str]) -> list[dict[str, str]]:
     """
     Fetch all modules concurrently.
 
@@ -85,7 +83,7 @@ async def fetch_all_modules(module_ids: List[str]) -> List[Dict[str, str]]:
         return results
 
 
-def save_raw_html(modules: List[Dict[str, str]], output_dir: Path):
+def save_raw_html(modules: list[dict[str, str]], output_dir: Path):
     """
     Save raw HTML files to disk.
 
@@ -140,7 +138,7 @@ def main():
     save_raw_html(modules, output_dir)
 
     logger.success(f"✓ Fetch complete! Files saved to {output_dir}")
-    logger.info(f"Next step: run 'make parse-data' to parse HTML")
+    logger.info("Next step: run 'make parse-data' to parse HTML")
 
 
 if __name__ == "__main__":

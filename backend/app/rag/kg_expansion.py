@@ -5,7 +5,6 @@ This is the "secret sauce" - uses KG to expand queries with related concepts
 for better retrieval. This is what differentiates us from vanilla RAG.
 """
 
-from typing import List, Set
 
 from loguru import logger
 
@@ -37,7 +36,7 @@ class KGExpander:
         if self.neo4j_adapter:
             self.neo4j_adapter.close()
 
-    def extract_concepts_from_query(self, query: str, all_concepts: Set[str]) -> List[str]:
+    def extract_concepts_from_query(self, query: str, all_concepts: set[str]) -> list[str]:
         """
         Extract concept names from query.
 
@@ -61,7 +60,7 @@ class KGExpander:
 
         return found_concepts[:5]  # Max 5 concepts from query
 
-    def expand_with_kg(self, concepts: List[str]) -> List[str]:
+    def expand_with_kg(self, concepts: list[str]) -> list[str]:
         """
         Expand concepts using KG relationships.
 
@@ -94,7 +93,7 @@ class KGExpander:
         logger.info(f"Expanded {len(concepts)} concepts to {len(expanded)} using KG")
         return list(expanded)
 
-    def expand_query(self, query: str, all_concepts: Set[str]) -> dict:
+    def expand_query(self, query: str, all_concepts: set[str]) -> dict:
         """
         Full query expansion pipeline.
 
@@ -150,7 +149,7 @@ def get_kg_expander() -> KGExpander:
     return _kg_expander
 
 
-def get_all_concepts_from_neo4j() -> Set[str]:
+def get_all_concepts_from_neo4j() -> set[str]:
     """
     Get all concept names from Neo4j.
 

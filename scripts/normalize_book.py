@@ -8,14 +8,13 @@ Adds proper CC BY 4.0 attribution to all content.
 
 import json
 from pathlib import Path
-from typing import Dict, List
 
 from loguru import logger
 
 from backend.app.core.settings import settings
 
 
-def normalize_module(module: Dict) -> List[Dict]:
+def normalize_module(module: dict) -> list[dict]:
     """
     Normalize a single module into JSONL records.
 
@@ -96,7 +95,7 @@ def main():
     summary_path = processed_dir / "normalized_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     logger.info(f"Saved summary to {summary_path}")
-    logger.info(f"Next step: run 'make build-kg' to build the knowledge graph")
+    logger.info("Next step: run 'make build-kg' to build the knowledge graph")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@ Text chunking for RAG.
 Splits long documents into overlapping chunks suitable for retrieval.
 """
 
-from typing import Dict, List
 
 from loguru import logger
 
@@ -29,7 +28,7 @@ class TextChunker:
         self.chunk_size = chunk_size or settings.rag_chunk_size
         self.chunk_overlap = chunk_overlap or settings.rag_chunk_overlap
 
-    def chunk_text(self, text: str, metadata: Dict = None) -> List[Dict]:
+    def chunk_text(self, text: str, metadata: dict = None) -> list[dict]:
         """
         Chunk a single text into overlapping segments.
 
@@ -91,7 +90,7 @@ class TextChunker:
 
         return chunks
 
-    def chunk_records(self, records: List[Dict], text_field: str = "text") -> List[Dict]:
+    def chunk_records(self, records: list[dict], text_field: str = "text") -> list[dict]:
         """
         Chunk multiple records.
 
@@ -119,7 +118,7 @@ class TextChunker:
         return all_chunks
 
 
-def chunk_for_rag(records: List[Dict]) -> List[Dict]:
+def chunk_for_rag(records: list[dict]) -> list[dict]:
     """
     Convenience function to chunk records for RAG.
 

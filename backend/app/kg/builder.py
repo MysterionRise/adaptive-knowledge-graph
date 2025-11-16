@@ -5,9 +5,7 @@ Extracts concepts from text and builds the knowledge graph structure.
 Uses NLP techniques for concept extraction and relationship mining.
 """
 
-import re
 from collections import Counter
-from typing import Dict, List, Set, Tuple
 
 import networkx as nx
 from loguru import logger
@@ -19,7 +17,6 @@ from backend.app.kg.schema import (
     ModuleNode,
     Relationship,
     RelationshipType,
-    SectionNode,
 )
 
 
@@ -54,7 +51,7 @@ class KGBuilder:
             (r"prerequisite.*?(\w+)", "prereq"),
         ]
 
-    def extract_concepts_from_text(self, text: str, key_terms: List[str]) -> List[str]:
+    def extract_concepts_from_text(self, text: str, key_terms: list[str]) -> list[str]:
         """
         Extract concept names from text.
 
@@ -76,7 +73,7 @@ class KGBuilder:
         # Extract keywords using YAKE
         try:
             keywords = self.keyword_extractor.extract_keywords(text)
-            for keyword, score in keywords:
+            for keyword, _ in keywords:
                 # Filter: only accept biological terms (heuristic)
                 keyword_clean = keyword.title().strip()
                 if (
@@ -90,7 +87,7 @@ class KGBuilder:
 
         return list(concepts)
 
-    def build_from_records(self, records: List[Dict]) -> KnowledgeGraph:
+    def build_from_records(self, records: list[dict]) -> KnowledgeGraph:
         """
         Build knowledge graph from normalized data records.
 
@@ -178,7 +175,7 @@ class KGBuilder:
         logger.success(f"✓ KG built: {self.kg.get_stats()}")
         return self.kg
 
-    def _mine_concept_relationships(self, records: List[Dict], concepts: List[str]):
+    def _mine_concept_relationships(self, records: list[dict], concepts: list[str]):
         """
         Mine relationships between concepts based on co-occurrence.
 
@@ -244,7 +241,7 @@ class KGBuilder:
 
         logger.info("Computed importance scores using PageRank")
 
-    def get_top_concepts(self, n: int = 20) -> List[Tuple[str, float]]:
+    def get_top_concepts(self, n: int = 20) -> list[tuple[str, float]]:
         """
         Get top N concepts by importance.
 

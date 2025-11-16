@@ -8,7 +8,6 @@ and learning objectives.
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -30,7 +29,7 @@ def extract_title(soup: BeautifulSoup) -> str:
     return "Untitled"
 
 
-def extract_learning_objectives(soup: BeautifulSoup) -> List[str]:
+def extract_learning_objectives(soup: BeautifulSoup) -> list[str]:
     """Extract learning objectives from the module."""
     objectives = []
 
@@ -49,7 +48,7 @@ def extract_learning_objectives(soup: BeautifulSoup) -> List[str]:
     return objectives
 
 
-def extract_key_terms(soup: BeautifulSoup) -> List[str]:
+def extract_key_terms(soup: BeautifulSoup) -> list[str]:
     """Extract key terms from the module."""
     key_terms = []
 
@@ -75,7 +74,7 @@ def extract_key_terms(soup: BeautifulSoup) -> List[str]:
     return list(set(key_terms))[:50]  # Limit to 50 unique terms
 
 
-def extract_paragraphs(soup: BeautifulSoup) -> List[Dict[str, str]]:
+def extract_paragraphs(soup: BeautifulSoup) -> list[dict[str, str]]:
     """
     Extract paragraphs from the module.
 
@@ -98,7 +97,7 @@ def extract_paragraphs(soup: BeautifulSoup) -> List[Dict[str, str]]:
     return paragraphs
 
 
-def parse_module(html_path: Path) -> Optional[Dict]:
+def parse_module(html_path: Path) -> dict | None:
     """
     Parse a single HTML module into structured JSON.
 
@@ -168,7 +167,7 @@ def main():
     total_key_terms = sum(len(m["key_terms"]) for m in parsed_modules)
     logger.info(f"Total paragraphs: {total_paragraphs}")
     logger.info(f"Total key terms: {total_key_terms}")
-    logger.info(f"Next step: run 'make normalize-data'")
+    logger.info("Next step: run 'make normalize-data'")
 
 
 if __name__ == "__main__":

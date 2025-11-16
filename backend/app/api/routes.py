@@ -4,7 +4,6 @@ API routes for the application.
 Includes Q&A, graph queries, and other endpoints.
 """
 
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -34,8 +33,8 @@ class QuestionResponse(BaseModel):
 
     question: str
     answer: str
-    sources: List[Dict]
-    expanded_concepts: Optional[List[str]] = None
+    sources: list[dict]
+    expanded_concepts: list[str] | None = None
     retrieved_count: int
     model: str
     attribution: str
@@ -130,7 +129,7 @@ async def ask_question(request: QuestionRequest):
         raise
     except Exception as e:
         logger.error(f"Error in ask endpoint: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") from e
 
 
 @router.get("/graph/stats", response_model=GraphStatsResponse)
@@ -155,10 +154,10 @@ async def get_graph_stats():
 
     except Exception as e:
         logger.error(f"Error getting graph stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/concepts/top", response_model=List[Dict])
+@router.get("/concepts/top", response_model=list[dict])
 async def get_top_concepts(limit: int = 20):
     """Get top concepts by importance."""
     try:
@@ -188,4 +187,4 @@ async def get_top_concepts(limit: int = 20):
 
     except Exception as e:
         logger.error(f"Error getting top concepts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

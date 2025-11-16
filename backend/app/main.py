@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
+from backend.app.api.routes import router as api_router
 from backend.app.core.logging import setup_logging
 from backend.app.core.settings import settings
 
@@ -65,7 +66,5 @@ async def health():
     }
 
 
-# Import and include routers
-from backend.app.api.routes import router as api_router
-
+# Include routers
 app.include_router(api_router, prefix=settings.api_prefix, tags=["Q&A and Graph"])
