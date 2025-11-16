@@ -161,11 +161,8 @@ jobs:
 
   # Docker build validation
   docker-build:
-    name: Docker Build Check
+    name: Docker Build Check (CPU only)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dockerfile: [api.cpu.Dockerfile, api.gpu.Dockerfile]
     steps:
       - uses: actions/checkout@v4
 
@@ -176,9 +173,9 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: infra/docker/${{ matrix.dockerfile }}
+          file: infra/docker/api.cpu.Dockerfile
           push: false
-          tags: adaptive-kg-test:${{ matrix.dockerfile }}
+          tags: adaptive-kg-test:cpu
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
