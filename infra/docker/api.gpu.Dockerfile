@@ -5,17 +5,17 @@ WORKDIR /app
 
 # Install Python and system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-dev \
+    python3.12 \
+    python3.12-dev \
     python3-pip \
     build-essential \
     curl \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python 3.11 as default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+# Set Python 3.12 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 
 # Install Poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -
@@ -24,9 +24,9 @@ ENV PATH="/root/.local/bin:$PATH"
 # Copy dependency files and README (required by Poetry)
 COPY pyproject.toml poetry.lock* README.md ./
 
-# Install dependencies with GPU support
+# Install dependencies with GPU support - skip root package for now
 RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-interaction --no-ansi --without pyirt,pybkt
+    && poetry install --only main --no-interaction --no-ansi --without pyirt,pybkt --no-root
 
 # Install PyTorch with CUDA support (if not already in poetry)
 RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
@@ -35,6 +35,9 @@ RUN pip install torch torchvision torchaudio --index-url https://download.pytorc
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
 COPY data/ ./data/
+
+# Install the project package now that backend/ exists
+RUN poetry install --only-root --no-interaction --no-ansi
 
 # Create logs directory
 RUN mkdir -p logs

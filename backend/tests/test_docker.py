@@ -12,7 +12,7 @@ def test_cpu_dockerfile_exists():
     dockerfile = Path("infra/docker/api.cpu.Dockerfile")
     assert dockerfile.exists(), "CPU Dockerfile not found"
     content = dockerfile.read_text()
-    assert "FROM python:3.11-slim" in content
+    assert "FROM python:3.12-slim" in content
     assert "poetry" in content.lower()
     assert "EXPOSE 8000" in content
 
