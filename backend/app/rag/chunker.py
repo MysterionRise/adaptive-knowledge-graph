@@ -67,7 +67,9 @@ class TextChunker:
 
             if chunk_text:
                 chunk = {
-                    "id": f"{metadata.get('id', 'chunk')}_{chunk_id}" if metadata else f"chunk_{chunk_id}",
+                    "id": f"{metadata.get('id', 'chunk')}_{chunk_id}"
+                    if metadata
+                    else f"chunk_{chunk_id}",
                     "text": chunk_text,
                     "start_char": start,
                     "end_char": end,

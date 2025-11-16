@@ -78,7 +78,9 @@ class Neo4jAdapter:
             # Create relationships
             self._create_relationships(session, kg)
 
-        logger.success(f"✓ Persisted KG with {len(kg.concepts)} concepts and {len(kg.relationships)} relationships")
+        logger.success(
+            f"✓ Persisted KG with {len(kg.concepts)} concepts and {len(kg.relationships)} relationships"
+        )
 
     def _create_concept_nodes(self, session: Session, kg: KnowledgeGraph):
         """Create concept nodes in Neo4j."""
@@ -159,9 +161,7 @@ class Neo4jAdapter:
 
         logger.info(f"Created {len(kg.relationships)} relationships")
 
-    def query_concept_neighbors(
-        self, concept_name: str, max_hops: int = 1
-    ) -> list[dict]:
+    def query_concept_neighbors(self, concept_name: str, max_hops: int = 1) -> list[dict]:
         """
         Query neighboring concepts.
 

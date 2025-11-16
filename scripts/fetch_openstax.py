@@ -61,7 +61,12 @@ async def fetch_html(session: aiohttp.ClientSession, module_id: str) -> dict[str
                 return {"module_id": module_id, "html": html, "url": url}
             else:
                 logger.error(f"✗ Failed to fetch {module_id}: HTTP {response.status}")
-                return {"module_id": module_id, "html": "", "url": url, "error": f"HTTP {response.status}"}
+                return {
+                    "module_id": module_id,
+                    "html": "",
+                    "url": url,
+                    "error": f"HTTP {response.status}",
+                }
     except Exception as e:
         logger.error(f"✗ Error fetching {module_id}: {e}")
         return {"module_id": module_id, "html": "", "url": url, "error": str(e)}

@@ -22,9 +22,7 @@ class QuestionRequest(BaseModel):
     """Request for Q&A endpoint."""
 
     question: str = Field(..., description="User's question", min_length=3)
-    use_kg_expansion: bool = Field(
-        default=True, description="Use knowledge graph expansion"
-    )
+    use_kg_expansion: bool = Field(default=True, description="Use knowledge graph expansion")
     top_k: int = Field(default=5, description="Number of chunks to retrieve", ge=1, le=20)
 
 
@@ -147,9 +145,7 @@ async def get_graph_stats():
         return GraphStatsResponse(
             concept_count=stats.get("Concept_count", 0),
             module_count=stats.get("Module_count", 0),
-            relationship_count=sum(
-                v for k, v in stats.items() if k.endswith("_relationships")
-            ),
+            relationship_count=sum(v for k, v in stats.items() if k.endswith("_relationships")),
         )
 
     except Exception as e:

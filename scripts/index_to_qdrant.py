@@ -66,7 +66,9 @@ def main():
     retriever.connect()
 
     # Create collection
-    response = input(f"Recreate collection '{retriever.collection_name}'? (yes/no): ").strip().lower()
+    response = (
+        input(f"Recreate collection '{retriever.collection_name}'? (yes/no): ").strip().lower()
+    )
     recreate = response == "yes"
     retriever.create_collection(embedding_dim, recreate=recreate)
 
@@ -90,7 +92,9 @@ def main():
         results = retriever.retrieve(query, top_k=3)
         logger.info(f"\nQuery: {query}")
         for i, result in enumerate(results, 1):
-            logger.info(f"  {i}. [{result['score']:.3f}] {result['section']}: {result['text'][:100]}...")
+            logger.info(
+                f"  {i}. [{result['score']:.3f}] {result['section']}: {result['text'][:100]}..."
+            )
 
     logger.success("\n✓ RAG indexing complete!")
     logger.info("Qdrant dashboard: http://localhost:6333/dashboard")

@@ -107,7 +107,9 @@ class KnowledgeGraph(BaseModel):
 
         self.relationships.append(relationship)
 
-    def get_concept_neighbors(self, concept_name: str, relationship_types: list[RelationshipType] | None = None) -> list[str]:
+    def get_concept_neighbors(
+        self, concept_name: str, relationship_types: list[RelationshipType] | None = None
+    ) -> list[str]:
         """
         Get neighboring concepts for a given concept.
 

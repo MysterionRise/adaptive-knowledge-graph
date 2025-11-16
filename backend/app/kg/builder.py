@@ -214,7 +214,9 @@ class KGBuilder:
                     )
                 )
 
-        logger.info(f"Mined {len([r for r in self.kg.relationships if r.type == RelationshipType.RELATED])} RELATED relationships")
+        logger.info(
+            f"Mined {len([r for r in self.kg.relationships if r.type == RelationshipType.RELATED])} RELATED relationships"
+        )
 
     def _compute_importance_scores(self):
         """Compute importance scores for concepts using PageRank-like algorithm."""

@@ -64,7 +64,9 @@ class LLMClient:
                 return await self._generate_ollama(prompt, system_prompt, temperature)
             except Exception as e:
                 logger.warning(f"Local LLM failed ({e}), falling back to remote")
-                return await self._generate_openrouter(prompt, system_prompt, temperature, max_tokens)
+                return await self._generate_openrouter(
+                    prompt, system_prompt, temperature, max_tokens
+                )
 
     async def _generate_ollama(
         self,
@@ -84,7 +86,9 @@ class LLMClient:
         }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(
+                url, json=payload, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data.get("response", "")
@@ -123,7 +127,9 @@ class LLMClient:
         }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(
+                url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data["choices"][0]["message"]["content"]
