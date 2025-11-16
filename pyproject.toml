@@ -11,7 +11,7 @@ packages = [{include = "backend"}]
 python = ">=3.10,<3.14"
 # Web framework
 fastapi = "^0.109.0"
-uvicorn = {extras = ["standard"], version = "^0.27.0"}
+uvicorn = {extras = ["standard"], version = "^0.38.0"}
 websockets = "^12.0"
 python-multipart = "^0.0.9"
 
