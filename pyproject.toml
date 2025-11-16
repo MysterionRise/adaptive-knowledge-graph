@@ -46,7 +46,7 @@ pandas = "^2.2.0"
 
 # Data Processing
 beautifulsoup4 = "^4.12.3"
-lxml = "^5.1.0"
+lxml = "^6.0.2"
 markdownify = "^0.11.6"
 pydantic = "^2.6.0"
 pydantic-settings = "^2.1.0"
