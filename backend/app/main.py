@@ -65,6 +65,7 @@ async def health():
     }
 
 
-# Import and include routers (will be added later)
-# from backend.app.api.routes import router as api_router
-# app.include_router(api_router, prefix=settings.api_prefix)
+# Import and include routers
+from backend.app.api.routes import router as api_router
+
+app.include_router(api_router, prefix=settings.api_prefix, tags=["Q&A and Graph"])
