@@ -90,7 +90,7 @@ def test_mypy_configuration():
 
     assert "mypy" in data["tool"]
     mypy_config = data["tool"]["mypy"]
-    assert mypy_config["python_version"] == "3.10"
+    assert mypy_config["python_version"] == "3.11"
 
 
 def test_pytest_configuration():
