@@ -18,7 +18,9 @@ from loguru import logger
 from backend.app.core.settings import settings
 
 # GitHub raw content base URL for philschatz/biology-concepts-book
-GITHUB_BASE_URL = "https://raw.githubusercontent.com/philschatz/biology-concepts-book/refs/heads/master/contents"
+GITHUB_BASE_URL = (
+    "https://raw.githubusercontent.com/philschatz/biology-concepts-book/refs/heads/master/contents"
+)
 BOOK_TOC_URL = f"{GITHUB_BASE_URL}/m44403.md"
 
 # For demo, we'll focus on key chapters (can expand later)
