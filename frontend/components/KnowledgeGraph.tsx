@@ -135,7 +135,7 @@ export default function KnowledgeGraph({
         tile: true,
         animate: 'end',
         animationDuration: 1000,
-      },
+      } as any,
       minZoom: 0.3,
       maxZoom: 3,
       wheelSensitivity: 0.2,

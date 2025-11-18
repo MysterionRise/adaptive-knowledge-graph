@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import type { QuestionResponse } from '@/lib/types';
@@ -19,7 +19,7 @@ interface Message {
   response?: QuestionResponse;
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuestion = searchParams.get('question');
@@ -294,7 +294,7 @@ function AssistantMessage({ content, response }: AssistantMessageProps) {
                           )}
                         </div>
                         <span className="text-xs text-gray-500">
-                          Score: {(source.score * 100).toFixed(0)}%
+                          Score: {((source.score ?? 0) * 100).toFixed(0)}%
                         </span>
                       </div>
                       <p className="text-gray-700 text-sm">{source.text}</p>
@@ -318,5 +318,20 @@ function AssistantMessage({ content, response }: AssistantMessageProps) {
         </>
       )}
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+          <span className="text-gray-600">Loading chat...</span>
+        </div>
+      </div>
+    }>
+      <ChatPageContent />
+    </Suspense>
   );
 }
