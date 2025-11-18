@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Neo4j Graph Database
   neo4j:
