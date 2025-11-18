@@ -4,7 +4,6 @@ LLM client for question answering and text generation.
 Supports local Ollama and remote OpenRouter APIs.
 """
 
-
 import aiohttp
 from loguru import logger
 
@@ -155,7 +154,7 @@ class LLMClient:
             Dict with 'answer' and 'reasoning'
         """
         # Build context string
-        context_str = "\n\n".join([f"[{i+1}] {chunk}" for i, chunk in enumerate(context)])
+        context_str = "\n\n".join([f"[{i + 1}] {chunk}" for i, chunk in enumerate(context)])
 
         # System prompt for Q&A
         system_prompt = """You are an expert biology tutor. Answer the student's question using ONLY the provided textbook context.

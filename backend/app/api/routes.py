@@ -4,7 +4,6 @@ API routes for the application.
 Includes Q&A, graph queries, and other endpoints.
 """
 
-
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -183,4 +182,98 @@ async def get_top_concepts(limit: int = 20):
 
     except Exception as e:
         logger.error(f"Error getting top concepts: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/graph/data")
+async def get_graph_data(limit: int = 100):
+    """
+    Get graph data for visualization (concepts and relationships).
+
+    This endpoint returns nodes and edges formatted for Cytoscape.js visualization.
+    Limits to top N concepts by importance to prevent overwhelming the frontend.
+
+    Args:
+        limit: Maximum number of concepts to return (default 100)
+
+    Returns:
+        GraphData with nodes and edges arrays
+    """
+    try:
+        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter.connect()
+
+        with adapter.driver.session() as session:
+            # Get top concepts by importance
+            concept_result = session.run(
+                """
+                MATCH (c:Concept)
+                RETURN elementId(c) as id,
+                       c.name as label,
+                       coalesce(c.importance_score, 0.5) as importance,
+                       c.chapter as chapter,
+                       c.key_term as is_key_term
+                ORDER BY c.importance_score DESC
+                LIMIT $limit
+                """,
+                limit=limit,
+            )
+
+            concepts = list(concept_result)
+            concept_ids = [c["id"] for c in concepts]
+
+            # Get relationships between these concepts
+            if concept_ids:
+                relationship_result = session.run(
+                    """
+                    MATCH (c1:Concept)-[r]->(c2:Concept)
+                    WHERE elementId(c1) IN $ids AND elementId(c2) IN $ids
+                    RETURN elementId(c1) as source,
+                           elementId(c2) as target,
+                           type(r) as type,
+                           coalesce(r.weight, 1.0) as weight
+                    """,
+                    ids=concept_ids,
+                )
+
+                relationships = list(relationship_result)
+            else:
+                relationships = []
+
+        adapter.close()
+
+        # Format for Cytoscape
+        nodes = [
+            {
+                "data": {
+                    "id": concept["id"],
+                    "label": concept["label"],
+                    "importance": float(concept["importance"]),
+                    "chapter": concept.get("chapter"),
+                }
+            }
+            for concept in concepts
+        ]
+
+        edges = [
+            {
+                "data": {
+                    "id": f"e{i}",
+                    "source": rel["source"],
+                    "target": rel["target"],
+                    "type": rel["type"],
+                    "label": rel["type"].lower().replace("_", " "),
+                }
+            }
+            for i, rel in enumerate(relationships)
+        ]
+
+        logger.info(f"Returning graph data: {len(nodes)} nodes, {len(edges)} edges")
+
+        return {"nodes": nodes, "edges": edges}
+
+    except Exception as e:
+        logger.error(f"Error getting graph data: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -4,7 +4,6 @@ Neo4j adapter for persisting knowledge graphs.
 Handles connection to Neo4j and CRUD operations for graph data.
 """
 
-
 from loguru import logger
 from neo4j import GraphDatabase, Session
 
