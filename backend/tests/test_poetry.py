@@ -49,7 +49,7 @@ def test_required_dependencies():
         "neo4j",
         "networkx",
         "rdflib",
-        "qdrant-client",
+        "opensearch-py",
         "beautifulsoup4",
         "pydantic",
         "pydantic-settings",

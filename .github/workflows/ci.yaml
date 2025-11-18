@@ -157,7 +157,7 @@ jobs:
 
       - name: Check services start (databases only)
         run: |
-          docker compose -f infra/compose/compose.yaml up -d neo4j qdrant
+          docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
           sleep 10
           docker compose -f infra/compose/compose.yaml ps
           docker compose -f infra/compose/compose.yaml logs

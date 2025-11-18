@@ -36,7 +36,7 @@ def test_docker_compose_exists():
 
     # Check required services
     assert "neo4j:" in content
-    assert "qdrant:" in content
+    assert "opensearch:" in content
     assert "api-cpu:" in content
     assert "api-gpu:" in content
 
@@ -45,9 +45,9 @@ def test_docker_compose_exists():
     assert "7474:7474" in content  # HTTP port
     assert "7687:7687" in content  # Bolt port
 
-    # Check Qdrant configuration
-    assert "qdrant/qdrant" in content
-    assert "6333:6333" in content
+    # Check OpenSearch configuration
+    assert "opensearchproject/opensearch" in content
+    assert "9200:9200" in content
 
     # Check profiles
     assert "profiles:" in content

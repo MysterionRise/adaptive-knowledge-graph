@@ -1,71 +1,104 @@
 """
-Retriever for semantic search using Qdrant vector database.
+Retriever for semantic search using OpenSearch vector database.
 
 Handles document retrieval and reranking for RAG.
 """
 
 from loguru import logger
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from opensearchpy import OpenSearch, helpers
 
 from backend.app.core.settings import settings
 from backend.app.nlp.embeddings import get_embedding_model
 
 
-class QdrantRetriever:
-    """Retriever using Qdrant vector database."""
+class OpenSearchRetriever:
+    """Retriever using OpenSearch vector database."""
 
     def __init__(
         self,
-        collection_name: str | None = None,
+        index_name: str | None = None,
         host: str | None = None,
         port: int | None = None,
     ):
         """
-        Initialize Qdrant retriever.
+        Initialize OpenSearch retriever.
 
         Args:
-            collection_name: Qdrant collection name
-            host: Qdrant host
-            port: Qdrant port
+            index_name: OpenSearch index name
+            host: OpenSearch host
+            port: OpenSearch port
         """
-        self.collection_name = collection_name or settings.qdrant_collection
-        self.host = host or settings.qdrant_host
-        self.port = port or settings.qdrant_port
+        self.index_name = index_name or settings.opensearch_index
+        self.host = host or settings.opensearch_host
+        self.port = port or settings.opensearch_port
 
-        self.client: QdrantClient | None = None
+        self.client: OpenSearch | None = None
         self.embedding_model = get_embedding_model()
 
     def connect(self):
-        """Connect to Qdrant."""
-        logger.info(f"Connecting to Qdrant at {self.host}:{self.port}")
-        self.client = QdrantClient(host=self.host, port=self.port)
-        logger.success("✓ Connected to Qdrant")
+        """Connect to OpenSearch."""
+        logger.info(f"Connecting to OpenSearch at {self.host}:{self.port}")
+        self.client = OpenSearch(
+            hosts=[{"host": self.host, "port": self.port}],
+            http_compress=True,
+            use_ssl=settings.opensearch_use_ssl,
+            verify_certs=settings.opensearch_verify_certs,
+            ssl_show_warn=False,
+        )
+        logger.success("✓ Connected to OpenSearch")
 
     def create_collection(self, embedding_dim: int, recreate: bool = False):
         """
-        Create Qdrant collection.
+        Create OpenSearch index with kNN configuration.
 
         Args:
             embedding_dim: Dimension of embeddings
-            recreate: If True, delete existing collection
+            recreate: If True, delete existing index
         """
-        if recreate and self.client.collection_exists(self.collection_name):
-            logger.warning(f"Deleting existing collection: {self.collection_name}")
-            self.client.delete_collection(self.collection_name)
+        if recreate and self.client.indices.exists(index=self.index_name):
+            logger.warning(f"Deleting existing index: {self.index_name}")
+            self.client.indices.delete(index=self.index_name)
 
-        if not self.client.collection_exists(self.collection_name):
-            self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(size=embedding_dim, distance=Distance.COSINE),
-            )
-            logger.success(f"✓ Created collection: {self.collection_name}")
+        if not self.client.indices.exists(index=self.index_name):
+            # Create index with kNN settings
+            index_body = {
+                "settings": {
+                    "index": {
+                        "knn": True,
+                        "knn.algo_param.ef_search": 100,
+                    }
+                },
+                "mappings": {
+                    "properties": {
+                        "text": {"type": "text"},
+                        "id": {"type": "keyword"},
+                        "module_id": {"type": "keyword"},
+                        "module_title": {"type": "text"},
+                        "section": {"type": "text"},
+                        "key_terms": {"type": "keyword"},
+                        "attribution": {"type": "text"},
+                        "embedding": {
+                            "type": "knn_vector",
+                            "dimension": embedding_dim,
+                            "method": {
+                                "name": "hnsw",
+                                "space_type": "cosinesimil",
+                                "engine": "nmslib",
+                                "parameters": {"ef_construction": 128, "m": 24},
+                            },
+                        },
+                    }
+                },
+            }
+
+            self.client.indices.create(index=self.index_name, body=index_body)
+            logger.success(f"✓ Created index: {self.index_name}")
         else:
-            logger.info(f"Collection already exists: {self.collection_name}")
+            logger.info(f"Index already exists: {self.index_name}")
 
     def index_chunks(self, chunks: list[dict], show_progress: bool = True):
         """
-        Index text chunks into Qdrant.
+        Index text chunks into OpenSearch.
 
         Args:
             chunks: List of chunk dicts with 'text' and metadata
@@ -75,7 +108,7 @@ class QdrantRetriever:
             logger.warning("No chunks to index")
             return
 
-        logger.info(f"Indexing {len(chunks)} chunks to Qdrant")
+        logger.info(f"Indexing {len(chunks)} chunks to OpenSearch")
 
         # Extract texts for embedding
         texts = [chunk["text"] for chunk in chunks]
@@ -84,13 +117,13 @@ class QdrantRetriever:
         logger.info("Generating embeddings...")
         embeddings = self.embedding_model.encode_batch(texts)
 
-        # Create points for Qdrant
-        points = []
+        # Create documents for OpenSearch
+        actions = []
         for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=False)):
-            point = PointStruct(
-                id=idx,
-                vector=embedding,
-                payload={
+            action = {
+                "_index": self.index_name,
+                "_id": chunk.get("id", f"chunk_{idx}"),
+                "_source": {
                     "text": chunk["text"],
                     "id": chunk.get("id", f"chunk_{idx}"),
                     "module_id": chunk.get("module_id"),
@@ -98,19 +131,21 @@ class QdrantRetriever:
                     "section": chunk.get("section"),
                     "key_terms": chunk.get("key_terms", []),
                     "attribution": chunk.get("attribution"),
+                    "embedding": embedding.tolist(),
                 },
-            )
-            points.append(point)
+            }
+            actions.append(action)
 
-        # Upload to Qdrant in batches
-        batch_size = 100
-        for i in range(0, len(points), batch_size):
-            batch = points[i : i + batch_size]
-            self.client.upsert(collection_name=self.collection_name, points=batch)
-            if show_progress:
-                logger.info(f"Uploaded {min(i + batch_size, len(points))}/{len(points)} chunks")
+        # Bulk index to OpenSearch
+        logger.info("Uploading to OpenSearch...")
+        success, failed = helpers.bulk(self.client, actions, chunk_size=100, raise_on_error=False)
 
-        logger.success(f"✓ Indexed {len(chunks)} chunks to Qdrant")
+        if show_progress:
+            logger.info(f"Successfully indexed: {success} documents")
+            if failed:
+                logger.warning(f"Failed to index: {len(failed)} documents")
+
+        logger.success(f"✓ Indexed {success} chunks to OpenSearch")
 
     def retrieve(
         self,
@@ -134,26 +169,43 @@ class QdrantRetriever:
         # Encode query
         query_embedding = self.embedding_model.encode_query(query)
 
-        # Search Qdrant
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_embedding,
-            limit=top_k,
-            query_filter=filter_dict,
-        )
+        # Build kNN search query
+        search_body = {
+            "size": top_k,
+            "query": {
+                "knn": {
+                    "embedding": {
+                        "vector": query_embedding.tolist(),
+                        "k": top_k,
+                    }
+                }
+            },
+        }
+
+        # Add filters if provided
+        if filter_dict:
+            search_body["query"] = {
+                "bool": {
+                    "must": [{"knn": search_body["query"]["knn"]}],
+                    "filter": [{"term": filter_dict}],
+                }
+            }
+
+        # Search OpenSearch
+        results = self.client.search(index=self.index_name, body=search_body)
 
         # Format results
         retrieved = []
-        for result in results:
+        for hit in results["hits"]["hits"]:
             chunk = {
-                "text": result.payload["text"],
-                "score": result.score,
-                "id": result.payload.get("id"),
-                "module_id": result.payload.get("module_id"),
-                "module_title": result.payload.get("module_title"),
-                "section": result.payload.get("section"),
-                "key_terms": result.payload.get("key_terms", []),
-                "attribution": result.payload.get("attribution"),
+                "text": hit["_source"]["text"],
+                "score": hit["_score"],
+                "id": hit["_source"].get("id"),
+                "module_id": hit["_source"].get("module_id"),
+                "module_title": hit["_source"].get("module_title"),
+                "section": hit["_source"].get("section"),
+                "key_terms": hit["_source"].get("key_terms", []),
+                "attribution": hit["_source"].get("attribution"),
             }
             retrieved.append(chunk)
 
@@ -161,33 +213,34 @@ class QdrantRetriever:
         return retrieved
 
     def get_collection_info(self) -> dict:
-        """Get collection information."""
-        if not self.client.collection_exists(self.collection_name):
+        """Get index information."""
+        if not self.client.indices.exists(index=self.index_name):
             return {"exists": False}
 
-        info = self.client.get_collection(self.collection_name)
+        stats = self.client.indices.stats(index=self.index_name)
+        doc_count = stats["indices"][self.index_name]["total"]["docs"]["count"]
+
         return {
             "exists": True,
-            "vectors_count": info.vectors_count,
-            "points_count": info.points_count,
+            "doc_count": doc_count,
         }
 
 
 # Global singleton
-_retriever: QdrantRetriever | None = None
+_retriever: OpenSearchRetriever | None = None
 
 
-def get_retriever() -> QdrantRetriever:
+def get_retriever() -> OpenSearchRetriever:
     """
     Get or create global retriever instance.
 
     Returns:
-        QdrantRetriever instance
+        OpenSearchRetriever instance
     """
     global _retriever
 
     if _retriever is None:
-        _retriever = QdrantRetriever()
+        _retriever = OpenSearchRetriever()
         _retriever.connect()
 
     return _retriever

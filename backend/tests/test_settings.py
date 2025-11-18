@@ -11,7 +11,7 @@ def test_settings_defaults():
     assert settings.app_name == "Adaptive Knowledge Graph"
     assert settings.app_version == "0.1.0"
     assert settings.neo4j_uri == "bolt://localhost:7687"
-    assert settings.qdrant_host == "localhost"
+    assert settings.opensearch_host == "localhost"
     assert settings.llm_mode in ["local", "remote", "hybrid"]
     assert settings.privacy_local_only is True
 

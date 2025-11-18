@@ -31,7 +31,7 @@ rdflib = "^7.0.0"
 hdbscan = "^0.8.33"
 
 # Vector DB & Search
-qdrant-client = "^1.7.3"
+opensearch-py = "^3.0.0"
 
 # LLM Integration
 outlines = "^0.0.34"
@@ -148,7 +148,7 @@ module = [
     "yake.*",
     "keybert.*",
     "hdbscan.*",
-    "qdrant_client.*",
+    "opensearchpy.*",
     "outlines.*",
     "instructor.*",
     "ragas.*",
