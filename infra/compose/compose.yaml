@@ -34,6 +34,7 @@ services:
       - "6334:6334"  # gRPC
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__STORAGE__STORAGE_PATH=/qdrant/storage
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
