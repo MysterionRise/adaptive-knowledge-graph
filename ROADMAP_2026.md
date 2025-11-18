@@ -14,7 +14,7 @@
 - ✅ **KG-Aware RAG**: 40% better answer quality
 - ✅ **Local-First**: Privacy-focused, runs on $500 GPU
 - ✅ **Frontend**: Production-quality Next.js UI
-- ✅ **Backend**: FastAPI with Neo4j + Qdrant
+- ✅ **Backend**: FastAPI with Neo4j + OpenSearch
 
 ### 2026 Vision
 - 🎯 **Multi-Subject**: 10+ OpenStax textbooks (Biology, Chemistry, Physics, Math, etc.)
@@ -70,14 +70,14 @@
 
 **Bottlenecks Identified:**
 - Neo4j query performance (no indexes)
-- Qdrant search latency (CPU-only)
+- OpenSearch search latency (CPU-only)
 - LLM inference time (4-bit quantization bottleneck)
 - Frontend graph rendering (1000+ nodes crashes)
 
 **Solutions:**
 - [ ] Add Neo4j indexes on `importance_score`, `name`
 - [ ] Implement query result caching (Redis)
-- [ ] Enable Qdrant GPU indexing
+- [ ] Optimize OpenSearch kNN settings
 - [ ] Use LLM batching for multiple questions
 - [ ] Frontend: Virtual scrolling for large graphs
 - [ ] Frontend: WebGL rendering (via Cytoscape.js)
@@ -786,8 +786,8 @@
 
 ### Current Stack (2025)
 - **Frontend**: Next.js 14, TypeScript, Tailwind
-- **Backend**: FastAPI, Python 3.11
-- **Database**: Neo4j (graph), Qdrant (vectors)
+- **Backend**: FastAPI, Python 3.11-3.13
+- **Database**: Neo4j (graph), OpenSearch (vectors)
 - **LLM**: Llama 3.1 8B (local, 4-bit)
 - **Infrastructure**: Single VPS or local machine
 
@@ -796,7 +796,7 @@
 - **Backend**: FastAPI (scale to microservices if needed)
 - **Databases**:
   - Neo4j (graph)
-  - Qdrant (vectors)
+  - OpenSearch (vectors)
   - PostgreSQL (student data, assessments)
   - Redis (cache, sessions)
 - **LLM**:

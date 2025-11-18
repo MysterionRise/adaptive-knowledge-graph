@@ -40,7 +40,7 @@ Built for educators, researchers, and developers exploring **personalized educat
 ### 🔍 KG-Aware RAG
 - BGE-M3 embeddings + BGE-Reranker v2-m3 for high-precision retrieval
 - Knowledge graph expansion: query "photosynthesis" → auto-includes prereq concepts
-- Qdrant vector database with optional GPU indexing
+- OpenSearch vector database with kNN search
 - Citation tracking with OpenStax CC BY 4.0 attribution
 
 ### 🎓 Adaptive Learning
@@ -88,10 +88,10 @@ This software is licensed under the [MIT License](./LICENSE). See [LICENSE](./LI
                                      │
                     ┌────────────────┼────────────────┐
                     │                │                │
-              ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐
-              │   Neo4j   │   │  Qdrant   │   │  Ollama   │
-              │    (KG)   │   │ (Vectors) │   │  (Local)  │
-              └───────────┘   └───────────┘   └───────────┘
+              ┌─────▼─────┐   ┌─────▼──────┐  ┌─────▼─────┐
+              │   Neo4j   │   │ OpenSearch │  │  Ollama   │
+              │    (KG)   │   │  (Vectors) │  │  (Local)  │
+              └───────────┘   └────────────┘  └───────────┘
 ```
 
 ---
@@ -139,14 +139,14 @@ docker compose -f infra/compose/compose.yaml --profile cpu up -d
 docker compose -f infra/compose/compose.yaml --profile gpu up -d
 
 # Option C: Just databases (run API locally)
-docker compose -f infra/compose/compose.yaml up -d neo4j qdrant
+docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
 poetry run uvicorn backend.app.main:app --reload
 ```
 
 ### 4. Verify Services
 
 - **Neo4j Browser**: http://localhost:7474 (user: `neo4j`, pass: `password`)
-- **Qdrant Dashboard**: http://localhost:6333/dashboard
+- **OpenSearch**: http://localhost:9200 (REST API)
 - **API Health**: http://localhost:8000/health
 - **API Docs**: http://localhost:8000/docs
 
@@ -169,7 +169,7 @@ make normalize-data
 # Build knowledge graph (extract concepts, mine edges, persist to Neo4j)
 make build-kg
 
-# Index content to Qdrant for RAG
+# Index content to OpenSearch for RAG
 make index-rag
 
 # Or run entire pipeline
@@ -333,7 +333,7 @@ Contributions welcome! This is an educational PoC designed for **reuse and exten
 - **philschatz** for GitHub textbook mirrors
 - **BAAI** for BGE embeddings/rerankers
 - **Ollama** for local LLM runtime
-- **Neo4j**, **Qdrant** for graph/vector databases
+- **Neo4j**, **OpenSearch** for graph/vector databases
 
 ---
 

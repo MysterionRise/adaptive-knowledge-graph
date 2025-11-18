@@ -10,7 +10,7 @@ packages = [{include = "backend"}]
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"
 # Web framework
-fastapi = "^0.109.0"
+fastapi = "^0.121.0"
 uvicorn = {extras = ["standard"], version = "^0.27.0"}
 websockets = "^12.0"
 python-multipart = "^0.0.9"
@@ -20,12 +20,12 @@ transformers = "^4.37.0"
 sentence-transformers = "^2.3.1"
 torch = "^2.1.2"
 yake = "^0.4.8"
-keybert = "^0.8.4"
+keybert = "^0.9.0"
 nltk = "^3.8.1"
 spacy = "^3.7.2"
 
 # Knowledge Graph
-neo4j = "^5.16.0"
+neo4j = "^5.28.0"
 networkx = "^3.2.1"
 rdflib = "^7.0.0"
 hdbscan = "^0.8.33"
@@ -34,9 +34,9 @@ hdbscan = "^0.8.33"
 opensearch-py = "^3.0.0"
 
 # LLM Integration
-outlines = "^0.0.34"
-instructor = "^0.5.0"
-openai = "^1.10.0"  # For OpenRouter compatibility
+outlines = "^0.1.0"
+instructor = "^1.0.0"
+openai = "^2.0.0"  # For OpenRouter compatibility
 
 # Student Modeling
 numpy = "^1.26.3"
@@ -46,13 +46,13 @@ pandas = "^2.2.0"
 
 # Data Processing
 beautifulsoup4 = "^4.12.3"
-lxml = "^5.1.0"
-markdownify = "^0.11.6"
+lxml = "^5.4.0"
+markdownify = "^1.0.0"
 pydantic = "^2.6.0"
 pydantic-settings = "^2.1.0"
 
 # Utilities
-httpx = "^0.26.0"
+httpx = "^0.28.0"
 aiohttp = "^3.9.3"
 certifi = "^2024.0.0"
 python-dotenv = "^1.0.1"
@@ -62,14 +62,14 @@ tenacity = "^8.2.3"
 [tool.poetry.group.dev.dependencies]
 # Testing
 pytest = "^8.0.0"
-pytest-asyncio = "^0.23.4"
-pytest-cov = "^4.1.0"
+pytest-asyncio = "^1.0.0"
+pytest-cov = "^7.0.0"
 pytest-mock = "^3.12.0"
 
 # Code quality
 ruff = "^0.2.0"
 mypy = "^1.8.0"
-pre-commit = "^3.6.0"
+pre-commit = "^4.0.0"
 
 # Type stubs
 types-beautifulsoup4 = "^4.12.0"
@@ -81,7 +81,7 @@ toml = "^0.10.2"
 
 # Jupyter for evaluation
 jupyter = "^1.0.0"
-ipykernel = "^6.29.0"
+ipykernel = "^7.0.0"
 matplotlib = "^3.8.2"
 seaborn = "^0.13.2"
 
