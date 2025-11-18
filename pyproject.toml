@@ -31,7 +31,7 @@ rdflib = "^7.0.0"
 hdbscan = "^0.8.33"
 
 # Vector DB & Search
-opensearch-py = "^2.4.0"
+opensearch-py = "^3.0.0"
 
 # LLM Integration
 outlines = "^0.0.34"
