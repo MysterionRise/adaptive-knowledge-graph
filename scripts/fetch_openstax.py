@@ -1,8 +1,8 @@
 """
 Fetch OpenStax Biology 2e textbook from philschatz GitHub mirror.
 
-This script downloads the HTML content of OpenStax Biology 2e from the
-philschatz/biology-book GitHub repository, which mirrors OpenStax content.
+This script downloads the markdown content of OpenStax Biology 2e from the
+philschatz/biology-concepts-book GitHub repository, which mirrors OpenStax content.
 The content is licensed under CC BY 4.0.
 """
 
@@ -17,9 +17,11 @@ from loguru import logger
 
 from backend.app.core.settings import settings
 
-# GitHub raw content base URL for philschatz/biology-book
-GITHUB_BASE_URL = "https://raw.githubusercontent.com/philschatz/biology-book/master/contents"
-BOOK_TOC_URL = f"{GITHUB_BASE_URL}/m44403.xhtml"
+# GitHub raw content base URL for philschatz/biology-concepts-book
+GITHUB_BASE_URL = (
+    "https://raw.githubusercontent.com/philschatz/biology-concepts-book/refs/heads/master/contents"
+)
+BOOK_TOC_URL = f"{GITHUB_BASE_URL}/m44403.md"
 
 # For demo, we'll focus on key chapters (can expand later)
 DEMO_CHAPTERS = [
@@ -52,7 +54,7 @@ async def fetch_html(session: aiohttp.ClientSession, module_id: str) -> dict[str
     Returns:
         Dict with module_id and html content
     """
-    url = f"{GITHUB_BASE_URL}/{module_id}.xhtml"
+    url = f"{GITHUB_BASE_URL}/{module_id}.md"
     logger.info(f"Fetching {module_id} from {url}")
 
     try:
@@ -114,7 +116,7 @@ def save_raw_html(modules: list[dict[str, str]], output_dir: Path):
 
     # Save metadata
     metadata = {
-        "source": "philschatz/biology-book",
+        "source": "philschatz/biology-concepts-book",
         "license": "CC BY 4.0",
         "attribution": settings.attribution_openstax,
         "modules_count": len(modules),
