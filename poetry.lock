@@ -712,7 +712,7 @@ version = "8.3.0"
 description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
-groups = ["main", "pyirt"]
+groups = ["main", "dev", "pyirt"]
 files = [
     {file = "click-8.3.0-py3-none-any.whl", hash = "sha256:9b9f285302c6e3064f4330c05f05b81945b2a39544279343e6e7c5f27a9baddc"},
     {file = "click-8.3.0.tar.gz", hash = "sha256:e7b8232224eba16f4ebe410c25ced9f7875cb5f3263ffc93cc3e8da705e229c4"},
@@ -1222,7 +1222,7 @@ version = "5.6.3"
 description = "Disk Cache -- Disk and file backed persistent cache."
 optional = false
 python-versions = ">=3"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19"},
     {file = "diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc"},
@@ -1258,7 +1258,7 @@ version = "0.15"
 description = "Parse Python docstrings in reST, Google and Numpydoc format"
 optional = false
 python-versions = ">=3.6,<4.0"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "docstring_parser-0.15-py3-none-any.whl", hash = "sha256:d1679b86250d269d06a99670924d6bce45adc00b08069dae8c47d98e89b667a9"},
     {file = "docstring_parser-0.15.tar.gz", hash = "sha256:48ddc093e8b1865899956fcc03b03e66bb7240c310fac5af81814580c55bf682"},
@@ -1616,6 +1616,40 @@ test-full = ["adlfs", "aiohttp (!=4.0.0a0,!=4.0.0a1)", "cloudpickle", "dask", "d
 tqdm = ["tqdm"]
 
 [[package]]
+name = "gitdb"
+version = "4.0.12"
+description = "Git Object Database"
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "gitdb-4.0.12-py3-none-any.whl", hash = "sha256:67073e15955400952c6565cc3e707c554a4eea2e428946f7a4c162fab9bd9bcf"},
+    {file = "gitdb-4.0.12.tar.gz", hash = "sha256:5ef71f855d191a3326fcfbc0d5da835f26b13fbcba60c32c21091c349ffdb571"},
+]
+
+[package.dependencies]
+smmap = ">=3.0.1,<6"
+
+[[package]]
+name = "gitpython"
+version = "3.1.45"
+description = "GitPython is a Python library used to interact with Git repositories"
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "gitpython-3.1.45-py3-none-any.whl", hash = "sha256:8908cb2e02fb3b93b7eb0f2827125cb699869470432cc885f019b8fd0fccff77"},
+    {file = "gitpython-3.1.45.tar.gz", hash = "sha256:85b0ee964ceddf211c41b9f27a49086010a190fd8132a24e21f362a4b36a791c"},
+]
+
+[package.dependencies]
+gitdb = ">=4.0.1,<5"
+
+[package.extras]
+doc = ["sphinx (>=7.1.2,<7.2)", "sphinx-autodoc-typehints", "sphinx_rtd_theme"]
+test = ["coverage[toml]", "ddt (>=1.1.1,!=1.4.3)", "mock ; python_version < \"3.8\"", "mypy", "pre-commit", "pytest (>=7.3.1)", "pytest-cov", "pytest-instafail", "pytest-mock", "pytest-sugar", "typing-extensions ; python_version < \"3.11\""]
+
+[[package]]
 name = "greenlet"
 version = "3.2.4"
 description = "Lightweight in-process concurrent programming"
@@ -1967,7 +2001,7 @@ version = "0.5.2"
 description = "structured outputs for llm"
 optional = false
 python-versions = ">=3.10,<4.0"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "instructor-0.5.2-py3-none-any.whl", hash = "sha256:8c7c927f3cbf6cd863eeebceae3f021e27eaca2ceaf9e9f3c8204540a1126160"},
     {file = "instructor-0.5.2.tar.gz", hash = "sha256:d8d679eb4624254db615794aaab59840e506fa696bc0181d998ae4f9ded2706d"},
@@ -3227,7 +3261,7 @@ version = "4.0.0"
 description = "Python port of markdown-it. Markdown parsing, done right!"
 optional = false
 python-versions = ">=3.10"
-groups = ["main", "pyirt"]
+groups = ["main", "dev", "pyirt"]
 files = [
     {file = "markdown_it_py-4.0.0-py3-none-any.whl", hash = "sha256:87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147"},
     {file = "markdown_it_py-4.0.0.tar.gz", hash = "sha256:cb0a2b4aa34f932c007117b194e945bd74e0ec24133ceb5bac59009cda1cb9f3"},
@@ -3485,7 +3519,7 @@ version = "0.1.2"
 description = "Markdown URL utilities"
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "pyirt"]
+groups = ["main", "dev", "pyirt"]
 files = [
     {file = "mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"},
     {file = "mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba"},
@@ -3970,7 +4004,7 @@ version = "3.5"
 description = "Python package for creating and manipulating graphs and networks"
 optional = false
 python-versions = ">=3.11"
-groups = ["main", "pyirt"]
+groups = ["main", "dev", "pyirt"]
 files = [
     {file = "networkx-3.5-py3-none-any.whl", hash = "sha256:0030d386a9a06dee3565298b4a734b68589749a544acbb6c412dc9e2489ec6ec"},
     {file = "networkx-3.5.tar.gz", hash = "sha256:d4c6f9cf81f52d69230866796b82afbccdec3db7ae4fbd1b65ea750feed50037"},
@@ -5191,7 +5225,7 @@ description = "Run a subprocess in a pseudo terminal"
 optional = false
 python-versions = "*"
 groups = ["dev"]
-markers = "os_name != \"nt\" or sys_platform != \"win32\" and sys_platform != \"emscripten\""
+markers = "sys_platform != \"win32\" and sys_platform != \"emscripten\" or os_name != \"nt\""
 files = [
     {file = "ptyprocess-0.7.0-py2.py3-none-any.whl", hash = "sha256:4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35"},
     {file = "ptyprocess-0.7.0.tar.gz", hash = "sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220"},
@@ -5598,17 +5632,6 @@ profile = ["prettytable", "pytest-benchmark", "snakeviz"]
 test = ["black (>=21.4b0)", "graphviz (>=0.8)", "ipywidgets", "matplotlib (>=1.3)", "nbval", "notebook", "pandas", "pillow (>=8.3.1)", "pytest (>=5.0)", "pytest-cov", "pytest-xdist", "ruff", "scikit-learn", "scipy (>=1.1)", "seaborn (>=0.11.0)", "torchvision (>=0.15.0)", "visdom (>=0.1.4,<0.2.2)", "wget"]
 
 [[package]]
-name = "pysbd"
-version = "0.3.4"
-description = "pysbd (Python Sentence Boundary Disambiguation) is a rule-based sentence boundary detection that works out-of-the-box across many languages."
-optional = false
-python-versions = ">=3"
-groups = ["dev"]
-files = [
-    {file = "pysbd-0.3.4-py3-none-any.whl", hash = "sha256:cd838939b7b0b185fcf86b0baf6636667dfb6e474743beeff878e9f42e022953"},
-]
-
-[[package]]
 name = "pytest"
 version = "8.4.2"
 description = "pytest: simple powerful testing with Python"
@@ -5970,31 +5993,46 @@ cffi = {version = "*", markers = "implementation_name == \"pypy\""}
 
 [[package]]
 name = "ragas"
-version = "0.1.22"
-description = ""
+version = "0.3.9"
+description = "Evaluation framework for RAG and LLM applications"
 optional = false
-python-versions = "*"
+python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "ragas-0.1.22-py3-none-any.whl", hash = "sha256:4efd2c1893dd334b616079bf358c5eb3308a9dd86ceff222f0b477e828949301"},
-    {file = "ragas-0.1.22.tar.gz", hash = "sha256:4a635f3d0c0bcf9e077533ace973bb5168533b36a383693cf7643adb1ab3a8fa"},
+    {file = "ragas-0.3.9-py3-none-any.whl", hash = "sha256:1be77af14c7101f26125cc025ff1026f49e2d564162471ae590c3d832527f9c5"},
+    {file = "ragas-0.3.9.tar.gz", hash = "sha256:7807cfc3f01c0297ef99ab3e6a5f53e7cac0a73267d273273b17871437c55786"},
 ]
 
 [package.dependencies]
 appdirs = "*"
-datasets = "*"
-langchain = "<0.3"
-langchain-community = "<0.3"
-langchain-core = "<0.3"
-langchain-openai = "*"
+datasets = ">=4.0.0"
+diskcache = ">=5.6.3"
+gitpython = "*"
+instructor = "*"
+langchain = "*"
+langchain-community = "*"
+langchain-core = "*"
+langchain_openai = "*"
 nest-asyncio = "*"
-numpy = "*"
-openai = ">1"
-pysbd = ">=0.3.4"
+networkx = "*"
+numpy = ">=1.21.0,<3.0.0"
+openai = ">=1.0.0"
+pillow = ">=10.4.0"
+pydantic = ">=2.0.0"
+rich = "*"
+scikit-network = "*"
 tiktoken = "*"
+tqdm = "*"
+typer = "*"
 
 [package.extras]
-all = ["sentence-transformers", "transformers"]
+ai-frameworks = ["haystack-ai"]
+all = ["datacompy", "llama_index", "nltk", "pandas", "r2r", "rapidfuzz", "rouge_score", "sacrebleu", "sentence-transformers", "transformers"]
+dev-minimal = ["build (>=1.3.0)", "nbmake", "pre-commit (>=4.3.0)", "pyright (>=1.1.403)", "pytest", "pytest-asyncio", "pytest-xdist[psutil]", "ruff"]
+gdrive = ["google-api-python-client (>=2.178.0)", "google-auth (>=2.40.3)", "google-auth-oauthlib (>=1.2.2)"]
+oci = ["oci (>=2.160.1)"]
+test = ["scipy"]
+tracing = ["langfuse (>=3.2.4)", "mlflow (>=3.1.4)"]
 
 [[package]]
 name = "rdflib"
@@ -6249,7 +6287,7 @@ version = "13.9.4"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
 optional = false
 python-versions = ">=3.8.0"
-groups = ["main", "pyirt"]
+groups = ["main", "dev", "pyirt"]
 files = [
     {file = "rich-13.9.4-py3-none-any.whl", hash = "sha256:6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90"},
     {file = "rich-13.9.4.tar.gz", hash = "sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098"},
@@ -6512,12 +6550,55 @@ maintenance = ["conda-lock (==3.0.1)"]
 tests = ["matplotlib (>=3.5.0)", "mypy (>=1.15)", "numpydoc (>=1.2.0)", "pandas (>=1.4.0)", "polars (>=0.20.30)", "pooch (>=1.6.0)", "pyamg (>=4.2.1)", "pyarrow (>=12.0.0)", "pytest (>=7.1.2)", "pytest-cov (>=2.9.0)", "ruff (>=0.11.7)", "scikit-image (>=0.19.0)"]
 
 [[package]]
+name = "scikit-network"
+version = "0.33.4"
+description = "Graph algorithms"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "scikit_network-0.33.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c54214aaeb28f37fa34dae1ff892574cc824ca3d8bd1d3424fb9af1a7737b9fd"},
+    {file = "scikit_network-0.33.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:36c3bdcd3a7110eb7734faf116b255703b18fd94ad903e52cce932dadaa3edc6"},
+    {file = "scikit_network-0.33.4-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:afdc916fe6aa897e431a8b05d2dc724d8a77570349326dc03c7139b0fa6fa576"},
+    {file = "scikit_network-0.33.4-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:384cc27821f0136b585b0fca057bfce4721d9a81fdae9a42141865dfad4ac175"},
+    {file = "scikit_network-0.33.4-cp310-cp310-win_amd64.whl", hash = "sha256:d86c461db97b9e3d6eb13de42a0ee3194c5fa9552c66f86c075ec39efb0b2dfa"},
+    {file = "scikit_network-0.33.4-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:c44dbf62355c83d96a2dadb4adf94222049b77524da93ae6e10607babbc5753b"},
+    {file = "scikit_network-0.33.4-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:ff5e4912c9a88ad50aec19f714ab9957311b684c7e0f3f58e18818580cfc285a"},
+    {file = "scikit_network-0.33.4-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d899b898e0f023f43e6d09de8591e9fb627c7ca42977905316ad949257c67707"},
+    {file = "scikit_network-0.33.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a1c12fe08616f8d3ef6506bf8686df347933ee0adb4f107b9210cc41546f82a8"},
+    {file = "scikit_network-0.33.4-cp311-cp311-win_amd64.whl", hash = "sha256:10d7d7ecc25a44bdaa2430ac581d3c52ab69234f06a08825528426aa88fc1fde"},
+    {file = "scikit_network-0.33.4-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:fbd74b858111441b30cbc507ceb2d7469e83db5597115d93d3bddd9b1dabc583"},
+    {file = "scikit_network-0.33.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:f5d4fabf43769d8a80bffcc6c167c71dc916efd631d50005e941e5f25e0fc33e"},
+    {file = "scikit_network-0.33.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:07ab7493980cc97a5840e5c679bbef442698bb3580107b537cffde1cba2dacb0"},
+    {file = "scikit_network-0.33.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:33603f6b5f1a28ef2bc4786f85c4505124cb85bd4c352f856bfc90f6943dc6c8"},
+    {file = "scikit_network-0.33.4-cp312-cp312-win_amd64.whl", hash = "sha256:b82dec6c0225e11ddf4bca042aedee6b776c3fb2997d96792f2dd402ea077c4d"},
+    {file = "scikit_network-0.33.4-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:67abf338cb7bf0f606574a155314f670dfc4617fcf1d9e8909d97d9bd5a7bf48"},
+    {file = "scikit_network-0.33.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:966e234dfec4119ca0041134d7f8715413dda8ba5a45e29a1d5d5762a38444b7"},
+    {file = "scikit_network-0.33.4-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ba75f34ade80f1f1ebf65091deb70e8929c0c19fdbf6dbc3a26108cb90405444"},
+    {file = "scikit_network-0.33.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:74835e2ec29164a2a356a58747ec523740268dbb149a22dc409cce827a360293"},
+    {file = "scikit_network-0.33.4-cp313-cp313-win_amd64.whl", hash = "sha256:775fae14f0c879cedb14e54147d2fc968b74552142fd44186c5b4d57b6613e58"},
+    {file = "scikit_network-0.33.4-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:2f2fdd4933546e77a1112f01f35e012afec182aca52d871df9909e8936e8845d"},
+    {file = "scikit_network-0.33.4-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:9c4e47b2492225cf2a82d4c98b8366d7909b2c2882108479093b384b76c9422e"},
+    {file = "scikit_network-0.33.4-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:dc3bba83b42aa917ccefc74de61def42b8d0afe0db9413e8b90cc82058193e4d"},
+    {file = "scikit_network-0.33.4-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:73680756b342d4421721b304270d770bd6d91960b9ce9d646a5cc5759a793066"},
+    {file = "scikit_network-0.33.4-cp39-cp39-win_amd64.whl", hash = "sha256:d828bbaaf8efbf58bb19ff86e7693bb48245de2c16cecbcfcf2cc232af34227d"},
+    {file = "scikit_network-0.33.4.tar.gz", hash = "sha256:fb0229a076a7894821e19940027ada50fc1b47b06564c5fcb7cfcb55a827fe45"},
+]
+
+[package.dependencies]
+numpy = ">=1.22.4"
+scipy = ">=1.7.3"
+
+[package.extras]
+test = ["note", "pluggy (>=0.7.1)", "pytest"]
+
+[[package]]
 name = "scipy"
 version = "1.16.3"
 description = "Fundamental algorithms for scientific computing in Python"
 optional = false
 python-versions = ">=3.11"
-groups = ["main", "pybkt", "pyirt"]
+groups = ["main", "dev", "pybkt", "pyirt"]
 files = [
     {file = "scipy-1.16.3-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:40be6cf99e68b6c4321e9f8782e7d5ff8265af28ef2cd56e9c9b2638fa08ad97"},
     {file = "scipy-1.16.3-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:8be1ca9170fcb6223cc7c27f4305d680ded114a1567c0bd2bfcbf947d1b17511"},
@@ -6729,6 +6810,18 @@ ssh = ["paramiko"]
 test = ["awscli", "flake8", "moto[server]", "numpy", "pyopenssl", "pytest", "pytest-rerunfailures", "pytest-timeout", "pytest-xdist[psutil]", "pytest_benchmark", "responses", "smart_open[all]"]
 webhdfs = ["requests"]
 zst = ["backports.zstd (>=1.0.0) ; python_version < \"3.14\""]
+
+[[package]]
+name = "smmap"
+version = "5.0.2"
+description = "A pure Python implementation of a sliding window memory map manager"
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "smmap-5.0.2-py3-none-any.whl", hash = "sha256:b30115f0def7d7531d22a0fb6502488d879e75b260a9db4d0819cfb25403af5e"},
+    {file = "smmap-5.0.2.tar.gz", hash = "sha256:26ea65a03958fa0c8a1c7e8c7a58fdc77221b8910f6be2131affade476898ad5"},
+]
 
 [[package]]
 name = "sniffio"
@@ -7598,7 +7691,7 @@ version = "0.9.4"
 description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
 optional = false
 python-versions = ">=3.6"
-groups = ["main", "pyirt"]
+groups = ["main", "dev", "pyirt"]
 files = [
     {file = "typer-0.9.4-py3-none-any.whl", hash = "sha256:aa6c4a4e2329d868b80ecbaf16f807f2b54e192209d7ac9dd42691d63f7a54eb"},
     {file = "typer-0.9.4.tar.gz", hash = "sha256:f714c2d90afae3a7929fcd72a3abb08df305e1ff61719381384211c4070af57f"},
@@ -8653,4 +8746,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "f8e4039238194f5f607398d62fe484c1aaf392963b3e64b7a2fbc86cde5b15ad"
+content-hash = "0c6cc28b3a69fcd98a8e22eaf61ce7aa382d7b21d8e50eb6a9e2d29df4b0e286"
