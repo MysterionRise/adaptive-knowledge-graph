@@ -5,7 +5,7 @@ This directory contains Docker Compose configurations for running the Adaptive K
 ## Services
 
 - **neo4j**: Graph database for storing the knowledge graph
-- **qdrant**: Vector database for semantic search
+- **opensearch**: Vector database for semantic search with kNN
 - **api-cpu**: FastAPI backend (CPU-only)
 - **api-gpu**: FastAPI backend (GPU-enabled for RTX 4070)
 
@@ -14,7 +14,7 @@ This directory contains Docker Compose configurations for running the Adaptive K
 ### Option 1: CPU-only mode (no GPU required)
 
 ```bash
-# Start Neo4j and Qdrant + CPU API
+# Start Neo4j and OpenSearch + CPU API
 docker compose -f infra/compose/compose.yaml --profile cpu up -d
 
 # Or from project root using Makefile
@@ -24,7 +24,7 @@ make docker-up
 ### Option 2: GPU mode (requires NVIDIA GPU + nvidia-docker)
 
 ```bash
-# Start Neo4j and Qdrant + GPU API
+# Start Neo4j and OpenSearch + GPU API
 docker compose -f infra/compose/compose.yaml --profile gpu up -d
 
 # Check GPU is accessible
@@ -34,8 +34,8 @@ docker exec adaptive-kg-api-gpu nvidia-smi
 ### Option 3: Just databases (run API locally)
 
 ```bash
-# Start only Neo4j and Qdrant
-docker compose -f infra/compose/compose.yaml up -d neo4j qdrant
+# Start only Neo4j and OpenSearch
+docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
 
 # Then run API locally
 poetry run uvicorn backend.app.main:app --reload
@@ -46,7 +46,8 @@ poetry run uvicorn backend.app.main:app --reload
 - **Neo4j Browser**: http://localhost:7474
   - Username: `neo4j`
   - Password: `password`
-- **Qdrant Dashboard**: http://localhost:6333/dashboard
+- **OpenSearch**: http://localhost:9200 (REST API)
+  - Performance Analyzer: http://localhost:9600
 - **API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
