@@ -138,9 +138,7 @@ class OpenSearchRetriever:
 
         # Bulk index to OpenSearch
         logger.info("Uploading to OpenSearch...")
-        success, failed = helpers.bulk(
-            self.client, actions, chunk_size=100, raise_on_error=False
-        )
+        success, failed = helpers.bulk(self.client, actions, chunk_size=100, raise_on_error=False)
 
         if show_progress:
             logger.info(f"Successfully indexed: {success} documents")

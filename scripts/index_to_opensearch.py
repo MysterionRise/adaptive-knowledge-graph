@@ -66,9 +66,7 @@ def main():
     retriever.connect()
 
     # Create index
-    response = (
-        input(f"Recreate index '{retriever.index_name}'? (yes/no): ").strip().lower()
-    )
+    response = input(f"Recreate index '{retriever.index_name}'? (yes/no): ").strip().lower()
     recreate = response == "yes"
     retriever.create_collection(embedding_dim, recreate=recreate)
 
