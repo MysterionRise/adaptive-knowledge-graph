@@ -35,11 +35,12 @@ class Settings(BaseSettings):
     neo4j_password: str = "password"
     neo4j_database: str = "neo4j"
 
-    # Qdrant
-    qdrant_host: str = "localhost"
-    qdrant_port: int = 6333
-    qdrant_collection: str = "textbook_chunks"
-    qdrant_use_gpu: bool = False
+    # OpenSearch
+    opensearch_host: str = "localhost"
+    opensearch_port: int = 9200
+    opensearch_index: str = "textbook_chunks"
+    opensearch_use_ssl: bool = False
+    opensearch_verify_certs: bool = False
 
     # LLM Configuration
     llm_mode: Literal["local", "remote", "hybrid"] = "local"

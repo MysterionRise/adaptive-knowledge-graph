@@ -16,7 +16,7 @@ def test_settings():
         debug=True,
         log_level="DEBUG",
         neo4j_uri="bolt://localhost:7687",
-        qdrant_host="localhost",
+        opensearch_host="localhost",
         privacy_local_only=True,
     )
 
@@ -51,10 +51,10 @@ def mock_neo4j_uri():
 
 
 @pytest.fixture
-def mock_qdrant_config():
-    """Mock Qdrant configuration."""
+def mock_opensearch_config():
+    """Mock OpenSearch configuration."""
     return {
         "host": "localhost",
-        "port": 6333,
-        "collection": "test_collection",
+        "port": 9200,
+        "index": "test_index",
     }

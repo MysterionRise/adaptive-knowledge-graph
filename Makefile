@@ -42,7 +42,7 @@ clean: ## Clean up generated files
 docker-build: ## Build Docker images
 	docker compose -f infra/compose/compose.yaml build
 
-docker-up: ## Start all services (neo4j, qdrant, api)
+docker-up: ## Start all services (neo4j, opensearch, api)
 	docker compose -f infra/compose/compose.yaml up -d
 
 docker-down: ## Stop all services
@@ -72,8 +72,8 @@ export-rdf: ## Export KG to RDF/Turtle
 	poetry run python scripts/export_graph_rdf.py
 
 # RAG operations
-index-rag: ## Index textbook content to Qdrant
-	poetry run python scripts/index_to_qdrant.py
+index-rag: ## Index textbook content to OpenSearch
+	poetry run python scripts/index_to_opensearch.py
 
 # Run services
 run-api: ## Run FastAPI backend locally
@@ -93,7 +93,7 @@ pipeline-all: fetch-data parse-data normalize-data build-kg index-rag ## Run com
 dev-setup: install-dev docker-up ## Complete dev environment setup
 	@echo "✅ Development environment ready!"
 	@echo "   - Neo4j: http://localhost:7474 (neo4j/password)"
-	@echo "   - Qdrant: http://localhost:6333"
+	@echo "   - OpenSearch: http://localhost:9200"
 	@echo "   - API will run on: http://localhost:8000"
 
 # Quick checks before commit
