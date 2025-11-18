@@ -8,9 +8,11 @@ The content is licensed under CC BY 4.0.
 
 import asyncio
 import json
+import ssl
 from pathlib import Path
 
 import aiohttp
+import certifi
 from loguru import logger
 
 from backend.app.core.settings import settings
@@ -82,7 +84,13 @@ async def fetch_all_modules(module_ids: list[str]) -> list[dict[str, str]]:
     Returns:
         List of dicts with module data
     """
-    async with aiohttp.ClientSession() as session:
+    # Create SSL context with certifi certificates for proper certificate verification
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+    # Create aiohttp connector with the SSL context
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+
+    async with aiohttp.ClientSession(connector=connector) as session:
         tasks = [fetch_html(session, module_id) for module_id in module_ids]
         results = await asyncio.gather(*tasks)
         return results
