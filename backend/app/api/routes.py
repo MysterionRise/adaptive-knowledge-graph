@@ -4,7 +4,6 @@ API routes for the application.
 Includes Q&A, graph queries, and other endpoints.
 """
 
-
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -271,9 +270,7 @@ async def get_graph_data(limit: int = 100):
             for i, rel in enumerate(relationships)
         ]
 
-        logger.info(
-            f"Returning graph data: {len(nodes)} nodes, {len(edges)} edges"
-        )
+        logger.info(f"Returning graph data: {len(nodes)} nodes, {len(edges)} edges")
 
         return {"nodes": nodes, "edges": edges}
 

@@ -4,7 +4,6 @@ Text chunking for RAG.
 Splits long documents into overlapping chunks suitable for retrieval.
 """
 
-
 from loguru import logger
 
 from backend.app.core.settings import settings

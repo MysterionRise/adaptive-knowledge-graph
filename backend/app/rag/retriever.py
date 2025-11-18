@@ -4,7 +4,6 @@ Retriever for semantic search using Qdrant vector database.
 Handles document retrieval and reranking for RAG.
 """
 
-
 from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams

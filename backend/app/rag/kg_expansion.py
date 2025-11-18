@@ -5,7 +5,6 @@ This is the "secret sauce" - uses KG to expand queries with related concepts
 for better retrieval. This is what differentiates us from vanilla RAG.
 """
 
-
 from loguru import logger
 
 from backend.app.core.settings import settings

@@ -5,7 +5,6 @@ Uses BGE-M3 multilingual embeddings for semantic search.
 Supports both CPU and GPU inference.
 """
 
-
 import torch
 from loguru import logger
 from sentence_transformers import SentenceTransformer
