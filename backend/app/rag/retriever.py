@@ -87,7 +87,7 @@ class OpenSearchRetriever:
                             "method": {
                                 "name": "hnsw",
                                 "space_type": "cosinesimil",
-                                "engine": "nmslib",
+                                "engine": "faiss",
                                 "parameters": {"ef_construction": 128, "m": 24},
                             },
                         },
