@@ -33,8 +33,8 @@ class OpenSearchRetriever:
         self.index_name = index_name or settings.opensearch_index
         self.host = host or settings.opensearch_host
         self.port = port or settings.opensearch_port
-        self.username = username or settings.opensearch_username
-        self.password = password or settings.opensearch_password
+        self.username = username
+        self.password = password
         self.client: OpenSearch | None = None
         self.embedding_model = get_embedding_model()
 
@@ -87,7 +87,7 @@ class OpenSearchRetriever:
                             "method": {
                                 "name": "hnsw",
                                 "space_type": "cosinesimil",
-                                "engine": "nmslib",
+                                "engine": "faiss",
                                 "parameters": {"ef_construction": 128, "m": 24},
                             },
                         },
@@ -135,7 +135,7 @@ class OpenSearchRetriever:
                     "section": chunk.get("section"),
                     "key_terms": chunk.get("key_terms", []),
                     "attribution": chunk.get("attribution"),
-                    "embedding": embedding.tolist(),
+                    "embedding": embedding,
                 },
             }
             actions.append(action)
@@ -179,7 +179,7 @@ class OpenSearchRetriever:
             "query": {
                 "knn": {
                     "embedding": {
-                        "vector": query_embedding.tolist(),
+                        "vector": query_embedding,
                         "k": top_k,
                     }
                 }
@@ -244,7 +244,7 @@ def get_retriever() -> OpenSearchRetriever:
     global _retriever
 
     if _retriever is None:
-        _retriever = OpenSearchRetriever()
+        _retriever = OpenSearchRetriever(username="admin", password="Opensearch-adaptive-graph123!")
         _retriever.connect()
 
     return _retriever
