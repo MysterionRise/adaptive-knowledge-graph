@@ -19,6 +19,8 @@ class OpenSearchRetriever:
         index_name: str | None = None,
         host: str | None = None,
         port: int | None = None,
+        username: str | None = None,
+        password: str | None = None
     ):
         """
         Initialize OpenSearch retriever.
@@ -31,7 +33,8 @@ class OpenSearchRetriever:
         self.index_name = index_name or settings.opensearch_index
         self.host = host or settings.opensearch_host
         self.port = port or settings.opensearch_port
-
+        self.username = username or settings.opensearch_username
+        self.password = password or settings.opensearch_password
         self.client: OpenSearch | None = None
         self.embedding_model = get_embedding_model()
 
@@ -44,6 +47,7 @@ class OpenSearchRetriever:
             use_ssl=settings.opensearch_use_ssl,
             verify_certs=settings.opensearch_verify_certs,
             ssl_show_warn=False,
+            http_auth=(self.username, self.password) if self.username and self.password else None,
         )
         logger.success("✓ Connected to OpenSearch")
 

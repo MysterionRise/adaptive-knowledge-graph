@@ -62,7 +62,7 @@ def main():
 
     # Initialize OpenSearch retriever
     logger.info("Connecting to OpenSearch...")
-    retriever = OpenSearchRetriever()
+    retriever = OpenSearchRetriever(username="admin", password="Opensearch-adaptive-graph123!")
     retriever.connect()
 
     # Create index

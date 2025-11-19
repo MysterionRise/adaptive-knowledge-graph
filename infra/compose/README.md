@@ -63,6 +63,7 @@ docker compose -f infra/compose/compose.yaml down
 # Stop and remove volumes (⚠️ deletes all data)
 docker compose -f infra/compose/compose.yaml down -v
 
+
 # Check service status
 docker compose -f infra/compose/compose.yaml ps
 ```
