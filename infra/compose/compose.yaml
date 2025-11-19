@@ -23,15 +23,14 @@ services:
     networks:
       - adaptive-kg-network
 
-  # OpenSearch Vector Database - Node 1
+  # OpenSearch Vector Database
   opensearch-node1:
     image: opensearchproject/opensearch:latest
     container_name: opensearch-node1
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-node1
-      - discovery.seed_hosts=opensearch-node1,opensearch-node2
-      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - discovery.type=single-node
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123}
@@ -43,34 +42,10 @@ services:
         soft: 65536
         hard: 65536
     volumes:
-      - opensearch_data1:/usr/share/opensearch/data
+      - opensearch_data:/usr/share/opensearch/data
     ports:
       - 9200:9200  # REST API
       - 9600:9600  # Performance Analyzer
-    networks:
-      - adaptive-kg-network
-
-  # OpenSearch Vector Database - Node 2
-  opensearch-node2:
-    image: opensearchproject/opensearch:latest
-    container_name: opensearch-node2
-    environment:
-      - cluster.name=opensearch-cluster
-      - node.name=opensearch-node2
-      - discovery.seed_hosts=opensearch-node1,opensearch-node2
-      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
-      - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123}
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    volumes:
-      - opensearch_data2:/usr/share/opensearch/data
     networks:
       - adaptive-kg-network
 
@@ -83,7 +58,7 @@ services:
     expose:
       - "5601"
     environment:
-      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200","https://opensearch-node2:9200"]'
+      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200"]'
     networks:
       - adaptive-kg-network
 
@@ -169,8 +144,7 @@ volumes:
   neo4j_data:
   neo4j_logs:
   neo4j_import:
-  opensearch_data1:
-  opensearch_data2:
+  opensearch_data:
 
 networks:
   adaptive-kg-network:
