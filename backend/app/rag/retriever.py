@@ -20,7 +20,7 @@ class OpenSearchRetriever:
         host: str | None = None,
         port: int | None = None,
         username: str | None = None,
-        password: str | None = None
+        password: str | None = None,
     ):
         """
         Initialize OpenSearch retriever.
