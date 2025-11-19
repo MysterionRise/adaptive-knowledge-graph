@@ -25,23 +25,40 @@ services:
 
   # OpenSearch Vector Database
   opensearch:
-    image: opensearchproject/opensearch:2
-    container_name: adaptive-kg-opensearch
-    ports:
-      - "9200:9200"  # REST API
-      - "9600:9600"  # Performance Analyzer
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch
     environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch
       - discovery.type=single-node
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
-      - DISABLE_SECURITY_PLUGIN=true
-      - plugins.security.disabled=true
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
       - opensearch_data:/usr/share/opensearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    ports:
+      - 9200:9200  # REST API
+      - 9600:9600  # Performance Analyzer
+    networks:
+      - adaptive-kg-network
+
+  # OpenSearch Dashboards
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:latest
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601
+    expose:
+      - "5601"
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch:9200"]'
     networks:
       - adaptive-kg-network
 
@@ -59,6 +76,10 @@ services:
       - NEO4J_PASSWORD=password
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
+      - OPENSEARCH_USER=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123}
+      - OPENSEARCH_USE_SSL=true
+      - OPENSEARCH_VERIFY_CERTS=false
       - LLM_MODE=local
       - EMBEDDING_DEVICE=cpu
       - RERANKER_DEVICE=cpu
@@ -70,7 +91,7 @@ services:
       neo4j:
         condition: service_healthy
       opensearch:
-        condition: service_healthy
+        condition: service_started
     networks:
       - adaptive-kg-network
     profiles:
@@ -90,6 +111,10 @@ services:
       - NEO4J_PASSWORD=password
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
+      - OPENSEARCH_USER=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123}
+      - OPENSEARCH_USE_SSL=true
+      - OPENSEARCH_VERIFY_CERTS=false
       - LLM_MODE=local
       - EMBEDDING_DEVICE=cuda
       - RERANKER_DEVICE=cuda
@@ -102,7 +127,7 @@ services:
       neo4j:
         condition: service_healthy
       opensearch:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         reservations:
