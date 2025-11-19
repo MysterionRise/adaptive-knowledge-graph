@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "mistralai/mixtral-8x7b-instruct"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_verify_ssl: bool = False
 
     # Embeddings
     embedding_model: str = "BAAI/bge-m3"

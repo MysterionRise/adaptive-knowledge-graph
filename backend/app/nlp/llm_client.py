@@ -4,6 +4,7 @@ LLM client for question answering and text generation.
 Supports local Ollama and remote OpenRouter APIs.
 """
 
+import ssl
 import aiohttp
 from loguru import logger
 
@@ -125,9 +126,18 @@ class LLMClient:
             "Content-Type": "application/json",
         }
 
+        # Configure SSL context
+        ssl_context = None
+        if not settings.openrouter_verify_ssl:
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
+                url, json=payload, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=60),
+                ssl=ssl_context
             ) as response:
                 if response.status == 200:
                     data = await response.json()
