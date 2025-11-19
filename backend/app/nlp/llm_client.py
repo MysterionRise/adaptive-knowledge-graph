@@ -136,9 +136,11 @@ class LLMClient:
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url, json=payload, headers=headers,
+                url,
+                json=payload,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=60),
-                ssl=ssl_context
+                ssl=ssl_context,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
