@@ -86,7 +86,7 @@ matplotlib = "^3.8.2"
 seaborn = "^0.13.2"
 
 # Evaluation
-ragas = "^0.1.4"
+ragas = "^0.3.9"
 
 [tool.poetry.group.pyirt]
 optional = true
