@@ -27,7 +27,7 @@ spacy = "^3.7.2"
 # Knowledge Graph
 neo4j = "^5.28.0"
 networkx = "^3.2.1"
-rdflib = "^7.0.0"
+rdflib = "^7.5.0"
 hdbscan = "^0.8.33"
 
 # Vector DB & Search
