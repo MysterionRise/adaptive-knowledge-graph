@@ -57,7 +57,7 @@ aiohttp = "^3.9.3"
 certifi = "^2024.0.0"
 python-dotenv = "^1.0.1"
 loguru = "^0.7.2"
-tenacity = "^8.2.3"
+tenacity = "^9.1.2"
 
 [tool.poetry.group.dev.dependencies]
 # Testing
