@@ -45,7 +45,7 @@ scikit-learn = "^1.4.0"
 pandas = "^2.2.0"
 
 # Data Processing
-beautifulsoup4 = "^4.12.3"
+beautifulsoup4 = "^4.14.3"
 lxml = "^5.4.0"
 markdownify = "^1.0.0"
 pydantic = "^2.6.0"
