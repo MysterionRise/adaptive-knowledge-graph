@@ -178,7 +178,7 @@ jobs:
           test -f .env.example
 
       - name: Lint markdown files
-        uses: DavidAnson/markdownlint-cli2-action@v15
+        uses: DavidAnson/markdownlint-cli2-action@v22
         with:
           globs: "*.md"
         continue-on-error: true  # Don't fail on markdown issues
