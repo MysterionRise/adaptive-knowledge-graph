@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Adaptive Knowledge Graph - Personalized Learning with AI",
-  description: "AI-powered personalized education using knowledge graphs and local LLMs",
+  title: "Professional Certifications - Adaptive Learning Platform",
+  description: "AI-powered adaptive test prep for professional exams (US History, Government, and more)",
 };
 
 export default function RootLayout({

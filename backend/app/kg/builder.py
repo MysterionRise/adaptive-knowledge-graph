@@ -42,13 +42,17 @@ class KGBuilder:
             features=None,
         )
 
-        # Common biology prerequisite patterns
+        # Common prerequisite/causality patterns (History/Political Science focus)
         self.prereq_patterns = [
             (r"before understanding (\w+)", "prereq"),
             (r"requires knowledge of (\w+)", "prereq"),
             (r"builds on (\w+)", "prereq"),
             (r"depends on (\w+)", "prereq"),
-            (r"prerequisite.*?(\w+)", "prereq"),
+            (r"led to (\w+)", "causality"),
+            (r"caused (\w+)", "causality"),
+            (r"resulted in (\w+)", "causality"),
+            (r"influenced (\w+)", "causality"),
+            (r"triggered (\w+)", "causality"),
         ]
 
     def extract_concepts_from_text(self, text: str, key_terms: list[str]) -> list[str]:
@@ -74,12 +78,11 @@ class KGBuilder:
         try:
             keywords = self.keyword_extractor.extract_keywords(text)
             for keyword, _ in keywords:
-                # Filter: only accept biological terms (heuristic)
+                # Filter: General heuristics for meaningful terms
                 keyword_clean = keyword.title().strip()
                 if (
-                    len(keyword_clean.split()) <= 3  # Max 3 words
-                    and len(keyword_clean) >= 4  # Min 4 chars
-                    and not keyword_clean[0].isdigit()  # Not starting with number
+                    len(keyword_clean.split()) <= 4  # Max 4 words
+                    and len(keyword_clean) >= 3  # Min 3 chars
                 ):
                     concepts.add(keyword_clean)
         except Exception as e:

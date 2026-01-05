@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = "Adaptive Knowledge Graph"
-    app_version: str = "0.1.0"
+    app_name: str = "Adaptive Professional Certifications"
+    app_version: str = "0.2.0"
     debug: bool = False
     log_level: str = "INFO"
 
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     opensearch_host: str = "localhost"
     opensearch_port: int = 9200
     opensearch_index: str = "textbook_chunks"
-    opensearch_use_ssl: bool = False
+    opensearch_use_ssl: bool = True
     opensearch_verify_certs: bool = False
 
     # LLM Configuration
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     privacy_local_only: bool = True  # Toggle for local-only mode
     privacy_no_tracking: bool = False
     attribution_openstax: str = (
-        "Content adapted from OpenStax Biology 2e, "
+        "Content adapted from OpenStax (various), "
         "licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)"
     )
 

@@ -11,7 +11,10 @@ from pydantic import BaseModel, Field
 from backend.app.core.settings import settings
 from backend.app.nlp.llm_client import get_llm_client
 from backend.app.rag.kg_expansion import get_all_concepts_from_neo4j, get_kg_expander
+
 from backend.app.rag.retriever import get_retriever
+from backend.app.ui_payloads.quiz import Quiz
+from backend.app.student.quiz_generator import get_quiz_generator
 
 router = APIRouter()
 
@@ -277,3 +280,15 @@ async def get_graph_data(limit: int = 100):
     except Exception as e:
         logger.error(f"Error getting graph data: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/quiz/generate", response_model=Quiz)
+async def generate_quiz(topic: str, num_questions: int = 3):
+    """Generate an adaptive quiz for a topic."""
+    try:
+        generator = get_quiz_generator()
+        quiz = await generator.generate_from_topic(topic, num_questions)
+        return quiz
+    except Exception as e:
+        logger.error(f"Error generating quiz: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

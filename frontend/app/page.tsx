@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import type { GraphStats } from '@/lib/types';
-import { Network, MessageSquare, TrendingUp, Zap } from 'lucide-react';
+import { Network, MessageSquare, TrendingUp, Zap, GraduationCap } from 'lucide-react';
 
 export default function Home() {
   const [stats, setStats] = useState<GraphStats | null>(null);
@@ -38,10 +38,10 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Adaptive Knowledge Graph
+                Adaptive Certifications
               </h1>
               <p className="mt-2 text-gray-600">
-                Personalized Learning with AI & Knowledge Graphs
+                AI-Powered Prep for Professional Exams
               </p>
             </div>
             <div className="flex gap-4">
@@ -67,12 +67,12 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
-            Learn Smarter with
-            <span className="text-primary-600"> AI-Powered</span> Knowledge Graphs
+            Master Your
+            <span className="text-primary-600"> Certification</span> Exams
           </h2>
           <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-            Experience personalized education through knowledge graph-aware RAG,
-            local-first LLMs, and adaptive learning algorithms.
+            Adaptive study plans for US History, Government, and Professional Standards
+            powered by Knowledge Graphs and AI.
           </p>
         </div>
 
@@ -88,25 +88,25 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <StatCard
-                title="Concepts"
+                title="Exam Topics"
                 value={stats?.concept_count ?? 0}
                 icon={<Network className="w-8 h-8" />}
                 color="blue"
-                description="Biology concepts extracted"
+                description="Key concepts tracked"
               />
               <StatCard
-                title="Modules"
+                title="Study Modules"
                 value={stats?.module_count ?? 0}
                 icon={<TrendingUp className="w-8 h-8" />}
                 color="purple"
-                description="OpenStax modules analyzed"
+                description="Textbook chapters available"
               />
               <StatCard
-                title="Relationships"
+                title="Connections"
                 value={stats?.relationship_count ?? 0}
                 icon={<Zap className="w-8 h-8" />}
                 color="green"
-                description="Concept relationships mapped"
+                description="Causal links & prerequisites"
               />
             </div>
           )}
@@ -124,14 +124,14 @@ export default function Home() {
           </h3>
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
             <FeatureCard
-              title="Knowledge Graph"
-              description="Interactive visualization of Biology concepts and their relationships"
+              title="Knowledge Map"
+              description="Visualize historical events and their causal relationships"
               icon={<Network className="w-6 h-6" />}
               link="/graph"
             />
             <FeatureCard
               title="AI Tutor Chat"
-              description="Ask questions and get answers with citations from OpenStax"
+              description="Ask about historical context with citations from approved texts"
               icon={<MessageSquare className="w-6 h-6" />}
               link="/chat"
             />
@@ -147,6 +147,12 @@ export default function Home() {
               icon={<Zap className="w-6 h-6" />}
               link="/about"
             />
+            <FeatureCard
+              title="Assessment"
+              description="Test your mastery with adaptive quizzes and instant remediation"
+              icon={<GraduationCap className="w-6 h-6" />}
+              link="/assessment"
+            />
           </div>
         </div>
 
@@ -158,8 +164,8 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <Step
               number={1}
-              title="Extract Concepts"
-              description="YAKE and KeyBERT extract key biology concepts from OpenStax Biology 2e textbook"
+              title="Ingest Content"
+              description="System ingests US History & Government textbooks, chunking by topic"
             />
             <Step
               number={2}
@@ -169,7 +175,7 @@ export default function Home() {
             <Step
               number={3}
               title="Smart Retrieval"
-              description="Questions are expanded through the graph, retrieving more relevant context for better answers"
+              description="Questions retrieved based on semantic similarity and historical attribution"
             />
           </div>
         </div>
@@ -179,12 +185,12 @@ export default function Home() {
           <p>
             Content adapted from{' '}
             <a
-              href="https://openstax.org/details/books/biology-2e"
+              href="https://github.com/philschatz/us-history-book"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary-600 hover:text-primary-700 underline"
             >
-              OpenStax Biology 2e
+              OpenStax US History (Phil Schatz mirror)
             </a>
           </p>
           <p className="mt-1">

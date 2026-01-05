@@ -17,6 +17,7 @@ This is a **proof-of-concept Adaptive Knowledge Graph** that combines:
 - **Knowledge Graph construction** from OpenStax Biology 2e textbooks
 - **Local-first LLM execution** optimized for NVIDIA RTX 4070 (12GB VRAM)
 - **KG-aware Retrieval-Augmented Generation (RAG)** with semantic search
+- **Professional Certification Engine** with dynamic assessments and skill tracking
 - **Adaptive learning** using Bayesian Knowledge Tracing (BKT) and Item Response Theory (IRT)
 - **Privacy-focused design** with opt-in remote LLM fallback (OpenRouter)
 
@@ -51,11 +52,17 @@ Built for educators, researchers, and developers exploring **personalized educat
   - Prerequisite requirements
   - Optimal difficulty zone
 
+### 🎓 Professional Certification & Assessment (New)
+- **Dynamic Quiz Generator**: LLM-based MCQ creation from any content chunk
+- **Instant Remediation**: Wrong answers link directly to source material
+- **Skill Tracking**: Real-time mastery updates based on assessment performance
+- **US History / Citizenship Prep**: Demo use case with OpenStax US History
+
 ### 🎨 Interactive UI (Next.js + Cytoscape.js)
+- **Assessment Engine**: Dedicated quiz interface with feedback
 - **Concept Map**: Navigable graph with mastery visualization
 - **Adaptive Path**: Recommended learning sequence with rationale
 - **Tutor Chat**: KG-aware Q&A with citations
-- **Practice Panel**: Adaptive exercises with instant feedback
 - **Teacher Mode**: Inspect/edit KG edges and recommendation logic
 
 ---
@@ -140,7 +147,21 @@ docker compose -f infra/compose/compose.yaml --profile gpu up -d
 
 # Option C: Just databases (run API locally)
 docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
-poetry run uvicorn backend.app.main:app --reload
+
+# Install backend dependencies (ensure Rust is up to date: rustup update)
+poetry install
+
+# Run backend (Port 8001 to avoid conflicts)
+poetry run uvicorn backend.app.main:app --reload --port 8001
+```
+
+### 4. Start Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+# Visit http://localhost:3000
 ```
 
 ### 4. Verify Services
@@ -174,6 +195,9 @@ make index-rag
 
 # Or run entire pipeline
 make pipeline-all
+
+# (NEW) Ingest US History for Certification Demo
+poetry run python3 scripts/ingest_us_history.py
 ```
 
 ### Run Tests
@@ -309,7 +333,7 @@ Compare configurations:
 - [ ] SPARQL endpoint for interoperability
 - [ ] Multilingual support (BGE-M3 multi-lang)
 - [ ] Teacher authoring tools (graph editing UI)
-- [ ] Assessment generation (LLM-based MCQ creation)
+- [x] Assessment generation (LLM-based MCQ creation)
 - [ ] A/B testing framework
 - [ ] Production deployment (Kubernetes + GPU cluster)
 

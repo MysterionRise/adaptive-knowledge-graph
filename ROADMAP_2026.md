@@ -1,28 +1,29 @@
 # Adaptive Knowledge Graph - 2026 Roadmap
 
-**Vision:** Transform from PoC to production-ready personalized learning platform serving 10,000+ students across multiple subjects.
+**Vision:** Pivot from Education PoC to the premier **Professional Certification & Adult Retraining Platform**. Empowering adults to switch careers through verified, skill-based micro-credentials derived from open academic content.
 
-**Last Updated:** November 17, 2025
-**Status:** PoC Complete (85%) → Production-Ready Platform
+**Last Updated:** December 12, 2025
+**Status:** Strategic Pivot Execution
 
 ---
 
 ## Executive Summary
 
-### Current State (November 2025)
-- ✅ **PoC Complete**: Biology 2e knowledge graph with 150+ concepts
-- ✅ **KG-Aware RAG**: 40% better answer quality
-- ✅ **Local-First**: Privacy-focused, runs on $500 GPU
-- ✅ **Frontend**: Production-quality Next.js UI
-- ✅ **Backend**: FastAPI with Neo4j + OpenSearch
+### Strategic Pivot (December 2025)
+The project is evolving from a general-purpose study tool into a **Professional Certification Engine**.
+- **User Focus**: Adult Learners, Career Switchers, Corporate Retraining.
+- **Value Prop**: "Turn Open Knowledge into Verifiable Careers".
+- **Key Deliverable**: Cryptographically signed Career Certificates (e.g., "Certified Pre-Nursing Competency").
 
-### 2026 Vision
-- 🎯 **Multi-Subject**: 10+ OpenStax textbooks (Biology, Chemistry, Physics, Math, etc.)
-- 🎯 **Scale**: 10,000 concurrent students
-- 🎯 **Adaptive**: Real-time personalized learning paths
-- 🎯 **Analytics**: Teacher dashboards with student insights
-- 🎯 **Cloud-Ready**: Kubernetes deployment with auto-scaling
-- 🎯 **Revenue**: Freemium model with institutional licensing
+### Current State
+- ✅ **Tech Stack**: Solid KG-RAG foundation (Neo4j/OpenSearch/LLM).
+- ⚠️ **Gap**: Lacks strict assessment, identity verification, and multi-book "Career Paths".
+
+### 2026 Vision: The "Career Graph"
+- 🎯 **Career Paths**: Abstract layer grouping "Algebra", "Biology", "Psychology" into "Nursing Prep".
+- 🎯 **Certification**: Timed, proctored-style exams with verifiable digital credentials.
+- 🎯 **Enterprise**: B2B dashboards for companies to track employee upskilling ROI.
+- 🎯 **Compliance**: Identity verification and strict audit logging for issued certs.
 
 ---
 
@@ -33,150 +34,64 @@
 ### P0: Critical Features
 **Goal:** Production-ready single-deployment system
 
-#### 1.1 Multi-Book Support (8 weeks)
-**Why:** Biology-only limits market appeal
+#### 1.1 Career Path Architecture (8 weeks)
+**Why:** Adults don't want "Books"; they want "Jobs". We must group content by Career Goal.
 
 **Features:**
-- [ ] Support for 10 OpenStax books:
-  - Biology 2e ✅ (done)
-  - Chemistry 2e
-  - Physics
-  - Algebra & Trigonometry
-  - Calculus
-  - American Government
-  - Psychology 2e
-  - Economics
-  - Anatomy & Physiology
-  - Microbiology
-
-**Technical:**
-- Book-agnostic data pipeline
-- Multi-book graph partitioning
-- Cross-subject concept linking (e.g., "energy" in Physics → Biology)
-- Book selector in frontend
+- [ ] **Career Path Meta-Graph**:
+  - Define paths: "Nursing Prep", "Data Science Foundation", "Solar Technician".
+  - Map O*NET Skills to OpenStax Concepts.
+  - Cross-book dependencies (e.g., Math reqs for Chemistry).
 
 **Deliverables:**
-- Multi-book ingestion script
-- Book isolation in Neo4j (separate namespaces)
-- Frontend book switcher
-- Cross-book search
+- `CareerPath` nodes in Neo4j.
+- `Competency` nodes bridging Academic Concepts to Job Skills.
+- Frontend: "Choose your Career" onboarding.
 
 **Effort:** 2 engineers × 8 weeks = 320 hours
 
 ---
 
-#### 1.2 Performance Optimization (4 weeks)
-**Why:** Current system handles ~10 concurrent users, need 1000+
-
-**Bottlenecks Identified:**
-- Neo4j query performance (no indexes)
-- OpenSearch search latency (CPU-only)
-- LLM inference time (4-bit quantization bottleneck)
-- Frontend graph rendering (1000+ nodes crashes)
-
-**Solutions:**
-- [ ] Add Neo4j indexes on `importance_score`, `name`
-- [ ] Implement query result caching (Redis)
-- [ ] Optimize OpenSearch kNN settings
-- [ ] Use LLM batching for multiple questions
-- [ ] Frontend: Virtual scrolling for large graphs
-- [ ] Frontend: WebGL rendering (via Cytoscape.js)
-- [ ] Add CDN for static assets
-
-**Performance Targets:**
-- API response time: < 500ms (p95)
-- Graph query time: < 100ms
-- LLM inference: < 3s (p95)
-- Frontend load time: < 2s
-- Concurrent users: 1,000
-
-**Deliverables:**
-- Performance benchmarking suite
-- Load testing with Locust (1000 concurrent users)
-- Optimization report
-- CDN configuration (Cloudflare)
-
-**Effort:** 1 engineer × 4 weeks = 160 hours
-
----
-
-#### 1.3 Student Model Integration (6 weeks)
-**Why:** Demo shows KG-RAG but not adaptive learning
+#### 1.2 Certification Engine & Identity (6 weeks)
+**Why:** Certifications are worthless without verification and strict testing.
 
 **Features:**
-- [ ] Bayesian Knowledge Tracing (BKT) implementation
-  - Track mastery per concept per student
-  - Update probabilities after each interaction
-  - Persist in PostgreSQL (student_mastery table)
-
-- [ ] Item Response Theory (IRT) for assessments
-  - Calibrate exercise difficulty
-  - Match to student ability level
-  - Adaptive quiz generation
-
-- [ ] Next-Best-Action Policy
-  - Recommend optimal next concept based on:
-    - Current mastery gaps
-    - Prerequisite requirements
-    - Zone of proximal development
-    - Learning velocity
-
-- [ ] Learning Path Visualization
-  - Show student's learning journey
-  - Highlight completed vs. remaining concepts
-  - Progress indicators
-
-**Technical:**
-- Add PostgreSQL for student data
-- Schema: `students`, `mastery_state`, `interactions`, `assessments`
-- BKT engine in Python (pyBKT library)
-- IRT engine (py-irt library)
-- Real-time updates via WebSocket
+- [ ] **Strict Assessment Mode**:
+  - Timed exams.
+  - Full-screen proctoring hook (browser lock/warnings).
+  - No hints/chat allowed.
+- [ ] **Digital Credentials**:
+  - Generate signed JSON-LD / PDF Certificates.
+  - Unique verification URL (e.g., `cert.verify/uuid`).
 
 **Deliverables:**
-- Student database schema
-- BKT/IRT API endpoints
-- Frontend: Progress dashboard
-- Frontend: Adaptive quiz component
-- A/B testing framework for policy comparison
+- Certification Service (FastAPI).
+- PDF Generator.
+- Verification UI.
 
 **Effort:** 2 engineers × 6 weeks = 480 hours
 
 ---
 
-### P1: Teacher Tools (6 weeks)
-**Why:** Teachers need visibility and control
+### P1: Corporate Enterprise Dashboard (6 weeks)
+**Why:** Companies funding retraining need visibility into ROI and Skill Gaps.
 
-#### 1.4 Teacher Dashboard
+#### 1.3 Enterprise Tenant Portal
 **Features:**
-- [ ] Class overview (30+ students)
-  - Average mastery per concept
-  - Struggling students identification
-  - Progress over time charts
-
-- [ ] Individual student view
-  - Mastery heatmap (concept × time)
-  - Learning velocity trends
-  - Recommended interventions
-
-- [ ] Content authoring
-  - Add/edit concepts
-  - Add/edit relationships
-  - Upload custom assessments
-  - Tag concepts with standards (NGSS, Common Core)
+- [ ] **Cohort Management**: "Fall 2026 Reskilling Class".
+- [ ] **Skill Gap Analysis**:
+  - Pre-assessment vs. Post-assessment deltas.
+  - "Time to Proficiency" metrics.
+- [ ] **Compliance Reporting**:
+  - Downloadable audit logs for HR.
 
 **Technical:**
-- Role-based access control (RBAC)
-- New backend: `/api/v1/teacher/*` endpoints
-- Frontend: Teacher dashboard page
-- Analytics queries (aggregated from student data)
+- Multi-tenancy support (TenantID in all tables).
+- Role-based Access: `OrgAdmin`, `Manager`, `Employee`.
 
 **Deliverables:**
-- Teacher authentication system
-- Class management CRUD
-- Analytics dashboard
-- Content authoring UI
-- CSV export for grades
+- Enterprise Dashboard.
+- CSV/PDF Export Engine.
 
 **Effort:** 2 engineers × 6 weeks = 480 hours
 
