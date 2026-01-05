@@ -80,7 +80,7 @@ export default function Quiz() {
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center p-12">
-                <Loader2 className="w-12 h-12 animate-spin text-primary-600 mb-4" />
+                <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
                 <p className="text-gray-600">Generating adaptive quiz from knowledge graph...</p>
                 <p className="text-xs text-gray-400 mt-2">Thinking about "{topic}"</p>
             </div>
@@ -96,17 +96,18 @@ export default function Quiz() {
                     <select
                         value={topic}
                         onChange={(e) => setTopic(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500"
+                        className="w-full p-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500"
                     >
-                        <option value="American Government">American Government</option>
-                        <option value="US History">US History</option>
-                        <option value="Citizenship Test">Citizenship Test</option>
-                        <option value="Biology">Biology (Demo)</option>
+                        <option value="The American Revolution">The American Revolution</option>
+                        <option value="The Constitution">The Constitution</option>
+                        <option value="The Civil War">The Civil War</option>
+                        <option value="Industrialization">Industrialization</option>
+                        <option value="World War II">World War II</option>
                     </select>
                 </div>
                 <button
                     onClick={handleStartQuiz}
-                    className="w-full bg-primary-600 text-white py-3 rounded-md font-semibold hover:bg-primary-700 transition"
+                    className="w-full bg-blue-600 text-white py-3 rounded-md font-semibold hover:bg-blue-700 transition"
                 >
                     Generate Assessment
                 </button>
@@ -143,8 +144,8 @@ export default function Quiz() {
                                 }
                             } else {
                                 btnClass += selectedOption === opt.id
-                                    ? "border-primary-600 bg-primary-50 text-primary-700"
-                                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50";
+                                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                                    : "border-gray-300 hover:border-blue-400 hover:bg-gray-50";
                             }
 
                             return (
@@ -191,7 +192,7 @@ export default function Quiz() {
                         <div className="mt-6 flex justify-end">
                             <button
                                 onClick={handleNextQuestion}
-                                className="px-6 py-2 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700"
+                                className="px-6 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700"
                             >
                                 {currentQuestionIndex < quiz.questions.length - 1 ? "Next Question" : "Finish Quiz"}
                             </button>
@@ -205,7 +206,7 @@ export default function Quiz() {
                         <button
                             onClick={handleSubmitAnswer}
                             disabled={!selectedOption}
-                            className="px-6 py-2 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-6 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Submit Answer
                         </button>

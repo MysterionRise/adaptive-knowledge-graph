@@ -169,11 +169,10 @@ function ChatPageContent() {
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-3xl rounded-lg px-6 py-4 ${
-                    message.role === 'user'
-                      ? 'bg-primary-600 text-white'
+                  className={`max-w-3xl rounded-lg px-6 py-4 ${message.role === 'user'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-white border border-gray-200 shadow-sm'
-                  }`}
+                    }`}
                 >
                   {message.role === 'user' ? (
                     <p>{message.content}</p>
