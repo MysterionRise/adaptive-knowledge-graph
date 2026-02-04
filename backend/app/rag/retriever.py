@@ -244,7 +244,10 @@ def get_retriever() -> OpenSearchRetriever:
     global _retriever
 
     if _retriever is None:
-        _retriever = OpenSearchRetriever(username="admin", password="Opensearch-adaptive-graph123!")
+        _retriever = OpenSearchRetriever(
+            username=settings.opensearch_user,
+            password=settings.opensearch_password,
+        )
         _retriever.connect()
 
     return _retriever

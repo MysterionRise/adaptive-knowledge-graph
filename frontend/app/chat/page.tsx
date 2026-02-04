@@ -11,7 +11,10 @@ import {
   Network,
   BookOpen,
   ExternalLink,
+  MapPin,
 } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
+import { ChatMessageSkeleton } from '@/components/Skeleton';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -28,6 +31,9 @@ function ChatPageContent() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [useKgExpansion, setUseKgExpansion] = useState(true);
+
+  // Zustand store for cross-page state
+  const { setLastQueryConcepts, setLastQuery, setHighlightedConcepts } = useAppStore();
 
   // Ask initial question if provided in URL
   useEffect(() => {
@@ -63,6 +69,13 @@ function ChatPageContent() {
         response,
       };
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Store expanded concepts for cross-page highlighting
+      if (response.expanded_concepts && response.expanded_concepts.length > 0) {
+        setLastQueryConcepts(response.expanded_concepts);
+        setHighlightedConcepts(response.expanded_concepts);
+      }
+      setLastQuery(question);
     } catch (error: any) {
       console.error('Error asking question:', error);
       const errorMessage: Message = {
@@ -81,10 +94,10 @@ function ChatPageContent() {
   };
 
   const exampleQuestions = [
-    'What is photosynthesis?',
-    'Explain cellular respiration',
-    'How does DNA replication work?',
-    'What is the difference between mitosis and meiosis?',
+    'What caused the American Revolution?',
+    'Explain the significance of the Constitution',
+    'How did the Civil War affect American society?',
+    'What was the impact of Industrialization?',
   ];
 
   return (
@@ -104,7 +117,7 @@ function ChatPageContent() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">AI Tutor Chat</h1>
                 <p className="text-sm text-gray-600">
-                  Ask questions about Biology concepts
+                  Ask questions about US History &amp; Government
                 </p>
               </div>
             </div>
@@ -143,9 +156,9 @@ function ChatPageContent() {
                   Welcome to the AI Tutor!
                 </h2>
                 <p className="text-gray-600 mb-6">
-                  Ask me anything about Biology. I use knowledge graph-aware RAG
+                  Ask me anything about US History &amp; Government. I use knowledge graph-aware RAG
                   to provide comprehensive answers with citations from OpenStax
-                  Biology 2e.
+                  US History.
                 </p>
 
                 {/* Example Questions */}
@@ -188,16 +201,7 @@ function ChatPageContent() {
           )}
 
           {/* Loading indicator */}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-gray-200 rounded-lg px-6 py-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
-                  <span className="text-gray-600">Thinking...</span>
-                </div>
-              </div>
-            </div>
-          )}
+          {isLoading && <ChatMessageSkeleton />}
         </div>
 
         {/* Input Area */}
@@ -207,7 +211,7 @@ function ChatPageContent() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a question about Biology..."
+              placeholder="Ask a question about US History..."
               className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               disabled={isLoading}
             />
@@ -233,7 +237,16 @@ interface AssistantMessageProps {
 }
 
 function AssistantMessage({ content, response }: AssistantMessageProps) {
+  const router = useRouter();
   const [showSources, setShowSources] = useState(false);
+  const { setHighlightedConcepts } = useAppStore();
+
+  const handleViewOnGraph = () => {
+    if (response?.expanded_concepts) {
+      setHighlightedConcepts(response.expanded_concepts);
+    }
+    router.push('/graph');
+  };
 
   return (
     <div className="space-y-4">
@@ -244,11 +257,20 @@ function AssistantMessage({ content, response }: AssistantMessageProps) {
           {/* Expanded Concepts */}
           {response.expanded_concepts && response.expanded_concepts.length > 0 && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Network className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-blue-900">
-                  KG Expansion: {response.expanded_concepts.length} related concepts
-                </span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Network className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-semibold text-blue-900">
+                    KG Expansion: {response.expanded_concepts.length} related concepts
+                  </span>
+                </div>
+                <button
+                  onClick={handleViewOnGraph}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded transition-colors"
+                >
+                  <MapPin className="w-3 h-3" />
+                  View on Graph
+                </button>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {response.expanded_concepts.map((concept, idx) => (

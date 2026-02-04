@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_prefix: str = "/api/v1"
+    api_key: str = ""  # Set via API_KEY env var for authentication
+
+    # Rate Limiting
+    rate_limit_enabled: bool = True
+    rate_limit_ask: str = "10/minute"  # 10 requests per minute for /ask
+    rate_limit_quiz: str = "5/minute"  # 5 requests per minute for /quiz
+    rate_limit_graph: str = "30/minute"  # 30 requests per minute for /graph/*
 
     # Neo4j
     neo4j_uri: str = Field(default="bolt://localhost:7687")
@@ -41,6 +48,8 @@ class Settings(BaseSettings):
     opensearch_index: str = "textbook_chunks"
     opensearch_use_ssl: bool = True
     opensearch_verify_certs: bool = False
+    opensearch_user: str = "admin"
+    opensearch_password: str = ""  # Set via OPENSEARCH_PASSWORD env var
 
     # LLM Configuration
     llm_mode: Literal["local", "remote", "hybrid"] = "local"
@@ -73,6 +82,20 @@ class Settings(BaseSettings):
     rag_final_top_k: int = 5
     rag_kg_expansion: bool = True
     rag_kg_expansion_hops: int = 1
+
+    # Enterprise RAG: Vector Backend
+    # "opensearch" = original behavior (OpenSearch kNN)
+    # "neo4j" = Neo4j native vector index
+    # "hybrid" = query both, merge results
+    vector_backend: Literal["opensearch", "neo4j", "hybrid"] = "opensearch"
+
+    # Neo4j Vector Index Settings
+    neo4j_vector_index_name: str = "chunk_embeddings"
+    neo4j_vector_dimension: int = 1024  # BGE-M3 dimension
+
+    # Window Retrieval Settings
+    rag_window_retrieval: bool = True  # Enable window context via NEXT
+    rag_window_size: int = 1  # Chunks before/after to include
 
     # Student Model
     student_bkt_enabled: bool = True

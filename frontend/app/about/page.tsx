@@ -40,7 +40,7 @@ export default function AboutPage() {
             algorithms.
           </p>
           <p className="text-gray-700 leading-relaxed">
-            Built on OpenStax Biology 2e content, this system demonstrates how
+            Built on OpenStax US History content, this system demonstrates how
             AI can provide personalized, privacy-focused tutoring at scale.
           </p>
         </div>
@@ -84,7 +84,7 @@ export default function AboutPage() {
               <ul className="space-y-2 text-sm text-gray-700">
                 <li>• FastAPI for REST/WebSocket API</li>
                 <li>• Neo4j for knowledge graph storage</li>
-                <li>• Qdrant for vector search</li>
+                <li>• OpenSearch for vector search</li>
                 <li>• BGE-M3 embeddings</li>
                 <li>• Llama 3.1 / Qwen 2.5 (via Ollama)</li>
               </ul>
@@ -109,12 +109,12 @@ export default function AboutPage() {
           <p className="text-sm text-blue-800 mb-2">
             This project uses content from{' '}
             <a
-              href="https://openstax.org/details/books/biology-2e"
+              href="https://openstax.org/details/books/us-history"
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-blue-900"
             >
-              OpenStax Biology 2e
+              OpenStax US History
             </a>
             , licensed under{' '}
             <a

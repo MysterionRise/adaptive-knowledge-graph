@@ -7,11 +7,11 @@
 # 2. Parse HTML to structured JSON
 # 3. Normalize content with attribution
 # 4. Build knowledge graph in Neo4j
-# 5. Index chunks to Qdrant for RAG
+# 5. Index chunks to OpenSearch for RAG
 #
 # Prerequisites:
 # - Neo4j running on localhost:7687
-# - Qdrant running on localhost:6333
+# - OpenSearch running on localhost:9200
 # - Ollama with llama3.1 model (optional, for LLM features)
 # - Poetry environment activated
 #
@@ -153,9 +153,9 @@ main() {
         fi
     fi
 
-    # Check Qdrant
-    if ! check_service "Qdrant" "http://localhost:6333"; then
-        log_warning "Qdrant not running. Start with: docker compose -f infra/compose/compose.yaml up -d qdrant"
+    # Check OpenSearch
+    if ! check_service "OpenSearch" "http://localhost:9200"; then
+        log_warning "OpenSearch not running. Start with: docker compose -f infra/compose/compose.yaml up -d opensearch"
         read -p "Continue anyway? (y/N) " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -199,8 +199,8 @@ main() {
         exit 1
     fi
 
-    # Step 5: Index to Qdrant
-    if ! run_step 5 "Index chunks to Qdrant" "index_to_qdrant.py" "~60 minutes"; then
+    # Step 5: Index to OpenSearch
+    if ! run_step 5 "Index chunks to OpenSearch" "index_to_opensearch.py" "~60 minutes"; then
         exit 1
     fi
 

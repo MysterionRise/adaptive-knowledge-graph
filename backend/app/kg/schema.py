@@ -16,6 +16,7 @@ class NodeType(str, Enum):
     CONCEPT = "Concept"  # Biological concepts (e.g., "Photosynthesis", "Mitosis")
     SECTION = "Section"  # Textbook sections
     MODULE = "Module"  # Textbook modules
+    CHUNK = "Chunk"  # Text chunks for RAG (enterprise pattern)
 
 
 class RelationshipType(str, Enum):
@@ -26,6 +27,9 @@ class RelationshipType(str, Enum):
     COVERS = "COVERS"  # Section/Module covers Concept
     PART_OF = "PART_OF"  # Section is part of Module
     MENTIONS = "MENTIONS"  # Content mentions Concept
+    # Enterprise patterns for chunk-based RAG
+    NEXT = "NEXT"  # Sequential chunk relationship (chunk_a -> chunk_b)
+    FIRST_CHUNK = "FIRST_CHUNK"  # Module/Section -> first chunk relationship
 
 
 class ConceptNode(BaseModel):
@@ -62,6 +66,36 @@ class ModuleNode(BaseModel):
     key_terms: list[str] = Field(default_factory=list, description="Key terms in module")
 
 
+class ChunkNode(BaseModel):
+    """
+    Chunk node for enterprise RAG pattern.
+
+    Stores text chunks with embeddings directly in Neo4j for unified
+    graph+vector queries. Chunks are linked via NEXT relationships
+    for window retrieval.
+    """
+
+    chunk_id: str = Field(..., description="Unique chunk identifier")
+    text: str = Field(..., description="Chunk text content")
+    type: str = Field(default=NodeType.CHUNK, description="Node type")
+
+    # Position tracking
+    chunk_index: int = Field(default=0, description="Position within source document")
+    start_char: int = Field(default=0, description="Start character offset in source")
+    end_char: int = Field(default=0, description="End character offset in source")
+
+    # Source metadata
+    module_id: str | None = Field(None, description="Parent module ID")
+    section: str | None = Field(None, description="Section title")
+
+    # Embedding for Neo4j native vector search
+    text_embedding: list[float] | None = Field(None, description="BGE-M3 embedding vector")
+
+    # Sequential linking metadata
+    previous_chunk_id: str | None = Field(None, description="Previous chunk ID (for NEXT rel)")
+    next_chunk_id: str | None = Field(None, description="Next chunk ID (for NEXT rel)")
+
+
 class Relationship(BaseModel):
     """Relationship between nodes."""
 
@@ -79,6 +113,7 @@ class KnowledgeGraph(BaseModel):
     concepts: dict[str, ConceptNode] = Field(default_factory=dict, description="Concept nodes")
     sections: dict[str, SectionNode] = Field(default_factory=dict, description="Section nodes")
     modules: dict[str, ModuleNode] = Field(default_factory=dict, description="Module nodes")
+    chunks: dict[str, ChunkNode] = Field(default_factory=dict, description="Chunk nodes")
     relationships: list[Relationship] = Field(default_factory=list, description="All relationships")
 
     def add_concept(self, concept: ConceptNode):
@@ -91,6 +126,10 @@ class KnowledgeGraph(BaseModel):
             existing.source_modules = list(set(existing.source_modules))
         else:
             self.concepts[concept.name] = concept
+
+    def add_chunk(self, chunk: ChunkNode):
+        """Add a chunk node."""
+        self.chunks[chunk.chunk_id] = chunk
 
     def add_relationship(self, relationship: Relationship):
         """Add a relationship (avoiding duplicates)."""
@@ -138,6 +177,7 @@ class KnowledgeGraph(BaseModel):
             "concept_count": len(self.concepts),
             "section_count": len(self.sections),
             "module_count": len(self.modules),
+            "chunk_count": len(self.chunks),
             "relationship_count": len(self.relationships),
             "relationship_types": {
                 rel_type.value: sum(1 for r in self.relationships if r.type == rel_type)

@@ -149,11 +149,11 @@ else
     check_warn "Neo4j not running - start with: docker compose -f infra/compose/compose.yaml up -d neo4j"
 fi
 
-# Qdrant
-if curl -s -f http://localhost:6333 > /dev/null 2>&1; then
-    check_pass "Qdrant running (http://localhost:6333)"
+# OpenSearch
+if curl -s -f -k https://localhost:9200 > /dev/null 2>&1; then
+    check_pass "OpenSearch running (https://localhost:9200)"
 else
-    check_warn "Qdrant not running - start with: docker compose -f infra/compose/compose.yaml up -d qdrant"
+    check_warn "OpenSearch not running - start with: docker compose -f infra/compose/compose.yaml up -d opensearch"
 fi
 echo ""
 

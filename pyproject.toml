@@ -38,6 +38,11 @@ outlines = "^0.1.0"
 instructor = "^1.0.0"
 openai = "^2.0.0"  # For OpenRouter compatibility
 
+# LangChain (for GraphCypherQAChain)
+langchain = "^0.3.0"
+langchain-community = "^0.3.0"
+langchain-neo4j = "^0.2.0"
+
 # Student Modeling
 numpy = "^1.26.3"
 scipy = "^1.12.0"
@@ -59,6 +64,7 @@ python-dotenv = "^1.0.1"
 loguru = "^0.7.2"
 tenacity = "^8.2.3"
 requests = "^2.32.5"
+slowapi = "^0.1.9"
 
 [tool.poetry.group.dev.dependencies]
 # Testing
@@ -154,6 +160,9 @@ module = [
     "instructor.*",
     "ragas.*",
     "neo4j.*",
+    "langchain.*",
+    "langchain_community.*",
+    "langchain_neo4j.*",
 ]
 ignore_missing_imports = true
 

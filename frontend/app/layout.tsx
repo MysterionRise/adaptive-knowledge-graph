@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "../components/Providers";
 
 export const metadata: Metadata = {
   title: "Professional Certifications - Adaptive Learning Platform",
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

@@ -3,7 +3,13 @@ Knowledge Graph expansion for RAG.
 
 This is the "secret sauce" - uses KG to expand queries with related concepts
 for better retrieval. This is what differentiates us from vanilla RAG.
+
+Enterprise patterns:
+- Multi-strategy concept extraction (NER, embedding, YAKE)
+- Fulltext concept search for fuzzy matching
 """
+
+from typing import Literal
 
 from loguru import logger
 
@@ -14,15 +20,35 @@ from backend.app.kg.neo4j_adapter import Neo4jAdapter
 class KGExpander:
     """Expands queries using knowledge graph relationships."""
 
-    def __init__(self, max_hops: int = None):
+    def __init__(
+        self,
+        max_hops: int = None,
+        extraction_strategy: Literal["simple", "ensemble", "ner", "yake"] = "ensemble",
+    ):
         """
         Initialize KG expander.
 
         Args:
             max_hops: Maximum hops in graph for expansion
+            extraction_strategy: Concept extraction strategy
+                - "simple": Original substring matching
+                - "ensemble": Multi-strategy extraction (NER + YAKE)
+                - "ner": spaCy NER only
+                - "yake": YAKE keyword extraction only
         """
         self.max_hops = max_hops or settings.rag_kg_expansion_hops
+        self.extraction_strategy = extraction_strategy
         self.neo4j_adapter = None
+        self._concept_extractor = None
+
+    @property
+    def concept_extractor(self):
+        """Lazy-load concept extractor."""
+        if self._concept_extractor is None and self.extraction_strategy != "simple":
+            from backend.app.nlp.concept_extractor import get_concept_extractor
+
+            self._concept_extractor = get_concept_extractor()
+        return self._concept_extractor
 
     def connect(self):
         """Connect to Neo4j."""
@@ -39,6 +65,8 @@ class KGExpander:
         """
         Extract concept names from query.
 
+        Uses multi-strategy extraction when available, falls back to substring matching.
+
         Args:
             query: User query text
             all_concepts: Set of all known concept names
@@ -46,11 +74,43 @@ class KGExpander:
         Returns:
             List of concept names found in query
         """
+        if self.extraction_strategy == "simple":
+            return self._extract_simple(query, all_concepts)
+
+        # Use enhanced concept extraction
+        try:
+            extractor = self.concept_extractor
+            if extractor:
+                extractor.set_known_concepts(all_concepts)
+                matches = extractor.extract_concepts(
+                    query,
+                    strategy=self.extraction_strategy
+                    if self.extraction_strategy in ("ner", "yake")
+                    else "ensemble",
+                    top_k=5,
+                )
+                found_concepts = [m.name for m in matches]
+
+                if found_concepts:
+                    logger.info(
+                        f"Enhanced extraction ({self.extraction_strategy}): "
+                        f"found {len(found_concepts)} concepts"
+                    )
+                    return found_concepts
+
+        except Exception as e:
+            logger.warning(f"Enhanced extraction failed, using simple: {e}")
+
+        # Fallback to simple extraction
+        return self._extract_simple(query, all_concepts)
+
+    def _extract_simple(self, query: str, all_concepts: set[str]) -> list[str]:
+        """Original simple substring matching."""
         query_lower = query.lower()
         found_concepts = []
 
         for concept in all_concepts:
-            # Simple substring matching (can be improved with NER)
+            # Simple substring matching
             if concept.lower() in query_lower:
                 found_concepts.append(concept)
 

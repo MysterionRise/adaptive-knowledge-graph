@@ -2,14 +2,32 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import type { GraphStats } from '@/lib/types';
-import { Network, MessageSquare, TrendingUp, Zap, GraduationCap } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
+import { StatsSkeleton } from '@/components/Skeleton';
+import {
+  Network,
+  MessageSquare,
+  TrendingUp,
+  Zap,
+  GraduationCap,
+  Trophy,
+  Target,
+  BookOpen,
+  ArrowRight,
+  Sparkles,
+} from 'lucide-react';
 
 export default function Home() {
+  const router = useRouter();
   const [stats, setStats] = useState<GraphStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [topConcepts, setTopConcepts] = useState<string[]>([]);
+
+  const { masteryMap, getMastery } = useAppStore();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -21,14 +39,43 @@ export default function Home() {
       } catch (err) {
         console.error('Error fetching stats:', err);
         setError('Unable to load statistics. Using demo data.');
-        // Stats will show mock data from API client
       } finally {
         setIsLoading(false);
       }
     };
 
+    const fetchTopConcepts = async () => {
+      try {
+        const response = await fetch('/api/v1/concepts/top?limit=6');
+        if (response.ok) {
+          const data = await response.json();
+          setTopConcepts(data.concepts || []);
+        }
+      } catch (err) {
+        console.error('Error fetching top concepts:', err);
+        // Use fallback concepts
+        setTopConcepts([
+          'American Revolution',
+          'Constitution',
+          'Civil War',
+          'Reconstruction',
+          'Industrialization',
+          'World War II',
+        ]);
+      }
+    };
+
     fetchStats();
+    fetchTopConcepts();
   }, []);
+
+  // Calculate overall progress from mastery map
+  const masteredCount = Object.values(masteryMap).filter(m => m.masteryLevel >= 0.7).length;
+  const inProgressCount = Object.values(masteryMap).filter(m => m.masteryLevel >= 0.3 && m.masteryLevel < 0.7).length;
+  const totalTracked = Object.keys(masteryMap).length;
+  const overallMastery = totalTracked > 0
+    ? Object.values(masteryMap).reduce((sum, m) => sum + m.masteryLevel, 0) / totalTracked
+    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -82,9 +129,7 @@ export default function Home() {
             Knowledge Graph Statistics
           </h3>
           {isLoading ? (
-            <div className="flex justify-center items-center h-32">
-              <div className="spinner"></div>
-            </div>
+            <StatsSkeleton />
           ) : (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <StatCard
@@ -116,6 +161,140 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* Learning Progress Section */}
+        <div className="mb-16">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <Trophy className="w-7 h-7 text-amber-500" />
+            <h3 className="text-2xl font-bold text-gray-900">
+              Your Learning Progress
+            </h3>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+            {totalTracked > 0 ? (
+              <div className="space-y-6">
+                {/* Overall Progress */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Overall Mastery</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {Math.round(overallMastery * 100)}%
+                    </p>
+                  </div>
+                  <div className="flex gap-6 text-center">
+                    <div>
+                      <p className="text-2xl font-bold text-emerald-600">{masteredCount}</p>
+                      <p className="text-xs text-gray-500">Mastered</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-blue-600">{inProgressCount}</p>
+                      <p className="text-xs text-gray-500">In Progress</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-gray-400">{totalTracked}</p>
+                      <p className="text-xs text-gray-500">Total Tracked</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500"
+                    style={{ width: `${overallMastery * 100}%` }}
+                  />
+                </div>
+
+                {/* Concept Progress List */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {Object.entries(masteryMap).slice(0, 6).map(([name, data]) => (
+                    <div
+                      key={name}
+                      className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 cursor-pointer transition-all"
+                      onClick={() => router.push(`/chat?question=${encodeURIComponent(`Explain ${name}`)}`)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900 truncate">{name}</span>
+                        <span className={`text-xs font-semibold ${
+                          data.masteryLevel >= 0.7 ? 'text-emerald-600' :
+                          data.masteryLevel >= 0.4 ? 'text-blue-600' : 'text-gray-400'
+                        }`}>
+                          {Math.round(data.masteryLevel * 100)}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${
+                            data.masteryLevel >= 0.7 ? 'bg-emerald-500' :
+                            data.masteryLevel >= 0.4 ? 'bg-blue-500' : 'bg-gray-300'
+                          }`}
+                          style={{ width: `${data.masteryLevel * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Sparkles className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                  Start Your Learning Journey
+                </h4>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  Take assessments and ask questions to track your progress across US History concepts.
+                </p>
+                <div className="flex justify-center gap-4">
+                  <Link
+                    href="/assessment"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition-colors"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Take Assessment
+                  </Link>
+                  <Link
+                    href="/chat"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Ask AI Tutor
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Start Concepts */}
+        {topConcepts.length > 0 && (
+          <div className="mb-16">
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <Target className="w-6 h-6 text-blue-600" />
+              <h3 className="text-2xl font-bold text-gray-900">
+                Start Learning
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {topConcepts.map((concept) => (
+                <button
+                  key={concept}
+                  onClick={() => router.push(`/chat?question=${encodeURIComponent(`Explain ${concept}`)}`)}
+                  className="group p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all text-left"
+                >
+                  <p className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors text-sm">
+                    {concept}
+                  </p>
+                  <div className="flex items-center gap-1 mt-2 text-xs text-gray-500 group-hover:text-blue-500">
+                    <span>Learn</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Feature Cards */}
         <div className="mb-16">

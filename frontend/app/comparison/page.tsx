@@ -47,9 +47,9 @@ export default function ComparisonPage() {
   };
 
   const exampleQuestions = [
-    'What is photosynthesis?',
-    'Explain cellular respiration',
-    'How does mitosis work?',
+    'What caused the American Revolution?',
+    'Explain the significance of the Constitution',
+    'How did the Civil War affect society?',
   ];
 
   return (
@@ -94,7 +94,7 @@ export default function ComparisonPage() {
                 type="text"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="e.g., What is photosynthesis?"
+                placeholder="e.g., What caused the American Revolution?"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 disabled={isLoading}
               />
@@ -274,7 +274,7 @@ function ComparisonResult({ response, showKGInfo }: ComparisonResultProps) {
         <div className="pt-2">
           <p className="text-xs text-gray-600">
             Based on {response.sources.length} source
-            {response.sources.length > 1 ? 's' : ''} from OpenStax Biology 2e
+            {response.sources.length > 1 ? 's' : ''} from OpenStax US History
           </p>
         </div>
       )}

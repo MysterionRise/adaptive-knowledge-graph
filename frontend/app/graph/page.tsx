@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { apiClient } from '@/lib/api-client';
 import type { GraphData } from '@/lib/types';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, X, Loader2 } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
+import { GraphSkeleton } from '@/components/Skeleton';
 
 // Dynamic import to avoid SSR issues with Cytoscape
 const KnowledgeGraph = dynamic(() => import('@/components/KnowledgeGraph'), {
@@ -26,6 +28,9 @@ export default function GraphPage() {
     id: string;
     name: string;
   } | null>(null);
+
+  // Get highlighted concepts from store (set by chat page)
+  const { highlightedConcepts, clearHighlightedConcepts, lastQuery } = useAppStore();
 
   useEffect(() => {
     const fetchGraphData = async () => {
@@ -77,7 +82,7 @@ export default function GraphPage() {
                   Knowledge Graph Visualization
                 </h1>
                 <p className="mt-2 text-gray-600">
-                  Explore Biology concepts and their relationships
+                  Explore US History concepts and their relationships
                 </p>
               </div>
             </div>
@@ -96,17 +101,36 @@ export default function GraphPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Graph Visualization */}
           <div className="lg:col-span-3">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-center">
-                  <Loader2 className="w-12 h-12 animate-spin text-primary-600 mx-auto mb-4" />
-                  <p className="text-gray-600">Loading knowledge graph...</p>
+            {/* Highlighted concepts banner */}
+            {highlightedConcepts.length > 0 && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-amber-900">
+                    Highlighting {highlightedConcepts.length} concepts
+                    {lastQuery && (
+                      <span className="text-amber-700 ml-1">
+                        from query: &quot;{lastQuery.substring(0, 30)}...&quot;
+                      </span>
+                    )}
+                  </span>
                 </div>
+                <button
+                  onClick={clearHighlightedConcepts}
+                  className="p-1 hover:bg-amber-100 rounded transition-colors"
+                  aria-label="Clear highlights"
+                >
+                  <X className="w-4 h-4 text-amber-700" />
+                </button>
               </div>
+            )}
+
+            {isLoading ? (
+              <GraphSkeleton />
             ) : graphData ? (
               <KnowledgeGraph
                 data={graphData}
                 onNodeClick={handleNodeClick}
+                highlightedConcepts={highlightedConcepts}
                 className="h-[600px]"
               />
             ) : (
