@@ -90,9 +90,7 @@ class WindowRetriever:
                 all_chunks.append(chunk)
 
         # Sort by module_id, then chunk_index for coherent reading order
-        all_chunks.sort(
-            key=lambda c: (c.get("module_id", ""), c.get("chunk_index", 0))
-        )
+        all_chunks.sort(key=lambda c: (c.get("module_id", ""), c.get("chunk_index", 0)))
 
         logger.info(
             f"Window retrieval: {len(chunk_ids)} chunks -> "

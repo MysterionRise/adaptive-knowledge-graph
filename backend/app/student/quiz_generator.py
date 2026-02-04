@@ -149,14 +149,16 @@ JSON Output:"""
             if match:
                 return match.group(1).strip()
         if "```" in text:
-             pattern = r"```(.*?)```"
-             match = re.search(pattern, text, re.DOTALL)
-             if match:
+            pattern = r"```(.*?)```"
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
                 return match.group(1).strip()
         return text.strip()
 
+
 # Global singleton
 _quiz_generator: QuizGenerator | None = None
+
 
 def get_quiz_generator() -> QuizGenerator:
     """Get global instance."""

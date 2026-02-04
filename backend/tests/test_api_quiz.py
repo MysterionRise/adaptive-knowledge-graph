@@ -7,8 +7,9 @@ Tests cover:
 - Error handling (content not found, generation errors)
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 
 from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
 from backend.app.ui_payloads.quiz import Quiz, QuizOption, QuizQuestion
@@ -61,9 +62,7 @@ class TestQuizGenerateEndpoint:
 
         assert response.status_code == 200
         # Generator should be called with default num_questions=3
-        mock_quiz_generator.generate_from_topic.assert_called_once_with(
-            "Photosynthesis", 3
-        )
+        mock_quiz_generator.generate_from_topic.assert_called_once_with("Photosynthesis", 3)
 
     def test_generate_quiz_content_not_found(self, client):
         """Test 404 when no content found for topic."""
@@ -159,9 +158,7 @@ class TestQuizGenerateEndpoint:
             ],
         )
 
-        with patch(
-            "backend.app.api.routes.quiz.get_quiz_generator", return_value=generator
-        ):
+        with patch("backend.app.api.routes.quiz.get_quiz_generator", return_value=generator):
             response = client.post(
                 "/api/v1/quiz/generate",
                 params={"topic": "Test"},

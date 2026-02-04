@@ -106,7 +106,7 @@ The project is evolving from a general-purpose study tool into a **Professional 
   - Backend API (FastAPI)
   - Frontend (Next.js)
   - Neo4j (StatefulSet)
-  - Qdrant (StatefulSet)
+  - OpenSearch (StatefulSet)
   - PostgreSQL (StatefulSet)
   - Redis (cache)
 

@@ -238,7 +238,9 @@ def migrate_to_neo4j(
     if dry_run:
         logger.info("[DRY RUN] Would create the following in Neo4j:")
         logger.info(f"  - {len(chunks)} Chunk nodes")
-        logger.info(f"  - {sum(1 for c in chunks if c.get('previous_chunk_id'))} NEXT relationships")
+        logger.info(
+            f"  - {sum(1 for c in chunks if c.get('previous_chunk_id'))} NEXT relationships"
+        )
         logger.info(f"  - {len(first_chunks)} FIRST_CHUNK relationships")
         logger.info(f"  - {len(mentions)} MENTIONS relationships")
         return

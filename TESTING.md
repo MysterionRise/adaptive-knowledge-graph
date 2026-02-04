@@ -233,7 +233,7 @@ docker build -f infra/docker/api.gpu.Dockerfile -t test-gpu .
 
 ```bash
 # Start services
-docker compose -f infra/compose/compose.yaml up -d neo4j qdrant
+docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
 
 # Check health
 docker compose -f infra/compose/compose.yaml ps
@@ -304,7 +304,7 @@ Shared test data in `conftest.py`:
 - `client` - FastAPI test client
 - `temp_data_dir` - Temporary data directory
 - `mock_neo4j_uri` - Mock database URI
-- `mock_qdrant_config` - Mock vector DB config
+- `mock_opensearch_config` - Mock vector DB config
 
 ### Sample Data
 

@@ -85,13 +85,28 @@ def create_standard_indexes(adapter: Neo4jAdapter):
     with adapter.driver.session() as session:
         indexes = [
             # Chunk indexes
-            ("chunk_id_index", "CREATE INDEX chunk_id_index IF NOT EXISTS FOR (c:Chunk) ON (c.chunkId)"),
-            ("chunk_module_index", "CREATE INDEX chunk_module_index IF NOT EXISTS FOR (c:Chunk) ON (c.moduleId)"),
+            (
+                "chunk_id_index",
+                "CREATE INDEX chunk_id_index IF NOT EXISTS FOR (c:Chunk) ON (c.chunkId)",
+            ),
+            (
+                "chunk_module_index",
+                "CREATE INDEX chunk_module_index IF NOT EXISTS FOR (c:Chunk) ON (c.moduleId)",
+            ),
             # Concept indexes
-            ("concept_name_index", "CREATE INDEX concept_name_index IF NOT EXISTS FOR (c:Concept) ON (c.name)"),
-            ("concept_importance_index", "CREATE INDEX concept_importance_index IF NOT EXISTS FOR (c:Concept) ON (c.importance_score)"),
+            (
+                "concept_name_index",
+                "CREATE INDEX concept_name_index IF NOT EXISTS FOR (c:Concept) ON (c.name)",
+            ),
+            (
+                "concept_importance_index",
+                "CREATE INDEX concept_importance_index IF NOT EXISTS FOR (c:Concept) ON (c.importance_score)",
+            ),
             # Module indexes
-            ("module_id_index", "CREATE INDEX module_id_index IF NOT EXISTS FOR (m:Module) ON (m.module_id)"),
+            (
+                "module_id_index",
+                "CREATE INDEX module_id_index IF NOT EXISTS FOR (m:Module) ON (m.module_id)",
+            ),
         ]
 
         for name, query in indexes:
@@ -124,9 +139,7 @@ def verify_indexes(adapter: Neo4jAdapter):
             status = "ONLINE" if record["state"] == "ONLINE" else record["state"]
             labels = record["labelsOrTypes"]
             props = record["properties"]
-            logger.info(
-                f"  {record['name']}: {record['type']} on {labels}.{props} [{status}]"
-            )
+            logger.info(f"  {record['name']}: {record['type']} on {labels}.{props} [{status}]")
 
 
 def test_vector_search(adapter: Neo4jAdapter):

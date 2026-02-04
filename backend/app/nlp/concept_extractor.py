@@ -213,7 +213,9 @@ class ConceptExtractor:
 
         return matches
 
-    def _extract_embedding(self, text: str, similarity_threshold: float = 0.5) -> list[ConceptMatch]:
+    def _extract_embedding(
+        self, text: str, similarity_threshold: float = 0.5
+    ) -> list[ConceptMatch]:
         """Extract concepts using embedding similarity."""
         matches = []
 
@@ -307,7 +309,7 @@ class ConceptExtractor:
         fused_matches = []
         for concept_name, matches_list in all_matches.items():
             # Boost score for concepts found by multiple strategies
-            strategy_count = len(set(m.strategy for m in matches_list))
+            strategy_count = len({m.strategy for m in matches_list})
             max_score = max(m.score for m in matches_list)
             boosted_score = min(1.0, max_score * (1 + 0.2 * (strategy_count - 1)))
 

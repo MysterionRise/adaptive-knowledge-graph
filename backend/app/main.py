@@ -153,9 +153,7 @@ async def check_opensearch_health() -> ServiceHealth:
             cluster_status = health_data.get("status", "unknown")
 
             if cluster_status == "green":
-                return ServiceHealth(
-                    status=ServiceStatus.OK, latency_ms=round(latency, 2)
-                )
+                return ServiceHealth(status=ServiceStatus.OK, latency_ms=round(latency, 2))
             elif cluster_status == "yellow":
                 return ServiceHealth(
                     status=ServiceStatus.DEGRADED,
@@ -185,9 +183,7 @@ async def check_ollama_health() -> ServiceHealth:
 
     # Skip check if not using local LLM
     if settings.llm_mode == "remote":
-        return ServiceHealth(
-            status=ServiceStatus.OK, message="Using remote LLM (skipped)"
-        )
+        return ServiceHealth(status=ServiceStatus.OK, message="Using remote LLM (skipped)")
 
     try:
         start = time.perf_counter()
@@ -204,9 +200,7 @@ async def check_ollama_health() -> ServiceHealth:
             # Check if the configured model is available
             model_names = [m.get("name", "") for m in models]
             if any(settings.llm_local_model in name for name in model_names):
-                return ServiceHealth(
-                    status=ServiceStatus.OK, latency_ms=round(latency, 2)
-                )
+                return ServiceHealth(status=ServiceStatus.OK, latency_ms=round(latency, 2))
             else:
                 return ServiceHealth(
                     status=ServiceStatus.DEGRADED,
@@ -262,9 +256,7 @@ async def health_ready():
     elif any(s == ServiceStatus.ERROR for s in statuses):
         # Neo4j and OpenSearch are critical
         critical_services = ["neo4j", "opensearch"]
-        if any(
-            services[svc].status == ServiceStatus.ERROR for svc in critical_services
-        ):
+        if any(services[svc].status == ServiceStatus.ERROR for svc in critical_services):
             overall_status = "unhealthy"
         else:
             overall_status = "degraded"

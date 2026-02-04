@@ -273,18 +273,14 @@ def patch_neo4j(mock_neo4j_adapter):
 @pytest.fixture
 def patch_retriever(mock_retriever):
     """Patch get_retriever with mock."""
-    with patch(
-        "backend.app.api.routes.ask.get_retriever", return_value=mock_retriever
-    ) as mock:
+    with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever) as mock:
         yield mock
 
 
 @pytest.fixture
 def patch_llm_client(mock_llm_client):
     """Patch get_llm_client with mock."""
-    with patch(
-        "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client
-    ) as mock:
+    with patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client) as mock:
         yield mock
 
 

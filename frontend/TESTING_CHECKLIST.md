@@ -6,7 +6,7 @@ This checklist helps ensure all features work correctly before demo/deployment.
 
 - [ ] Backend API is running on `http://localhost:8000`
 - [ ] Neo4j is running with populated knowledge graph
-- [ ] Qdrant vector database is running with indexed chunks
+- [ ] OpenSearch vector database is running with indexed chunks
 - [ ] Frontend dev server is running on `http://localhost:3000`
 - [ ] Browser DevTools console is open for error checking
 

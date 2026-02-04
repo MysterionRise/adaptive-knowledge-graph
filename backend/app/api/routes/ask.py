@@ -121,9 +121,7 @@ async def ask_question(request: QuestionRequest):
                             }
                             for r in window_results
                         ]
-                        window_expanded_count = sum(
-                            r.get("chunk_count", 1) for r in window_results
-                        )
+                        window_expanded_count = sum(r.get("chunk_count", 1) for r in window_results)
                         logger.info(
                             f"Window expansion: {initial_count} -> {window_expanded_count} chunks"
                         )

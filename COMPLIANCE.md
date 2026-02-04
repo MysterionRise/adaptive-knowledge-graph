@@ -111,7 +111,7 @@ This is a **self-hosted PoC**. Compliance depends on deployment:
 |---------|-----------|---------|
 | Ollama (local) | Prompts with transformed excerpts | LLM inference |
 | Neo4j (local) | Knowledge graph | Graph storage |
-| Qdrant (local) | Embeddings + text chunks | Vector search |
+| OpenSearch (local) | Embeddings + text chunks | Vector search |
 | **External APIs** | **NONE** | N/A |
 
 ### When `PRIVACY_LOCAL_ONLY=false` (Opt-In)

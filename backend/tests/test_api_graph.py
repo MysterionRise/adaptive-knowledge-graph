@@ -11,8 +11,9 @@ Tests cover:
 - Learning path endpoints
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from backend.app.core.exceptions import Neo4jConnectionError, Neo4jQueryError
 
@@ -23,9 +24,7 @@ class TestGraphStatsEndpoint:
 
     def test_get_graph_stats_success(self, client, mock_neo4j_adapter):
         """Test successful graph statistics retrieval."""
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_neo4j_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_neo4j_adapter):
             response = client.get("/api/v1/graph/stats")
 
         assert response.status_code == 200
@@ -46,9 +45,7 @@ class TestGraphStatsEndpoint:
         failing_adapter = MagicMock()
         failing_adapter.connect.side_effect = Neo4jConnectionError("Connection refused")
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=failing_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=failing_adapter):
             response = client.get("/api/v1/graph/stats")
 
         assert response.status_code == 503
@@ -60,9 +57,7 @@ class TestGraphStatsEndpoint:
         failing_adapter.connect.return_value = None
         failing_adapter.get_graph_stats.side_effect = Neo4jQueryError("Query timeout")
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=failing_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=failing_adapter):
             response = client.get("/api/v1/graph/stats")
 
         assert response.status_code == 500
@@ -92,9 +87,7 @@ class TestTopConceptsEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/concepts/top", params={"limit": 3})
 
         assert response.status_code == 200
@@ -116,9 +109,7 @@ class TestTopConceptsEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/concepts/top")
 
         assert response.status_code == 200
@@ -157,9 +148,7 @@ class TestGraphDataEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/graph/data", params={"limit": 100})
 
         assert response.status_code == 200
@@ -199,9 +188,7 @@ class TestGraphDataEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/graph/data")
 
         assert response.status_code == 200
@@ -286,9 +273,7 @@ class TestConceptSearchEndpoint:
 
     def test_search_concepts_success(self, client, mock_neo4j_adapter):
         """Test successful concept search."""
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_neo4j_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_neo4j_adapter):
             response = client.post(
                 "/api/v1/concepts/search",
                 json={"query": "photo", "limit": 10},
@@ -314,9 +299,7 @@ class TestConceptSearchEndpoint:
         mock_adapter.close.return_value = None
         mock_adapter.fulltext_concept_search.return_value = []
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.post(
                 "/api/v1/concepts/search",
                 json={"query": "xyznonexistent", "limit": 10},
@@ -392,9 +375,7 @@ class TestLearningPathEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/learning-path/Photosynthesis")
 
         assert response.status_code == 200
@@ -418,9 +399,7 @@ class TestLearningPathEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/learning-path/BasicConcept")
 
         assert response.status_code == 200
@@ -445,12 +424,8 @@ class TestLearningPathEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
-            response = client.get(
-                "/api/v1/concepts/TestConcept/prerequisites", params={"depth": 2}
-            )
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
+            response = client.get("/api/v1/concepts/TestConcept/prerequisites", params={"depth": 2})
 
         assert response.status_code == 200
         data = response.json()
@@ -474,9 +449,7 @@ class TestLearningPathEndpoint:
         mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
         mock_adapter.driver = mock_driver
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/concepts/BasicConcept/dependents")
 
         assert response.status_code == 200
@@ -489,9 +462,7 @@ class TestLearningPathEndpoint:
         mock_adapter = MagicMock()
         mock_adapter.connect.side_effect = Neo4jConnectionError("Connection refused")
 
-        with patch(
-            "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter
-        ):
+        with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_adapter):
             response = client.get("/api/v1/learning-path/Photosynthesis")
 
         assert response.status_code == 503

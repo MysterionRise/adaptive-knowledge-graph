@@ -293,9 +293,7 @@ class CypherQAService:
             # Clean up response (remove markdown code blocks if present)
             if cypher.startswith("```"):
                 lines = cypher.split("\n")
-                cypher = "\n".join(
-                    line for line in lines if not line.startswith("```")
-                ).strip()
+                cypher = "\n".join(line for line in lines if not line.startswith("```")).strip()
 
             logger.info(f"Generated Cypher (preview): {cypher}")
             return cypher
