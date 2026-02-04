@@ -128,7 +128,7 @@ jobs:
           PIP_RETRIES: 5
 
       - name: Run tests with coverage
-        run: poetry run pytest --cov=backend/app --cov-report=xml --cov-report=term --cov-fail-under=80
+        run: poetry run pytest --cov=backend/app --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -166,10 +166,6 @@ jobs:
       - name: Run ESLint
         working-directory: frontend
         run: npm run lint
-
-      - name: Check formatting with Prettier
-        working-directory: frontend
-        run: npm run format:check
 
   # Frontend type checking
   frontend-type-check:

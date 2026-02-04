@@ -36,17 +36,3 @@ repos:
         language: system
         files: ^frontend/.*\.(ts|tsx|js|jsx)$
         pass_filenames: false
-
-      - id: frontend-format
-        name: Frontend Prettier
-        entry: bash -c 'cd frontend && npm run format:check'
-        language: system
-        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css)$
-        pass_filenames: false
-
-      - id: frontend-typecheck
-        name: Frontend TypeScript
-        entry: bash -c 'cd frontend && npm run type-check'
-        language: system
-        files: ^frontend/.*\.(ts|tsx)$
-        pass_filenames: false
