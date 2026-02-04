@@ -1,10 +1,31 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import cytoscape, { Core, NodeSingular, EdgeSingular } from 'cytoscape';
+import cytoscape, {
+  Core,
+  NodeSingular,
+  EdgeSingular,
+  Stylesheet,
+  LayoutOptions,
+} from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import type { GraphData } from '@/lib/types';
 import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
+
+// Type for cose-bilkent layout options (not included in @types/cytoscape)
+interface CoseBilkentLayoutOptions extends LayoutOptions {
+  name: 'cose-bilkent';
+  randomize?: boolean;
+  nodeRepulsion?: number;
+  idealEdgeLength?: number;
+  edgeElasticity?: number;
+  nestingFactor?: number;
+  gravity?: number;
+  numIter?: number;
+  tile?: boolean;
+  animate?: boolean | 'end' | 'during';
+  animationDuration?: number;
+}
 
 // Register layout
 if (typeof cytoscape !== 'undefined') {
@@ -92,7 +113,7 @@ export default function KnowledgeGraph({
             'background-opacity': 0.9,
             'transition-property': 'background-color, border-color, border-width, width, height',
             'transition-duration': 300,
-          } as any,
+          } as Stylesheet['style'],
         },
         {
           selector: 'node.highlighted',
@@ -160,7 +181,7 @@ export default function KnowledgeGraph({
             'opacity': 0.7,
             'transition-property': 'opacity, width, line-color',
             'transition-duration': 300,
-          } as any,
+          } as Stylesheet['style'],
         },
         {
           selector: 'edge.highlighted',
@@ -189,7 +210,7 @@ export default function KnowledgeGraph({
         tile: true,
         animate: 'end',
         animationDuration: 1000,
-      } as any,
+      } as CoseBilkentLayoutOptions,
       minZoom: 0.3,
       maxZoom: 3,
       wheelSensitivity: 0.2,

@@ -2,11 +2,14 @@
 
 **Enterprise-grade AI Tutor with Knowledge Graphs, Local LLMs, and Adaptive Learning**
 
+[![CI](https://github.com/MysterionRise/adaptive-knowledge-graph/workflows/CI/badge.svg)](https://github.com/MysterionRise/adaptive-knowledge-graph/actions)
+[![codecov](https://codecov.io/gh/MysterionRise/adaptive-knowledge-graph/branch/main/graph/badge.svg)](https://codecov.io/gh/MysterionRise/adaptive-knowledge-graph)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11-3.13](https://img.shields.io/badge/python-3.11--3.13-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com)
-[![Test Coverage](https://img.shields.io/badge/coverage-80%25-green.svg)](./TESTING.md)
-[![CI](https://github.com/yourusername/adaptive-knowledge-graph/workflows/CI/badge.svg)](https://github.com/yourusername/adaptive-knowledge-graph/actions)
+[![Python](https://img.shields.io/badge/Python-3.11--3.13-blue.svg)](https://www.python.org/downloads/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6.svg)](https://www.typescriptlang.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.121+-009688.svg)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org/)
+[![Test Coverage](https://img.shields.io/badge/coverage-80%25+-brightgreen.svg)](./TESTING.md)
 
 **📚 [Testing Guide](./TESTING.md) | 📐 [Architecture](./docs/ARCHITECTURE.md) | 🤝 [Contributing](./CONTRIBUTING.md) | 🔒 [Compliance](./COMPLIANCE.md)**
 

@@ -1,0 +1,8 @@
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+*.min.js
+*.min.css
+package-lock.json
