@@ -129,16 +129,7 @@ jobs:
           PIP_RETRIES: 5
 
       - name: Run tests with coverage
-        run: poetry run pytest --cov=backend/app --cov-report=xml --cov-report=term
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: matrix.python-version == '3.11'
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+        run: poetry run pytest --cov=backend/app --cov-report=term
 
       - name: Cleanup to free disk space
         if: always()
@@ -213,14 +204,6 @@ jobs:
         working-directory: frontend
         run: npm run test:coverage -- --ci --passWithNoTests || true
         continue-on-error: true
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./frontend/coverage/lcov.info
-          flags: frontend
-          name: frontend-coverage
-          fail_ci_if_error: false
 
   # E2E Tests (Playwright)
   e2e-tests:
