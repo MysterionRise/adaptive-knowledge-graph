@@ -9,6 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.121+-009688.svg)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org/)
 [![Test Coverage](https://img.shields.io/badge/coverage-80%25+-brightgreen.svg)](./TESTING.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 **📚 [Testing Guide](./TESTING.md) | 📐 [Architecture](./docs/ARCHITECTURE.md) | 🤝 [Contributing](./CONTRIBUTING.md) | 🔒 [Compliance](./COMPLIANCE.md)**
 
@@ -150,7 +151,7 @@ This software is licensed under the [MIT License](./LICENSE). See [LICENSE](./LI
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/yourusername/adaptive-knowledge-graph.git
+git clone https://github.com/MysterionRise/adaptive-knowledge-graph.git
 cd adaptive-knowledge-graph
 
 # Install Poetry if not already installed
@@ -201,7 +202,7 @@ npm run dev
 # Visit http://localhost:3000
 ```
 
-### 4. Verify Services
+### 5. Verify Services
 
 - **Neo4j Browser**: http://localhost:7474 (user: `neo4j`, pass: `password`)
 - **OpenSearch**: http://localhost:9200 (REST API)
@@ -438,8 +439,8 @@ Contributions welcome! This is an educational PoC designed for **reuse and exten
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/adaptive-knowledge-graph/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/adaptive-knowledge-graph/discussions)
+- **Issues**: [GitHub Issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/MysterionRise/adaptive-knowledge-graph/discussions)
 
 ---
 
