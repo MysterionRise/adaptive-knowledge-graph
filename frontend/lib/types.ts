@@ -99,3 +99,45 @@ export interface HealthResponse {
   status: string;
   attribution?: string;
 }
+
+/**
+ * Subject summary for listing.
+ */
+export interface SubjectSummary {
+  id: string;
+  name: string;
+  description: string;
+  is_default: boolean;
+}
+
+/**
+ * Subject list response.
+ */
+export interface SubjectListResponse {
+  subjects: SubjectSummary[];
+  default_subject: string;
+}
+
+/**
+ * Subject theme for frontend styling.
+ */
+export interface SubjectTheme {
+  subject_id: string;
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  chapter_colors: Record<string, string>;
+}
+
+/**
+ * Subject detail response.
+ */
+export interface SubjectDetailResponse {
+  id: string;
+  name: string;
+  description: string;
+  attribution: string;
+  opensearch_index: string;
+  book_count: number;
+  is_default: boolean;
+}

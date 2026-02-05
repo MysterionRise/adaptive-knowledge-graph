@@ -11,6 +11,9 @@ import type {
   GraphData,
   TopConcept,
   HealthResponse,
+  SubjectListResponse,
+  SubjectTheme,
+  SubjectDetailResponse,
 } from './types';
 
 /**
@@ -54,10 +57,14 @@ class ApiClient {
   /**
    * Get graph statistics (concept count, module count, relationship count).
    * Falls back to mock data if the API is unavailable.
+   *
+   * @param subject - Subject ID (e.g., 'us_history', 'biology')
    */
-  async getGraphStats(): Promise<GraphStats> {
+  async getGraphStats(subject?: string): Promise<GraphStats> {
     try {
-      const response = await this.client.get<GraphStats>(`${this.apiPrefix}/graph/stats`);
+      const response = await this.client.get<GraphStats>(`${this.apiPrefix}/graph/stats`, {
+        params: subject ? { subject } : undefined,
+      });
       return response.data;
     } catch (error) {
       console.warn('Failed to fetch graph stats, using mock data:', error);
@@ -74,13 +81,15 @@ class ApiClient {
    * Ask a question using KG-aware RAG.
    *
    * @param request - Question request with question text and optional parameters
+   * @param subject - Subject ID (e.g., 'us_history', 'biology')
    * @returns Question response with answer, sources, and metadata
    */
-  async askQuestion(request: QuestionRequest): Promise<QuestionResponse> {
+  async askQuestion(request: QuestionRequest, subject?: string): Promise<QuestionResponse> {
     const payload = {
       question: request.question,
       use_kg_expansion: request.use_kg_expansion ?? true,
       top_k: request.top_k ?? 5,
+      subject: subject,
     };
 
     const response = await this.client.post<QuestionResponse>(
@@ -94,12 +103,13 @@ class ApiClient {
    * Get graph data for visualization (nodes and edges).
    *
    * @param limit - Maximum number of concepts to return (default: 100)
+   * @param subject - Subject ID (e.g., 'us_history', 'biology')
    * @returns Graph data with nodes and edges
    */
-  async getGraphData(limit: number = 100): Promise<GraphData> {
+  async getGraphData(limit: number = 100, subject?: string): Promise<GraphData> {
     try {
       const response = await this.client.get<GraphData>(`${this.apiPrefix}/graph/data`, {
-        params: { limit },
+        params: { limit, ...(subject && { subject }) },
       });
       return response.data;
     } catch (error) {
@@ -150,6 +160,83 @@ class ApiClient {
    */
   getBaseURL(): string {
     return this.baseURL;
+  }
+
+  // ==========================================================================
+  // Subject Management
+  // ==========================================================================
+
+  /**
+   * Get all available subjects.
+   *
+   * @returns List of subjects with default subject indicated
+   */
+  async getSubjects(): Promise<SubjectListResponse> {
+    try {
+      const response = await this.client.get<SubjectListResponse>(`${this.apiPrefix}/subjects`);
+      return response.data;
+    } catch (error) {
+      console.warn('Failed to fetch subjects:', error);
+      // Return fallback with default subject
+      return {
+        subjects: [
+          { id: 'us_history', name: 'US History', description: 'American History', is_default: true },
+        ],
+        default_subject: 'us_history',
+      };
+    }
+  }
+
+  /**
+   * Get theme for a specific subject.
+   *
+   * @param subjectId - Subject identifier
+   * @returns Theme configuration with colors
+   */
+  async getSubjectTheme(subjectId: string): Promise<SubjectTheme> {
+    try {
+      const response = await this.client.get<SubjectTheme>(
+        `${this.apiPrefix}/subjects/${subjectId}/theme`
+      );
+      return response.data;
+    } catch (error) {
+      console.warn(`Failed to fetch theme for ${subjectId}:`, error);
+      // Return default theme
+      return {
+        subject_id: subjectId,
+        primary_color: '#6366f1',
+        secondary_color: '#e0e7ff',
+        accent_color: '#4f46e5',
+        chapter_colors: { default: '#6366f1' },
+      };
+    }
+  }
+
+  /**
+   * Get detailed information about a subject.
+   *
+   * @param subjectId - Subject identifier
+   * @returns Subject detail information
+   */
+  async getSubjectDetail(subjectId: string): Promise<SubjectDetailResponse> {
+    const response = await this.client.get<SubjectDetailResponse>(
+      `${this.apiPrefix}/subjects/${subjectId}`
+    );
+    return response.data;
+  }
+
+  /**
+   * Generate a quiz for a topic.
+   *
+   * @param topic - Topic to generate quiz for
+   * @param numQuestions - Number of questions (default: 3)
+   * @param subject - Subject ID (e.g., 'us_history', 'biology')
+   */
+  async generateQuiz(topic: string, numQuestions: number = 3, subject?: string): Promise<any> {
+    const response = await this.client.post(`${this.apiPrefix}/quiz/generate`, null, {
+      params: { topic, num_questions: numQuestions, ...(subject && { subject }) },
+    });
+    return response.data;
   }
 }
 

@@ -154,6 +154,8 @@ class LLMClient:
         question: str,
         context: list[str],
         attribution: str,
+        system_prompt: str | None = None,
+        context_label: str | None = None,
     ) -> dict[str, str]:
         """
         Answer a question using retrieved context.
@@ -162,6 +164,8 @@ class LLMClient:
             question: User question
             context: List of retrieved text chunks
             attribution: Attribution text to include
+            system_prompt: Custom system prompt (defaults to generic tutor prompt)
+            context_label: Label for the context section (e.g., "Context from US History")
 
         Returns:
             Dict with 'answer' and 'reasoning'
@@ -169,8 +173,9 @@ class LLMClient:
         # Build context string
         context_str = "\n\n".join([f"[{i + 1}] {chunk}" for i, chunk in enumerate(context)])
 
-        # System prompt for Q&A
-        system_prompt = """You are an expert biology tutor. Answer the student's question using ONLY the provided textbook context.
+        # Default system prompt if not provided
+        if system_prompt is None:
+            system_prompt = """You are an expert tutor. Answer the student's question using ONLY the provided textbook context.
 
 Rules:
 1. Base your answer ONLY on the provided context
@@ -179,10 +184,14 @@ Rules:
 4. Be clear, accurate, and educational
 5. Include the attribution at the end of your response"""
 
+        # Default context label if not provided
+        if context_label is None:
+            context_label = "Context from textbook"
+
         # User prompt
         user_prompt = f"""Question: {question}
 
-Context from OpenStax Biology 2e:
+{context_label}:
 {context_str}
 
 Please answer the question based on the context above. End your response with the attribution:

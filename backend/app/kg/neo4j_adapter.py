@@ -2,6 +2,7 @@
 Neo4j adapter for persisting knowledge graphs.
 
 Handles connection to Neo4j and CRUD operations for graph data.
+Supports multi-subject isolation via database parameter or label prefixes.
 """
 
 from loguru import logger
@@ -19,6 +20,8 @@ class Neo4jAdapter:
         uri: str | None = None,
         user: str | None = None,
         password: str | None = None,
+        database: str | None = None,
+        label_prefix: str | None = None,
     ):
         """
         Initialize Neo4j adapter.
@@ -27,21 +30,38 @@ class Neo4jAdapter:
             uri: Neo4j URI (defaults to settings)
             user: Neo4j user (defaults to settings)
             password: Neo4j password (defaults to settings)
+            database: Neo4j database name (for Enterprise Edition multi-db)
+            label_prefix: Prefix for node labels (for Community Edition soft isolation)
         """
         self.uri = uri or settings.neo4j_uri
         self.user = user or settings.neo4j_user
         self.password = password or settings.neo4j_password
+        self.database = database or settings.neo4j_database
+        self.label_prefix = label_prefix  # e.g., "us_history" -> "us_history_Concept"
         self.driver = None
+
+    def _get_label(self, base_label: str) -> str:
+        """Get the full label name with optional prefix for isolation."""
+        if self.label_prefix:
+            return f"{self.label_prefix}_{base_label}"
+        return base_label
+
+    def _get_session(self) -> Session:
+        """Get a session for the configured database."""
+        return self.driver.session(database=self.database)
 
     def connect(self):
         """Connect to Neo4j database."""
         try:
             self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
             # Test connection
-            with self.driver.session() as session:
+            with self._get_session() as session:
                 result = session.run("RETURN 1 as test")
                 result.single()
-            logger.success(f"✓ Connected to Neo4j at {self.uri}")
+            db_info = f"{self.uri} (db: {self.database})"
+            if self.label_prefix:
+                db_info += f" [prefix: {self.label_prefix}]"
+            logger.success(f"✓ Connected to Neo4j at {db_info}")
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}")
             raise
@@ -54,9 +74,19 @@ class Neo4jAdapter:
 
     def clear_database(self):
         """Clear all nodes and relationships (use with caution!)."""
-        with self.driver.session() as session:
-            session.run("MATCH (n) DETACH DELETE n")
-        logger.warning("⚠️  Cleared Neo4j database")
+        with self._get_session() as session:
+            if self.label_prefix:
+                # Only clear nodes with our prefix (soft isolation)
+                concept_label = self._get_label("Concept")
+                module_label = self._get_label("Module")
+                chunk_label = self._get_label("Chunk")
+                session.run(f"MATCH (n:{concept_label}) DETACH DELETE n")
+                session.run(f"MATCH (n:{module_label}) DETACH DELETE n")
+                session.run(f"MATCH (n:{chunk_label}) DETACH DELETE n")
+                logger.warning(f"⚠️  Cleared Neo4j nodes with prefix: {self.label_prefix}")
+            else:
+                session.run("MATCH (n) DETACH DELETE n")
+                logger.warning("⚠️  Cleared Neo4j database")
 
     def persist_knowledge_graph(self, kg: KnowledgeGraph):
         """
@@ -65,9 +95,10 @@ class Neo4jAdapter:
         Args:
             kg: KnowledgeGraph to persist
         """
-        logger.info("Persisting knowledge graph to Neo4j")
+        prefix_info = f" (prefix: {self.label_prefix})" if self.label_prefix else ""
+        logger.info(f"Persisting knowledge graph to Neo4j{prefix_info}")
 
-        with self.driver.session() as session:
+        with self._get_session() as session:
             # Create concept nodes
             self._create_concept_nodes(session, kg)
 
@@ -83,9 +114,10 @@ class Neo4jAdapter:
 
     def _create_concept_nodes(self, session: Session, kg: KnowledgeGraph):
         """Create concept nodes in Neo4j."""
+        concept_label = self._get_label("Concept")
         for _, concept in kg.concepts.items():
-            query = """
-            MERGE (c:Concept {name: $name})
+            query = f"""
+            MERGE (c:{concept_label} {{name: $name}})
             SET c.key_term = $key_term,
                 c.frequency = $frequency,
                 c.importance_score = $importance_score,
@@ -103,9 +135,10 @@ class Neo4jAdapter:
 
     def _create_module_nodes(self, session: Session, kg: KnowledgeGraph):
         """Create module nodes in Neo4j."""
+        module_label = self._get_label("Module")
         for _, module in kg.modules.items():
-            query = """
-            MERGE (m:Module {module_id: $module_id})
+            query = f"""
+            MERGE (m:{module_label} {{module_id: $module_id}})
             SET m.title = $title,
                 m.key_terms = $key_terms
             """
@@ -119,30 +152,33 @@ class Neo4jAdapter:
 
     def _create_relationships(self, session: Session, kg: KnowledgeGraph):
         """Create relationships in Neo4j."""
+        concept_label = self._get_label("Concept")
+        module_label = self._get_label("Module")
+
         for rel in kg.relationships:
             if rel.type == RelationshipType.COVERS:
                 # Module -> Concept
-                query = """
-                MATCH (m:Module {module_id: $source})
-                MATCH (c:Concept {name: $target})
+                query = f"""
+                MATCH (m:{module_label} {{module_id: $source}})
+                MATCH (c:{concept_label} {{name: $target}})
                 MERGE (m)-[r:COVERS]->(c)
                 SET r.weight = $weight,
                     r.confidence = $confidence
                 """
             elif rel.type == RelationshipType.RELATED:
                 # Concept -> Concept
-                query = """
-                MATCH (c1:Concept {name: $source})
-                MATCH (c2:Concept {name: $target})
+                query = f"""
+                MATCH (c1:{concept_label} {{name: $source}})
+                MATCH (c2:{concept_label} {{name: $target}})
                 MERGE (c1)-[r:RELATED]-(c2)
                 SET r.weight = $weight,
                     r.confidence = $confidence
                 """
             elif rel.type == RelationshipType.PREREQ:
                 # Concept -> Concept (prerequisite)
-                query = """
-                MATCH (c1:Concept {name: $source})
-                MATCH (c2:Concept {name: $target})
+                query = f"""
+                MATCH (c1:{concept_label} {{name: $source}})
+                MATCH (c2:{concept_label} {{name: $target}})
                 MERGE (c1)-[r:PREREQ]->(c2)
                 SET r.weight = $weight,
                     r.confidence = $confidence
@@ -171,9 +207,10 @@ class Neo4jAdapter:
         Returns:
             List of neighbor concept dicts
         """
-        with self.driver.session() as session:
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
             query = f"""
-            MATCH (c:Concept {{name: $name}})-[r*1..{max_hops}]-(neighbor:Concept)
+            MATCH (c:{concept_label} {{name: $name}})-[r*1..{max_hops}]-(neighbor:{concept_label})
             RETURN DISTINCT neighbor.name as name,
                    neighbor.importance_score as importance_score,
                    neighbor.key_term as key_term
@@ -186,19 +223,48 @@ class Neo4jAdapter:
 
     def get_graph_stats(self) -> dict:
         """Get graph statistics from Neo4j."""
-        with self.driver.session() as session:
+        concept_label = self._get_label("Concept")
+        module_label = self._get_label("Module")
+        chunk_label = self._get_label("Chunk")
+
+        with self._get_session() as session:
             stats = {}
 
-            # Count nodes by type
-            result = session.run("MATCH (n) RETURN labels(n) as labels, count(n) as count")
-            for record in result:
-                label = record["labels"][0] if record["labels"] else "Unknown"
-                stats[f"{label}_count"] = record["count"]
+            if self.label_prefix:
+                # Count nodes with our prefix labels
+                result = session.run(f"MATCH (n:{concept_label}) RETURN count(n) as count")
+                stats["Concept_count"] = result.single()["count"]
 
-            # Count relationships by type
-            result = session.run("MATCH ()-[r]->() RETURN type(r) as type, count(r) as count")
-            for record in result:
-                stats[f"{record['type']}_relationships"] = record["count"]
+                result = session.run(f"MATCH (n:{module_label}) RETURN count(n) as count")
+                stats["Module_count"] = result.single()["count"]
+
+                result = session.run(f"MATCH (n:{chunk_label}) RETURN count(n) as count")
+                stats["Chunk_count"] = result.single()["count"]
+
+                # Count relationships between our nodes
+                result = session.run(
+                    f"MATCH (:{concept_label})-[r]->() RETURN type(r) as type, count(r) as count"
+                )
+                for record in result:
+                    stats[f"{record['type']}_relationships"] = record["count"]
+
+                result = session.run(
+                    f"MATCH (:{module_label})-[r]->() RETURN type(r) as type, count(r) as count"
+                )
+                for record in result:
+                    key = f"{record['type']}_relationships"
+                    stats[key] = stats.get(key, 0) + record["count"]
+            else:
+                # Original behavior - count all nodes
+                result = session.run("MATCH (n) RETURN labels(n) as labels, count(n) as count")
+                for record in result:
+                    label = record["labels"][0] if record["labels"] else "Unknown"
+                    stats[f"{label}_count"] = record["count"]
+
+                # Count relationships by type
+                result = session.run("MATCH ()-[r]->() RETURN type(r) as type, count(r) as count")
+                for record in result:
+                    stats[f"{record['type']}_relationships"] = record["count"]
 
             return stats
 
@@ -217,14 +283,15 @@ class Neo4jAdapter:
         if not chunks:
             return
 
-        with self.driver.session() as session:
+        chunk_label = self._get_label("Chunk")
+        with self._get_session() as session:
             # Process in batches for performance
             for i in range(0, len(chunks), batch_size):
                 batch = chunks[i : i + batch_size]
 
-                query = """
+                query = f"""
                 UNWIND $chunks AS chunk
-                MERGE (c:Chunk {chunkId: chunk.chunk_id})
+                MERGE (c:{chunk_label} {{chunkId: chunk.chunk_id}})
                 SET c.text = chunk.text,
                     c.chunkIndex = chunk.chunk_index,
                     c.startChar = chunk.start_char,
@@ -261,11 +328,12 @@ class Neo4jAdapter:
         Args:
             chunks: List of ChunkNode objects with sequential linking metadata
         """
-        with self.driver.session() as session:
-            query = """
+        chunk_label = self._get_label("Chunk")
+        with self._get_session() as session:
+            query = f"""
             UNWIND $pairs AS pair
-            MATCH (c1:Chunk {chunkId: pair.from_id})
-            MATCH (c2:Chunk {chunkId: pair.to_id})
+            MATCH (c1:{chunk_label} {{chunkId: pair.from_id}})
+            MATCH (c2:{chunk_label} {{chunkId: pair.to_id}})
             MERGE (c1)-[:NEXT]->(c2)
             """
 
@@ -287,11 +355,13 @@ class Neo4jAdapter:
         Args:
             module_first_chunks: Dict mapping module_id to first chunk_id
         """
-        with self.driver.session() as session:
-            query = """
+        module_label = self._get_label("Module")
+        chunk_label = self._get_label("Chunk")
+        with self._get_session() as session:
+            query = f"""
             UNWIND $links AS link
-            MATCH (m:Module {module_id: link.module_id})
-            MATCH (c:Chunk {chunkId: link.chunk_id})
+            MATCH (m:{module_label} {{module_id: link.module_id}})
+            MATCH (c:{chunk_label} {{chunkId: link.chunk_id}})
             MERGE (m)-[:FIRST_CHUNK]->(c)
             """
 
@@ -318,14 +388,16 @@ class Neo4jAdapter:
         if not chunk_concept_pairs:
             return
 
-        with self.driver.session() as session:
+        chunk_label = self._get_label("Chunk")
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
             for i in range(0, len(chunk_concept_pairs), batch_size):
                 batch = chunk_concept_pairs[i : i + batch_size]
 
-                query = """
+                query = f"""
                 UNWIND $pairs AS pair
-                MATCH (chunk:Chunk {chunkId: pair.chunk_id})
-                MATCH (concept:Concept {name: pair.concept_name})
+                MATCH (chunk:{chunk_label} {{chunkId: pair.chunk_id}})
+                MATCH (concept:{concept_label} {{name: pair.concept_name}})
                 MERGE (chunk)-[:MENTIONS]->(concept)
                 """
 
@@ -344,7 +416,7 @@ class Neo4jAdapter:
 
     def create_vector_index(
         self,
-        index_name: str = "chunk_embeddings",
+        index_name: str | None = None,
         dimension: int = 1024,
         similarity_function: str = "cosine",
     ):
@@ -354,11 +426,20 @@ class Neo4jAdapter:
         Requires Neo4j 5.x with vector index support.
 
         Args:
-            index_name: Name for the vector index
+            index_name: Name for the vector index (auto-generated if label_prefix set)
             dimension: Embedding dimension (1024 for BGE-M3)
             similarity_function: 'cosine' or 'euclidean'
         """
-        with self.driver.session() as session:
+        chunk_label = self._get_label("Chunk")
+
+        # Auto-generate index name if using label prefix
+        if index_name is None:
+            if self.label_prefix:
+                index_name = f"{self.label_prefix}_chunk_embeddings"
+            else:
+                index_name = "chunk_embeddings"
+
+        with self._get_session() as session:
             # Check if index already exists
             result = session.run("SHOW INDEXES YIELD name WHERE name = $name", name=index_name)
             if result.single():
@@ -368,7 +449,7 @@ class Neo4jAdapter:
             # Create vector index (Neo4j 5.x syntax)
             query = f"""
             CREATE VECTOR INDEX {index_name} IF NOT EXISTS
-            FOR (c:Chunk) ON (c.textEmbedding)
+            FOR (c:{chunk_label}) ON (c.textEmbedding)
             OPTIONS {{
                 indexConfig: {{
                     `vector.dimensions`: {dimension},
@@ -380,14 +461,23 @@ class Neo4jAdapter:
 
         logger.success(f"✓ Created vector index: {index_name}")
 
-    def create_fulltext_index(self, index_name: str = "fullTextConceptNames"):
+    def create_fulltext_index(self, index_name: str | None = None):
         """
         Create fulltext index for fuzzy concept name search.
 
         Args:
-            index_name: Name for the fulltext index
+            index_name: Name for the fulltext index (auto-generated if label_prefix set)
         """
-        with self.driver.session() as session:
+        concept_label = self._get_label("Concept")
+
+        # Auto-generate index name if using label prefix
+        if index_name is None:
+            if self.label_prefix:
+                index_name = f"{self.label_prefix}_fullTextConceptNames"
+            else:
+                index_name = "fullTextConceptNames"
+
+        with self._get_session() as session:
             # Check if index already exists
             result = session.run("SHOW INDEXES YIELD name WHERE name = $name", name=index_name)
             if result.single():
@@ -397,7 +487,7 @@ class Neo4jAdapter:
             # Create fulltext index
             query = f"""
             CREATE FULLTEXT INDEX {index_name} IF NOT EXISTS
-            FOR (c:Concept) ON EACH [c.name]
+            FOR (c:{concept_label}) ON EACH [c.name]
             """
             session.run(query)
 
@@ -405,14 +495,19 @@ class Neo4jAdapter:
 
     def create_chunk_id_index(self):
         """Create index on Chunk.chunkId for faster lookups."""
-        with self.driver.session() as session:
-            query = """
-            CREATE INDEX chunk_id_index IF NOT EXISTS
-            FOR (c:Chunk) ON (c.chunkId)
+        chunk_label = self._get_label("Chunk")
+        index_name = (
+            f"{self.label_prefix}_chunk_id_index" if self.label_prefix else "chunk_id_index"
+        )
+
+        with self._get_session() as session:
+            query = f"""
+            CREATE INDEX {index_name} IF NOT EXISTS
+            FOR (c:{chunk_label}) ON (c.chunkId)
             """
             session.run(query)
 
-        logger.success("✓ Created index on Chunk.chunkId")
+        logger.success(f"✓ Created index on {chunk_label}.chunkId")
 
     # ==========================================================================
     # Enterprise RAG: Vector Search Operations
@@ -422,7 +517,7 @@ class Neo4jAdapter:
         self,
         query_embedding: list[float],
         top_k: int = 10,
-        index_name: str = "chunk_embeddings",
+        index_name: str | None = None,
     ) -> list[dict]:
         """
         Perform vector similarity search on chunk embeddings.
@@ -430,12 +525,19 @@ class Neo4jAdapter:
         Args:
             query_embedding: Query embedding vector
             top_k: Number of results to return
-            index_name: Name of the vector index
+            index_name: Name of the vector index (auto-generated if label_prefix set)
 
         Returns:
             List of chunk dicts with similarity scores
         """
-        with self.driver.session() as session:
+        # Auto-generate index name if using label prefix
+        if index_name is None:
+            if self.label_prefix:
+                index_name = f"{self.label_prefix}_chunk_embeddings"
+            else:
+                index_name = "chunk_embeddings"
+
+        with self._get_session() as session:
             query = """
             CALL db.index.vector.queryNodes($index_name, $top_k, $query_embedding)
             YIELD node, score
@@ -470,14 +572,15 @@ class Neo4jAdapter:
         Returns:
             List of chunk dicts in sequential order
         """
-        with self.driver.session() as session:
+        chunk_label = self._get_label("Chunk")
+        with self._get_session() as session:
             # Get preceding chunks (traverse NEXT backwards)
             # Get following chunks (traverse NEXT forwards)
             # Combine and order by chunk_index
             query = f"""
-            MATCH (center:Chunk {{chunkId: $chunk_id}})
-            OPTIONAL MATCH path_before = (prev:Chunk)-[:NEXT*1..{window_before}]->(center)
-            OPTIONAL MATCH path_after = (center)-[:NEXT*1..{window_after}]->(next:Chunk)
+            MATCH (center:{chunk_label} {{chunkId: $chunk_id}})
+            OPTIONAL MATCH path_before = (prev:{chunk_label})-[:NEXT*1..{window_before}]->(center)
+            OPTIONAL MATCH path_after = (center)-[:NEXT*1..{window_after}]->(next:{chunk_label})
             WITH center,
                  collect(DISTINCT prev) AS before_chunks,
                  collect(DISTINCT next) AS after_chunks
@@ -496,7 +599,7 @@ class Neo4jAdapter:
             return [dict(record) for record in result]
 
     def fulltext_concept_search(
-        self, query_text: str, limit: int = 10, index_name: str = "fullTextConceptNames"
+        self, query_text: str, limit: int = 10, index_name: str | None = None
     ) -> list[dict]:
         """
         Fuzzy search for concepts using fulltext index.
@@ -504,12 +607,19 @@ class Neo4jAdapter:
         Args:
             query_text: Search query
             limit: Maximum results
-            index_name: Name of the fulltext index
+            index_name: Name of the fulltext index (auto-generated if label_prefix set)
 
         Returns:
             List of matching concepts with scores
         """
-        with self.driver.session() as session:
+        # Auto-generate index name if using label prefix
+        if index_name is None:
+            if self.label_prefix:
+                index_name = f"{self.label_prefix}_fullTextConceptNames"
+            else:
+                index_name = "fullTextConceptNames"
+
+        with self._get_session() as session:
             query = """
             CALL db.index.fulltext.queryNodes($index_name, $query_text)
             YIELD node, score
@@ -528,3 +638,62 @@ class Neo4jAdapter:
             )
 
             return [dict(record) for record in result]
+
+
+# ==========================================================================
+# Factory Functions for Multi-Subject Support
+# ==========================================================================
+
+# Registry of adapters per subject
+_neo4j_adapters: dict[str, Neo4jAdapter] = {}
+
+
+def get_neo4j_adapter(subject_id: str | None = None) -> Neo4jAdapter:
+    """
+    Get or create a Neo4j adapter for a specific subject.
+
+    Uses a registry pattern to reuse adapters per subject.
+
+    Args:
+        subject_id: Subject identifier (e.g., "us_history", "biology").
+                   If None, uses the default subject.
+
+    Returns:
+        Neo4jAdapter configured for the subject
+    """
+    from backend.app.core.subjects import get_default_subject_id, get_subject
+
+    # Use default subject if not specified
+    if subject_id is None:
+        subject_id = get_default_subject_id()
+
+    # Return cached adapter if available
+    if subject_id in _neo4j_adapters:
+        adapter = _neo4j_adapters[subject_id]
+        # Reconnect if driver is None
+        if adapter.driver is None:
+            adapter.connect()
+        return adapter
+
+    # Get subject configuration
+    subject_config = get_subject(subject_id)
+
+    # Create new adapter with subject-specific configuration
+    adapter = Neo4jAdapter(
+        database=subject_config.database.neo4j_database,
+        label_prefix=subject_config.database.label_prefix,
+    )
+    adapter.connect()
+
+    # Cache the adapter
+    _neo4j_adapters[subject_id] = adapter
+
+    return adapter
+
+
+def clear_neo4j_adapters() -> None:
+    """Close and clear all cached Neo4j adapters."""
+    for adapter in _neo4j_adapters.values():
+        adapter.close()
+    _neo4j_adapters.clear()
+    logger.info("Cleared all cached Neo4j adapters")

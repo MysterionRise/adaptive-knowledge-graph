@@ -24,6 +24,7 @@ class KGExpander:
         self,
         max_hops: int = None,
         extraction_strategy: Literal["simple", "ensemble", "ner", "yake"] = "ensemble",
+        subject_id: str | None = None,
     ):
         """
         Initialize KG expander.
@@ -35,9 +36,11 @@ class KGExpander:
                 - "ensemble": Multi-strategy extraction (NER + YAKE)
                 - "ner": spaCy NER only
                 - "yake": YAKE keyword extraction only
+            subject_id: Subject identifier for multi-subject support
         """
         self.max_hops = max_hops or settings.rag_kg_expansion_hops
         self.extraction_strategy = extraction_strategy
+        self.subject_id = subject_id
         self.neo4j_adapter = None
         self._concept_extractor = None
 
@@ -51,10 +54,17 @@ class KGExpander:
         return self._concept_extractor
 
     def connect(self):
-        """Connect to Neo4j."""
-        self.neo4j_adapter = Neo4jAdapter()
-        self.neo4j_adapter.connect()
-        logger.info("KG Expander connected to Neo4j")
+        """Connect to Neo4j with subject-specific configuration."""
+        if self.subject_id:
+            from backend.app.kg.neo4j_adapter import get_neo4j_adapter
+
+            self.neo4j_adapter = get_neo4j_adapter(self.subject_id)
+        else:
+            self.neo4j_adapter = Neo4jAdapter()
+            self.neo4j_adapter.connect()
+
+        prefix_info = f" (subject: {self.subject_id})" if self.subject_id else ""
+        logger.info(f"KG Expander connected to Neo4j{prefix_info}")
 
     def close(self):
         """Close Neo4j connection."""
@@ -185,47 +195,98 @@ class KGExpander:
         }
 
 
-# Global singleton
+# Global singleton for backward compatibility
 _kg_expander: KGExpander = None
 
+# Registry of KG expanders per subject
+_kg_expanders: dict[str, KGExpander] = {}
 
-def get_kg_expander() -> KGExpander:
+
+def get_kg_expander(subject_id: str | None = None) -> KGExpander:
     """
-    Get or create global KG expander instance.
+    Get or create a KG expander instance for a specific subject.
+
+    Uses a registry pattern to reuse expanders per subject.
+
+    Args:
+        subject_id: Subject identifier (e.g., "us_history", "biology").
+                   If None, uses the default subject (backward compatible).
 
     Returns:
-        KGExpander instance
+        KGExpander instance configured for the subject
     """
     global _kg_expander
 
-    if _kg_expander is None:
-        _kg_expander = KGExpander()
-        try:
-            _kg_expander.connect()
-        except Exception as e:
-            logger.warning(f"KG expansion disabled (Neo4j connection failed): {e}")
+    # Backward compatibility: if no subject_id, use default singleton
+    if subject_id is None:
+        if _kg_expander is None:
+            _kg_expander = KGExpander()
+            try:
+                _kg_expander.connect()
+            except Exception as e:
+                logger.warning(f"KG expansion disabled (Neo4j connection failed): {e}")
+        return _kg_expander
 
-    return _kg_expander
+    # Return cached expander if available
+    if subject_id in _kg_expanders:
+        return _kg_expanders[subject_id]
+
+    # Create new expander with subject-specific configuration
+    expander = KGExpander(subject_id=subject_id)
+    try:
+        expander.connect()
+    except Exception as e:
+        logger.warning(f"KG expansion disabled for {subject_id} (Neo4j connection failed): {e}")
+
+    # Cache the expander
+    _kg_expanders[subject_id] = expander
+
+    return expander
 
 
-def get_all_concepts_from_neo4j() -> set[str]:
+def get_all_concepts_from_neo4j(subject_id: str | None = None) -> set[str]:
     """
     Get all concept names from Neo4j.
+
+    Args:
+        subject_id: Subject identifier for multi-subject support
 
     Returns:
         Set of concept names
     """
     try:
-        adapter = Neo4jAdapter()
-        adapter.connect()
+        if subject_id:
+            from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        with adapter.driver.session() as session:
-            result = session.run("MATCH (c:Concept) RETURN c.name as name")
-            concepts = {record["name"] for record in result}
+            adapter = get_neo4j_adapter(subject_id)
+            concept_label = adapter._get_label("Concept")
 
-        adapter.close()
-        return concepts
+            with adapter._get_session() as session:
+                result = session.run(f"MATCH (c:{concept_label}) RETURN c.name as name")
+                concepts = {record["name"] for record in result}
+
+            return concepts
+        else:
+            adapter = Neo4jAdapter()
+            adapter.connect()
+
+            with adapter.driver.session() as session:
+                result = session.run("MATCH (c:Concept) RETURN c.name as name")
+                concepts = {record["name"] for record in result}
+
+            adapter.close()
+            return concepts
 
     except Exception as e:
         logger.error(f"Failed to load concepts from Neo4j: {e}")
         return set()
+
+
+def clear_kg_expanders() -> None:
+    """Clear all cached KG expanders."""
+    global _kg_expander
+    _kg_expander = None
+    for expander in _kg_expanders.values():
+        expander.close()
+    _kg_expanders.clear()
+    logger.info("Cleared all cached KG expanders")

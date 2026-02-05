@@ -1,0 +1,149 @@
+# Subject Configuration for Multi-Subject Adaptive Knowledge Graph
+#
+# Each subject defines:
+# - Database and index names
+# - Content sources (books)
+# - LLM prompts for Q&A
+# - Frontend theming
+# - Attribution text
+
+default_subject: us_history
+
+subjects:
+  us_history:
+    name: "US History"
+    description: "American History from colonial times to modern era"
+
+    # Database configuration
+    database:
+      # Neo4j database name (Community Edition uses labels for soft isolation)
+      neo4j_database: "neo4j"  # Default database
+      label_prefix: "us_history"  # For soft isolation in Community Edition
+      opensearch_index: "textbook_chunks_us_history"
+
+    # Content sources
+    books:
+      - title: "US History"
+        repo_url_raw: "https://raw.githubusercontent.com/philschatz/us-history-book/master"
+        summary_path: "SUMMARY.md"
+        content_path: "contents"
+        branch: "master"
+      - title: "American Government"
+        repo_url_raw: "https://raw.githubusercontent.com/philschatz/american-government-book/master"
+        summary_path: "SUMMARY.md"
+        content_path: "contents"
+        branch: "master"
+
+    # LLM prompts
+    prompts:
+      system_prompt: |
+        You are an expert US History tutor. Answer the student's question using ONLY the provided textbook context.
+
+        Rules:
+        1. Base your answer ONLY on the provided context
+        2. If the context doesn't contain enough information, say so
+        3. Cite context passages using [1], [2], etc.
+        4. Be clear, accurate, and educational
+        5. Include the attribution at the end of your response
+      context_label: "Context from US History textbook"
+
+    # Frontend theming
+    theme:
+      primary_color: "#dc2626"  # Red for US History
+      secondary_color: "#fecaca"
+      accent_color: "#b91c1c"
+      chapter_colors:
+        Revolution: "#ef4444"
+        Constitution: "#3b82f6"
+        Civil War: "#8b5cf6"
+        Reconstruction: "#10b981"
+        Industrialization: "#f59e0b"
+        World War: "#ec4899"
+        Cold War: "#06b6d4"
+        default: "#6366f1"
+
+    # Attribution
+    attribution: "Content from OpenStax US History (CC BY 4.0). Download for free at https://openstax.org/details/books/us-history"
+
+  biology:
+    name: "Biology"
+    description: "Comprehensive biology covering cellular to ecosystem levels"
+
+    # Database configuration
+    database:
+      neo4j_database: "neo4j"
+      label_prefix: "biology"
+      opensearch_index: "textbook_chunks_biology"
+
+    # Content sources
+    books:
+      - title: "Biology 2e"
+        repo_url_raw: "https://raw.githubusercontent.com/philschatz/biology-book/master"
+        summary_path: "SUMMARY.md"
+        content_path: "contents"
+        branch: "master"
+      - title: "Concepts of Biology"
+        repo_url_raw: "https://raw.githubusercontent.com/philschatz/biology-concepts-book/master"
+        summary_path: "SUMMARY.md"
+        content_path: "contents"
+        branch: "master"
+
+    # LLM prompts
+    prompts:
+      system_prompt: |
+        You are an expert biology tutor. Answer the student's question using ONLY the provided textbook context.
+
+        Rules:
+        1. Base your answer ONLY on the provided context
+        2. If the context doesn't contain enough information, say so
+        3. Cite context passages using [1], [2], etc.
+        4. Be clear, accurate, and educational
+        5. Include the attribution at the end of your response
+      context_label: "Context from OpenStax Biology 2e"
+
+    # Frontend theming
+    theme:
+      primary_color: "#16a34a"  # Green for Biology
+      secondary_color: "#bbf7d0"
+      accent_color: "#15803d"
+      chapter_colors:
+        Cell: "#22c55e"
+        Genetics: "#3b82f6"
+        Evolution: "#8b5cf6"
+        Ecology: "#10b981"
+        Photosynthesis: "#84cc16"
+        Respiration: "#f59e0b"
+        Reproduction: "#ec4899"
+        Anatomy: "#06b6d4"
+        default: "#22c55e"
+
+    # Attribution
+    attribution: "Content from OpenStax Biology 2e (CC BY 4.0). Download for free at https://openstax.org/details/books/biology-2e"
+
+  # Template for adding new subjects
+  # chemistry:
+  #   name: "Chemistry"
+  #   description: "General chemistry fundamentals"
+  #   database:
+  #     neo4j_database: "neo4j"
+  #     label_prefix: "chemistry"
+  #     opensearch_index: "textbook_chunks_chemistry"
+  #   books:
+  #     - title: "Chemistry 2e"
+  #       repo_url_raw: "https://raw.githubusercontent.com/philschatz/chemistry-book/master"
+  #       summary_path: "SUMMARY.md"
+  #       content_path: "contents"
+  #       branch: "master"
+  #   prompts:
+  #     system_prompt: |
+  #       You are an expert chemistry tutor...
+  #     context_label: "Context from OpenStax Chemistry 2e"
+  #   theme:
+  #     primary_color: "#2563eb"
+  #     secondary_color: "#bfdbfe"
+  #     accent_color: "#1d4ed8"
+  #     chapter_colors:
+  #       Atoms: "#3b82f6"
+  #       Bonding: "#8b5cf6"
+  #       default: "#3b82f6"
+  #   attribution: "Content from OpenStax Chemistry 2e (CC BY 4.0)."

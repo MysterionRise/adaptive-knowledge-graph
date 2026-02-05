@@ -13,7 +13,13 @@ from loguru import logger
 from pydantic import BaseModel
 from slowapi.errors import RateLimitExceeded
 
-from backend.app.api import ask_router, graph_router, learning_path_router, quiz_router
+from backend.app.api import (
+    ask_router,
+    graph_router,
+    learning_path_router,
+    quiz_router,
+    subjects_router,
+)
 from backend.app.core.logging import setup_logging
 from backend.app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from backend.app.core.settings import settings
@@ -286,3 +292,4 @@ app.include_router(ask_router, prefix=settings.api_prefix)
 app.include_router(graph_router, prefix=settings.api_prefix)
 app.include_router(quiz_router, prefix=settings.api_prefix)
 app.include_router(learning_path_router, prefix=settings.api_prefix)
+app.include_router(subjects_router, prefix=settings.api_prefix)

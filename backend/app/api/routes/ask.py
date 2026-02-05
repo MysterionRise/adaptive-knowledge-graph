@@ -23,6 +23,10 @@ class QuestionRequest(BaseModel):
     """Request for Q&A endpoint."""
 
     question: str = Field(..., description="User's question", min_length=3)
+    subject: str | None = Field(
+        default=None,
+        description="Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.",
+    )
     use_kg_expansion: bool = Field(default=True, description="Use knowledge graph expansion")
     use_window_retrieval: bool = Field(
         default=True, description="Include surrounding chunks via NEXT traversal"
@@ -55,10 +59,16 @@ async def ask_question(request: QuestionRequest):
     1. Knowledge graph query expansion (if enabled)
     2. Semantic retrieval from OpenSearch
     3. LLM-based answer generation
-    4. OpenStax attribution
+    4. Subject-specific attribution and prompts
     """
     try:
-        logger.info(f"Question: {request.question}")
+        logger.info(f"Question: {request.question} (subject: {request.subject or 'default'})")
+
+        # Get subject configuration for prompts and attribution
+        from backend.app.core.subjects import get_subject
+
+        subject_config = get_subject(request.subject)
+        subject_id = subject_config.id
 
         # Step 1: Knowledge Graph Expansion (if enabled)
         expanded_concepts = []
@@ -66,9 +76,9 @@ async def ask_question(request: QuestionRequest):
 
         if request.use_kg_expansion and settings.rag_kg_expansion:
             try:
-                all_concepts = get_all_concepts_from_neo4j()
+                all_concepts = get_all_concepts_from_neo4j(subject_id)
                 if all_concepts:
-                    expander = get_kg_expander()
+                    expander = get_kg_expander(subject_id)
                     expansion_result = expander.expand_query(request.question, all_concepts)
 
                     expanded_concepts = expansion_result["expanded_concepts"]
@@ -81,8 +91,8 @@ async def ask_question(request: QuestionRequest):
             except Exception as e:
                 logger.warning(f"KG expansion failed, continuing without it: {e}")
 
-        # Step 2: Retrieve relevant chunks
-        retriever = get_retriever()
+        # Step 2: Retrieve relevant chunks from subject-specific index
+        retriever = get_retriever(subject_id)
         retrieved_chunks = retriever.retrieve(query, top_k=request.top_k)
 
         if not retrieved_chunks:
@@ -128,14 +138,16 @@ async def ask_question(request: QuestionRequest):
             except Exception as e:
                 logger.warning(f"Window retrieval failed, using original chunks: {e}")
 
-        # Step 3: Generate answer using LLM
+        # Step 3: Generate answer using LLM with subject-specific prompts
         llm_client = get_llm_client()
         context_texts = [chunk["text"] for chunk in retrieved_chunks]
 
         answer_result = await llm_client.answer_question(
             question=request.question,
             context=context_texts,
-            attribution=settings.attribution_openstax,
+            attribution=subject_config.attribution,
+            system_prompt=subject_config.prompts.system_prompt,
+            context_label=subject_config.prompts.context_label,
         )
 
         # Step 4: Format response
@@ -157,7 +169,7 @@ async def ask_question(request: QuestionRequest):
             retrieved_count=initial_count,
             window_expanded_count=window_expanded_count,
             model=answer_result["model"],
-            attribution=settings.attribution_openstax,
+            attribution=subject_config.attribution,
         )
 
     except ContentNotFoundError as e:

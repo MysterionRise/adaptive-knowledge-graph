@@ -25,3 +25,11 @@ class Quiz(BaseModel):
     title: str
     questions: list[QuizQuestion]
     average_difficulty: float | None = None  # Average difficulty across questions
+
+
+class AdaptiveQuiz(Quiz):
+    """Quiz with adaptation metadata for personalized learning."""
+
+    student_mastery: float  # Student's current mastery level for the topic (0.0-1.0)
+    target_difficulty: Literal["easy", "medium", "hard"]  # Difficulty level targeted
+    adapted: bool = True  # Whether this quiz was adapted to student's level

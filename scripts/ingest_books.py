@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import os
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 sys.path.append(os.getcwd())
 
 from backend.app.core.settings import settings
+from backend.app.core.subjects import get_all_subjects, get_subject, get_subject_ids
 from backend.app.rag.retriever import get_retriever
 
 
@@ -23,6 +25,7 @@ class BookConfig(BaseModel):
     branch: str = "master"
 
 
+# Legacy BOOKS list for backward compatibility (will be overridden by subjects.yaml)
 BOOKS = [
     BookConfig(
         title="US History",
@@ -33,6 +36,26 @@ BOOKS = [
         repo_url_raw="https://raw.githubusercontent.com/philschatz/american-government-book/master",
     ),
 ]
+
+
+def get_books_for_subject(subject_id: str) -> list[BookConfig]:
+    """Get book configurations from subjects.yaml for a specific subject."""
+    try:
+        subject_config = get_subject(subject_id)
+        return [
+            BookConfig(
+                title=book.title,
+                repo_url_raw=book.repo_url_raw,
+                summary_path=book.summary_path,
+                content_path=book.content_path,
+                branch=book.branch,
+            )
+            for book in subject_config.books
+        ]
+    except Exception as e:
+        logger.warning(f"Failed to load books from subjects.yaml for {subject_id}: {e}")
+        logger.info("Falling back to hardcoded BOOKS list")
+        return BOOKS
 
 
 def fetch_text(url: str) -> str | None:
@@ -86,19 +109,50 @@ def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
     return chunks
 
 
-async def process_books(limit: int = 10, index_rag: bool = False):
-    logger.info("Starting book ingestion pipeline...")
+async def process_books(
+    limit: int = 10,
+    index_rag: bool = False,
+    subject_id: str | None = None,
+):
+    """
+    Process and ingest books for a subject.
+
+    Args:
+        limit: Maximum number of chapters to process per book (0 = all)
+        index_rag: Whether to index into OpenSearch
+        subject_id: Subject identifier (e.g., "us_history", "biology").
+                   If None, uses the default subject.
+    """
+    # Get subject configuration
+    subject_config = get_subject(subject_id)
+    subject_id = subject_config.id  # Ensure we have the resolved ID
+
+    logger.info(f"Starting book ingestion pipeline for subject: {subject_id}")
     logger.info(f"Configuration: limit={limit}, index_rag={index_rag}")
+
+    # Get books from subjects.yaml
+    books = get_books_for_subject(subject_id)
+    logger.info(f"Found {len(books)} books for subject {subject_id}")
 
     # Ensure processed dir exists
     os.makedirs(settings.data_processed_dir, exist_ok=True)
-    books_jsonl_path = settings.data_books_jsonl
 
-    retriever = get_retriever() if index_rag else None
+    # Use subject-specific JSONL path
+    books_jsonl_path = os.path.join(settings.data_processed_dir, f"books_{subject_id}.jsonl")
+
+    # Get subject-specific retriever
+    retriever = get_retriever(subject_id) if index_rag else None
+
+    # Create the index if it doesn't exist
+    if retriever:
+        try:
+            retriever.create_collection(embedding_dim=1024, recreate=False)
+        except Exception as e:
+            logger.warning(f"Could not create index (may already exist): {e}")
 
     all_records = []
 
-    for book in BOOKS:
+    for book in books:
         logger.info(f"Processing book: {book.title}")
 
         # 1. Fetch Summary
@@ -139,21 +193,25 @@ async def process_books(limit: int = 10, index_rag: bool = False):
                     "text": clean_content,
                     "key_terms": [],
                     "chunks": chunks,
+                    "subject_id": subject_id,  # Add subject_id to records
                 }
                 all_records.append(record)
 
                 # Index into OpenSearch (RAG)
                 if index_rag and retriever:
                     docs = []
-                    for chunk in chunks:
+                    for chunk_idx, chunk in enumerate(chunks):
                         docs.append(
                             {
+                                "id": f"{subject_id}_{module_id}_chunk_{chunk_idx}",
                                 "text": chunk,
+                                "module_id": module_id,
                                 "module_title": book.title,
                                 "section": module_id,
                                 "book": book.title,
                                 "key_terms": [],
-                                "attribution": f"{book.title} (OpenStax/PhilSchatz)",
+                                "attribution": subject_config.attribution,
+                                "subject_id": subject_id,
                             }
                         )
 
@@ -172,10 +230,54 @@ async def process_books(limit: int = 10, index_rag: bool = False):
             del record_copy["chunks"]
             f.write(json.dumps(record_copy) + "\n")
 
-    logger.success("Ingestion complete!")
+    logger.success(f"Ingestion complete for {subject_id}! Processed {len(all_records)} modules.")
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Ingest textbook content for a subject into the knowledge graph."
+    )
+    parser.add_argument(
+        "--subject",
+        type=str,
+        default=None,
+        help=f"Subject ID to ingest (available: {get_subject_ids()}). Defaults to us_history.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Maximum chapters per book (0 = all chapters). Default: 0",
+    )
+    parser.add_argument(
+        "--index-rag",
+        action="store_true",
+        help="Index content into OpenSearch for RAG retrieval.",
+    )
+    parser.add_argument(
+        "--list-subjects",
+        action="store_true",
+        help="List all available subjects and exit.",
+    )
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    # Disable RAG indexing for speed/stability during dev verification
-    # Run with RAG indexing enabled and larger limit for demo
-    asyncio.run(process_books(limit=50, index_rag=True))
+    args = parse_args()
+
+    if args.list_subjects:
+        print("Available subjects:")
+        for subject in get_all_subjects():
+            books_info = ", ".join(b.title for b in subject.books)
+            print(f"  - {subject.id}: {subject.name} ({len(subject.books)} books: {books_info})")
+        sys.exit(0)
+
+    # Index content for the specified subject
+    asyncio.run(
+        process_books(
+            limit=args.limit,
+            index_rag=args.index_rag,
+            subject_id=args.subject,
+        )
+    )

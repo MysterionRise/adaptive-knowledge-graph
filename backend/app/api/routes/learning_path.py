@@ -38,7 +38,7 @@ class PrerequisiteResponse(BaseModel):
 
 
 @router.get("/learning-path/{concept_name}", response_model=LearningPathResponse)
-async def get_learning_path(concept_name: str, max_depth: int = 3):
+async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str | None = None):
     """
     Get the prerequisite chain for a concept.
 
@@ -47,18 +47,19 @@ async def get_learning_path(concept_name: str, max_depth: int = 3):
     Args:
         concept_name: Name of the target concept
         max_depth: Maximum depth to traverse (default 3)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
     """
     try:
-        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        adapter = Neo4jAdapter()
-        adapter.connect()
+        adapter = get_neo4j_adapter(subject)
+        concept_label = adapter._get_label("Concept")
 
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             # Find prerequisites recursively using variable-length path
             result = session.run(
-                """
-                MATCH path = (prereq:Concept)-[:PREREQUISITE*1..]->(target:Concept {name: $name})
+                f"""
+                MATCH path = (prereq:{concept_label})-[:PREREQUISITE*1..]->(target:{concept_label} {{name: $name}})
                 WHERE length(path) <= $max_depth
                 WITH prereq, length(path) as depth
                 RETURN DISTINCT
@@ -84,8 +85,6 @@ async def get_learning_path(concept_name: str, max_depth: int = 3):
                 for record in result
             ]
 
-        adapter.close()
-
         return LearningPathResponse(
             target_concept=concept_name,
             prerequisites=prerequisites,
@@ -101,26 +100,27 @@ async def get_learning_path(concept_name: str, max_depth: int = 3):
 
 
 @router.get("/concepts/{concept_name}/prerequisites", response_model=PrerequisiteResponse)
-async def get_prerequisites(concept_name: str, depth: int = 2):
+async def get_prerequisites(concept_name: str, depth: int = 2, subject: str | None = None):
     """
     Get prerequisites for a concept up to N levels deep.
 
     Args:
         concept_name: Name of the concept
         depth: Maximum depth to traverse (default 2)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
     """
     try:
-        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        adapter = Neo4jAdapter()
-        adapter.connect()
+        adapter = get_neo4j_adapter(subject)
+        concept_label = adapter._get_label("Concept")
 
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             # Get direct and indirect prerequisites
             result = session.run(
-                """
-                MATCH (target:Concept {name: $name})
-                OPTIONAL MATCH path = (prereq:Concept)-[:PREREQUISITE*1..]->(target)
+                f"""
+                MATCH (target:{concept_label} {{name: $name}})
+                OPTIONAL MATCH path = (prereq:{concept_label})-[:PREREQUISITE*1..]->(target)
                 WHERE length(path) <= $depth
                 WITH prereq, length(path) as level
                 WHERE prereq IS NOT NULL
@@ -145,8 +145,6 @@ async def get_prerequisites(concept_name: str, depth: int = 2):
                 for record in result
             ]
 
-        adapter.close()
-
         return PrerequisiteResponse(
             concept=concept_name,
             prerequisites=prerequisites,
@@ -159,26 +157,27 @@ async def get_prerequisites(concept_name: str, depth: int = 2):
 
 
 @router.get("/concepts/{concept_name}/dependents")
-async def get_dependents(concept_name: str, depth: int = 2):
+async def get_dependents(concept_name: str, depth: int = 2, subject: str | None = None):
     """
     Get concepts that depend on this concept (reverse prerequisites).
 
     Args:
         concept_name: Name of the concept
         depth: Maximum depth to traverse (default 2)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
     """
     try:
-        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        adapter = Neo4jAdapter()
-        adapter.connect()
+        adapter = get_neo4j_adapter(subject)
+        concept_label = adapter._get_label("Concept")
 
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             # Get concepts that have this as a prerequisite
             result = session.run(
-                """
-                MATCH (source:Concept {name: $name})
-                OPTIONAL MATCH path = (source)-[:PREREQUISITE*1..]->(dependent:Concept)
+                f"""
+                MATCH (source:{concept_label} {{name: $name}})
+                OPTIONAL MATCH path = (source)-[:PREREQUISITE*1..]->(dependent:{concept_label})
                 WHERE length(path) <= $depth
                 WITH dependent, length(path) as level
                 WHERE dependent IS NOT NULL
@@ -202,8 +201,6 @@ async def get_dependents(concept_name: str, depth: int = 2):
                 }
                 for record in result
             ]
-
-        adapter.close()
 
         return {
             "concept": concept_name,

@@ -8,6 +8,7 @@ import type { GraphData } from '@/lib/types';
 import { ArrowLeft, X, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { GraphSkeleton } from '@/components/Skeleton';
+import SubjectPicker from '@/components/SubjectPicker';
 
 // Dynamic import to avoid SSR issues with Cytoscape
 const KnowledgeGraph = dynamic(() => import('@/components/KnowledgeGraph'), {
@@ -29,21 +30,27 @@ export default function GraphPage() {
     name: string;
   } | null>(null);
 
-  // Get highlighted concepts from store (set by chat page)
-  const { highlightedConcepts, clearHighlightedConcepts, lastQuery } = useAppStore();
+  // Get highlighted concepts and subject from store
+  const {
+    highlightedConcepts,
+    clearHighlightedConcepts,
+    lastQuery,
+    currentSubject,
+    subjectTheme,
+  } = useAppStore();
 
   useEffect(() => {
     const fetchGraphData = async () => {
       try {
         setIsLoading(true);
-        const data = await apiClient.getGraphData();
+        const data = await apiClient.getGraphData(100, currentSubject);
         setGraphData(data);
         setError(null);
       } catch (err: any) {
         console.error('Error fetching graph data:', err);
         setError(err.detail || 'Failed to load graph data. Showing demo data.');
         // Fallback to mock data from API client
-        const mockData = await apiClient.getGraphData();
+        const mockData = await apiClient.getGraphData(100, currentSubject);
         setGraphData(mockData);
       } finally {
         setIsLoading(false);
@@ -51,7 +58,7 @@ export default function GraphPage() {
     };
 
     fetchGraphData();
-  }, []);
+  }, [currentSubject]);
 
   const handleNodeClick = (nodeId: string, nodeName: string) => {
     setSelectedConcept({ id: nodeId, name: nodeName });
@@ -82,10 +89,11 @@ export default function GraphPage() {
                   Knowledge Graph Visualization
                 </h1>
                 <p className="mt-2 text-gray-600">
-                  Explore US History concepts and their relationships
+                  Explore concepts and their relationships
                 </p>
               </div>
             </div>
+            <SubjectPicker />
           </div>
         </div>
       </header>
@@ -131,6 +139,7 @@ export default function GraphPage() {
                 data={graphData}
                 onNodeClick={handleNodeClick}
                 highlightedConcepts={highlightedConcepts}
+                chapterColors={subjectTheme?.chapter_colors}
                 className="h-[600px]"
               />
             ) : (

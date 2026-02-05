@@ -19,6 +19,7 @@ import {
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
+import SubjectPicker from '@/components/SubjectPicker';
 
 export default function Home() {
   const router = useRouter();
@@ -27,13 +28,20 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [topConcepts, setTopConcepts] = useState<string[]>([]);
 
-  const { masteryMap, getMastery } = useAppStore();
+  const { masteryMap, getMastery, currentSubject, loadSubjectTheme } = useAppStore();
+
+  // Load subject theme on mount
+  useEffect(() => {
+    if (currentSubject) {
+      loadSubjectTheme(currentSubject);
+    }
+  }, [currentSubject, loadSubjectTheme]);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setIsLoading(true);
-        const data = await apiClient.getGraphStats();
+        const data = await apiClient.getGraphStats(currentSubject);
         setStats(data);
         setError(null);
       } catch (err) {
@@ -67,7 +75,7 @@ export default function Home() {
 
     fetchStats();
     fetchTopConcepts();
-  }, []);
+  }, [currentSubject]);
 
   // Calculate overall progress from mastery map
   const masteredCount = Object.values(masteryMap).filter(m => m.masteryLevel >= 0.7).length;
@@ -91,7 +99,8 @@ export default function Home() {
                 AI-Powered Prep for Professional Exams
               </p>
             </div>
-            <div className="flex gap-4">
+            <div className="flex items-center gap-4">
+              <SubjectPicker />
               <Link
                 href="/graph"
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 transition-colors"

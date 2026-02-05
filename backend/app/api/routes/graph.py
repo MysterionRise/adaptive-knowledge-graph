@@ -25,16 +25,18 @@ class GraphStatsResponse(BaseModel):
 
 
 @router.get("/graph/stats", response_model=GraphStatsResponse)
-async def get_graph_stats():
-    """Get knowledge graph statistics."""
+async def get_graph_stats(subject: str | None = None):
+    """
+    Get knowledge graph statistics.
+
+    Args:
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+    """
     try:
-        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        adapter = Neo4jAdapter()
-        adapter.connect()
-
+        adapter = get_neo4j_adapter(subject)
         stats = adapter.get_graph_stats()
-        adapter.close()
 
         return GraphStatsResponse(
             concept_count=stats.get("Concept_count", 0),
@@ -54,18 +56,24 @@ async def get_graph_stats():
 
 
 @router.get("/concepts/top", response_model=list[dict])
-async def get_top_concepts(limit: int = 20):
-    """Get top concepts by importance."""
+async def get_top_concepts(limit: int = 20, subject: str | None = None):
+    """
+    Get top concepts by importance.
+
+    Args:
+        limit: Maximum number of concepts to return
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+    """
     try:
-        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        adapter = Neo4jAdapter()
-        adapter.connect()
+        adapter = get_neo4j_adapter(subject)
+        concept_label = adapter._get_label("Concept")
 
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             result = session.run(
-                """
-                MATCH (c:Concept)
+                f"""
+                MATCH (c:{concept_label})
                 RETURN c.name as name,
                        c.importance_score as score,
                        c.key_term as is_key_term,
@@ -78,7 +86,6 @@ async def get_top_concepts(limit: int = 20):
 
             concepts = [dict(record) for record in result]
 
-        adapter.close()
         return concepts
 
     except Exception as e:
@@ -87,7 +94,7 @@ async def get_top_concepts(limit: int = 20):
 
 
 @router.get("/graph/data")
-async def get_graph_data(limit: int = 100):
+async def get_graph_data(limit: int = 100, subject: str | None = None):
     """
     Get graph data for visualization (concepts and relationships).
 
@@ -96,21 +103,22 @@ async def get_graph_data(limit: int = 100):
 
     Args:
         limit: Maximum number of concepts to return (default 100)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
 
     Returns:
         GraphData with nodes and edges arrays
     """
     try:
-        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        adapter = Neo4jAdapter()
-        adapter.connect()
+        adapter = get_neo4j_adapter(subject)
+        concept_label = adapter._get_label("Concept")
 
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             # Get top concepts by importance
             concept_result = session.run(
-                """
-                MATCH (c:Concept)
+                f"""
+                MATCH (c:{concept_label})
                 RETURN elementId(c) as id,
                        c.name as label,
                        coalesce(c.importance_score, 0.5) as importance,
@@ -128,8 +136,8 @@ async def get_graph_data(limit: int = 100):
             # Get relationships between these concepts
             if concept_ids:
                 relationship_result = session.run(
-                    """
-                    MATCH (c1:Concept)-[r]->(c2:Concept)
+                    f"""
+                    MATCH (c1:{concept_label})-[r]->(c2:{concept_label})
                     WHERE elementId(c1) IN $ids AND elementId(c2) IN $ids
                     RETURN elementId(c1) as source,
                            elementId(c2) as target,
@@ -142,8 +150,6 @@ async def get_graph_data(limit: int = 100):
                 relationships = list(relationship_result)
             else:
                 relationships = []
-
-        adapter.close()
 
         # Format for Cytoscape
         nodes = [
@@ -273,7 +279,7 @@ class ConceptSearchResult(BaseModel):
 
 
 @router.post("/concepts/search", response_model=list[ConceptSearchResult])
-async def search_concepts(request: ConceptSearchRequest):
+async def search_concepts(request: ConceptSearchRequest, subject: str | None = None):
     """
     Search for concepts using fulltext index with fuzzy matching.
 
@@ -281,19 +287,20 @@ async def search_concepts(request: ConceptSearchRequest):
     - Partial matches
     - Fuzzy matching (typo tolerance)
     - Relevance ranking
+
+    Args:
+        request: Search request with query and limit
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
     """
     try:
-        from backend.app.kg.neo4j_adapter import Neo4jAdapter
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        adapter = Neo4jAdapter()
-        adapter.connect()
+        adapter = get_neo4j_adapter(subject)
 
         results = adapter.fulltext_concept_search(
             query_text=request.query,
             limit=request.limit,
         )
-
-        adapter.close()
 
         return [
             ConceptSearchResult(

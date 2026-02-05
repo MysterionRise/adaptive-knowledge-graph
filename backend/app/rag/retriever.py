@@ -230,24 +230,68 @@ class OpenSearchRetriever:
         }
 
 
-# Global singleton
+# Global singleton for backward compatibility
 _retriever: OpenSearchRetriever | None = None
 
+# Registry of retrievers per subject
+_retrievers: dict[str, OpenSearchRetriever] = {}
 
-def get_retriever() -> OpenSearchRetriever:
+
+def get_retriever(subject_id: str | None = None) -> OpenSearchRetriever:
     """
-    Get or create global retriever instance.
+    Get or create a retriever instance for a specific subject.
+
+    Uses a registry pattern to reuse retrievers per subject.
+
+    Args:
+        subject_id: Subject identifier (e.g., "us_history", "biology").
+                   If None, uses the default subject (backward compatible).
 
     Returns:
-        OpenSearchRetriever instance
+        OpenSearchRetriever instance configured for the subject
     """
     global _retriever
 
-    if _retriever is None:
-        _retriever = OpenSearchRetriever(
-            username=settings.opensearch_user,
-            password=settings.opensearch_password,
-        )
-        _retriever.connect()
+    # Backward compatibility: if no subject_id, use default singleton
+    if subject_id is None:
+        if _retriever is None:
+            _retriever = OpenSearchRetriever(
+                username=settings.opensearch_user,
+                password=settings.opensearch_password,
+            )
+            _retriever.connect()
+        return _retriever
 
-    return _retriever
+    # Return cached retriever if available
+    if subject_id in _retrievers:
+        retriever = _retrievers[subject_id]
+        # Reconnect if client is None
+        if retriever.client is None:
+            retriever.connect()
+        return retriever
+
+    # Get subject configuration
+    from backend.app.core.subjects import get_subject
+
+    subject_config = get_subject(subject_id)
+
+    # Create new retriever with subject-specific index
+    retriever = OpenSearchRetriever(
+        index_name=subject_config.database.opensearch_index,
+        username=settings.opensearch_user,
+        password=settings.opensearch_password,
+    )
+    retriever.connect()
+
+    # Cache the retriever
+    _retrievers[subject_id] = retriever
+
+    return retriever
+
+
+def clear_retrievers() -> None:
+    """Clear all cached retrievers."""
+    global _retriever
+    _retriever = None
+    _retrievers.clear()
+    logger.info("Cleared all cached retrievers")

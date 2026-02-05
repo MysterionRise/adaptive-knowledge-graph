@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin, Zap, RefreshCw } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import MasteryIndicator from './MasteryIndicator';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_PREFIX = '/api/v1';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 
@@ -23,6 +27,12 @@ interface Quiz {
     title: string;
     questions: QuizQuestion[];
     average_difficulty?: number;
+}
+
+interface AdaptiveQuiz extends Quiz {
+    student_mastery: number;
+    target_difficulty: Difficulty;
+    adapted: boolean;
 }
 
 const DifficultyBadge = ({ difficulty }: { difficulty?: Difficulty }) => {
@@ -61,7 +71,7 @@ const DifficultyBadge = ({ difficulty }: { difficulty?: Difficulty }) => {
 export default function Quiz() {
     const router = useRouter();
     const [topic, setTopic] = useState('The American Revolution');
-    const [quiz, setQuiz] = useState<Quiz | null>(null);
+    const [quiz, setQuiz] = useState<AdaptiveQuiz | Quiz | null>(null);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
     const [isSubmitted, setIsSubmitted] = useState(false);
@@ -69,17 +79,60 @@ export default function Quiz() {
     const [score, setScore] = useState(0);
     const [showResults, setShowResults] = useState(false);
 
+    // Adaptive mode state
+    const [adaptiveMode, setAdaptiveMode] = useState(true);
+    const [currentMastery, setCurrentMastery] = useState(0.3);
+    const [targetDifficulty, setTargetDifficulty] = useState<Difficulty>('easy');
+
     // Get mastery tracking from store
-    const { updateMastery, setHighlightedConcepts } = useAppStore();
+    const {
+        updateMastery,
+        setHighlightedConcepts,
+        loadMasteryFromBackend,
+        resetMasteryOnBackend,
+        getMastery
+    } = useAppStore();
+
+    // Load mastery from backend on mount
+    useEffect(() => {
+        loadMasteryFromBackend();
+    }, [loadMasteryFromBackend]);
+
+    // Update local mastery display when topic changes
+    useEffect(() => {
+        const mastery = getMastery(topic);
+        setCurrentMastery(mastery);
+        // Determine target difficulty
+        if (mastery < 0.4) setTargetDifficulty('easy');
+        else if (mastery <= 0.7) setTargetDifficulty('medium');
+        else setTargetDifficulty('hard');
+    }, [topic, getMastery]);
 
     const handleStartQuiz = async () => {
         setIsLoading(true);
         try {
-            // Direct fetch if apiClient doesn't have the method yet
-            const res = await fetch(`/api/v1/quiz/generate?topic=${encodeURIComponent(topic)}&num_questions=3`, {
-                method: 'POST'
-            });
-            const data = await res.json();
+            let data;
+
+            if (adaptiveMode) {
+                // Use adaptive endpoint
+                const res = await fetch(
+                    `${API_BASE}${API_PREFIX}/quiz/generate-adaptive?topic=${encodeURIComponent(topic)}&num_questions=3`,
+                    { method: 'POST' }
+                );
+                data = await res.json() as AdaptiveQuiz;
+
+                // Update local state with backend's mastery info
+                setCurrentMastery(data.student_mastery);
+                setTargetDifficulty(data.target_difficulty);
+            } else {
+                // Use standard endpoint
+                const res = await fetch(
+                    `${API_BASE}${API_PREFIX}/quiz/generate?topic=${encodeURIComponent(topic)}&num_questions=3`,
+                    { method: 'POST' }
+                );
+                data = await res.json() as Quiz;
+            }
+
             setQuiz(data);
             setCurrentQuestionIndex(0);
             setScore(0);
@@ -110,8 +163,18 @@ export default function Quiz() {
             setScore(s => s + 1);
         }
 
-        // Update mastery tracking for the topic
+        // Update mastery tracking for the topic (syncs to backend)
         updateMastery(topic, isCorrect);
+
+        // Update local mastery display
+        const delta = isCorrect ? 0.15 : -0.1;
+        const newMastery = Math.max(0.1, Math.min(1, currentMastery + delta));
+        setCurrentMastery(newMastery);
+
+        // Update target difficulty based on new mastery
+        if (newMastery < 0.4) setTargetDifficulty('easy');
+        else if (newMastery <= 0.7) setTargetDifficulty('medium');
+        else setTargetDifficulty('hard');
     };
 
     const handleNextQuestion = () => {
@@ -135,18 +198,39 @@ export default function Quiz() {
         setIsSubmitted(false);
     };
 
+    const handleResetProfile = async () => {
+        await resetMasteryOnBackend();
+        setCurrentMastery(0.3);
+        setTargetDifficulty('easy');
+        alert('Profile reset to initial state');
+    };
+
     const handleViewLearningPath = () => {
         // Set highlighted concepts before navigating to graph
         setHighlightedConcepts([topic]);
         router.push('/graph');
     };
 
+    // Check if quiz is adaptive
+    const isAdaptiveQuiz = (q: Quiz | AdaptiveQuiz | null): q is AdaptiveQuiz => {
+        return q !== null && 'adapted' in q && q.adapted === true;
+    };
+
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center p-12">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
-                <p className="text-gray-600">Generating adaptive quiz from knowledge graph...</p>
-                <p className="text-xs text-gray-400 mt-2">Thinking about "{topic}"</p>
+                <p className="text-gray-600">
+                    {adaptiveMode
+                        ? 'Generating personalized quiz based on your mastery level...'
+                        : 'Generating quiz from knowledge graph...'}
+                </p>
+                <p className="text-xs text-gray-400 mt-2">Topic: "{topic}"</p>
+                {adaptiveMode && (
+                    <p className="text-xs text-blue-500 mt-1">
+                        Target difficulty: {targetDifficulty}
+                    </p>
+                )}
             </div>
         );
     }
@@ -155,6 +239,35 @@ export default function Quiz() {
         return (
             <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
                 <h2 className="text-2xl font-bold mb-6 text-center">Start Assessment</h2>
+
+                {/* Adaptive Mode Toggle */}
+                <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                            <Zap className="w-5 h-5 text-blue-600" />
+                            <span className="font-medium text-gray-800">Adaptive Mode</span>
+                        </div>
+                        <button
+                            onClick={() => setAdaptiveMode(!adaptiveMode)}
+                            className={`relative w-12 h-6 rounded-full transition-colors ${
+                                adaptiveMode ? 'bg-blue-600' : 'bg-gray-300'
+                            }`}
+                        >
+                            <span
+                                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                    adaptiveMode ? 'translate-x-6' : 'translate-x-0'
+                                }`}
+                            />
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                        {adaptiveMode
+                            ? 'Questions will be tailored to your current proficiency level'
+                            : 'Questions will have mixed difficulty levels'}
+                    </p>
+                </div>
+
+                {/* Topic Selection */}
                 <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
                     <select
@@ -169,11 +282,34 @@ export default function Quiz() {
                         <option value="World War II">World War II</option>
                     </select>
                 </div>
+
+                {/* Current Mastery Display (when adaptive mode is on) */}
+                {adaptiveMode && (
+                    <div className="mb-6">
+                        <MasteryIndicator
+                            mastery={currentMastery}
+                            targetDifficulty={targetDifficulty}
+                            topic={topic}
+                            showAdaptingMessage={true}
+                        />
+                    </div>
+                )}
+
+                {/* Action Buttons */}
                 <button
                     onClick={handleStartQuiz}
-                    className="w-full bg-blue-600 text-white py-3 rounded-md font-semibold hover:bg-blue-700 transition"
+                    className="w-full bg-blue-600 text-white py-3 rounded-md font-semibold hover:bg-blue-700 transition mb-3"
                 >
-                    Generate Assessment
+                    {adaptiveMode ? 'Start Adaptive Assessment' : 'Generate Assessment'}
+                </button>
+
+                {/* Demo Reset Button */}
+                <button
+                    onClick={handleResetProfile}
+                    className="w-full flex items-center justify-center gap-2 text-gray-500 hover:text-gray-700 py-2 text-sm"
+                >
+                    <RefreshCw className="w-4 h-4" />
+                    Reset Profile (Demo)
                 </button>
             </div>
         );
@@ -184,10 +320,32 @@ export default function Quiz() {
 
     return (
         <div className="max-w-2xl mx-auto">
+            {/* Adaptation Banner (for adaptive quizzes) */}
+            {isAdaptiveQuiz(quiz) && (
+                <div className="mb-4">
+                    <MasteryIndicator
+                        mastery={currentMastery}
+                        targetDifficulty={targetDifficulty}
+                        topic={topic}
+                        showAdaptingMessage={true}
+                        compact={false}
+                    />
+                </div>
+            )}
+
             {/* Progress */}
             <div className="mb-6 flex justify-between items-center text-sm text-gray-500">
                 <span>Question {currentQuestionIndex + 1} of {quiz.questions.length}</span>
-                <span>Score: {score}</span>
+                <div className="flex items-center gap-4">
+                    <span>Score: {score}</span>
+                    {isAdaptiveQuiz(quiz) && (
+                        <MasteryIndicator
+                            mastery={currentMastery}
+                            targetDifficulty={targetDifficulty}
+                            compact={true}
+                        />
+                    )}
+                </div>
             </div>
 
             {/* Question Card */}
@@ -240,17 +398,30 @@ export default function Quiz() {
                             <div className={`mt-1 ${isCorrect ? "text-green-600" : "text-red-600"}`}>
                                 {isCorrect ? <CheckCircle className="w-6 h-6" /> : <BookOpen className="w-6 h-6" />}
                             </div>
-                            <div>
+                            <div className="flex-1">
                                 <h4 className={`font-bold ${isCorrect ? "text-green-800" : "text-red-800"}`}>
-                                    {isCorrect ? "Correct!" : "Concept Gap Detailed"}
+                                    {isCorrect ? "Correct!" : "Concept Gap Identified"}
                                 </h4>
                                 <p className="text-gray-700 mt-1">{currentQ.explanation}</p>
+
+                                {/* Mastery Update Feedback */}
+                                {isAdaptiveQuiz(quiz) && (
+                                    <div className="mt-3 p-3 bg-white/80 rounded-lg border border-gray-200">
+                                        <p className="text-sm text-gray-600">
+                                            <span className="font-medium">Mastery updated:</span>{' '}
+                                            <span className={isCorrect ? 'text-green-600' : 'text-red-600'}>
+                                                {isCorrect ? '+15%' : '-10%'}
+                                            </span>
+                                            {' '}&rarr;{' '}
+                                            <span className="font-medium">{Math.round(currentMastery * 100)}%</span>
+                                        </p>
+                                    </div>
+                                )}
 
                                 {!isCorrect && (
                                     <div className="mt-4 p-4 bg-white rounded border border-red-200">
                                         <p className="text-xs uppercase font-bold text-gray-400 mb-1">Recommended Reading</p>
                                         <p className="text-sm text-gray-800 italic">"Refer to section on {topic}..."</p>
-                                        {/* In a real app, fetch the content chunk here */}
                                     </div>
                                 )}
                             </div>
@@ -344,7 +515,25 @@ export default function Quiz() {
                             <p className="text-sm text-gray-500 mt-2">
                                 Topic: {topic}
                             </p>
-                            {quiz.average_difficulty !== undefined && (
+
+                            {/* Adaptive Quiz Results */}
+                            {isAdaptiveQuiz(quiz) && (
+                                <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                                    <div className="flex items-center justify-center gap-2 mb-2">
+                                        <Zap className="w-4 h-4 text-blue-600" />
+                                        <span className="text-sm font-medium text-blue-800">Adaptive Learning</span>
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                        <p>Current Mastery: <span className="font-semibold">{Math.round(currentMastery * 100)}%</span></p>
+                                        <p>Next Quiz Difficulty: <span className={`font-semibold ${
+                                            targetDifficulty === 'easy' ? 'text-green-600' :
+                                            targetDifficulty === 'medium' ? 'text-yellow-600' : 'text-red-600'
+                                        }`}>{targetDifficulty.charAt(0).toUpperCase() + targetDifficulty.slice(1)}</span></p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {quiz.average_difficulty !== undefined && !isAdaptiveQuiz(quiz) && (
                                 <div className="mt-3 flex items-center justify-center gap-2 text-sm">
                                     <span className="text-gray-500">Quiz Difficulty:</span>
                                     <span className={`font-medium ${
@@ -375,7 +564,7 @@ export default function Quiz() {
                                 className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
                             >
                                 <RotateCcw className="w-5 h-5" />
-                                Try Another Assessment
+                                {isAdaptiveQuiz(quiz) ? 'Continue Learning (Next Level)' : 'Try Another Assessment'}
                             </button>
                         </div>
                     </div>

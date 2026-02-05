@@ -1,19 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import cytoscape, {
   Core,
   NodeSingular,
   EdgeSingular,
-  Stylesheet,
-  LayoutOptions,
 } from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import type { GraphData } from '@/lib/types';
 import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
 
 // Type for cose-bilkent layout options (not included in @types/cytoscape)
-interface CoseBilkentLayoutOptions extends LayoutOptions {
+type CoseBilkentLayoutOptions = {
   name: 'cose-bilkent';
   randomize?: boolean;
   nodeRepulsion?: number;
@@ -25,15 +23,15 @@ interface CoseBilkentLayoutOptions extends LayoutOptions {
   tile?: boolean;
   animate?: boolean | 'end' | 'during';
   animationDuration?: number;
-}
+};
 
 // Register layout
 if (typeof cytoscape !== 'undefined') {
   cytoscape.use(coseBilkent);
 }
 
-// Color mappings for chapters/topics
-const CHAPTER_COLORS: Record<string, string> = {
+// Default color mappings for chapters/topics (US History)
+const DEFAULT_CHAPTER_COLORS: Record<string, string> = {
   'Revolution': '#ef4444',
   'Constitution': '#3b82f6',
   'Civil War': '#8b5cf6',
@@ -49,19 +47,20 @@ interface KnowledgeGraphProps {
   onNodeClick?: (nodeId: string, nodeName: string) => void;
   highlightedConcepts?: string[];
   className?: string;
+  chapterColors?: Record<string, string>; // Dynamic colors from subject theme
 }
 
 // Helper to get color based on chapter/topic
-function getNodeColor(node: NodeSingular): string {
+function getNodeColor(node: NodeSingular, chapterColors: Record<string, string>): string {
   const label = node.data('label') || '';
   const chapter = node.data('chapter') || '';
 
-  for (const [key, color] of Object.entries(CHAPTER_COLORS)) {
+  for (const [key, color] of Object.entries(chapterColors)) {
     if (key !== 'default' && (label.includes(key) || chapter.includes(key))) {
       return color;
     }
   }
-  return CHAPTER_COLORS.default;
+  return chapterColors.default || DEFAULT_CHAPTER_COLORS.default;
 }
 
 export default function KnowledgeGraph({
@@ -69,7 +68,13 @@ export default function KnowledgeGraph({
   onNodeClick,
   highlightedConcepts = [],
   className = '',
+  chapterColors,
 }: KnowledgeGraphProps) {
+  // Merge provided colors with defaults (memoized to prevent unnecessary re-renders)
+  const effectiveColors = useMemo(
+    () => ({ ...DEFAULT_CHAPTER_COLORS, ...chapterColors }),
+    [chapterColors]
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -91,7 +96,7 @@ export default function KnowledgeGraph({
           selector: 'node',
           style: {
             'label': 'data(label)',
-            'background-color': (ele: NodeSingular) => getNodeColor(ele),
+            'background-color': (ele: NodeSingular) => getNodeColor(ele, effectiveColors),
             'width': (ele: NodeSingular) => {
               const importance = ele.data('importance') || 0.5;
               return 25 + importance * 45; // Size 25-70px based on importance
@@ -113,7 +118,7 @@ export default function KnowledgeGraph({
             'background-opacity': 0.9,
             'transition-property': 'background-color, border-color, border-width, width, height',
             'transition-duration': 300,
-          } as Stylesheet['style'],
+          },
         },
         {
           selector: 'node.highlighted',
@@ -176,12 +181,12 @@ export default function KnowledgeGraph({
             'text-rotation': 'autorotate' as const,
             'text-background-color': '#ffffff',
             'text-background-opacity': 0.9,
-            'text-background-padding': 3,
+            'text-background-padding': '3px',
             'text-background-shape': 'roundrectangle' as const,
             'opacity': 0.7,
             'transition-property': 'opacity, width, line-color',
             'transition-duration': 300,
-          } as Stylesheet['style'],
+          },
         },
         {
           selector: 'edge.highlighted',
@@ -273,7 +278,7 @@ export default function KnowledgeGraph({
     return () => {
       cy.destroy();
     };
-  }, [data, onNodeClick]);
+  }, [data, onNodeClick, effectiveColors]);
 
   // Update highlighted concepts when prop changes (from chat page)
   useEffect(() => {
