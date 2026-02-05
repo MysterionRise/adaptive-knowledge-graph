@@ -3,7 +3,6 @@
 **Enterprise-grade AI Tutor with Knowledge Graphs, Local LLMs, and Adaptive Learning**
 
 [![CI](https://github.com/MysterionRise/adaptive-knowledge-graph/workflows/CI/badge.svg)](https://github.com/MysterionRise/adaptive-knowledge-graph/actions)
-[![codecov](https://codecov.io/gh/MysterionRise/adaptive-knowledge-graph/branch/main/graph/badge.svg)](https://codecov.io/gh/MysterionRise/adaptive-knowledge-graph)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.11--3.13-blue.svg)](https://www.python.org/downloads/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6.svg)](https://www.typescriptlang.org/)
