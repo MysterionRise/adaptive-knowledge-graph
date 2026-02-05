@@ -1,0 +1,24 @@
+{
+  "default": {
+    "student_id": "default",
+    "mastery_map": {
+      "World War II": {
+        "concept_name": "World War II",
+        "mastery_level": 0.6000000000000002,
+        "attempts": 12,
+        "correct_attempts": 6,
+        "last_assessed": "2026-02-04T21:07:50.780173"
+      }
+    },
+    "overall_ability": 0.6000000000000002,
+    "created_at": "2026-02-04T21:00:23.754761",
+    "updated_at": "2026-02-04T21:07:50.780198"
+  },
+  "test_student": {
+    "student_id": "test_student",
+    "mastery_map": {},
+    "overall_ability": 0.3,
+    "created_at": "2026-02-05T12:40:56.128384",
+    "updated_at": "2026-02-05T12:40:56.128388"
+  }
+}
