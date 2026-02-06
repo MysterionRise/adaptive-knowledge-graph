@@ -4,15 +4,15 @@
     "mastery_map": {
       "World War II": {
         "concept_name": "World War II",
-        "mastery_level": 0.6000000000000002,
-        "attempts": 12,
-        "correct_attempts": 6,
-        "last_assessed": "2026-02-04T21:07:50.780173"
+        "mastery_level": 0.5000000000000003,
+        "attempts": 18,
+        "correct_attempts": 8,
+        "last_assessed": "2026-02-05T19:57:45.236639"
       }
     },
-    "overall_ability": 0.6000000000000002,
+    "overall_ability": 0.5000000000000003,
     "created_at": "2026-02-04T21:00:23.754761",
-    "updated_at": "2026-02-04T21:07:50.780198"
+    "updated_at": "2026-02-05T19:57:45.236653"
   },
   "test_student": {
     "student_id": "test_student",

@@ -15,7 +15,7 @@ from loguru import logger
 
 from backend.app.core.settings import settings
 from backend.app.kg.builder import KGBuilder
-from backend.app.kg.neo4j_adapter import Neo4jAdapter
+from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
 
 def load_records(jsonl_path: Path) -> list:
@@ -66,11 +66,9 @@ def main():
 
     # Persist to Neo4j
     logger.info("\nConnecting to Neo4j...")
-    adapter = Neo4jAdapter()
+    adapter = get_neo4j_adapter("us_history")
 
     try:
-        adapter.connect()
-
         # Clear existing data (for fresh build)
         response = input("Clear existing Neo4j data? (yes/no): ").strip().lower()
         if response == "yes":
