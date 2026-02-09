@@ -10,7 +10,7 @@ packages = [{include = "backend"}]
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"
 # Web framework
-fastapi = "^0.121.0"
+fastapi = "^0.128.6"
 uvicorn = {extras = ["standard"], version = "^0.27.0"}
 websockets = "^12.0"
 python-multipart = "^0.0.9"
