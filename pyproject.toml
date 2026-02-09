@@ -34,7 +34,7 @@ hdbscan = "^0.8.33"
 opensearch-py = "^3.0.0"
 
 # LLM Integration
-outlines = "^0.1.0"
+outlines = "^1.2.10"
 instructor = "^1.0.0"
 openai = "^2.0.0"  # For OpenRouter compatibility
 
