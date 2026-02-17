@@ -71,7 +71,9 @@ def main():
 
     if not jsonl_path.exists():
         logger.error(f"Data file not found: {jsonl_path}")
-        logger.error(f"Run 'poetry run python scripts/ingest_books.py --subject {subject_id}' first")
+        logger.error(
+            f"Run 'poetry run python scripts/ingest_books.py --subject {subject_id}' first"
+        )
         return
 
     records = load_records(jsonl_path)
@@ -108,7 +110,9 @@ def main():
         if args.clear:
             adapter.clear_database()
         else:
-            response = input(f"Clear existing Neo4j data for {subject_id}? (yes/no): ").strip().lower()
+            response = (
+                input(f"Clear existing Neo4j data for {subject_id}? (yes/no): ").strip().lower()
+            )
             if response == "yes":
                 adapter.clear_database()
 
