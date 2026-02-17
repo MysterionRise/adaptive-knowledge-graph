@@ -5,8 +5,10 @@ Handles connection to Neo4j and CRUD operations for graph data.
 Supports multi-subject isolation via database parameter or label prefixes.
 """
 
+from typing import Any
+
 from loguru import logger
-from neo4j import GraphDatabase, Session
+from neo4j import Driver, GraphDatabase, Session
 
 from backend.app.core.settings import settings
 from backend.app.kg.schema import ChunkNode, KnowledgeGraph, RelationshipType
@@ -38,7 +40,7 @@ class Neo4jAdapter:
         self.password = password or settings.neo4j_password
         self.database = database or settings.neo4j_database
         self.label_prefix = label_prefix  # e.g., "us_history" -> "us_history_Concept"
-        self.driver = None
+        self.driver: Driver | None = None
 
     def _get_label(self, base_label: str) -> str:
         """Get the full label name with optional prefix for isolation."""
@@ -48,6 +50,7 @@ class Neo4jAdapter:
 
     def _get_session(self) -> Session:
         """Get a session for the configured database."""
+        assert self.driver is not None, "Not connected. Call connect() first."
         return self.driver.session(database=self.database)
 
     def connect(self):
@@ -68,7 +71,7 @@ class Neo4jAdapter:
 
     def close(self):
         """Close Neo4j connection."""
-        if self.driver:
+        if self.driver is not None:
             self.driver.close()
             logger.info("Closed Neo4j connection")
 
@@ -233,13 +236,16 @@ class Neo4jAdapter:
             if self.label_prefix:
                 # Count nodes with our prefix labels
                 result = session.run(f"MATCH (n:{concept_label}) RETURN count(n) as count")
-                stats["Concept_count"] = result.single()["count"]
+                record: Any = result.single()
+                stats["Concept_count"] = record["count"]
 
                 result = session.run(f"MATCH (n:{module_label}) RETURN count(n) as count")
-                stats["Module_count"] = result.single()["count"]
+                record = result.single()
+                stats["Module_count"] = record["count"]
 
                 result = session.run(f"MATCH (n:{chunk_label}) RETURN count(n) as count")
-                stats["Chunk_count"] = result.single()["count"]
+                record = result.single()
+                stats["Chunk_count"] = record["count"]
 
                 # Count relationships between our nodes
                 result = session.run(

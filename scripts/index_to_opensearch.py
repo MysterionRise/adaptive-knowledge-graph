@@ -72,6 +72,8 @@ def main():
 
     # Index chunks
     logger.info("Indexing chunks to OpenSearch...")
+    if isinstance(chunks, tuple):
+        chunks = chunks[0]
     retriever.index_chunks(chunks, show_progress=True)
 
     # Verify

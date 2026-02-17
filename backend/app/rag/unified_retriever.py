@@ -39,7 +39,7 @@ class UnifiedRetriever:
         self._neo4j_adapter = neo4j_adapter
         self._owns_neo4j = neo4j_adapter is None
         self._opensearch_retriever: OpenSearchRetriever | None = None
-        self._embedding_model = None
+        self._embedding_model: object | None = None
 
     @property
     def neo4j_adapter(self) -> Neo4jAdapter:
@@ -280,7 +280,7 @@ class UnifiedRetriever:
         query_embedding = self.embedding_model.encode_query(query)
 
         # Combined Cypher query for vector + graph
-        with self.neo4j_adapter.driver.session() as session:
+        with self.neo4j_adapter._get_session() as session:
             cypher_query = f"""
             // Step 1: Vector similarity search
             CALL db.index.vector.queryNodes($index_name, $top_k, $query_embedding)

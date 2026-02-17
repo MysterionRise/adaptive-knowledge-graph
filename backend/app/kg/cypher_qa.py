@@ -135,8 +135,8 @@ class CypherQAService:
 
         self._graph: Neo4jGraph | None = None
         self._chain: GraphCypherQAChain | None = None
-        self._llm = None
-        self._prompt = None
+        self._llm: object | None = None
+        self._prompt: object | None = None
 
     def _ensure_langchain(self):
         """Ensure LangChain is available, raise if not."""
@@ -193,9 +193,9 @@ class CypherQAService:
                 from langchain_community.chat_models import ChatOpenAI
 
                 self._llm = ChatOpenAI(
-                    openai_api_base=settings.openrouter_base_url,
-                    openai_api_key=settings.openrouter_api_key,
-                    model_name=settings.openrouter_model,
+                    base_url=settings.openrouter_base_url,
+                    api_key=settings.openrouter_api_key,
+                    model=settings.openrouter_model,
                     temperature=0.0,
                 )
         return self._llm
@@ -288,7 +288,7 @@ class CypherQAService:
 
             # Generate via LLM
             response = self.llm.invoke(prompt_text)
-            cypher = response.content.strip()
+            cypher = str(response.content).strip()
 
             # Clean up response (remove markdown code blocks if present)
             if cypher.startswith("```"):

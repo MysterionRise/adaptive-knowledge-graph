@@ -15,8 +15,10 @@ from backend.app.student.models import (
     TargetDifficultyResponse,
 )
 from backend.app.student.quiz_generator import get_quiz_generator
+from backend.app.student.recommendation_service import get_recommendation_service
 from backend.app.student.student_service import get_student_service
 from backend.app.ui_payloads.quiz import AdaptiveQuiz, Quiz
+from backend.app.ui_payloads.recommendations import RecommendationRequest, RecommendationResponse
 
 router = APIRouter(tags=["Quiz"])
 
@@ -178,6 +180,32 @@ async def reset_student_profile(student_id: str = "default"):
         return student_service.reset_profile(student_id)
     except Exception as e:
         logger.error(f"Error resetting student profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# =============================================================================
+# Post-Quiz Recommendations
+# =============================================================================
+
+
+@router.post("/quiz/recommendations", response_model=RecommendationResponse)
+async def get_quiz_recommendations(request: RecommendationRequest):
+    """
+    Generate personalized recommendations after a quiz attempt.
+
+    Based on the quiz results, returns:
+    - Remediation: prerequisites + reading materials for weak concepts
+    - Advancement: advanced topics + deep dive content for strong concepts
+    """
+    try:
+        service = get_recommendation_service(request.subject)
+        return await service.generate_recommendations(
+            topic=request.topic,
+            question_results=request.question_results,
+            student_id=request.student_id,
+        )
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

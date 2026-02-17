@@ -4,8 +4,11 @@ import json
 import os
 import re
 import sys
+import time
+from typing import Any
 
 import requests
+from bs4 import BeautifulSoup
 from loguru import logger
 from pydantic import BaseModel
 
@@ -13,16 +16,20 @@ from pydantic import BaseModel
 sys.path.append(os.getcwd())
 
 from backend.app.core.settings import settings
-from backend.app.core.subjects import get_all_subjects, get_subject, get_subject_ids
-from backend.app.rag.retriever import get_retriever
+from backend.app.core.subjects import SubjectConfig, get_all_subjects, get_subject
+from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
 
 
 class BookConfig(BaseModel):
     title: str
-    repo_url_raw: str  # e.g. "https://raw.githubusercontent.com/philschatz/us-history-book/master"
+    source_type: str = "github_raw"  # "github_raw" or "openstax_web"
+    # github_raw fields
+    repo_url_raw: str | None = None
     summary_path: str = "SUMMARY.md"
     content_path: str = "contents"
     branch: str = "master"
+    # openstax_web fields
+    openstax_slug: str | None = None  # e.g. "world-history-volume-1"
 
 
 # Legacy BOOKS list for backward compatibility (will be overridden by subjects.yaml)
@@ -40,22 +47,19 @@ BOOKS = [
 
 def get_books_for_subject(subject_id: str) -> list[BookConfig]:
     """Get book configurations from subjects.yaml for a specific subject."""
-    try:
-        subject_config = get_subject(subject_id)
-        return [
-            BookConfig(
-                title=book.title,
-                repo_url_raw=book.repo_url_raw,
-                summary_path=book.summary_path,
-                content_path=book.content_path,
-                branch=book.branch,
-            )
-            for book in subject_config.books
-        ]
-    except Exception as e:
-        logger.warning(f"Failed to load books from subjects.yaml for {subject_id}: {e}")
-        logger.info("Falling back to hardcoded BOOKS list")
-        return BOOKS
+    subject_config = get_subject(subject_id)
+    return [
+        BookConfig(
+            title=book.title,
+            source_type=book.source_type,
+            repo_url_raw=book.repo_url_raw,
+            summary_path=book.summary_path,
+            content_path=book.content_path,
+            branch=book.branch,
+            openstax_slug=book.openstax_slug,
+        )
+        for book in subject_config.books
+    ]
 
 
 def fetch_text(url: str) -> str | None:
@@ -89,6 +93,115 @@ def clean_markdown(text: str) -> str:
     return text.strip()
 
 
+OPENSTAX_BASE_URL = "https://openstax.org/books"
+OPENSTAX_FETCH_DELAY = 0.5  # seconds between page fetches
+
+
+def _extract_preloaded_state(html: str) -> dict[str, Any] | None:
+    """Extract the __PRELOADED_STATE__ JSON from an OpenStax page."""
+    marker = "window.__PRELOADED_STATE__ = "
+    soup = BeautifulSoup(html, "html.parser")
+    for script in soup.select("script"):
+        text = script.string or ""
+        if marker in text:
+            json_str = text.split(marker, 1)[1].rstrip(";").strip()
+            try:
+                result: dict[str, Any] = json.loads(json_str)
+                return result
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse __PRELOADED_STATE__ JSON: {e}")
+                return None
+    return None
+
+
+def _collect_leaf_pages(node: dict) -> list[dict[str, str]]:
+    """Recursively collect leaf pages (actual content pages) from the book tree."""
+    pages: list[dict[str, str]] = []
+    contents = node.get("contents", [])
+    if not contents:
+        # Leaf node = actual page
+        slug = node.get("slug", "")
+        raw_title = node.get("title", slug)
+        # Titles may contain HTML markup — strip it
+        clean_title = BeautifulSoup(raw_title, "html.parser").get_text(strip=True)
+        pages.append({"page_slug": slug, "title": clean_title})
+    else:
+        for child in contents:
+            pages.extend(_collect_leaf_pages(child))
+    return pages
+
+
+def fetch_openstax_toc(slug: str) -> list[dict[str, str]]:
+    """Fetch table of contents from an OpenStax book.
+
+    Uses the embedded __PRELOADED_STATE__ JSON which contains the full book tree
+    on every page. Fetches the 'preface' page as a reliable entry point.
+
+    Returns list of {"page_slug": ..., "title": ...} dicts.
+    """
+    url = f"{OPENSTAX_BASE_URL}/{slug}/pages/preface"
+    logger.info(f"Fetching OpenStax ToC from {url}")
+
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.error(f"Failed to fetch OpenStax page for {slug}: {e}")
+        return []
+
+    state = _extract_preloaded_state(resp.text)
+    if not state:
+        logger.error(f"No __PRELOADED_STATE__ found on page for {slug}")
+        return []
+
+    try:
+        tree = state["content"]["book"]["tree"]
+    except (KeyError, TypeError):
+        logger.error(f"Unexpected __PRELOADED_STATE__ structure for {slug}")
+        return []
+
+    toc_entries = _collect_leaf_pages(tree)
+    logger.info(f"Found {len(toc_entries)} pages in OpenStax ToC for {slug}")
+    return toc_entries
+
+
+def fetch_openstax_page(slug: str, page_slug: str) -> str | None:
+    """Fetch and extract text from a single OpenStax page."""
+    url = f"{OPENSTAX_BASE_URL}/{slug}/pages/{page_slug}"
+
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.warning(f"Failed to fetch OpenStax page {page_slug}: {e}")
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Find the main content element
+    content = (
+        soup.select_one('[data-type="page"]')
+        or soup.select_one("main")
+        or soup.select_one("#main-content")
+    )
+
+    if not content:
+        logger.warning(f"No main content found on page {page_slug}")
+        return None
+
+    # Remove non-content elements
+    for tag in content.select("figure, nav, footer, [data-type='note'], script, style"):
+        tag.decompose()
+
+    text = content.get_text(separator="\n", strip=True)
+
+    # Clean up excessive whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" {2,}", " ", text)
+
+    return text.strip() if text.strip() else None
+
+
 def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
     words = text.split()
     chunks = []
@@ -107,6 +220,166 @@ def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
         chunks.append(" ".join(current_chunk))
 
     return chunks
+
+
+def _add_record_and_index(
+    record: dict,
+    all_records: list[dict],
+    subject_id: str,
+    subject_config: SubjectConfig,
+    index_rag: bool,
+    retriever: OpenSearchRetriever | None,
+    book_title: str,
+    module_id: str,
+) -> None:
+    """Add a record to results and optionally index into OpenSearch."""
+    all_records.append(record)
+
+    if index_rag and retriever:
+        docs = []
+        for chunk_idx, chunk in enumerate(record["chunks"]):
+            docs.append(
+                {
+                    "id": f"{subject_id}_{module_id}_chunk_{chunk_idx}",
+                    "text": chunk,
+                    "module_id": module_id,
+                    "module_title": book_title,
+                    "section": module_id,
+                    "book": book_title,
+                    "key_terms": [],
+                    "attribution": subject_config.attribution,
+                    "subject_id": subject_id,
+                }
+            )
+
+        if docs:
+            try:
+                retriever.index_chunks(docs, show_progress=False)
+            except Exception as e:
+                logger.error(f"Failed to index {module_id}: {e}")
+
+
+def _process_github_raw_book(
+    book: BookConfig,
+    subject_id: str,
+    subject_config: SubjectConfig,
+    limit: int,
+    index_rag: bool,
+    retriever: OpenSearchRetriever | None,
+    all_records: list[dict],
+) -> None:
+    """Process a book from a philschatz GitHub raw source."""
+    summary_url = f"{book.repo_url_raw}/{book.summary_path}"
+    summary_text = fetch_text(summary_url)
+
+    if not summary_text:
+        logger.error(f"Could not fetch summary for {book.title}")
+        return
+
+    chapters = parse_summary(summary_text)
+    logger.info(f"Found {len(chapters)} chapters in {book.title}")
+
+    if limit and limit > 0:
+        chapters = chapters[:limit]
+        logger.info(f"Limiting to first {limit} chapters for verification.")
+
+    for filename in chapters:
+        file_url = f"{book.repo_url_raw}/{book.content_path}/{filename}"
+        content = fetch_text(file_url)
+
+        if not content:
+            continue
+
+        clean_content = clean_markdown(content)
+        chunks = chunk_text(clean_content, chunk_size=settings.rag_chunk_size)
+
+        module_id = filename.replace(".md", "")
+
+        if chunks:
+            record = {
+                "module_id": module_id,
+                "module_title": f"{book.title} - {module_id}",
+                "book_title": book.title,
+                "section": module_id,
+                "text": clean_content,
+                "key_terms": [],
+                "chunks": chunks,
+                "subject_id": subject_id,
+            }
+            _add_record_and_index(
+                record,
+                all_records,
+                subject_id,
+                subject_config,
+                index_rag,
+                retriever,
+                book.title,
+                module_id,
+            )
+
+
+def _process_openstax_web_book(
+    book: BookConfig,
+    subject_id: str,
+    subject_config: SubjectConfig,
+    limit: int,
+    index_rag: bool,
+    retriever: OpenSearchRetriever | None,
+    all_records: list[dict],
+) -> None:
+    """Process a book from the OpenStax website (HTML source)."""
+    if not book.openstax_slug:
+        logger.error(f"No openstax_slug configured for book: {book.title}")
+        return
+
+    toc = fetch_openstax_toc(book.openstax_slug)
+    if not toc:
+        logger.error(f"Could not fetch ToC for {book.title}")
+        return
+
+    logger.info(f"Found {len(toc)} pages in {book.title}")
+
+    if limit and limit > 0:
+        toc = toc[:limit]
+        logger.info(f"Limiting to first {limit} pages for verification.")
+
+    for entry in toc:
+        page_slug = entry["page_slug"]
+        page_title = entry["title"]
+
+        content = fetch_openstax_page(book.openstax_slug, page_slug)
+
+        if not content:
+            continue
+
+        chunks = chunk_text(content, chunk_size=settings.rag_chunk_size)
+        # Create a filesystem-safe module_id from the page slug
+        module_id = re.sub(r"[^a-zA-Z0-9_-]", "_", page_slug)
+
+        if chunks:
+            record = {
+                "module_id": module_id,
+                "module_title": f"{book.title} - {page_title}",
+                "book_title": book.title,
+                "section": page_slug,
+                "text": content,
+                "key_terms": [],
+                "chunks": chunks,
+                "subject_id": subject_id,
+            }
+            _add_record_and_index(
+                record,
+                all_records,
+                subject_id,
+                subject_config,
+                index_rag,
+                retriever,
+                book.title,
+                module_id,
+            )
+
+        # Rate-limit to be polite to openstax.org
+        time.sleep(OPENSTAX_FETCH_DELAY)
 
 
 async def process_books(
@@ -150,76 +423,26 @@ async def process_books(
         except Exception as e:
             logger.warning(f"Could not create index (may already exist): {e}")
 
-    all_records = []
+    all_records: list[dict] = []
 
     for book in books:
-        logger.info(f"Processing book: {book.title}")
+        logger.info(f"Processing book: {book.title} (source_type={book.source_type})")
 
-        # 1. Fetch Summary
-        summary_url = f"{book.repo_url_raw}/{book.summary_path}"
-        summary_text = fetch_text(summary_url)
-
-        if not summary_text:
-            logger.error(f"Could not fetch summary for {book.title}")
-            continue
-
-        chapters = parse_summary(summary_text)
-        logger.info(f"Found {len(chapters)} chapters in {book.title}")
-
-        if limit and limit > 0:
-            chapters = chapters[:limit]
-            logger.info(f"Limiting to first {limit} chapters for verification.")
-
-        # 2. Process Chapters
-        for filename in chapters:
-            file_url = f"{book.repo_url_raw}/{book.content_path}/{filename}"
-            content = fetch_text(file_url)
-
-            if not content:
+        if book.source_type == "openstax_web":
+            if not book.openstax_slug:
+                logger.error(f"No openstax_slug for openstax_web book: {book.title}")
                 continue
-
-            clean_content = clean_markdown(content)
-            chunks = chunk_text(clean_content, chunk_size=settings.rag_chunk_size)
-
-            module_id = filename.replace(".md", "")
-
-            # Create records for JSONL (KG building)
-            if chunks:
-                record = {
-                    "module_id": module_id,
-                    "module_title": f"{book.title} - {module_id}",
-                    "book_title": book.title,
-                    "section": module_id,
-                    "text": clean_content,
-                    "key_terms": [],
-                    "chunks": chunks,
-                    "subject_id": subject_id,  # Add subject_id to records
-                }
-                all_records.append(record)
-
-                # Index into OpenSearch (RAG)
-                if index_rag and retriever:
-                    docs = []
-                    for chunk_idx, chunk in enumerate(chunks):
-                        docs.append(
-                            {
-                                "id": f"{subject_id}_{module_id}_chunk_{chunk_idx}",
-                                "text": chunk,
-                                "module_id": module_id,
-                                "module_title": book.title,
-                                "section": module_id,
-                                "book": book.title,
-                                "key_terms": [],
-                                "attribution": subject_config.attribution,
-                                "subject_id": subject_id,
-                            }
-                        )
-
-                    if docs:
-                        try:
-                            retriever.index_chunks(docs, show_progress=False)
-                        except Exception as e:
-                            logger.error(f"Failed to index {module_id}: {e}")
+            _process_openstax_web_book(
+                book, subject_id, subject_config, limit, index_rag, retriever, all_records
+            )
+        else:
+            # Default: github_raw
+            if not book.repo_url_raw:
+                logger.error(f"No repo_url_raw for github_raw book: {book.title}")
+                continue
+            _process_github_raw_book(
+                book, subject_id, subject_config, limit, index_rag, retriever, all_records
+            )
 
     # Save to JSONL
     logger.info(f"Saving {len(all_records)} records to {books_jsonl_path}")
@@ -242,7 +465,7 @@ def parse_args():
         "--subject",
         type=str,
         default=None,
-        help=f"Subject ID to ingest (available: {get_subject_ids()}). Defaults to us_history.",
+        help="Subject ID to ingest. Use --list-subjects to see options. Defaults to us_history.",
     )
     parser.add_argument(
         "--limit",

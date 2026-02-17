@@ -59,6 +59,7 @@ class OpenSearchRetriever:
             embedding_dim: Dimension of embeddings
             recreate: If True, delete existing index
         """
+        assert self.client is not None, "Not connected. Call connect() first."
         if recreate and self.client.indices.exists(index=self.index_name):
             logger.warning(f"Deleting existing index: {self.index_name}")
             self.client.indices.delete(index=self.index_name)
@@ -95,6 +96,7 @@ class OpenSearchRetriever:
                 },
             }
 
+            assert self.client is not None
             self.client.indices.create(index=self.index_name, body=index_body)
             logger.success(f"✓ Created index: {self.index_name}")
         else:
@@ -154,7 +156,7 @@ class OpenSearchRetriever:
     def retrieve(
         self,
         query: str,
-        top_k: int = None,
+        top_k: int | None = None,
         filter_dict: dict | None = None,
     ) -> list[dict]:
         """
@@ -174,29 +176,31 @@ class OpenSearchRetriever:
         query_embedding = self.embedding_model.encode_query(query)
 
         # Build kNN search query
-        search_body = {
-            "size": top_k,
-            "query": {
-                "knn": {
-                    "embedding": {
-                        "vector": query_embedding,
-                        "k": top_k,
-                    }
+        knn_clause: dict = {
+            "knn": {
+                "embedding": {
+                    "vector": query_embedding,
+                    "k": top_k,
                 }
-            },
+            }
         }
 
         # Add filters if provided
         if filter_dict:
-            search_body["query"] = {
+            query_clause: dict = {
                 "bool": {
-                    "must": [{"knn": search_body["query"]["knn"]}],
+                    "must": [knn_clause],
                     "filter": [{"term": filter_dict}],
                 }
             }
+        else:
+            query_clause = knn_clause
+
+        search_body: dict = {"size": top_k, "query": query_clause}
 
         # Search OpenSearch
-        results = self.client.search(index=self.index_name, body=search_body)
+        assert self.client is not None, "Not connected. Call connect() first."
+        results: dict = self.client.search(index=self.index_name, body=search_body)
 
         # Format results
         retrieved = []
@@ -218,6 +222,7 @@ class OpenSearchRetriever:
 
     def get_collection_info(self) -> dict:
         """Get index information."""
+        assert self.client is not None, "Not connected. Call connect() first."
         if not self.client.indices.exists(index=self.index_name):
             return {"exists": False}
 

@@ -49,7 +49,7 @@ class ConceptExtractor:
         """
         self.known_concepts = known_concepts or set()
         self._embedding_model = embedding_model
-        self._spacy_nlp = None
+        self._spacy_nlp: object | None = None
         self._yake_extractor = None
         self._concept_embeddings: dict[str, list[float]] = {}
 
@@ -139,7 +139,7 @@ class ConceptExtractor:
 
     def _extract_ner(self, text: str) -> list[ConceptMatch]:
         """Extract concepts using spaCy NER."""
-        matches = []
+        matches: list[ConceptMatch] = []
 
         if self.spacy_nlp is None:
             return matches
@@ -217,7 +217,7 @@ class ConceptExtractor:
         self, text: str, similarity_threshold: float = 0.5
     ) -> list[ConceptMatch]:
         """Extract concepts using embedding similarity."""
-        matches = []
+        matches: list[ConceptMatch] = []
 
         if not self.known_concepts:
             return matches

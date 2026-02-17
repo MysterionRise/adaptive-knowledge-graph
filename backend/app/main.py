@@ -51,7 +51,7 @@ app = FastAPI(
 
 # Add rate limiter state and exception handler
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # CORS middleware for Next.js frontend
 app.add_middleware(
@@ -120,7 +120,7 @@ async def check_neo4j_health() -> ServiceHealth:
         adapter.connect()
 
         # Run a simple query to verify
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             result = session.run("RETURN 1 as n")
             _ = list(result)
 
@@ -270,7 +270,7 @@ async def health_ready():
         overall_status = "degraded"
 
     return ReadinessResponse(
-        status=overall_status,
+        status=overall_status,  # type: ignore[arg-type]
         services=services,
         attribution=settings.attribution_openstax,
     )

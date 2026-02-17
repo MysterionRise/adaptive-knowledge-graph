@@ -38,8 +38,8 @@ class LLMClient:
         self,
         prompt: str,
         system_prompt: str | None = None,
-        temperature: float = None,
-        max_tokens: int = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         """
         Generate text using LLM.
@@ -92,7 +92,7 @@ class LLMClient:
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get("response", "")
+                    return str(data.get("response", ""))
                 else:
                     error_text = await response.text()
                     raise RuntimeError(f"Ollama API error ({response.status}): {error_text}")
@@ -140,11 +140,11 @@ class LLMClient:
                 json=payload,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=60),
-                ssl=ssl_context,
+                ssl=ssl_context if ssl_context is not None else False,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data["choices"][0]["message"]["content"]
+                    return str(data["choices"][0]["message"]["content"])
                 else:
                     error_text = await response.text()
                     raise RuntimeError(f"OpenRouter API error ({response.status}): {error_text}")

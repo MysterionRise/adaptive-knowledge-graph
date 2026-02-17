@@ -125,8 +125,8 @@ class KGBuilder:
             self.kg.modules[module_id] = module_node
 
         # Step 2: Extract concepts
-        all_concepts = Counter()
-        concept_to_modules = {}
+        all_concepts: Counter[str] = Counter()
+        concept_to_modules: dict[str, list[str]] = {}
 
         for module_id, data in modules_data.items():
             full_text = " ".join(data["texts"])
@@ -146,6 +146,7 @@ class KGBuilder:
         for concept_name in top_concepts:
             concept_node = ConceptNode(
                 name=concept_name,
+                definition=None,
                 frequency=all_concepts[concept_name],
                 source_modules=concept_to_modules.get(concept_name, []),
                 key_term=any(
@@ -166,6 +167,7 @@ class KGBuilder:
                             type=RelationshipType.COVERS,
                             weight=1.0,
                             confidence=1.0,
+                            evidence=None,
                         )
                     )
 
@@ -187,7 +189,7 @@ class KGBuilder:
             concepts: List of concept names
         """
         # Build co-occurrence matrix
-        cooccurrence = Counter()
+        cooccurrence: Counter[tuple[str, ...]] = Counter()
 
         for record in records:
             text_lower = record["text"].lower()
@@ -214,6 +216,7 @@ class KGBuilder:
                         type=RelationshipType.RELATED,
                         weight=weight,
                         confidence=0.7,  # Medium confidence for co-occurrence
+                        evidence=None,
                     )
                 )
 

@@ -31,7 +31,7 @@ def drop_existing_indexes(adapter: Neo4jAdapter):
     """Drop existing indexes (use with caution)."""
     logger.warning("Dropping existing indexes...")
 
-    with adapter.driver.session() as session:
+    with adapter._get_session() as session:
         # Get all indexes
         result = session.run("SHOW INDEXES YIELD name, type")
         indexes = [(r["name"], r["type"]) for r in result]
@@ -82,7 +82,7 @@ def create_standard_indexes(adapter: Neo4jAdapter):
     """Create standard indexes for performance."""
     logger.info("Creating standard indexes...")
 
-    with adapter.driver.session() as session:
+    with adapter._get_session() as session:
         indexes = [
             # Chunk indexes
             (
@@ -124,7 +124,7 @@ def verify_indexes(adapter: Neo4jAdapter):
     """Verify all indexes are created and populated."""
     logger.info("Verifying indexes...")
 
-    with adapter.driver.session() as session:
+    with adapter._get_session() as session:
         result = session.run(
             """
             SHOW INDEXES
@@ -148,7 +148,7 @@ def test_vector_search(adapter: Neo4jAdapter):
 
     try:
         # Check if there are chunks with embeddings
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             result = session.run(
                 """
                 MATCH (c:Chunk)
@@ -156,7 +156,7 @@ def test_vector_search(adapter: Neo4jAdapter):
                 RETURN count(c) as count
                 """
             )
-            count = result.single()["count"]
+            count = result.single()["count"]  # type: ignore[index]
 
             if count == 0:
                 logger.warning("No chunks with embeddings found. Vector search test skipped.")
@@ -173,7 +173,7 @@ def test_vector_search(adapter: Neo4jAdapter):
                 LIMIT 1
                 """
             )
-            sample_embedding = result.single()["embedding"]
+            sample_embedding = result.single()["embedding"]  # type: ignore[index]
 
             # Test vector search
             search_result = adapter.vector_search(
@@ -197,9 +197,9 @@ def test_fulltext_search(adapter: Neo4jAdapter):
 
     try:
         # Check if there are concepts
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             result = session.run("MATCH (c:Concept) RETURN count(c) as count")
-            count = result.single()["count"]
+            count = result.single()["count"]  # type: ignore[index]
 
             if count == 0:
                 logger.warning("No concepts found. Fulltext search test skipped.")

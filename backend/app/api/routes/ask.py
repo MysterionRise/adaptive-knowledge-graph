@@ -111,7 +111,7 @@ async def ask_question(request: QuestionRequest):
                 from backend.app.rag.window_retriever import get_window_retriever
 
                 window_retriever = get_window_retriever()
-                chunk_ids = [c.get("id") for c in retrieved_chunks if c.get("id")]
+                chunk_ids: list[str] = [c["id"] for c in retrieved_chunks if c.get("id")]
 
                 if chunk_ids:
                     window_results = window_retriever.retrieve_window_text(

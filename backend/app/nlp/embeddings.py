@@ -90,7 +90,7 @@ class EmbeddingModel:
                 convert_to_tensor=False,  # Return as numpy array
             )
 
-            return embeddings.tolist()  # Convert to list for JSON serialization
+            return list(embeddings.tolist())  # Convert to list for JSON serialization
 
         except Exception as e:
             logger.error(f"Encoding failed: {e}")
@@ -107,7 +107,10 @@ class EmbeddingModel:
             Query embedding
         """
         embeddings = self.encode(query, normalize=True)
-        return embeddings[0]
+        result = embeddings[0]
+        if isinstance(result, list):
+            return result
+        return list(result)
 
     def encode_batch(self, texts: list[str]) -> list[list[float]]:
         """
@@ -119,7 +122,10 @@ class EmbeddingModel:
         Returns:
             List of embeddings
         """
-        return self.encode(texts, normalize=True, show_progress=True)
+        result = self.encode(texts, normalize=True, show_progress=True)
+        if isinstance(result, list):
+            return result
+        return list(result)
 
     def get_embedding_dimension(self) -> int:
         """Get the embedding dimension."""

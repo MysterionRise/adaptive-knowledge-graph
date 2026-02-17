@@ -56,11 +56,12 @@ export default function SubjectPicker({ className = '' }: SubjectPickerProps) {
     if (subjectTheme && subjectTheme.subject_id === subjectId) {
       return subjectTheme.primary_color;
     }
-    // Default colors for subjects
+    // Default colors for subjects (must match subjects.yaml theme.primary_color)
     const defaultColors: Record<string, string> = {
       us_history: '#dc2626',
       biology: '#16a34a',
-      chemistry: '#2563eb',
+      economics: '#d97706',
+      world_history: '#4f46e5',
     };
     return defaultColors[subjectId] || '#6366f1';
   };

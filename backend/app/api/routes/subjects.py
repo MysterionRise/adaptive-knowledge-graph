@@ -175,16 +175,21 @@ async def get_subject_books(subject_id: str):
     try:
         subject = get_subject(subject_id)
 
-        return [
-            {
+        result = []
+        for book in subject.books:
+            entry: dict = {
                 "title": book.title,
-                "repo_url_raw": book.repo_url_raw,
-                "summary_path": book.summary_path,
-                "content_path": book.content_path,
-                "branch": book.branch,
+                "source_type": book.source_type,
             }
-            for book in subject.books
-        ]
+            if book.source_type == "openstax_web":
+                entry["openstax_slug"] = book.openstax_slug
+            else:
+                entry["repo_url_raw"] = book.repo_url_raw
+                entry["summary_path"] = book.summary_path
+                entry["content_path"] = book.content_path
+                entry["branch"] = book.branch
+            result.append(entry)
+        return result
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:

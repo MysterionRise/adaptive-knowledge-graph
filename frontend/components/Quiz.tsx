@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin, Zap, RefreshCw } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import MasteryIndicator from './MasteryIndicator';
+import PostQuizRecommendations from './PostQuizRecommendations';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const API_PREFIX = '/api/v1';
@@ -18,8 +19,23 @@ interface QuizQuestion {
     correct_option_id: string;
     explanation: string;
     source_chunk_id?: string;
+    related_concept?: string;
     difficulty?: Difficulty;
     difficulty_score?: number;
+}
+
+interface QuestionResult {
+    question_id: string;
+    related_concept: string;
+    correct: boolean;
+}
+
+interface RecommendationData {
+    path_type: string;
+    score_pct: number;
+    remediation: any[];
+    advancement: any[];
+    summary: string;
 }
 
 interface Quiz {
@@ -83,6 +99,12 @@ export default function Quiz() {
     const [adaptiveMode, setAdaptiveMode] = useState(true);
     const [currentMastery, setCurrentMastery] = useState(0.3);
     const [targetDifficulty, setTargetDifficulty] = useState<Difficulty>('easy');
+
+    // Post-quiz recommendations state
+    const [questionResults, setQuestionResults] = useState<QuestionResult[]>([]);
+    const [recommendations, setRecommendations] = useState<RecommendationData | null>(null);
+    const [recsLoading, setRecsLoading] = useState(false);
+    const [recsError, setRecsError] = useState<string | null>(null);
 
     // Get mastery tracking from store
     const {
@@ -163,6 +185,16 @@ export default function Quiz() {
             setScore(s => s + 1);
         }
 
+        // Track question result for recommendations
+        setQuestionResults(prev => [
+            ...prev,
+            {
+                question_id: currentQ?.id || '',
+                related_concept: currentQ?.related_concept || topic,
+                correct: isCorrect,
+            },
+        ]);
+
         // Update mastery tracking for the topic (syncs to backend)
         updateMastery(topic, isCorrect);
 
@@ -186,6 +218,35 @@ export default function Quiz() {
         } else {
             // Quiz finished - show results modal
             setShowResults(true);
+            // Fetch recommendations asynchronously
+            fetchRecommendations();
+        }
+    };
+
+    const fetchRecommendations = async () => {
+        setRecsLoading(true);
+        setRecsError(null);
+        try {
+            const res = await fetch(`${API_BASE}${API_PREFIX}/quiz/recommendations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    topic,
+                    question_results: questionResults,
+                    student_id: 'default',
+                    subject: null,
+                }),
+            });
+            if (!res.ok) {
+                throw new Error(`Failed to fetch recommendations (${res.status})`);
+            }
+            const data = await res.json();
+            setRecommendations(data);
+        } catch (err) {
+            console.error('Failed to fetch recommendations:', err);
+            setRecsError('Unable to load recommendations. Your score and results are still available above.');
+        } finally {
+            setRecsLoading(false);
         }
     };
 
@@ -196,6 +257,9 @@ export default function Quiz() {
         setScore(0);
         setSelectedOption(null);
         setIsSubmitted(false);
+        setQuestionResults([]);
+        setRecommendations(null);
+        setRecsError(null);
     };
 
     const handleResetProfile = async () => {
@@ -209,6 +273,15 @@ export default function Quiz() {
         // Set highlighted concepts before navigating to graph
         setHighlightedConcepts([topic]);
         router.push('/graph');
+    };
+
+    const handlePracticeConcept = (concept: string) => {
+        handleRetry();
+        setTopic(concept);
+    };
+
+    const handleAskTutor = (concept: string) => {
+        router.push(`/chat?question=${encodeURIComponent(`Explain ${concept}`)}`);
     };
 
     // Check if quiz is adaptive
@@ -455,7 +528,7 @@ export default function Quiz() {
             {/* Results Modal */}
             {showResults && quiz && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl transform animate-in fade-in zoom-in duration-300">
+                    <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl transform animate-in fade-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
                         {/* Score Circle */}
                         <div className="relative w-36 h-36 mx-auto mb-6">
                             <svg className="w-full h-full transform -rotate-90">
@@ -567,6 +640,15 @@ export default function Quiz() {
                                 {isAdaptiveQuiz(quiz) ? 'Continue Learning (Next Level)' : 'Try Another Assessment'}
                             </button>
                         </div>
+
+                        {/* Post-Quiz Recommendations */}
+                        <PostQuizRecommendations
+                            recommendations={recommendations}
+                            isLoading={recsLoading}
+                            error={recsError}
+                            onPractice={handlePracticeConcept}
+                            onAskTutor={handleAskTutor}
+                        />
                     </div>
                 </div>
             )}

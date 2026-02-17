@@ -120,7 +120,8 @@ async def ingest():
         logger.info(f"Ingestion complete. Total chunks: {total_chunks}")
 
         # Force refresh index
-        retriever.client.indices.refresh(index=settings.opensearch_index)
+        if retriever.client is not None:
+            retriever.client.indices.refresh(index=settings.opensearch_index)
 
     except Exception as e:
         logger.error(f"Ingestion failed: {e}")

@@ -28,11 +28,6 @@ subjects:
         summary_path: "SUMMARY.md"
         content_path: "contents"
         branch: "master"
-      - title: "American Government"
-        repo_url_raw: "https://raw.githubusercontent.com/philschatz/american-government-book/master"
-        summary_path: "SUMMARY.md"
-        content_path: "contents"
-        branch: "master"
 
     # LLM prompts
     prompts:
@@ -119,6 +114,107 @@ subjects:
 
     # Attribution
     attribution: "Content from OpenStax Biology 2e (CC BY 4.0). Download for free at https://openstax.org/details/books/biology-2e"
+
+  economics:
+    name: "Economics"
+    description: "Principles of economics covering micro and macroeconomics"
+
+    # Database configuration
+    database:
+      neo4j_database: "neo4j"
+      label_prefix: "economics"
+      opensearch_index: "textbook_chunks_economics"
+
+    # Content sources
+    books:
+      - title: "Economics"
+        repo_url_raw: "https://raw.githubusercontent.com/philschatz/economics-book/master"
+        summary_path: "SUMMARY.md"
+        content_path: "contents"
+        branch: "master"
+
+    # LLM prompts
+    prompts:
+      system_prompt: |
+        You are an expert economics tutor. Answer the student's question using ONLY the provided textbook context.
+
+        Rules:
+        1. Base your answer ONLY on the provided context
+        2. If the context doesn't contain enough information, say so
+        3. Cite context passages using [1], [2], etc.
+        4. Be clear, accurate, and educational
+        5. Use real-world examples where applicable to illustrate economic concepts
+        6. Include the attribution at the end of your response
+      context_label: "Context from OpenStax Economics"
+
+    # Frontend theming
+    theme:
+      primary_color: "#d97706"  # Amber/orange for Economics
+      secondary_color: "#fde68a"
+      accent_color: "#b45309"
+      chapter_colors:
+        Supply and Demand: "#f59e0b"
+        Markets: "#eab308"
+        Macroeconomics: "#d97706"
+        Microeconomics: "#ca8a04"
+        Trade: "#b45309"
+        Fiscal Policy: "#92400e"
+        Monetary Policy: "#78350f"
+        default: "#d97706"
+
+    # Attribution
+    attribution: "Content from OpenStax Principles of Economics (CC BY 4.0). Download for free at https://openstax.org/details/books/principles-economics-3e"
+
+  world_history:
+    name: "World History"
+    description: "World history from ancient civilizations to the modern era"
+
+    # Database configuration
+    database:
+      neo4j_database: "neo4j"
+      label_prefix: "world_history"
+      opensearch_index: "textbook_chunks_world_history"
+
+    # Content sources
+    books:
+      - title: "World History Volume 1"
+        source_type: "openstax_web"
+        openstax_slug: "world-history-volume-1"
+      - title: "World History Volume 2"
+        source_type: "openstax_web"
+        openstax_slug: "world-history-volume-2"
+
+    # LLM prompts
+    prompts:
+      system_prompt: |
+        You are an expert world history tutor. Answer the student's question using ONLY the provided textbook context.
+
+        Rules:
+        1. Base your answer ONLY on the provided context
+        2. If the context doesn't contain enough information, say so
+        3. Cite context passages using [1], [2], etc.
+        4. Be clear, accurate, and educational
+        5. Help students understand historical connections across regions and time periods
+        6. Include the attribution at the end of your response
+      context_label: "Context from OpenStax World History"
+
+    # Frontend theming
+    theme:
+      primary_color: "#4f46e5"  # Indigo/purple for World History
+      secondary_color: "#c7d2fe"
+      accent_color: "#4338ca"
+      chapter_colors:
+        Ancient: "#6366f1"
+        Classical: "#8b5cf6"
+        Medieval: "#a855f7"
+        Renaissance: "#7c3aed"
+        Enlightenment: "#6d28d9"
+        Modern: "#5b21b6"
+        Contemporary: "#4c1d95"
+        default: "#4f46e5"
+
+    # Attribution
+    attribution: "Content from OpenStax World History (CC BY 4.0). Download for free at https://openstax.org/details/books/world-history-volume-1"
 
   # Template for adding new subjects
   # chemistry:

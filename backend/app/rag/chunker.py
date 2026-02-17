@@ -15,8 +15,8 @@ class TextChunker:
 
     def __init__(
         self,
-        chunk_size: int = None,
-        chunk_overlap: int = None,
+        chunk_size: int | None = None,
+        chunk_overlap: int | None = None,
         track_sequential: bool = True,
     ):
         """
@@ -34,7 +34,7 @@ class TextChunker:
     def chunk_text(
         self,
         text: str,
-        metadata: dict = None,
+        metadata: dict | None = None,
         previous_chunk_id: str | None = None,
     ) -> list[dict]:
         """
@@ -52,7 +52,7 @@ class TextChunker:
         if not text:
             return []
 
-        chunks = []
+        chunks: list[dict] = []
         start = 0
         chunk_id = 0
         prev_id = previous_chunk_id

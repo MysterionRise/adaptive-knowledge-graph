@@ -127,7 +127,7 @@ def require_auth() -> str:
     Returns:
         The validated API key
     """
-    return Depends(verify_api_key)
+    return Depends(verify_api_key)  # type: ignore[no-any-return]
 
 
 # Re-export auth dependencies for convenience

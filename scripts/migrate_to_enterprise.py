@@ -52,6 +52,7 @@ def load_chunks_from_opensearch(batch_size: int = 1000) -> list[dict]:
 
     try:
         # Initial search
+        assert retriever.client is not None, "Not connected. Call connect() first."
         response = retriever.client.search(
             index=retriever.index_name,
             body={"query": {"match_all": {}}, "size": batch_size},
@@ -78,6 +79,7 @@ def load_chunks_from_opensearch(batch_size: int = 1000) -> list[dict]:
                 all_chunks.append(chunk)
 
             # Get next batch
+            assert retriever.client is not None
             response = retriever.client.scroll(scroll_id=scroll_id, scroll="2m")
             scroll_id = response["_scroll_id"]
             hits = response["hits"]["hits"]
@@ -86,7 +88,7 @@ def load_chunks_from_opensearch(batch_size: int = 1000) -> list[dict]:
         # Clear scroll
         if scroll_id:
             try:
-                retriever.client.clear_scroll(scroll_id=scroll_id)
+                retriever.client.clear_scroll(scroll_id=scroll_id)  # type: ignore[union-attr]
             except Exception:
                 pass
 
@@ -292,7 +294,7 @@ def verify_migration(adapter: Neo4jAdapter):
     logger.info(f"  MENTIONS relationships: {stats.get('MENTIONS_relationships', 0)}")
 
     # Test window query
-    with adapter.driver.session() as session:
+    with adapter._get_session() as session:
         result = session.run(
             """
             MATCH (c:Chunk)
@@ -356,7 +358,7 @@ def main():
         chunks, first_chunks = add_sequential_linking(chunks)
 
         # Step 4: Get all concepts for MENTIONS relationships
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             result = session.run("MATCH (c:Concept) RETURN c.name as name")
             all_concepts = {record["name"] for record in result}
         logger.info(f"Found {len(all_concepts)} concepts in graph")

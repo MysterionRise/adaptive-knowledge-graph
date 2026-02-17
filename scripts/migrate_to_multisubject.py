@@ -51,16 +51,16 @@ def migrate_neo4j_labels(subject_id: str = "us_history", dry_run: bool = False):
     label_prefix = subject_config.database.label_prefix
 
     try:
-        with adapter.driver.session() as session:
+        with adapter._get_session() as session:
             # Check existing data
             result = session.run("MATCH (c:Concept) RETURN count(c) as count")
-            concept_count = result.single()["count"]
+            concept_count = result.single()["count"]  # type: ignore[index]
 
             result = session.run("MATCH (m:Module) RETURN count(m) as count")
-            module_count = result.single()["count"]
+            module_count = result.single()["count"]  # type: ignore[index]
 
             result = session.run("MATCH (c:Chunk) RETURN count(c) as count")
-            chunk_count = result.single()["count"]
+            chunk_count = result.single()["count"]  # type: ignore[index]
 
             logger.info("Found existing data:")
             logger.info(f"  - {concept_count} Concept nodes")
@@ -74,7 +74,7 @@ def migrate_neo4j_labels(subject_id: str = "us_history", dry_run: bool = False):
             # Check if migration already done
             new_concept_label = f"{label_prefix}_Concept"
             result = session.run(f"MATCH (c:{new_concept_label}) RETURN count(c) as count")
-            existing_migrated = result.single()["count"]
+            existing_migrated = result.single()["count"]  # type: ignore[index]
 
             if existing_migrated > 0:
                 logger.warning(
@@ -108,7 +108,7 @@ def migrate_neo4j_labels(subject_id: str = "us_history", dry_run: bool = False):
                 RETURN count(c) as count
                 """
             )
-            migrated = result.single()["count"]
+            migrated = result.single()["count"]  # type: ignore[index]
             logger.info(f"  Migrated {migrated} Concept nodes")
 
             logger.info(f"Adding {label_prefix}_Module label to Module nodes...")
@@ -120,7 +120,7 @@ def migrate_neo4j_labels(subject_id: str = "us_history", dry_run: bool = False):
                 RETURN count(m) as count
                 """
             )
-            migrated = result.single()["count"]
+            migrated = result.single()["count"]  # type: ignore[index]
             logger.info(f"  Migrated {migrated} Module nodes")
 
             logger.info(f"Adding {label_prefix}_Chunk label to Chunk nodes...")
@@ -132,7 +132,7 @@ def migrate_neo4j_labels(subject_id: str = "us_history", dry_run: bool = False):
                 RETURN count(c) as count
                 """
             )
-            migrated = result.single()["count"]
+            migrated = result.single()["count"]  # type: ignore[index]
             logger.info(f"  Migrated {migrated} Chunk nodes")
 
         logger.success(f"Neo4j label migration complete for {subject_id}")

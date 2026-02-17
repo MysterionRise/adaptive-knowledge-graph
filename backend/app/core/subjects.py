@@ -18,10 +18,14 @@ class BookSource(BaseModel):
     """Configuration for a book source."""
 
     title: str
-    repo_url_raw: str
+    source_type: str = "github_raw"  # "github_raw" or "openstax_web"
+    # github_raw fields (existing, optional for openstax_web sources)
+    repo_url_raw: str | None = None
     summary_path: str = "SUMMARY.md"
     content_path: str = "contents"
     branch: str = "master"
+    # openstax_web fields
+    openstax_slug: str | None = None  # e.g. "world-history-volume-1"
 
 
 class SubjectPrompts(BaseModel):

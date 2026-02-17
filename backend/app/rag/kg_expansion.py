@@ -22,7 +22,7 @@ class KGExpander:
 
     def __init__(
         self,
-        max_hops: int = None,
+        max_hops: int | None = None,
         extraction_strategy: Literal["simple", "ensemble", "ner", "yake"] = "ensemble",
         subject_id: str | None = None,
     ):
@@ -41,8 +41,8 @@ class KGExpander:
         self.max_hops = max_hops or settings.rag_kg_expansion_hops
         self.extraction_strategy = extraction_strategy
         self.subject_id = subject_id
-        self.neo4j_adapter = None
-        self._concept_extractor = None
+        self.neo4j_adapter: Neo4jAdapter | None = None
+        self._concept_extractor: object | None = None
 
     @property
     def concept_extractor(self):
@@ -196,7 +196,7 @@ class KGExpander:
 
 
 # Global singleton for backward compatibility
-_kg_expander: KGExpander = None
+_kg_expander: KGExpander | None = None
 
 # Registry of KG expanders per subject
 _kg_expanders: dict[str, KGExpander] = {}
@@ -270,7 +270,7 @@ def get_all_concepts_from_neo4j(subject_id: str | None = None) -> set[str]:
             adapter = Neo4jAdapter()
             adapter.connect()
 
-            with adapter.driver.session() as session:
+            with adapter._get_session() as session:
                 result = session.run("MATCH (c:Concept) RETURN c.name as name")
                 concepts = {record["name"] for record in result}
 

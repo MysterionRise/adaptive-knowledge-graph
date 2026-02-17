@@ -6,14 +6,21 @@ This script:
 2. Extracts concepts and relationships using KGBuilder
 3. Persists the graph to Neo4j
 4. Outputs statistics and top concepts
+
+Usage:
+    poetry run python scripts/build_knowledge_graph.py
+    poetry run python scripts/build_knowledge_graph.py --subject biology
+    poetry run python scripts/build_knowledge_graph.py --subject us_history --max-concepts 300
 """
 
+import argparse
 import json
 from pathlib import Path
 
 from loguru import logger
 
 from backend.app.core.settings import settings
+from backend.app.core.subjects import get_subject, get_subject_ids
 from backend.app.kg.builder import KGBuilder
 from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
@@ -30,20 +37,48 @@ def load_records(jsonl_path: Path) -> list:
 
 def main():
     """Main entry point."""
-    logger.info("Starting knowledge graph construction")
+    parser = argparse.ArgumentParser(description="Build knowledge graph from textbook data")
+    parser.add_argument(
+        "--subject",
+        type=str,
+        default=None,
+        help=f"Subject ID (available: {get_subject_ids()}). Defaults to us_history.",
+    )
+    parser.add_argument(
+        "--max-concepts",
+        type=int,
+        default=200,
+        help="Maximum number of concepts to extract (default: 200)",
+    )
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear existing Neo4j data before building (skips interactive prompt)",
+    )
+    args = parser.parse_args()
 
-    # Load data
-    jsonl_path = Path(settings.data_books_jsonl)
+    # Resolve subject
+    subject_config = get_subject(args.subject)
+    subject_id = subject_config.id
+
+    logger.info(f"Starting knowledge graph construction for subject: {subject_id}")
+
+    # Load data from subject-specific JSONL
+    jsonl_path = Path(settings.data_processed_dir) / f"books_{subject_id}.jsonl"
+    if not jsonl_path.exists():
+        # Fall back to generic path
+        jsonl_path = Path(settings.data_books_jsonl)
+
     if not jsonl_path.exists():
         logger.error(f"Data file not found: {jsonl_path}")
-        logger.error("Run 'make normalize-data' first")
+        logger.error(f"Run 'poetry run python scripts/ingest_books.py --subject {subject_id}' first")
         return
 
     records = load_records(jsonl_path)
-    logger.info(f"Loaded {len(records)} text records")
+    logger.info(f"Loaded {len(records)} text records from {jsonl_path}")
 
     # Build knowledge graph
-    builder = KGBuilder(max_concepts=200)  # Limit for demo
+    builder = KGBuilder(max_concepts=args.max_concepts)
     kg = builder.build_from_records(records)
 
     # Print statistics
@@ -60,19 +95,22 @@ def main():
 
     # Save graph to JSON for backup
     processed_dir = Path(settings.data_processed_dir)
-    graph_json_path = processed_dir / "knowledge_graph.json"
+    graph_json_path = processed_dir / f"knowledge_graph_{subject_id}.json"
     graph_json_path.write_text(kg.model_dump_json(indent=2), encoding="utf-8")
     logger.success(f"Saved graph to {graph_json_path}")
 
     # Persist to Neo4j
     logger.info("\nConnecting to Neo4j...")
-    adapter = get_neo4j_adapter("us_history")
+    adapter = get_neo4j_adapter(subject_id)
 
     try:
-        # Clear existing data (for fresh build)
-        response = input("Clear existing Neo4j data? (yes/no): ").strip().lower()
-        if response == "yes":
+        # Clear existing data
+        if args.clear:
             adapter.clear_database()
+        else:
+            response = input(f"Clear existing Neo4j data for {subject_id}? (yes/no): ").strip().lower()
+            if response == "yes":
+                adapter.clear_database()
 
         # Persist graph
         adapter.persist_knowledge_graph(kg)
@@ -83,7 +121,7 @@ def main():
         for key, value in neo4j_stats.items():
             logger.info(f"  {key}: {value}")
 
-        logger.success("\n✓ Knowledge graph build complete!")
+        logger.success(f"\n✓ Knowledge graph build complete for {subject_id}!")
         logger.info("View graph at: http://localhost:7474")
         logger.info("Next step: run 'make index-rag' to index content for RAG")
 
