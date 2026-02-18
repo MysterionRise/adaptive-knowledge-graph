@@ -54,6 +54,9 @@ docker-logs: ## Show Docker logs
 docker-ps: ## Show running containers
 	docker compose -f infra/compose/compose.yaml ps
 
+# Subject selection (override with: make build-kg SUBJECT=biology)
+SUBJECT ?=
+
 # Data pipeline operations
 fetch-data: ## Fetch OpenStax Biology 2e from philschatz
 	poetry run python scripts/fetch_openstax.py
@@ -64,16 +67,19 @@ parse-data: ## Parse fetched HTML to clean JSON
 normalize-data: ## Normalize to JSONL with attribution
 	poetry run python scripts/normalize_book.py
 
+ingest-books: ## Ingest books for a subject (use SUBJECT=economics)
+	poetry run python scripts/ingest_books.py $(if $(SUBJECT),--subject $(SUBJECT))
+
 # KG operations
-build-kg: ## Build knowledge graph (extract concepts, edges, persist to Neo4j)
-	poetry run python scripts/build_knowledge_graph.py
+build-kg: ## Build knowledge graph (use SUBJECT=biology to override)
+	poetry run python scripts/build_knowledge_graph.py $(if $(SUBJECT),--subject $(SUBJECT))
 
 export-rdf: ## Export KG to RDF/Turtle
 	poetry run python scripts/export_graph_rdf.py
 
 # RAG operations
-index-rag: ## Index textbook content to OpenSearch
-	poetry run python scripts/index_to_opensearch.py
+index-rag: ## Index textbook content to OpenSearch (use SUBJECT=biology to override)
+	poetry run python scripts/index_to_opensearch.py $(if $(SUBJECT),--subject $(SUBJECT))
 
 # Run services
 run-api: ## Run FastAPI backend locally

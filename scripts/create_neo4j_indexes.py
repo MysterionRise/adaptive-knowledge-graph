@@ -24,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from loguru import logger
 
 from backend.app.core.settings import settings
-from backend.app.kg.neo4j_adapter import Neo4jAdapter
+from backend.app.core.subjects import get_all_subjects, get_subject
+from backend.app.kg.neo4j_adapter import Neo4jAdapter, get_neo4j_adapter
 
 
 def drop_existing_indexes(adapter: Neo4jAdapter):
@@ -70,7 +71,8 @@ def create_fulltext_index(adapter: Neo4jAdapter):
     logger.info("Creating fulltext index on Concept.name...")
 
     try:
-        adapter.create_fulltext_index(index_name="fullTextConceptNames")
+        # Pass None to let adapter auto-generate name with label_prefix
+        adapter.create_fulltext_index(index_name=None)
     except Exception as e:
         if "already exists" in str(e).lower():
             logger.info("Fulltext index already exists")
@@ -79,33 +81,44 @@ def create_fulltext_index(adapter: Neo4jAdapter):
 
 
 def create_standard_indexes(adapter: Neo4jAdapter):
-    """Create standard indexes for performance."""
+    """Create standard indexes for performance using subject-specific labels."""
     logger.info("Creating standard indexes...")
+    prefix = f"{adapter.label_prefix}_" if adapter.label_prefix else ""
+
+    # Build label names via the adapter's labeling convention
+    chunk_label = adapter._get_label("Chunk")
+    concept_label = adapter._get_label("Concept")
+    module_label = adapter._get_label("Module")
 
     with adapter._get_session() as session:
         indexes = [
             # Chunk indexes
             (
-                "chunk_id_index",
-                "CREATE INDEX chunk_id_index IF NOT EXISTS FOR (c:Chunk) ON (c.chunkId)",
+                f"{prefix}chunk_id_index",
+                f"CREATE INDEX {prefix}chunk_id_index IF NOT EXISTS "
+                f"FOR (c:{chunk_label}) ON (c.chunkId)",
             ),
             (
-                "chunk_module_index",
-                "CREATE INDEX chunk_module_index IF NOT EXISTS FOR (c:Chunk) ON (c.moduleId)",
+                f"{prefix}chunk_module_index",
+                f"CREATE INDEX {prefix}chunk_module_index IF NOT EXISTS "
+                f"FOR (c:{chunk_label}) ON (c.moduleId)",
             ),
             # Concept indexes
             (
-                "concept_name_index",
-                "CREATE INDEX concept_name_index IF NOT EXISTS FOR (c:Concept) ON (c.name)",
+                f"{prefix}concept_name_index",
+                f"CREATE INDEX {prefix}concept_name_index IF NOT EXISTS "
+                f"FOR (c:{concept_label}) ON (c.name)",
             ),
             (
-                "concept_importance_index",
-                "CREATE INDEX concept_importance_index IF NOT EXISTS FOR (c:Concept) ON (c.importance_score)",
+                f"{prefix}concept_importance_index",
+                f"CREATE INDEX {prefix}concept_importance_index IF NOT EXISTS "
+                f"FOR (c:{concept_label}) ON (c.importance_score)",
             ),
             # Module indexes
             (
-                "module_id_index",
-                "CREATE INDEX module_id_index IF NOT EXISTS FOR (m:Module) ON (m.module_id)",
+                f"{prefix}module_id_index",
+                f"CREATE INDEX {prefix}module_id_index IF NOT EXISTS "
+                f"FOR (m:{module_label}) ON (m.module_id)",
             ),
         ]
 
@@ -220,6 +233,12 @@ def test_fulltext_search(adapter: Neo4jAdapter):
 def main():
     parser = argparse.ArgumentParser(description="Create Neo4j indexes for enterprise RAG")
     parser.add_argument(
+        "--subject",
+        type=str,
+        default=None,
+        help="Subject ID for subject-specific indexes. Defaults to us_history.",
+    )
+    parser.add_argument(
         "--drop-existing",
         action="store_true",
         help="Drop existing indexes before creating new ones",
@@ -229,16 +248,31 @@ def main():
         action="store_true",
         help="Skip index verification tests",
     )
+    parser.add_argument(
+        "--list-subjects",
+        action="store_true",
+        help="List all available subjects and exit.",
+    )
     args = parser.parse_args()
 
+    if args.list_subjects:
+        print("Available subjects:")
+        for subject in get_all_subjects():
+            print(f"  - {subject.id}: {subject.name} (prefix: {subject.database.label_prefix})")
+        return
+
+    # Resolve subject
+    subject_config = get_subject(args.subject)
+    subject_id = subject_config.id
+
     logger.info("=== Neo4j Index Creation ===")
+    logger.info(f"Subject: {subject_id}")
     logger.info(f"Neo4j URI: {settings.neo4j_uri}")
-    logger.info(f"Vector index name: {settings.neo4j_vector_index_name}")
+    logger.info(f"Label prefix: {subject_config.database.label_prefix}")
     logger.info(f"Vector dimension: {settings.neo4j_vector_dimension}")
 
-    # Connect to Neo4j
-    adapter = Neo4jAdapter()
-    adapter.connect()
+    # Connect to Neo4j using subject-specific adapter (with label_prefix)
+    adapter = get_neo4j_adapter(subject_id)
 
     try:
         # Optionally drop existing indexes

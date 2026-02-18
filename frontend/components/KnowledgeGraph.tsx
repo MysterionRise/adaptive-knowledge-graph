@@ -30,15 +30,8 @@ if (typeof cytoscape !== 'undefined') {
   cytoscape.use(coseBilkent);
 }
 
-// Default color mappings for chapters/topics (US History)
+// Fallback color when no subject theme is loaded yet
 const DEFAULT_CHAPTER_COLORS: Record<string, string> = {
-  'Revolution': '#ef4444',
-  'Constitution': '#3b82f6',
-  'Civil War': '#8b5cf6',
-  'Reconstruction': '#10b981',
-  'Industrialization': '#f59e0b',
-  'World War': '#ec4899',
-  'Cold War': '#06b6d4',
   'default': '#6366f1',
 };
 

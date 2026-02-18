@@ -214,7 +214,7 @@ subjects:
         default: "#4f46e5"
 
     # Attribution
-    attribution: "Content from OpenStax World History (CC BY 4.0). Download for free at https://openstax.org/details/books/world-history-volume-1"
+    attribution: "Content from OpenStax World History Volumes 1 & 2 (CC BY 4.0). Download for free at https://openstax.org/subjects/humanities"
 
   # Template for adding new subjects
   # chemistry:

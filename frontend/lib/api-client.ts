@@ -180,7 +180,10 @@ class ApiClient {
       // Return fallback with default subject
       return {
         subjects: [
-          { id: 'us_history', name: 'US History', description: 'American History', is_default: true },
+          { id: 'us_history', name: 'US History', description: 'American History from colonial times to modern era', is_default: true },
+          { id: 'biology', name: 'Biology', description: 'Comprehensive biology covering cellular to ecosystem levels', is_default: false },
+          { id: 'economics', name: 'Economics', description: 'Principles of economics covering micro and macroeconomics', is_default: false },
+          { id: 'world_history', name: 'World History', description: 'World history from ancient civilizations to the modern era', is_default: false },
         ],
         default_subject: 'us_history',
       };

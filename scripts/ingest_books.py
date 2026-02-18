@@ -32,19 +32,6 @@ class BookConfig(BaseModel):
     openstax_slug: str | None = None  # e.g. "world-history-volume-1"
 
 
-# Legacy BOOKS list for backward compatibility (will be overridden by subjects.yaml)
-BOOKS = [
-    BookConfig(
-        title="US History",
-        repo_url_raw="https://raw.githubusercontent.com/philschatz/us-history-book/master",
-    ),
-    BookConfig(
-        title="American Government",
-        repo_url_raw="https://raw.githubusercontent.com/philschatz/american-government-book/master",
-    ),
-]
-
-
 def get_books_for_subject(subject_id: str) -> list[BookConfig]:
     """Get book configurations from subjects.yaml for a specific subject."""
     subject_config = get_subject(subject_id)
@@ -166,7 +153,11 @@ def fetch_openstax_toc(slug: str) -> list[dict[str, str]]:
 
 
 def fetch_openstax_page(slug: str, page_slug: str) -> str | None:
-    """Fetch and extract text from a single OpenStax page."""
+    """Fetch and extract text from a single OpenStax page.
+
+    First tries DOM selectors on the SSR HTML. Falls back to the embedded
+    __PRELOADED_STATE__ JSON if the page is client-side rendered.
+    """
     url = f"{OPENSTAX_BASE_URL}/{slug}/pages/{page_slug}"
 
     try:
@@ -178,22 +169,34 @@ def fetch_openstax_page(slug: str, page_slug: str) -> str | None:
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Find the main content element
+    # Try SSR content via DOM selectors
     content = (
         soup.select_one('[data-type="page"]')
         or soup.select_one("main")
         or soup.select_one("#main-content")
     )
 
-    if not content:
-        logger.warning(f"No main content found on page {page_slug}")
-        return None
-
-    # Remove non-content elements
-    for tag in content.select("figure, nav, footer, [data-type='note'], script, style"):
-        tag.decompose()
-
-    text = content.get_text(separator="\n", strip=True)
+    if content:
+        # Remove non-content elements
+        for tag in content.select("figure, nav, footer, [data-type='note'], script, style"):
+            tag.decompose()
+        text = content.get_text(separator="\n", strip=True)
+    else:
+        # Fallback: extract from __PRELOADED_STATE__ for JS-rendered pages
+        state = _extract_preloaded_state(resp.text)
+        if state:
+            page_html = state.get("content", {}).get("page", {}).get("content", "")
+            if page_html:
+                page_soup = BeautifulSoup(page_html, "html.parser")
+                for tag in page_soup.select("figure, nav, footer, script, style"):
+                    tag.decompose()
+                text = page_soup.get_text(separator="\n", strip=True)
+            else:
+                logger.warning(f"No content in __PRELOADED_STATE__ for page {page_slug}")
+                return None
+        else:
+            logger.warning(f"No main content found on page {page_slug}")
+            return None
 
     # Clean up excessive whitespace
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -352,16 +355,19 @@ def _process_openstax_web_book(
         if not content:
             continue
 
+        # Rate-limit after successful fetch to be polite to openstax.org
+        time.sleep(OPENSTAX_FETCH_DELAY)
+
         chunks = chunk_text(content, chunk_size=settings.rag_chunk_size)
-        # Create a filesystem-safe module_id from the page slug
-        module_id = re.sub(r"[^a-zA-Z0-9_-]", "_", page_slug)
+        # page_slug is already URL-safe (alphanumeric + hyphens) from OpenStax
+        module_id = page_slug
 
         if chunks:
             record = {
                 "module_id": module_id,
                 "module_title": f"{book.title} - {page_title}",
                 "book_title": book.title,
-                "section": page_slug,
+                "section": module_id,
                 "text": content,
                 "key_terms": [],
                 "chunks": chunks,
@@ -377,9 +383,6 @@ def _process_openstax_web_book(
                 book.title,
                 module_id,
             )
-
-        # Rate-limit to be polite to openstax.org
-        time.sleep(OPENSTAX_FETCH_DELAY)
 
 
 async def process_books(

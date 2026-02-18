@@ -20,7 +20,7 @@ from pathlib import Path
 from loguru import logger
 
 from backend.app.core.settings import settings
-from backend.app.core.subjects import get_subject, get_subject_ids
+from backend.app.core.subjects import get_subject
 from backend.app.kg.builder import KGBuilder
 from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
@@ -42,7 +42,7 @@ def main():
         "--subject",
         type=str,
         default=None,
-        help=f"Subject ID (available: {get_subject_ids()}). Defaults to us_history.",
+        help="Subject ID to build KG for. Defaults to us_history.",
     )
     parser.add_argument(
         "--max-concepts",
@@ -65,10 +65,6 @@ def main():
 
     # Load data from subject-specific JSONL
     jsonl_path = Path(settings.data_processed_dir) / f"books_{subject_id}.jsonl"
-    if not jsonl_path.exists():
-        # Fall back to generic path
-        jsonl_path = Path(settings.data_books_jsonl)
-
     if not jsonl_path.exists():
         logger.error(f"Data file not found: {jsonl_path}")
         logger.error(
