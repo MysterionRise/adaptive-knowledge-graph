@@ -60,26 +60,29 @@ class TextChunker:
         while start < len(text):
             end = start + self.chunk_size
 
-            # Try to break at sentence boundary
+            # Try to break at sentence boundary (but not too early)
             if end < len(text):
-                # Look for sentence endings
+                min_end = start + self.chunk_size // 2  # Don't break before half the chunk
                 sentence_ends = [". ", "! ", "? ", ".\n", "!\n", "?\n"]
                 best_break = -1
 
                 for sent_end in sentence_ends:
-                    pos = text.rfind(sent_end, start, end)
+                    pos = text.rfind(sent_end, min_end, end)
                     if pos > best_break:
                         best_break = pos + len(sent_end)
 
-                if best_break > start:
+                if best_break > min_end:
                     end = best_break
 
             chunk_text = text[start:end].strip()
 
             if chunk_text:
-                current_id = (
-                    f"{metadata.get('id', 'chunk')}_{chunk_id}" if metadata else f"chunk_{chunk_id}"
+                prefix = (
+                    metadata.get("id") or metadata.get("module_id") or "chunk"
+                    if metadata
+                    else "chunk"
                 )
+                current_id = f"{prefix}_{chunk_id}"
 
                 chunk = {
                     "id": current_id,
@@ -107,10 +110,11 @@ class TextChunker:
                 chunks.append(chunk)
                 chunk_id += 1
 
-            # Move start position with overlap
-            start = end - self.chunk_overlap
+            # Move start position with overlap, always advancing
+            new_start = end - self.chunk_overlap
+            start = max(new_start, start + 1)
 
-            # Prevent infinite loop
+            # Prevent infinite loop at end of text
             if start >= len(text) - self.chunk_overlap:
                 break
 

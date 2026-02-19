@@ -45,10 +45,25 @@ def temp_data_dir(tmp_path):
 
 @pytest.fixture(autouse=True)
 def setup_test_env(monkeypatch):
-    """Set up test environment variables."""
+    """Set up test environment variables and clear caches."""
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("PRIVACY_LOCAL_ONLY", "true")
+
+    # Disable rate limiting in tests
+    from backend.app.core.rate_limit import limiter
+
+    limiter.enabled = False
+
+    # Clear graph response cache between tests
+    from backend.app.api.routes.graph import clear_graph_cache
+
+    clear_graph_cache()
+
+    yield
+
+    # Re-enable rate limiting after test
+    limiter.enabled = True
 
 
 @pytest.fixture

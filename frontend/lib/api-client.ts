@@ -241,6 +241,97 @@ class ApiClient {
     });
     return response.data;
   }
+
+  /**
+   * Ask a question with SSE streaming response.
+   *
+   * Returns an object with metadata and a ReadableStream of tokens.
+   * The first SSE event contains metadata (sources, expanded_concepts),
+   * subsequent events contain answer tokens.
+   *
+   * @param request - Question request
+   * @param subject - Subject ID
+   * @param onToken - Callback for each token
+   * @param onMetadata - Callback for metadata (sources, concepts, etc.)
+   * @param onDone - Callback when streaming is complete
+   * @param onError - Callback on error
+   */
+  async askQuestionStream(
+    request: QuestionRequest,
+    subject?: string,
+    callbacks?: {
+      onToken?: (token: string) => void;
+      onMetadata?: (metadata: any) => void;
+      onDone?: () => void;
+      onError?: (error: string) => void;
+    }
+  ): Promise<void> {
+    const payload = {
+      question: request.question,
+      use_kg_expansion: request.use_kg_expansion ?? true,
+      top_k: request.top_k ?? 5,
+      subject: subject,
+    };
+
+    const response = await fetch(`${this.baseURL}${this.apiPrefix}/ask/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      callbacks?.onError?.(errorText || `HTTP ${response.status}`);
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      callbacks?.onError?.('No response body');
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+
+          const dataStr = trimmed.slice(6);
+          if (dataStr === '[DONE]') {
+            callbacks?.onDone?.();
+            return;
+          }
+
+          try {
+            const data = JSON.parse(dataStr);
+            if (data.type === 'metadata') {
+              callbacks?.onMetadata?.(data);
+            } else if (data.type === 'token') {
+              callbacks?.onToken?.(data.content);
+            } else if (data.type === 'error') {
+              callbacks?.onError?.(data.content);
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+        }
+      }
+      callbacks?.onDone?.();
+    } finally {
+      reader.releaseLock();
+    }
+  }
 }
 
 // Export default instance with environment-based configuration

@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     student_irt_enabled: bool = True
     student_initial_mastery: float = 0.3
 
+    # CORS
+    cors_origins: str = "http://localhost:3000,http://localhost:3001"
+
     # Privacy & Compliance
     privacy_local_only: bool = True  # Toggle for local-only mode
     privacy_no_tracking: bool = False

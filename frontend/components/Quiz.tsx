@@ -292,17 +292,46 @@ export default function Quiz() {
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center p-12">
-                <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
-                <p className="text-gray-600">
-                    {adaptiveMode
-                        ? 'Generating personalized quiz based on your mastery level...'
-                        : 'Generating quiz from knowledge graph...'}
-                </p>
-                <p className="text-xs text-gray-400 mt-2">Topic: "{topic}"</p>
+                {/* Animated quiz generation indicator */}
+                <div className="relative mb-6">
+                    <Loader2 className="w-16 h-16 animate-spin text-blue-600" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <BookOpen className="w-6 h-6 text-blue-500" />
+                    </div>
+                </div>
+
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    {adaptiveMode ? 'Crafting Your Personalized Quiz' : 'Generating Quiz'}
+                </h3>
+
+                {/* Progress steps */}
+                <div className="space-y-2 text-sm text-gray-500 mb-4">
+                    <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs">
+                            <CheckCircle className="w-3 h-3" />
+                        </span>
+                        <span>Retrieving context from knowledge graph</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                        </span>
+                        <span>
+                            {adaptiveMode
+                                ? `Generating ${targetDifficulty}-level questions...`
+                                : 'Generating questions with LLM...'}
+                        </span>
+                    </div>
+                </div>
+
+                <p className="text-xs text-gray-400">Topic: &ldquo;{topic}&rdquo;</p>
                 {adaptiveMode && (
-                    <p className="text-xs text-blue-500 mt-1">
-                        Target difficulty: {targetDifficulty}
-                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                        <Zap className="w-3 h-3 text-blue-500" />
+                        <p className="text-xs text-blue-500">
+                            Mastery: {Math.round(currentMastery * 100)}% &rarr; Target: {targetDifficulty}
+                        </p>
+                    </div>
                 )}
             </div>
         );

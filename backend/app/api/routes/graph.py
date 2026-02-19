@@ -7,13 +7,40 @@ Includes:
 - Concept search with fulltext index
 """
 
-from fastapi import APIRouter, HTTPException
+import time
+
+from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from backend.app.core.exceptions import Neo4jConnectionError, Neo4jQueryError
+from backend.app.core.rate_limit import limiter
 
-router = APIRouter(tags=["Graph"])
+router = APIRouter(tags=["Knowledge Graph"])
+
+# Simple TTL cache for graph endpoints (data doesn't change during demo)
+_graph_cache: dict[str, tuple[float, object]] = {}
+_CACHE_TTL = 300  # 5 minutes
+
+
+def _cache_get(key: str) -> object | None:
+    """Get a value from the TTL cache, or None if expired/missing."""
+    if key in _graph_cache:
+        timestamp, value = _graph_cache[key]
+        if time.time() - timestamp < _CACHE_TTL:
+            return value
+        del _graph_cache[key]
+    return None
+
+
+def _cache_set(key: str, value: object) -> None:
+    """Store a value in the TTL cache."""
+    _graph_cache[key] = (time.time(), value)
+
+
+def clear_graph_cache() -> None:
+    """Clear the graph data cache. Used in tests and after data updates."""
+    _graph_cache.clear()
 
 
 class GraphStatsResponse(BaseModel):
@@ -25,24 +52,32 @@ class GraphStatsResponse(BaseModel):
 
 
 @router.get("/graph/stats", response_model=GraphStatsResponse)
-async def get_graph_stats(subject: str | None = None):
+@limiter.limit("30/minute")
+async def get_graph_stats(request: Request, subject: str | None = None):
     """
     Get knowledge graph statistics.
 
     Args:
         subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
     """
+    cache_key = f"stats:{subject or 'default'}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
         adapter = get_neo4j_adapter(subject)
         stats = adapter.get_graph_stats()
 
-        return GraphStatsResponse(
+        result = GraphStatsResponse(
             concept_count=stats.get("Concept_count", 0),
             module_count=stats.get("Module_count", 0),
             relationship_count=sum(v for k, v in stats.items() if k.endswith("_relationships")),
         )
+        _cache_set(cache_key, result)
+        return result
 
     except Neo4jConnectionError as e:
         logger.error(f"Neo4j connection failed: {e}")
@@ -94,7 +129,8 @@ async def get_top_concepts(limit: int = 20, subject: str | None = None):
 
 
 @router.get("/graph/data")
-async def get_graph_data(limit: int = 100, subject: str | None = None):
+@limiter.limit("30/minute")
+async def get_graph_data(request: Request, limit: int = 100, subject: str | None = None):
     """
     Get graph data for visualization (concepts and relationships).
 
@@ -108,6 +144,11 @@ async def get_graph_data(limit: int = 100, subject: str | None = None):
     Returns:
         GraphData with nodes and edges arrays
     """
+    cache_key = f"data:{subject or 'default'}:{limit}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
@@ -179,7 +220,9 @@ async def get_graph_data(limit: int = 100, subject: str | None = None):
 
         logger.info(f"Returning graph data: {len(nodes)} nodes, {len(edges)} edges")
 
-        return {"nodes": nodes, "edges": edges}
+        result = {"nodes": nodes, "edges": edges}
+        _cache_set(cache_key, result)
+        return result
 
     except Exception as e:
         logger.error(f"Error getting graph data: {e}")

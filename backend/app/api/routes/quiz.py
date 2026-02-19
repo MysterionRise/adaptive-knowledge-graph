@@ -4,10 +4,11 @@ Quiz generation and student mastery endpoints.
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
 from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
+from backend.app.core.rate_limit import limiter
 from backend.app.student.models import (
     MasteryUpdate,
     MasteryUpdateResponse,
@@ -20,7 +21,7 @@ from backend.app.student.student_service import get_student_service
 from backend.app.ui_payloads.quiz import AdaptiveQuiz, Quiz
 from backend.app.ui_payloads.recommendations import RecommendationRequest, RecommendationResponse
 
-router = APIRouter(tags=["Quiz"])
+router = APIRouter(tags=["Quiz & Adaptive Learning"])
 
 
 # =============================================================================
@@ -29,7 +30,10 @@ router = APIRouter(tags=["Quiz"])
 
 
 @router.post("/quiz/generate", response_model=Quiz)
-async def generate_quiz(topic: str, num_questions: int = 3, subject: str | None = None):
+@limiter.limit("5/minute")
+async def generate_quiz(
+    request: Request, topic: str, num_questions: int = 3, subject: str | None = None
+):
     """
     Generate a quiz for a topic (non-adaptive, mixed difficulty).
 
@@ -56,7 +60,9 @@ async def generate_quiz(topic: str, num_questions: int = 3, subject: str | None 
 
 
 @router.post("/quiz/generate-adaptive", response_model=AdaptiveQuiz)
+@limiter.limit("5/minute")
 async def generate_adaptive_quiz(
+    request: Request,
     topic: str,
     num_questions: int = 3,
     student_id: str = "default",

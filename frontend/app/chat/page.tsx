@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import type { QuestionResponse } from '@/lib/types';
@@ -14,13 +14,30 @@ import {
   MapPin,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
-import { ChatMessageSkeleton } from '@/components/Skeleton';
 import SubjectPicker from '@/components/SubjectPicker';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   response?: QuestionResponse;
+  isStreaming?: boolean;
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-3xl rounded-lg px-6 py-4 bg-white border border-gray-200 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <span className="text-sm text-gray-500">Thinking...</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ChatPageContent() {
@@ -31,10 +48,17 @@ function ChatPageContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [useKgExpansion, setUseKgExpansion] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Zustand store for cross-page state
   const { setLastQueryConcepts, setLastQuery, setHighlightedConcepts, currentSubject } = useAppStore();
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isThinking]);
 
   // Ask initial question if provided in URL
   useEffect(() => {
@@ -44,7 +68,7 @@ function ChatPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuestion]);
 
-  const handleAskQuestion = async (question: string) => {
+  const handleAskQuestion = useCallback(async (question: string) => {
     if (!question.trim()) return;
 
     // Add user message
@@ -55,39 +79,116 @@ function ChatPageContent() {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setIsThinking(true);
+
+    // Metadata to collect during streaming
+    let streamMetadata: any = null;
 
     try {
-      const response = await apiClient.askQuestion({
-        question,
-        use_kg_expansion: useKgExpansion,
-        top_k: 5,
-      }, currentSubject);
-
-      // Add assistant response
-      const assistantMessage: Message = {
+      // Add a placeholder streaming message
+      const streamingMsg: Message = {
         role: 'assistant',
-        content: response.answer,
-        response,
+        content: '',
+        isStreaming: true,
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, streamingMsg]);
 
-      // Store expanded concepts for cross-page highlighting
-      if (response.expanded_concepts && response.expanded_concepts.length > 0) {
-        setLastQueryConcepts(response.expanded_concepts);
-        setHighlightedConcepts(response.expanded_concepts);
-      }
-      setLastQuery(question);
+      await apiClient.askQuestionStream(
+        {
+          question,
+          use_kg_expansion: useKgExpansion,
+          top_k: 5,
+        },
+        currentSubject,
+        {
+          onMetadata: (metadata) => {
+            streamMetadata = metadata;
+            setIsThinking(false);
+
+            // Store expanded concepts for cross-page highlighting
+            if (metadata.expanded_concepts && metadata.expanded_concepts.length > 0) {
+              setLastQueryConcepts(metadata.expanded_concepts);
+              setHighlightedConcepts(metadata.expanded_concepts);
+            }
+            setLastQuery(question);
+          },
+          onToken: (token) => {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.isStreaming) {
+                updated[updated.length - 1] = {
+                  ...last,
+                  content: last.content + token,
+                };
+              }
+              return updated;
+            });
+          },
+          onDone: () => {
+            // Finalize the streaming message with full response metadata
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.isStreaming) {
+                const response: QuestionResponse = {
+                  question,
+                  answer: last.content,
+                  sources: streamMetadata?.sources || [],
+                  expanded_concepts: streamMetadata?.expanded_concepts || null,
+                  retrieved_count: streamMetadata?.retrieved_count || 0,
+                  model: streamMetadata?.model || '',
+                  attribution: streamMetadata?.attribution || '',
+                };
+                updated[updated.length - 1] = {
+                  ...last,
+                  isStreaming: false,
+                  response,
+                };
+              }
+              return updated;
+            });
+            setIsLoading(false);
+            setIsThinking(false);
+          },
+          onError: (error) => {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.isStreaming) {
+                updated[updated.length - 1] = {
+                  ...last,
+                  content: `Sorry, I encountered an error: ${error}. Please try again.`,
+                  isStreaming: false,
+                };
+              }
+              return updated;
+            });
+            setIsLoading(false);
+            setIsThinking(false);
+          },
+        }
+      );
     } catch (error: any) {
       console.error('Error asking question:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: `Sorry, I encountered an error: ${error.detail || 'Unknown error'}. Please try again.`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
+      setMessages((prev) => {
+        // Replace the last streaming message or add an error
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.isStreaming) {
+          updated[updated.length - 1] = {
+            ...last,
+            content: `Sorry, I encountered an error: ${error.message || 'Unknown error'}. Please try again.`,
+            isStreaming: false,
+          };
+        }
+        return updated;
+      });
       setIsLoading(false);
+      setIsThinking(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useKgExpansion, currentSubject]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,6 +299,7 @@ function ChatPageContent() {
                     <AssistantMessage
                       content={message.content}
                       response={message.response}
+                      isStreaming={message.isStreaming}
                     />
                   )}
                 </div>
@@ -205,8 +307,9 @@ function ChatPageContent() {
             ))
           )}
 
-          {/* Loading indicator */}
-          {isLoading && <ChatMessageSkeleton />}
+          {/* Thinking indicator — shown while retrieving context before tokens start */}
+          {isThinking && <TypingIndicator />}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
@@ -239,9 +342,10 @@ function ChatPageContent() {
 interface AssistantMessageProps {
   content: string;
   response?: QuestionResponse;
+  isStreaming?: boolean;
 }
 
-function AssistantMessage({ content, response }: AssistantMessageProps) {
+function AssistantMessage({ content, response, isStreaming }: AssistantMessageProps) {
   const router = useRouter();
   const [showSources, setShowSources] = useState(false);
   const { setHighlightedConcepts } = useAppStore();
@@ -255,9 +359,12 @@ function AssistantMessage({ content, response }: AssistantMessageProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-gray-800 whitespace-pre-wrap">{content}</p>
+      <p className="text-gray-800 whitespace-pre-wrap">
+        {content}
+        {isStreaming && <span className="inline-block w-2 h-5 bg-blue-500 animate-pulse ml-0.5 align-text-bottom" />}
+      </p>
 
-      {response && (
+      {response && !isStreaming && (
         <>
           {/* Expanded Concepts */}
           {response.expanded_concepts && response.expanded_concepts.length > 0 && (

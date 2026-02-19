@@ -42,10 +42,53 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down application")
 
 
+openapi_tags = [
+    {
+        "name": "Q&A",
+        "description": "Knowledge graph-aware RAG question answering with streaming support.",
+    },
+    {
+        "name": "Quiz & Adaptive Learning",
+        "description": "Adaptive quiz generation, student mastery tracking, and post-quiz recommendations.",
+    },
+    {
+        "name": "Knowledge Graph",
+        "description": "Graph visualization, statistics, natural language Cypher queries, and concept search.",
+    },
+    {
+        "name": "Learning Paths",
+        "description": "Prerequisite traversal and learning path generation from the knowledge graph.",
+    },
+    {
+        "name": "Subjects",
+        "description": "Multi-subject configuration, themes, and book metadata.",
+    },
+    {
+        "name": "Health",
+        "description": "Service health checks including dependency status for Neo4j, OpenSearch, and Ollama.",
+    },
+]
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="PoC Adaptive Knowledge Graph in Education",
+    description=(
+        "**Adaptive Knowledge Graph** — an AI-powered adaptive learning platform "
+        "combining Knowledge Graphs (Neo4j), Vector Search (OpenSearch), and LLMs "
+        "(Ollama/OpenRouter) for personalized education.\n\n"
+        "## Key Features\n"
+        "- **KG-Aware RAG**: Query expansion via knowledge graph traversal + semantic retrieval\n"
+        "- **Adaptive Quizzes**: Difficulty targeting based on real-time student mastery (BKT/IRT)\n"
+        "- **Streaming Responses**: SSE-based token streaming for real-time answer generation\n"
+        "- **Multi-Subject**: Isolated knowledge graphs and search indices per subject\n"
+        "- **Privacy-First**: Local-only mode with Ollama for on-premise deployments\n\n"
+        "## Architecture\n"
+        "Frontend (Next.js) → FastAPI → Neo4j + OpenSearch + Ollama/OpenRouter\n\n"
+        "*Content adapted from OpenStax, licensed under CC BY 4.0.*"
+    ),
+    openapi_tags=openapi_tags,
+    contact={"name": "Adaptive KG Team", "url": "https://github.com/adaptive-knowledge-graph"},
+    license_info={"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
     lifespan=lifespan,
 )
 
@@ -53,10 +96,11 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
-# CORS middleware for Next.js frontend
+# CORS middleware — configurable via CORS_ORIGINS env var
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,7 +119,7 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 async def health():
     """Basic health check endpoint (always returns healthy if API is up)."""
     return {
@@ -224,7 +268,7 @@ async def check_ollama_health() -> ServiceHealth:
         return ServiceHealth(status=ServiceStatus.ERROR, message=str(e)[:100])
 
 
-@app.get("/health/ready", response_model=ReadinessResponse)
+@app.get("/health/ready", response_model=ReadinessResponse, tags=["Health"])
 async def health_ready():
     """
     Readiness check endpoint with service dependency verification.
@@ -276,7 +320,7 @@ async def health_ready():
     )
 
 
-@app.get("/health/live")
+@app.get("/health/live", tags=["Health"])
 async def health_live():
     """
     Liveness check endpoint.

@@ -142,16 +142,44 @@ class OpenSearchRetriever:
             }
             actions.append(action)
 
-        # Bulk index to OpenSearch
+        # Bulk index to OpenSearch in small batches
         logger.info("Uploading to OpenSearch...")
-        success, failed = helpers.bulk(self.client, actions, chunk_size=100, raise_on_error=False)
+        total_success = 0
+        total_failed = 0
+        batch_size = 50
+
+        for batch_start in range(0, len(actions), batch_size):
+            batch = actions[batch_start : batch_start + batch_size]
+            try:
+                success, failed = helpers.bulk(
+                    self.client, batch, chunk_size=batch_size, raise_on_error=False
+                )
+                total_success += success
+                if failed:
+                    total_failed += len(failed)
+                    if show_progress:
+                        logger.warning(
+                            f"Batch {batch_start // batch_size}: "
+                            f"{len(failed)} failures: {failed[0] if failed else ''}"
+                        )
+            except Exception as e:
+                total_failed += len(batch)
+                logger.error(f"Batch {batch_start // batch_size} error: {e}")
+
+            if show_progress and (batch_start // batch_size) % 20 == 0:
+                logger.info(
+                    f"Progress: {min(batch_start + batch_size, len(actions))}/{len(actions)} docs"
+                )
+
+        # Force refresh so docs are immediately searchable
+        self.client.indices.refresh(index=self.index_name)
 
         if show_progress:
-            logger.info(f"Successfully indexed: {success} documents")
-            if failed:
-                logger.warning(f"Failed to index: {len(failed)} documents")
+            logger.info(f"Successfully indexed: {total_success} documents")
+            if total_failed:
+                logger.warning(f"Failed to index: {total_failed} documents")
 
-        logger.success(f"✓ Indexed {success} chunks to OpenSearch")
+        logger.success(f"✓ Indexed {total_success} chunks to OpenSearch")
 
     def retrieve(
         self,

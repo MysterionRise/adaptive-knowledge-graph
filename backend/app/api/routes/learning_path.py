@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from backend.app.core.exceptions import Neo4jConnectionError
 
-router = APIRouter(tags=["Learning Path"])
+router = APIRouter(tags=["Learning Paths"])
 
 
 class ConceptNode(BaseModel):
