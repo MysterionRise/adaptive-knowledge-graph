@@ -7,8 +7,19 @@ import { useAppStore } from '@/lib/store';
 jest.mock('@/lib/api-client', () => ({
   apiClient: {
     getGraphData: jest.fn(),
+    getSubjects: jest.fn().mockResolvedValue({
+      subjects: [],
+      default_subject: 'us_history',
+    }),
   },
 }));
+
+// Mock SubjectPicker to avoid side effects
+jest.mock('@/components/SubjectPicker', () => {
+  return function MockSubjectPicker() {
+    return <div data-testid="subject-picker">Subject Picker</div>;
+  };
+});
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -77,7 +88,7 @@ describe('GraphPage', () => {
       render(<GraphPage />);
 
       expect(screen.getByText('Knowledge Graph Visualization')).toBeInTheDocument();
-      expect(screen.getByText(/Explore US History concepts/i)).toBeInTheDocument();
+      expect(screen.getByText(/Explore concepts and their relationships/i)).toBeInTheDocument();
     });
 
     it('renders back button', async () => {
@@ -143,7 +154,7 @@ describe('GraphPage', () => {
   describe('Error Handling', () => {
     it('displays error message when API fails', async () => {
       (apiClient.getGraphData as jest.Mock)
-        .mockRejectedValueOnce({ detail: 'Server error' })
+        .mockRejectedValueOnce(new Error('Server error'))
         .mockResolvedValueOnce(mockGraphData); // For fallback
 
       render(<GraphPage />);

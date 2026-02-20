@@ -3,41 +3,46 @@ import KnowledgeGraph from '@/components/KnowledgeGraph';
 import type { GraphData } from '@/lib/types';
 
 // Mock Cytoscape and its layout extension
-const mockCyInstance = {
-  nodes: jest.fn().mockReturnThis(),
-  edges: jest.fn().mockReturnThis(),
-  collection: jest.fn().mockReturnValue({
-    merge: jest.fn().mockReturnThis(),
-    addClass: jest.fn().mockReturnThis(),
-    edgesWith: jest.fn().mockReturnValue({
-      addClass: jest.fn().mockReturnThis(),
-    }),
-  }),
-  zoom: jest.fn().mockReturnValue(1),
-  center: jest.fn(),
-  fit: jest.fn(),
-  on: jest.fn(),
-  getElementById: jest.fn().mockReturnValue({
-    data: jest.fn().mockImplementation((key: string) => {
-      if (key === 'label') return 'Test Concept';
-      if (key === 'importance') return 0.75;
-      return null;
-    }),
-    neighborhood: jest.fn().mockReturnValue({
-      nodes: jest.fn().mockReturnValue({ length: 3 }),
-    }),
-  }),
-  destroy: jest.fn(),
-  not: jest.fn().mockReturnThis(),
-  filter: jest.fn().mockReturnThis(),
-  removeClass: jest.fn().mockReturnThis(),
-  addClass: jest.fn().mockReturnThis(),
-  hasClass: jest.fn().mockReturnValue(false),
-  style: jest.fn(),
-};
+// NOTE: jest.mock is hoisted above variable declarations, so mockCyInstance
+// must be assigned inside the factory to avoid temporal dead zone errors.
+// eslint-disable-next-line no-var
+var mockCyInstance: any;
 
 jest.mock('cytoscape', () => {
-  const mockCytoscape = jest.fn().mockReturnValue(mockCyInstance);
+  mockCyInstance = {
+    nodes: jest.fn().mockReturnThis(),
+    edges: jest.fn().mockReturnThis(),
+    collection: jest.fn().mockReturnValue({
+      merge: jest.fn().mockReturnThis(),
+      addClass: jest.fn().mockReturnThis(),
+      edgesWith: jest.fn().mockReturnValue({
+        addClass: jest.fn().mockReturnThis(),
+      }),
+    }),
+    zoom: jest.fn().mockReturnValue(1),
+    center: jest.fn(),
+    fit: jest.fn(),
+    on: jest.fn(),
+    getElementById: jest.fn().mockReturnValue({
+      data: jest.fn().mockImplementation((key: string) => {
+        if (key === 'label') return 'Test Concept';
+        if (key === 'importance') return 0.75;
+        return null;
+      }),
+      neighborhood: jest.fn().mockReturnValue({
+        nodes: jest.fn().mockReturnValue({ length: 3 }),
+      }),
+    }),
+    destroy: jest.fn(),
+    not: jest.fn().mockReturnThis(),
+    filter: jest.fn().mockReturnThis(),
+    removeClass: jest.fn().mockReturnThis(),
+    addClass: jest.fn().mockReturnThis(),
+    hasClass: jest.fn().mockReturnValue(false),
+    style: jest.fn(),
+  };
+
+  const mockCytoscape: any = jest.fn().mockReturnValue(mockCyInstance);
   mockCytoscape.use = jest.fn();
   return mockCytoscape;
 });

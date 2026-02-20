@@ -1,16 +1,38 @@
-import ApiClient, { apiClient } from '@/lib/api-client';
-import axios from 'axios';
+/* eslint-disable no-var */
+// Use var to avoid temporal dead zone — jest.mock is hoisted above const/let declarations
+var mockGet: jest.Mock;
+var mockPost: jest.Mock;
+var mockAxiosInstance: any;
 
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+jest.mock('axios', () => {
+  mockGet = jest.fn();
+  mockPost = jest.fn();
+  mockAxiosInstance = {
+    get: mockGet,
+    post: mockPost,
+    interceptors: {
+      response: { use: jest.fn() },
+      request: { use: jest.fn() },
+    },
+  };
+  return {
+    __esModule: true,
+    default: {
+      create: jest.fn(() => mockAxiosInstance),
+    },
+  };
+});
+
+import axios from 'axios';
+import ApiClient from '@/lib/api-client';
 
 describe('ApiClient', () => {
   let client: ApiClient;
 
   beforeEach(() => {
-    client = new ApiClient('http://localhost:8000');
     jest.clearAllMocks();
+    (axios.create as jest.Mock).mockReturnValue(mockAxiosInstance);
+    client = new ApiClient('http://localhost:8000');
   });
 
   describe('getGraphStats', () => {
@@ -21,28 +43,14 @@ describe('ApiClient', () => {
         relationship_count: 320,
       };
 
-      mockedAxios.create.mockReturnValue({
-        get: jest.fn().mockResolvedValue({ data: mockStats }),
-        post: jest.fn(),
-        interceptors: {
-          response: { use: jest.fn() },
-          request: { use: jest.fn() },
-        },
-      } as any);
+      mockGet.mockResolvedValue({ data: mockStats });
 
       const stats = await client.getGraphStats();
       expect(stats).toEqual(mockStats);
     });
 
     it('should fallback to mock data on error', async () => {
-      mockedAxios.create.mockReturnValue({
-        get: jest.fn().mockRejectedValue(new Error('Network error')),
-        post: jest.fn(),
-        interceptors: {
-          response: { use: jest.fn() },
-          request: { use: jest.fn() },
-        },
-      } as any);
+      mockGet.mockRejectedValue(new Error('Network error'));
 
       const stats = await client.getGraphStats();
       expect(stats).toHaveProperty('concept_count');
@@ -63,14 +71,7 @@ describe('ApiClient', () => {
         attribution: 'OpenStax Biology 2e',
       };
 
-      mockedAxios.create.mockReturnValue({
-        get: jest.fn(),
-        post: jest.fn().mockResolvedValue({ data: mockResponse }),
-        interceptors: {
-          response: { use: jest.fn() },
-          request: { use: jest.fn() },
-        },
-      } as any);
+      mockPost.mockResolvedValue({ data: mockResponse });
 
       const response = await client.askQuestion({
         question: 'What is photosynthesis?',
@@ -85,28 +86,14 @@ describe('ApiClient', () => {
 
   describe('health check', () => {
     it('should return true when API is healthy', async () => {
-      mockedAxios.create.mockReturnValue({
-        get: jest.fn().mockResolvedValue({ data: { status: 'ok' } }),
-        post: jest.fn(),
-        interceptors: {
-          response: { use: jest.fn() },
-          request: { use: jest.fn() },
-        },
-      } as any);
+      mockGet.mockResolvedValue({ data: { status: 'ok' } });
 
       const isHealthy = await client.healthCheck();
       expect(isHealthy).toBe(true);
     });
 
     it('should return false when API is down', async () => {
-      mockedAxios.create.mockReturnValue({
-        get: jest.fn().mockRejectedValue(new Error('Connection refused')),
-        post: jest.fn(),
-        interceptors: {
-          response: { use: jest.fn() },
-          request: { use: jest.fn() },
-        },
-      } as any);
+      mockGet.mockRejectedValue(new Error('Connection refused'));
 
       const isHealthy = await client.healthCheck();
       expect(isHealthy).toBe(false);

@@ -4,10 +4,20 @@ import ChatPage from '@/app/chat/page';
 import { apiClient } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
 
+// Mock scrollIntoView (not implemented in jsdom)
+Element.prototype.scrollIntoView = jest.fn();
+
 // Mock the API client
 jest.mock('@/lib/api-client', () => ({
   apiClient: {
     askQuestion: jest.fn(),
+    askQuestionStream: jest.fn(),
+    getSubjects: jest.fn().mockResolvedValue({
+      subjects: [
+        { id: 'us_history', name: 'US History', description: 'American History', is_default: true },
+      ],
+      default_subject: 'us_history',
+    }),
   },
 }));
 
@@ -29,8 +39,75 @@ jest.mock('@/components/Skeleton', () => ({
   ChatMessageSkeleton: () => <div data-testid="chat-skeleton">Loading...</div>,
 }));
 
+// Mock SubjectPicker
+jest.mock('@/components/SubjectPicker', () => {
+  return function MockSubjectPicker() {
+    return <div data-testid="subject-picker">Subject Picker</div>;
+  };
+});
+
 // Reset store between tests
 const initialStoreState = useAppStore.getState();
+
+/**
+ * Helper to create a mock implementation of askQuestionStream that
+ * simulates the streaming callbacks synchronously.
+ */
+function mockStreamResponse(response: {
+  question: string;
+  answer: string;
+  sources: any[];
+  expanded_concepts: string[] | null;
+  retrieved_count: number;
+  model: string;
+  attribution: string;
+}) {
+  return (apiClient.askQuestionStream as jest.Mock).mockImplementation(
+    async (_request: any, _subject: any, callbacks: any) => {
+      // Send metadata
+      callbacks?.onMetadata?.({
+        sources: response.sources,
+        expanded_concepts: response.expanded_concepts,
+        retrieved_count: response.retrieved_count,
+        model: response.model,
+        attribution: response.attribution,
+      });
+
+      // Send answer as a single token
+      callbacks?.onToken?.(response.answer);
+
+      // Signal done
+      callbacks?.onDone?.();
+    }
+  );
+}
+
+/**
+ * Helper to create a mock that never resolves (hangs forever).
+ */
+function mockStreamHanging() {
+  return (apiClient.askQuestionStream as jest.Mock).mockImplementation(
+    () => new Promise(() => {}) // Never resolves
+  );
+}
+
+/**
+ * Helper to create a mock that calls onError.
+ */
+function mockStreamError(errorMessage: string) {
+  return (apiClient.askQuestionStream as jest.Mock).mockImplementation(
+    async (_request: any, _subject: any, callbacks: any) => {
+      callbacks?.onError?.(errorMessage);
+    }
+  );
+}
+
+/**
+ * Helper to create a mock that throws an exception.
+ */
+function mockStreamThrow(error: Error) {
+  return (apiClient.askQuestionStream as jest.Mock).mockRejectedValue(error);
+}
 
 describe('ChatPage', () => {
   beforeEach(() => {
@@ -65,7 +142,7 @@ describe('ChatPage', () => {
     it('renders chat input form', () => {
       render(<ChatPage />);
 
-      expect(screen.getByPlaceholderText(/Ask a question about US History/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/Ask a question/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
     });
 
@@ -114,51 +191,51 @@ describe('ChatPage', () => {
 
   describe('Sending Messages', () => {
     it('sends message when form is submitted', async () => {
-      const mockResponse = {
-        question: 'Test question',
+      mockStreamResponse({
+        question: 'What is history?',
         answer: 'Test answer',
         sources: [],
         expanded_concepts: [],
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax US History',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       const sendButton = screen.getByRole('button', { name: /send/i });
 
       await userEvent.type(input, 'What is history?');
       fireEvent.click(sendButton);
 
       await waitFor(() => {
-        expect(apiClient.askQuestion).toHaveBeenCalledWith({
-          question: 'What is history?',
-          use_kg_expansion: true,
-          top_k: 5,
-        });
+        expect(apiClient.askQuestionStream).toHaveBeenCalledWith(
+          {
+            question: 'What is history?',
+            use_kg_expansion: true,
+            top_k: 5,
+          },
+          'us_history',
+          expect.any(Object)
+        );
       });
     });
 
     it('displays user message after sending', async () => {
-      const mockResponse = {
-        question: 'Test question',
+      mockStreamResponse({
+        question: 'My question',
         answer: 'Test answer',
         sources: [],
         expanded_concepts: [],
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax US History',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'My question');
       fireEvent.submit(input.closest('form')!);
 
@@ -168,21 +245,19 @@ describe('ChatPage', () => {
     });
 
     it('displays assistant response after receiving', async () => {
-      const mockResponse = {
-        question: 'Test question',
+      mockStreamResponse({
+        question: 'My question',
         answer: 'This is the assistant response',
         sources: [],
         expanded_concepts: [],
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax US History',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'My question');
       fireEvent.submit(input.closest('form')!);
 
@@ -192,21 +267,19 @@ describe('ChatPage', () => {
     });
 
     it('clears input after sending', async () => {
-      const mockResponse = {
-        question: 'Test question',
+      mockStreamResponse({
+        question: 'My question',
         answer: 'Test answer',
         sources: [],
         expanded_concepts: [],
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax US History',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i) as HTMLInputElement;
+      const input = screen.getByPlaceholderText(/Ask a question/i) as HTMLInputElement;
       await userEvent.type(input, 'My question');
       fireEvent.submit(input.closest('form')!);
 
@@ -216,13 +289,11 @@ describe('ChatPage', () => {
     });
 
     it('disables input while loading', async () => {
-      (apiClient.askQuestion as jest.Mock).mockImplementation(
-        () => new Promise(() => {}) // Never resolves
-      );
+      mockStreamHanging();
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'My question');
       fireEvent.submit(input.closest('form')!);
 
@@ -231,19 +302,17 @@ describe('ChatPage', () => {
       });
     });
 
-    it('shows loading skeleton while waiting for response', async () => {
-      (apiClient.askQuestion as jest.Mock).mockImplementation(
-        () => new Promise(() => {})
-      );
+    it('shows thinking indicator while waiting for response', async () => {
+      mockStreamHanging();
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'My question');
       fireEvent.submit(input.closest('form')!);
 
       await waitFor(() => {
-        expect(screen.getByTestId('chat-skeleton')).toBeInTheDocument();
+        expect(screen.getByText('Thinking...')).toBeInTheDocument();
       });
     });
 
@@ -255,13 +324,13 @@ describe('ChatPage', () => {
 
       fireEvent.click(sendButton);
 
-      expect(apiClient.askQuestion).not.toHaveBeenCalled();
+      expect(apiClient.askQuestionStream).not.toHaveBeenCalled();
     });
 
     it('does not send whitespace-only messages', async () => {
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, '   ');
 
       const sendButton = screen.getByRole('button', { name: /send/i });
@@ -271,7 +340,7 @@ describe('ChatPage', () => {
 
   describe('Example Questions', () => {
     it('sends example question when clicked', async () => {
-      const mockResponse = {
+      mockStreamResponse({
         question: 'What caused the American Revolution?',
         answer: 'The American Revolution was caused by...',
         sources: [],
@@ -279,9 +348,7 @@ describe('ChatPage', () => {
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax US History',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
@@ -289,24 +356,26 @@ describe('ChatPage', () => {
       fireEvent.click(exampleButton);
 
       await waitFor(() => {
-        expect(apiClient.askQuestion).toHaveBeenCalledWith({
-          question: 'What caused the American Revolution?',
-          use_kg_expansion: true,
-          top_k: 5,
-        });
+        expect(apiClient.askQuestionStream).toHaveBeenCalledWith(
+          {
+            question: 'What caused the American Revolution?',
+            use_kg_expansion: true,
+            top_k: 5,
+          },
+          'us_history',
+          expect.any(Object)
+        );
       });
     });
   });
 
   describe('Error Handling', () => {
-    it('displays error message when API call fails', async () => {
-      (apiClient.askQuestion as jest.Mock).mockRejectedValueOnce({
-        detail: 'Server error',
-      });
+    it('displays error message when streaming calls onError', async () => {
+      mockStreamError('Server error');
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'My question');
       fireEvent.submit(input.closest('form')!);
 
@@ -315,12 +384,12 @@ describe('ChatPage', () => {
       });
     });
 
-    it('handles unknown error format', async () => {
-      (apiClient.askQuestion as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    it('handles exception thrown by askQuestionStream', async () => {
+      mockStreamThrow(new Error('Network error'));
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'My question');
       fireEvent.submit(input.closest('form')!);
 
@@ -332,21 +401,19 @@ describe('ChatPage', () => {
 
   describe('Response Display', () => {
     it('displays expanded concepts when present', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [],
         expanded_concepts: ['Concept 1', 'Concept 2', 'Concept 3'],
         retrieved_count: 3,
         model: 'llama3.1:8b',
         attribution: 'OpenStax US History',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -359,21 +426,19 @@ describe('ChatPage', () => {
     });
 
     it('displays attribution', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [],
         expanded_concepts: [],
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax US History',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -383,21 +448,19 @@ describe('ChatPage', () => {
     });
 
     it('displays model name', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [],
         expanded_concepts: [],
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -409,8 +472,8 @@ describe('ChatPage', () => {
 
   describe('Sources Display', () => {
     it('shows sources toggle button when sources exist', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [
           {
@@ -423,13 +486,11 @@ describe('ChatPage', () => {
         retrieved_count: 1,
         model: 'llama3.1:8b',
         attribution: 'OpenStax',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -439,8 +500,8 @@ describe('ChatPage', () => {
     });
 
     it('toggles sources visibility', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [
           {
@@ -453,13 +514,11 @@ describe('ChatPage', () => {
         retrieved_count: 1,
         model: 'llama3.1:8b',
         attribution: 'OpenStax',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -478,21 +537,19 @@ describe('ChatPage', () => {
 
   describe('View on Graph', () => {
     it('shows View on Graph button when concepts exist', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [],
         expanded_concepts: ['Concept 1'],
         retrieved_count: 1,
         model: 'llama3.1:8b',
         attribution: 'OpenStax',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -502,21 +559,19 @@ describe('ChatPage', () => {
     });
 
     it('navigates to graph page when View on Graph is clicked', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [],
         expanded_concepts: ['Concept 1'],
         retrieved_count: 1,
         model: 'llama3.1:8b',
         attribution: 'OpenStax',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -532,21 +587,19 @@ describe('ChatPage', () => {
 
   describe('Store Integration', () => {
     it('updates highlighted concepts in store', async () => {
-      const mockResponse = {
-        question: 'Test',
+      mockStreamResponse({
+        question: 'Question',
         answer: 'Answer',
         sources: [],
         expanded_concepts: ['Concept A', 'Concept B'],
         retrieved_count: 2,
         model: 'llama3.1:8b',
         attribution: 'OpenStax',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'Question');
       fireEvent.submit(input.closest('form')!);
 
@@ -557,7 +610,7 @@ describe('ChatPage', () => {
     });
 
     it('updates last query in store', async () => {
-      const mockResponse = {
+      mockStreamResponse({
         question: 'My test query',
         answer: 'Answer',
         sources: [],
@@ -565,13 +618,11 @@ describe('ChatPage', () => {
         retrieved_count: 0,
         model: 'llama3.1:8b',
         attribution: 'OpenStax',
-      };
-
-      (apiClient.askQuestion as jest.Mock).mockResolvedValueOnce(mockResponse);
+      });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question about US History/i);
+      const input = screen.getByPlaceholderText(/Ask a question/i);
       await userEvent.type(input, 'My test query');
       fireEvent.submit(input.closest('form')!);
 

@@ -88,9 +88,30 @@ def create_demo_profile(student_id: str = "default") -> dict:
             "correct_attempts": 1,
             "last_assessed": (now - timedelta(days=1)).isoformat(),
         },
+        "Cold War": {
+            "concept_name": "Cold War",
+            "mastery_level": 0.42,
+            "attempts": 5,
+            "correct_attempts": 2,
+            "last_assessed": (now - timedelta(hours=6)).isoformat(),
+        },
+        "Slavery and Abolition": {
+            "concept_name": "Slavery and Abolition",
+            "mastery_level": 0.68,
+            "attempts": 7,
+            "correct_attempts": 5,
+            "last_assessed": (now - timedelta(hours=3)).isoformat(),
+        },
+        "Immigration and Urbanization": {
+            "concept_name": "Immigration and Urbanization",
+            "mastery_level": 0.22,
+            "attempts": 3,
+            "correct_attempts": 1,
+            "last_assessed": (now - timedelta(days=3)).isoformat(),
+        },
     }
 
-    # Economics topics — fewer entries, earlier stage of learning
+    # Economics topics — mix of strong, medium, and weak areas
     economics_concepts = {
         "Supply and Demand": {
             "concept_name": "Supply and Demand",
@@ -112,6 +133,34 @@ def create_demo_profile(student_id: str = "default") -> dict:
             "attempts": 2,
             "correct_attempts": 0,
             "last_assessed": (now - timedelta(days=3)).isoformat(),
+        },
+        "Monetary Policy": {
+            "concept_name": "Monetary Policy",
+            "mastery_level": 0.33,
+            "attempts": 3,
+            "correct_attempts": 1,
+            "last_assessed": (now - timedelta(days=2)).isoformat(),
+        },
+        "International Trade": {
+            "concept_name": "International Trade",
+            "mastery_level": 0.58,
+            "attempts": 6,
+            "correct_attempts": 4,
+            "last_assessed": (now - timedelta(hours=10)).isoformat(),
+        },
+        "GDP and Economic Growth": {
+            "concept_name": "GDP and Economic Growth",
+            "mastery_level": 0.81,
+            "attempts": 10,
+            "correct_attempts": 8,
+            "last_assessed": (now - timedelta(hours=4)).isoformat(),
+        },
+        "Inflation and Unemployment": {
+            "concept_name": "Inflation and Unemployment",
+            "mastery_level": 0.38,
+            "attempts": 4,
+            "correct_attempts": 2,
+            "last_assessed": (now - timedelta(days=1)).isoformat(),
         },
     }
 

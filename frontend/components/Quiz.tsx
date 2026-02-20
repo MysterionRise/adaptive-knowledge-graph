@@ -84,9 +84,56 @@ const DifficultyBadge = ({ difficulty }: { difficulty?: Difficulty }) => {
     );
 };
 
+// Subject-specific topic lists — curated to match OpenStax textbook content
+const SUBJECT_TOPICS: Record<string, { value: string; label: string }[]> = {
+    us_history: [
+        { value: 'The American Revolution', label: 'The American Revolution' },
+        { value: 'The Constitution', label: 'The Constitution' },
+        { value: 'Colonial America', label: 'Colonial America' },
+        { value: 'The Civil War', label: 'The Civil War' },
+        { value: 'Industrialization', label: 'Industrialization' },
+        { value: 'Westward Expansion', label: 'Westward Expansion' },
+        { value: 'World War II', label: 'World War II' },
+        { value: 'The Great Depression', label: 'The Great Depression' },
+        { value: 'Civil Rights Movement', label: 'Civil Rights Movement' },
+        { value: 'Cold War', label: 'Cold War' },
+        { value: 'Slavery and Abolition', label: 'Slavery and Abolition' },
+        { value: 'Immigration and Urbanization', label: 'Immigration and Urbanization' },
+    ],
+    economics: [
+        { value: 'Supply and Demand', label: 'Supply and Demand' },
+        { value: 'Market Equilibrium', label: 'Market Equilibrium' },
+        { value: 'Fiscal Policy', label: 'Fiscal Policy' },
+        { value: 'Monetary Policy', label: 'Monetary Policy' },
+        { value: 'International Trade', label: 'International Trade' },
+        { value: 'Monopoly and Competition', label: 'Monopoly and Competition' },
+        { value: 'Inflation and Unemployment', label: 'Inflation and Unemployment' },
+        { value: 'GDP and Economic Growth', label: 'GDP and Economic Growth' },
+        { value: 'Labor Markets', label: 'Labor Markets' },
+        { value: 'Poverty and Inequality', label: 'Poverty and Inequality' },
+    ],
+    biology: [
+        { value: 'Cell Structure and Function', label: 'Cell Structure and Function' },
+        { value: 'Photosynthesis', label: 'Photosynthesis' },
+        { value: 'DNA and Genetics', label: 'DNA and Genetics' },
+        { value: 'Evolution and Natural Selection', label: 'Evolution and Natural Selection' },
+        { value: 'Ecology and Ecosystems', label: 'Ecology and Ecosystems' },
+    ],
+    world_history: [
+        { value: 'Ancient Civilizations', label: 'Ancient Civilizations' },
+        { value: 'The Roman Empire', label: 'The Roman Empire' },
+        { value: 'The Renaissance', label: 'The Renaissance' },
+        { value: 'World War I', label: 'World War I' },
+        { value: 'Colonialism and Imperialism', label: 'Colonialism and Imperialism' },
+    ],
+};
+
+const DEFAULT_TOPICS = SUBJECT_TOPICS.us_history;
+
 export default function Quiz() {
     const router = useRouter();
     const [topic, setTopic] = useState('The American Revolution');
+    const [customTopic, setCustomTopic] = useState('');
     const [quiz, setQuiz] = useState<AdaptiveQuiz | Quiz | null>(null);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -94,6 +141,9 @@ export default function Quiz() {
     const [isLoading, setIsLoading] = useState(false);
     const [score, setScore] = useState(0);
     const [showResults, setShowResults] = useState(false);
+
+    // The actual topic being quizzed (resolved from dropdown or custom input)
+    const [activeTopic, setActiveTopic] = useState('The American Revolution');
 
     // Adaptive mode state
     const [adaptiveMode, setAdaptiveMode] = useState(true);
@@ -112,8 +162,19 @@ export default function Quiz() {
         setHighlightedConcepts,
         loadMasteryFromBackend,
         resetMasteryOnBackend,
-        getMastery
+        getMastery,
+        currentSubject
     } = useAppStore();
+
+    // Get topics for the current subject
+    const subjectTopics = SUBJECT_TOPICS[currentSubject] || DEFAULT_TOPICS;
+
+    // Reset topic when subject changes
+    useEffect(() => {
+        const topics = SUBJECT_TOPICS[currentSubject] || DEFAULT_TOPICS;
+        setTopic(topics[0].value);
+        setCustomTopic('');
+    }, [currentSubject]);
 
     // Load mastery from backend on mount
     useEffect(() => {
@@ -122,15 +183,22 @@ export default function Quiz() {
 
     // Update local mastery display when topic changes
     useEffect(() => {
-        const mastery = getMastery(topic);
+        const displayTopic = topic === '__custom__' ? customTopic.trim() : topic;
+        const mastery = getMastery(displayTopic || topic);
         setCurrentMastery(mastery);
         // Determine target difficulty
         if (mastery < 0.4) setTargetDifficulty('easy');
         else if (mastery <= 0.7) setTargetDifficulty('medium');
         else setTargetDifficulty('hard');
-    }, [topic, getMastery]);
+    }, [topic, customTopic, getMastery]);
 
     const handleStartQuiz = async () => {
+        const effectiveTopic = topic === '__custom__' ? customTopic.trim() : topic;
+        if (!effectiveTopic) {
+            alert('Please enter a topic.');
+            return;
+        }
+        setActiveTopic(effectiveTopic);
         setIsLoading(true);
         try {
             let data;
@@ -138,9 +206,13 @@ export default function Quiz() {
             if (adaptiveMode) {
                 // Use adaptive endpoint
                 const res = await fetch(
-                    `${API_BASE}${API_PREFIX}/quiz/generate-adaptive?topic=${encodeURIComponent(topic)}&num_questions=3`,
+                    `${API_BASE}${API_PREFIX}/quiz/generate-adaptive?topic=${encodeURIComponent(effectiveTopic)}&num_questions=3&subject=${encodeURIComponent(currentSubject)}`,
                     { method: 'POST' }
                 );
+                if (!res.ok) {
+                    const errBody = await res.text();
+                    throw new Error(`Quiz generation failed (${res.status}): ${errBody}`);
+                }
                 data = await res.json() as AdaptiveQuiz;
 
                 // Update local state with backend's mastery info
@@ -149,10 +221,18 @@ export default function Quiz() {
             } else {
                 // Use standard endpoint
                 const res = await fetch(
-                    `${API_BASE}${API_PREFIX}/quiz/generate?topic=${encodeURIComponent(topic)}&num_questions=3`,
+                    `${API_BASE}${API_PREFIX}/quiz/generate?topic=${encodeURIComponent(effectiveTopic)}&num_questions=3&subject=${encodeURIComponent(currentSubject)}`,
                     { method: 'POST' }
                 );
+                if (!res.ok) {
+                    const errBody = await res.text();
+                    throw new Error(`Quiz generation failed (${res.status}): ${errBody}`);
+                }
                 data = await res.json() as Quiz;
+            }
+
+            if (!data.questions || data.questions.length === 0) {
+                throw new Error('Quiz generated with no questions. Try a different topic.');
             }
 
             setQuiz(data);
@@ -190,13 +270,13 @@ export default function Quiz() {
             ...prev,
             {
                 question_id: currentQ?.id || '',
-                related_concept: currentQ?.related_concept || topic,
+                related_concept: currentQ?.related_concept || activeTopic,
                 correct: isCorrect,
             },
         ]);
 
         // Update mastery tracking for the topic (syncs to backend)
-        updateMastery(topic, isCorrect);
+        updateMastery(activeTopic, isCorrect);
 
         // Update local mastery display
         const delta = isCorrect ? 0.15 : -0.1;
@@ -231,10 +311,10 @@ export default function Quiz() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    topic,
+                    topic: activeTopic,
                     question_results: questionResults,
                     student_id: 'default',
-                    subject: null,
+                    subject: currentSubject,
                 }),
             });
             if (!res.ok) {
@@ -271,7 +351,7 @@ export default function Quiz() {
 
     const handleViewLearningPath = () => {
         // Set highlighted concepts before navigating to graph
-        setHighlightedConcepts([topic]);
+        setHighlightedConcepts([activeTopic]);
         router.push('/graph');
     };
 
@@ -324,7 +404,7 @@ export default function Quiz() {
                     </div>
                 </div>
 
-                <p className="text-xs text-gray-400">Topic: &ldquo;{topic}&rdquo;</p>
+                <p className="text-xs text-gray-400">Topic: &ldquo;{activeTopic}&rdquo;</p>
                 {adaptiveMode && (
                     <div className="mt-2 flex items-center gap-2">
                         <Zap className="w-3 h-3 text-blue-500" />
@@ -374,15 +454,26 @@ export default function Quiz() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
                     <select
                         value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
+                        onChange={(e) => {
+                            setTopic(e.target.value);
+                            if (e.target.value !== '__custom__') setCustomTopic('');
+                        }}
                         className="w-full p-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500"
                     >
-                        <option value="The American Revolution">The American Revolution</option>
-                        <option value="The Constitution">The Constitution</option>
-                        <option value="The Civil War">The Civil War</option>
-                        <option value="Industrialization">Industrialization</option>
-                        <option value="World War II">World War II</option>
+                        {subjectTopics.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                        <option value="__custom__">Custom topic...</option>
                     </select>
+                    {topic === '__custom__' && (
+                        <input
+                            type="text"
+                            value={customTopic}
+                            onChange={(e) => setCustomTopic(e.target.value)}
+                            placeholder="Enter a topic (e.g., Manifest Destiny)"
+                            className="w-full mt-2 p-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                        />
+                    )}
                 </div>
 
                 {/* Current Mastery Display (when adaptive mode is on) */}
@@ -417,7 +508,20 @@ export default function Quiz() {
         );
     }
 
-    const currentQ = quiz.questions[currentQuestionIndex];
+    const currentQ = quiz.questions?.[currentQuestionIndex];
+
+    if (!currentQ) {
+        return (
+            <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md text-center">
+                <h3 className="text-lg font-semibold text-red-600 mb-2">Quiz Error</h3>
+                <p className="text-gray-600 mb-4">Could not load quiz question. The quiz data may be invalid.</p>
+                <button onClick={handleRetry} className="px-6 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700">
+                    Try Again
+                </button>
+            </div>
+        );
+    }
+
     const isCorrect = selectedOption === currentQ.correct_option_id;
 
     return (
@@ -428,7 +532,7 @@ export default function Quiz() {
                     <MasteryIndicator
                         mastery={currentMastery}
                         targetDifficulty={targetDifficulty}
-                        topic={topic}
+                        topic={activeTopic}
                         showAdaptingMessage={true}
                         compact={false}
                     />
@@ -523,7 +627,7 @@ export default function Quiz() {
                                 {!isCorrect && (
                                     <div className="mt-4 p-4 bg-white rounded border border-red-200">
                                         <p className="text-xs uppercase font-bold text-gray-400 mb-1">Recommended Reading</p>
-                                        <p className="text-sm text-gray-800 italic">"Refer to section on {topic}..."</p>
+                                        <p className="text-sm text-gray-800 italic">"Refer to section on {activeTopic}..."</p>
                                     </div>
                                 )}
                             </div>
@@ -615,7 +719,7 @@ export default function Quiz() {
                                 <span className="font-semibold">{quiz.questions.length}</span> questions correctly
                             </p>
                             <p className="text-sm text-gray-500 mt-2">
-                                Topic: {topic}
+                                Topic: {activeTopic}
                             </p>
 
                             {/* Adaptive Quiz Results */}

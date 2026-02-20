@@ -101,7 +101,12 @@ describe('LearningPath Component', () => {
       render(<LearningPath conceptName="Advanced Topic" />);
 
       await waitFor(() => {
-        expect(screen.getByText('Advanced Topic')).toBeInTheDocument();
+        // "Advanced Topic" appears in both the description and concept card
+        const elements = screen.getAllByText('Advanced Topic');
+        expect(elements.length).toBeGreaterThanOrEqual(1);
+        // Check the description span specifically
+        const descSpan = elements.find(el => el.classList.contains('text-blue-600'));
+        expect(descSpan).toBeDefined();
       });
     });
 
@@ -111,7 +116,8 @@ describe('LearningPath Component', () => {
       await waitFor(() => {
         expect(screen.getByText('Basic Concept')).toBeInTheDocument();
         expect(screen.getByText('Intermediate Concept')).toBeInTheDocument();
-        expect(screen.getByText('Advanced Topic')).toBeInTheDocument();
+        // "Advanced Topic" appears in both description and concept card
+        expect(screen.getAllByText('Advanced Topic').length).toBeGreaterThanOrEqual(1);
       });
     });
 

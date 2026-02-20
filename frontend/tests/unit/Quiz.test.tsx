@@ -30,6 +30,35 @@ jest.mock('@/components/MasteryIndicator', () => {
   };
 });
 
+// Mock PostQuizRecommendations component
+jest.mock('@/components/PostQuizRecommendations', () => {
+  return function MockPostQuizRecommendations() {
+    return <div data-testid="post-quiz-recommendations" />;
+  };
+});
+
+// Helper: mock response for the initial loadMasteryFromBackend fetch on mount
+const mockProfileResponse = () => {
+  (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ mastery_levels: {}, updated_at: new Date().toISOString() }),
+  });
+};
+
+// Helper: mock response for the recommendations fetch after quiz completion
+const mockRecommendationsResponse = () => {
+  (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      path_type: 'remediation',
+      score_pct: 100,
+      remediation: [],
+      advancement: [],
+      summary: 'Great work!',
+    }),
+  });
+};
+
 // Reset store between tests
 const initialStoreState = useAppStore.getState();
 
@@ -55,7 +84,6 @@ describe('Quiz Component', () => {
       const select = screen.getByRole('combobox');
       expect(select).toHaveValue('The American Revolution');
 
-      expect(screen.getByText('The American Revolution')).toBeInTheDocument();
       expect(screen.getByText('The Constitution')).toBeInTheDocument();
       expect(screen.getByText('The Civil War')).toBeInTheDocument();
     });
@@ -140,6 +168,8 @@ describe('Quiz Component', () => {
     };
 
     it('shows loading state when generating quiz', async () => {
+      // First call (profile load on mount) resolves, subsequent calls never resolve
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       );
@@ -150,11 +180,12 @@ describe('Quiz Component', () => {
       fireEvent.click(startButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/Generating personalized quiz/i)).toBeInTheDocument();
+        expect(screen.getByText('Crafting Your Personalized Quiz')).toBeInTheDocument();
       });
     });
 
     it('displays quiz after successful generation', async () => {
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockQuizResponse,
@@ -230,6 +261,7 @@ describe('Quiz Component', () => {
     };
 
     beforeEach(async () => {
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockQuizResponse,
@@ -346,10 +378,12 @@ describe('Quiz Component', () => {
     };
 
     it('shows results modal after completing quiz', async () => {
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockQuizResponse,
       });
+      mockRecommendationsResponse();
 
       render(<Quiz />);
 
@@ -375,10 +409,12 @@ describe('Quiz Component', () => {
     });
 
     it('navigates to learning path from results', async () => {
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockQuizResponse,
       });
+      mockRecommendationsResponse();
 
       render(<Quiz />);
 
@@ -407,10 +443,12 @@ describe('Quiz Component', () => {
     });
 
     it('allows retrying quiz from results', async () => {
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockQuizResponse,
       });
+      mockRecommendationsResponse();
 
       render(<Quiz />);
 
@@ -475,6 +513,7 @@ describe('Quiz Component', () => {
     };
 
     it('tracks score correctly', async () => {
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockQuizResponse,
@@ -524,12 +563,22 @@ describe('Quiz Component', () => {
     });
 
     it('uses correct topic in API request', async () => {
+      mockProfileResponse();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           id: 'quiz-1',
           title: 'Constitution Quiz',
-          questions: [],
+          questions: [
+            {
+              id: 'q1',
+              text: 'What is the Constitution?',
+              options: [{ id: 'a', text: 'A document' }],
+              correct_option_id: 'a',
+              explanation: 'It is a document.',
+              difficulty: 'easy',
+            },
+          ],
           student_mastery: 0.3,
           target_difficulty: 'easy',
           adapted: true,

@@ -7,89 +7,138 @@
         "mastery_level": 0.85,
         "attempts": 12,
         "correct_attempts": 10,
-        "last_assessed": "2026-02-18T18:15:49.598660"
+        "last_assessed": "2026-02-19T18:41:50.641679"
       },
       "The Constitution": {
         "concept_name": "The Constitution",
         "mastery_level": 0.78,
         "attempts": 9,
         "correct_attempts": 7,
-        "last_assessed": "2026-02-18T17:15:49.598660"
+        "last_assessed": "2026-02-19T17:41:50.641679"
       },
       "Colonial America": {
         "concept_name": "Colonial America",
         "mastery_level": 0.92,
         "attempts": 15,
         "correct_attempts": 14,
-        "last_assessed": "2026-02-17T20:15:49.598660"
+        "last_assessed": "2026-02-18T20:41:50.641679"
       },
       "The Civil War": {
         "concept_name": "The Civil War",
-        "mastery_level": 0.7000000000000001,
-        "attempts": 7,
-        "correct_attempts": 4,
-        "last_assessed": "2026-02-19T01:20:04.104249"
+        "mastery_level": 0.55,
+        "attempts": 6,
+        "correct_attempts": 3,
+        "last_assessed": "2026-02-19T19:41:50.641679"
       },
       "Industrialization": {
         "concept_name": "Industrialization",
         "mastery_level": 0.48,
         "attempts": 5,
         "correct_attempts": 2,
-        "last_assessed": "2026-02-18T16:15:49.598660"
+        "last_assessed": "2026-02-19T16:41:50.641679"
       },
       "Westward Expansion": {
         "concept_name": "Westward Expansion",
         "mastery_level": 0.63,
         "attempts": 8,
         "correct_attempts": 5,
-        "last_assessed": "2026-02-17T20:15:49.598660"
+        "last_assessed": "2026-02-18T20:41:50.641679"
       },
       "World War II": {
         "concept_name": "World War II",
         "mastery_level": 0.3,
         "attempts": 3,
         "correct_attempts": 1,
-        "last_assessed": "2026-02-18T15:15:49.598660"
+        "last_assessed": "2026-02-19T15:41:50.641679"
       },
       "The Great Depression": {
         "concept_name": "The Great Depression",
         "mastery_level": 0.25,
         "attempts": 4,
         "correct_attempts": 1,
-        "last_assessed": "2026-02-16T20:15:49.598660"
+        "last_assessed": "2026-02-17T20:41:50.641679"
       },
       "Civil Rights Movement": {
         "concept_name": "Civil Rights Movement",
         "mastery_level": 0.35,
         "attempts": 3,
         "correct_attempts": 1,
-        "last_assessed": "2026-02-17T20:15:49.598660"
+        "last_assessed": "2026-02-18T20:41:50.641679"
+      },
+      "Cold War": {
+        "concept_name": "Cold War",
+        "mastery_level": 0.42,
+        "attempts": 5,
+        "correct_attempts": 2,
+        "last_assessed": "2026-02-19T14:41:50.641679"
+      },
+      "Slavery and Abolition": {
+        "concept_name": "Slavery and Abolition",
+        "mastery_level": 0.68,
+        "attempts": 7,
+        "correct_attempts": 5,
+        "last_assessed": "2026-02-19T17:41:50.641679"
+      },
+      "Immigration and Urbanization": {
+        "concept_name": "Immigration and Urbanization",
+        "mastery_level": 0.22,
+        "attempts": 3,
+        "correct_attempts": 1,
+        "last_assessed": "2026-02-16T20:41:50.641679"
       },
       "Supply and Demand": {
         "concept_name": "Supply and Demand",
         "mastery_level": 0.72,
         "attempts": 8,
         "correct_attempts": 6,
-        "last_assessed": "2026-02-18T14:15:49.598660"
+        "last_assessed": "2026-02-19T14:41:50.641679"
       },
       "Market Equilibrium": {
         "concept_name": "Market Equilibrium",
         "mastery_level": 0.45,
         "attempts": 4,
         "correct_attempts": 2,
-        "last_assessed": "2026-02-18T12:15:49.598660"
+        "last_assessed": "2026-02-19T12:41:50.641679"
       },
       "Fiscal Policy": {
         "concept_name": "Fiscal Policy",
         "mastery_level": 0.2,
         "attempts": 2,
         "correct_attempts": 0,
-        "last_assessed": "2026-02-15T20:15:49.598660"
+        "last_assessed": "2026-02-16T20:41:50.641679"
+      },
+      "Monetary Policy": {
+        "concept_name": "Monetary Policy",
+        "mastery_level": 0.33,
+        "attempts": 3,
+        "correct_attempts": 1,
+        "last_assessed": "2026-02-17T20:41:50.641679"
+      },
+      "International Trade": {
+        "concept_name": "International Trade",
+        "mastery_level": 0.58,
+        "attempts": 6,
+        "correct_attempts": 4,
+        "last_assessed": "2026-02-19T10:41:50.641679"
+      },
+      "GDP and Economic Growth": {
+        "concept_name": "GDP and Economic Growth",
+        "mastery_level": 0.81,
+        "attempts": 10,
+        "correct_attempts": 8,
+        "last_assessed": "2026-02-19T16:41:50.641679"
+      },
+      "Inflation and Unemployment": {
+        "concept_name": "Inflation and Unemployment",
+        "mastery_level": 0.38,
+        "attempts": 4,
+        "correct_attempts": 2,
+        "last_assessed": "2026-02-18T20:41:50.641679"
       }
     },
-    "overall_ability": 0.5525,
-    "created_at": "2026-02-11T20:15:49.598660",
-    "updated_at": "2026-02-19T01:20:04.104264"
+    "overall_ability": 0.521,
+    "created_at": "2026-02-12T20:41:50.641679",
+    "updated_at": "2026-02-19T20:41:50.641679"
   },
   "test_student": {
     "student_id": "test_student",
