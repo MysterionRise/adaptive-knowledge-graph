@@ -218,7 +218,8 @@ class ApiClient {
       onMetadata?: (metadata: any) => void;
       onDone?: () => void;
       onError?: (error: string) => void;
-    }
+    },
+    signal?: AbortSignal
   ): Promise<void> {
     const payload = {
       question: request.question,
@@ -231,6 +232,7 @@ class ApiClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal,
     });
 
     if (!response.ok) {

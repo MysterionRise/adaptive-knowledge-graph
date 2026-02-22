@@ -174,11 +174,21 @@ export default function Quiz() {
     // Get topics for the current subject
     const subjectTopics = SUBJECT_TOPICS[currentSubject] || DEFAULT_TOPICS;
 
-    // Reset topic when subject changes
+    // Reset topic and quiz state when subject changes
     useEffect(() => {
         const topics = SUBJECT_TOPICS[currentSubject] || DEFAULT_TOPICS;
         setTopic(topics[0].value);
         setCustomTopic('');
+        // Reset any in-progress quiz so stale data from a different subject isn't shown
+        setQuiz(null);
+        setShowResults(false);
+        setCurrentQuestionIndex(0);
+        setScore(0);
+        setSelectedOption(null);
+        setIsSubmitted(false);
+        setQuestionResults([]);
+        setRecommendations(null);
+        setFormError(null);
     }, [currentSubject]);
 
     // Load mastery from backend on mount
@@ -513,7 +523,8 @@ export default function Quiz() {
                 {/* Action Buttons */}
                 <button
                     onClick={handleStartQuiz}
-                    className="w-full bg-blue-600 text-white py-3 rounded-md font-semibold hover:bg-blue-700 transition mb-3"
+                    disabled={isLoading}
+                    className="w-full bg-blue-600 text-white py-3 rounded-md font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition mb-3"
                 >
                     {adaptiveMode ? 'Start Adaptive Assessment' : 'Generate Assessment'}
                 </button>

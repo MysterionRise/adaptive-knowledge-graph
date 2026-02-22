@@ -116,7 +116,7 @@ describe('ChatPage', () => {
       render(<ChatPage />);
 
       expect(screen.getByText('AI Tutor Chat')).toBeInTheDocument();
-      expect(screen.getByText(/Ask questions about US History/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ask questions about your selected subject/i)).toBeInTheDocument();
     });
 
     it('renders welcome message when no messages', () => {
@@ -212,7 +212,8 @@ describe('ChatPage', () => {
             top_k: 5,
           },
           'us_history',
-          expect.any(Object)
+          expect.any(Object),
+          expect.any(AbortSignal)
         );
       });
     });
@@ -358,7 +359,8 @@ describe('ChatPage', () => {
             top_k: 5,
           },
           'us_history',
-          expect.any(Object)
+          expect.any(Object),
+          expect.any(AbortSignal)
         );
       });
     });

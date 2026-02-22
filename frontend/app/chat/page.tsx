@@ -51,9 +51,17 @@ function ChatPageContent() {
   const [isThinking, setIsThinking] = useState(false);
   const [useKgExpansion, setUseKgExpansion] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Zustand store for cross-page state
   const { setLastQueryConcepts, setLastQuery, setHighlightedConcepts, currentSubject } = useAppStore();
+
+  // Abort any in-flight stream on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -70,6 +78,11 @@ function ChatPageContent() {
 
   const handleAskQuestion = useCallback(async (question: string) => {
     if (!question.trim()) return;
+
+    // Abort any previous stream
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     // Add user message
     const userMessage: Message = {
@@ -167,9 +180,12 @@ function ChatPageContent() {
             setIsLoading(false);
             setIsThinking(false);
           },
-        }
+        },
+        controller.signal
       );
     } catch (error: any) {
+      // Ignore abort errors (user navigated away or started new question)
+      if (error.name === 'AbortError') return;
       console.error('Error asking question:', error);
       setMessages((prev) => {
         // Replace the last streaming message or add an error
@@ -195,12 +211,33 @@ function ChatPageContent() {
     handleAskQuestion(input);
   };
 
-  const exampleQuestions = [
-    'What caused the American Revolution?',
-    'Explain the significance of the Constitution',
-    'How did the Civil War affect American society?',
-    'What was the impact of Industrialization?',
-  ];
+  const SUBJECT_EXAMPLES: Record<string, string[]> = {
+    us_history: [
+      'What caused the American Revolution?',
+      'Explain the significance of the Constitution',
+      'How did the Civil War affect American society?',
+      'What was the impact of Industrialization?',
+    ],
+    economics: [
+      'How do supply and demand determine prices?',
+      'What is the role of the Federal Reserve?',
+      'Explain the causes of inflation',
+      'What is comparative advantage in trade?',
+    ],
+    biology: [
+      'What is the process of photosynthesis?',
+      'How does DNA replication work?',
+      'Explain natural selection and evolution',
+      'What are the stages of cellular respiration?',
+    ],
+    world_history: [
+      'What caused the fall of the Roman Empire?',
+      'Explain the impact of the Renaissance',
+      'How did colonialism shape the modern world?',
+      'What were the causes of World War I?',
+    ],
+  };
+  const exampleQuestions = SUBJECT_EXAMPLES[currentSubject] || SUBJECT_EXAMPLES.us_history;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
@@ -219,7 +256,7 @@ function ChatPageContent() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">AI Tutor Chat</h1>
                 <p className="text-sm text-gray-600">
-                  Ask questions about US History &amp; Government
+                  Ask questions about your selected subject
                 </p>
               </div>
             </div>

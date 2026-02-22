@@ -138,12 +138,20 @@ curl http://localhost:8000/health/ready | python -m json.tool
 
 ### 15:00–17:00 — Comparison: KG-RAG vs Plain RAG
 
-**Talking Points (can show via chat):**
+**Navigate:** `http://localhost:3000/comparison`
+
+**Actions:**
+1. Select a question from the subject-aware examples (auto-populated for current subject)
+2. Click **Compare Approaches** — runs both KG-RAG and plain RAG in parallel
+3. "Left panel: KG expansion finds related concepts first, retrieves broader context"
+4. "Right panel: Plain RAG only matches literal text — misses prerequisite concepts"
+5. Point out the **Concepts Used** and **Retrieved Chunks** counts — KG-RAG consistently pulls more relevant context
+6. "Under the hood, we now use hybrid BM25 + kNN retrieval with reciprocal rank fusion"
+
+**Alternative (via chat):**
 - Toggle KG Expansion OFF, ask the same question
-- "Without KG expansion, it only searches for literal text matches"
 - Toggle KG Expansion ON, ask again
-- "With KG expansion, it finds related concepts first, then retrieves more comprehensive context"
-- "This is the key differentiator — the knowledge graph provides *structured understanding*"
+- Compare the expanded concepts panel
 
 ---
 
@@ -171,8 +179,10 @@ curl http://localhost:8000/health/ready | python -m json.tool
 **Still in quiz results modal:**
 1. "Remediation block shows prerequisites the student should review"
 2. "Advancement block shows deeper topics for mastered concepts"
-3. Click **"View Learning Path"** — navigates to graph with concept highlighted
-4. "The learning path shows prerequisite chains — what to study first"
+3. Scroll down to **Learning Path** section — "Embedded right in the results, showing the prerequisite chain"
+4. "Each node shows mastery level with progress bars — the student can see exactly what to study next"
+5. Click **"View Learning Path"** button — navigates to graph with concept highlighted
+6. "The graph visualization highlights the same concepts in their full relationship context"
 
 ---
 
@@ -192,7 +202,7 @@ curl http://localhost:8000/health/ready | python -m json.tool
 **Quick flash through:**
 1. `http://localhost:8000/docs` — "Full OpenAPI documentation with examples"
 2. "Rate limiting configured on all endpoints"
-3. "83+ tests passing, CI/CD with pre-commit hooks"
+3. "300+ tests passing, CI/CD with 13-job pipeline"
 4. "Type-checked with MyPy, formatted with Ruff"
 
 **If asked about scalability:**

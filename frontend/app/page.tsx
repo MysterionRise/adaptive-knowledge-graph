@@ -54,7 +54,7 @@ export default function Home() {
 
     const fetchTopConcepts = async () => {
       try {
-        const response = await fetch('/api/v1/concepts/top?limit=6');
+        const response = await fetch(`/api/v1/concepts/top?limit=6&subject=${currentSubject}`);
         if (response.ok) {
           const data = await response.json();
           setTopConcepts(data.concepts || []);
@@ -119,8 +119,8 @@ export default function Home() {
             <span className="text-primary-600"> Certification</span> Exams
           </h2>
           <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-            Adaptive study plans for US History, Government, and Professional Standards
-            powered by Knowledge Graphs and AI.
+            Adaptive study plans powered by Knowledge Graphs, Retrieval-Augmented Generation,
+            and AI-driven personalization.
           </p>
         </div>
 
@@ -244,7 +244,7 @@ export default function Home() {
                   Start Your Learning Journey
                 </h4>
                 <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  Take assessments and ask questions to track your progress across US History concepts.
+                  Take assessments and ask questions to track your progress across key concepts.
                 </p>
                 <div className="flex justify-center gap-4">
                   <Link
@@ -305,13 +305,13 @@ export default function Home() {
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
             <FeatureCard
               title="Knowledge Map"
-              description="Visualize historical events and their causal relationships"
+              description="Visualize concepts and their prerequisite relationships"
               icon={<Network className="w-6 h-6" />}
               link="/graph"
             />
             <FeatureCard
               title="AI Tutor Chat"
-              description="Ask about historical context with citations from approved texts"
+              description="Ask questions with citations from approved textbooks"
               icon={<MessageSquare className="w-6 h-6" />}
               link="/chat"
             />
@@ -345,7 +345,7 @@ export default function Home() {
             <Step
               number={1}
               title="Ingest Content"
-              description="System ingests US History & Government textbooks, chunking by topic"
+              description="System ingests OpenStax textbooks, chunking by topic and section"
             />
             <Step
               number={2}
@@ -365,13 +365,14 @@ export default function Home() {
           <p>
             Content adapted from{' '}
             <a
-              href="https://github.com/philschatz/us-history-book"
+              href="https://openstax.org/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary-600 hover:text-primary-700 underline"
             >
-              OpenStax US History (Phil Schatz mirror)
+              OpenStax
             </a>
+            {' '}open textbooks (US History, Economics, Biology, World History)
           </p>
           <p className="mt-1">
             Licensed under{' '}
