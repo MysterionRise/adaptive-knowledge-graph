@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import type { QuestionResponse } from '@/lib/types';
@@ -16,6 +16,14 @@ export default function ComparisonPage() {
   const [withoutKG, setWithoutKG] = useState<QuestionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { currentSubject } = useAppStore();
+
+  // Clear stale results when subject changes
+  useEffect(() => {
+    setQuestion('');
+    setWithKG(null);
+    setWithoutKG(null);
+    setError(null);
+  }, [currentSubject]);
 
   const handleCompare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +129,7 @@ export default function ComparisonPage() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="e.g., What caused the American Revolution?"
+                maxLength={500}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 disabled={isLoading}
               />

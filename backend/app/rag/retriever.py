@@ -38,7 +38,7 @@ class OpenSearchRetriever:
         self.client: OpenSearch | None = None
         self.embedding_model = get_embedding_model()
 
-    def connect(self):
+    def connect(self) -> None:
         """Connect to OpenSearch."""
         logger.info(f"Connecting to OpenSearch at {self.host}:{self.port}")
         self.client = OpenSearch(
@@ -51,7 +51,7 @@ class OpenSearchRetriever:
         )
         logger.success("✓ Connected to OpenSearch")
 
-    def create_collection(self, embedding_dim: int, recreate: bool = False):
+    def create_collection(self, embedding_dim: int, recreate: bool = False) -> None:
         """
         Create OpenSearch index with kNN configuration.
 
@@ -102,7 +102,7 @@ class OpenSearchRetriever:
         else:
             logger.info(f"Index already exists: {self.index_name}")
 
-    def index_chunks(self, chunks: list[dict], show_progress: bool = True):
+    def index_chunks(self, chunks: list[dict], show_progress: bool = True) -> None:
         """
         Index text chunks into OpenSearch.
 

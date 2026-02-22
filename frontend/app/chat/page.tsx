@@ -357,6 +357,7 @@ function ChatPageContent() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question..."
+              maxLength={500}
               className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               disabled={isLoading}
             />

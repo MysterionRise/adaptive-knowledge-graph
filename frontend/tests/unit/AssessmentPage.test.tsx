@@ -1,6 +1,19 @@
 import { render, screen } from '@testing-library/react';
 import AssessmentPage from '@/app/assessment/page';
 
+// Mock next/navigation
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+  }),
+}));
+
 // Mock the Quiz component
 jest.mock('@/components/Quiz', () => {
   return function MockQuiz() {
@@ -8,13 +21,24 @@ jest.mock('@/components/Quiz', () => {
   };
 });
 
+// Mock the SubjectPicker component
+jest.mock('@/components/SubjectPicker', () => {
+  return function MockSubjectPicker() {
+    return <div data-testid="subject-picker">Subject Picker Mock</div>;
+  };
+});
+
 describe('AssessmentPage', () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+  });
+
   describe('Page Structure', () => {
     it('renders the page container with correct styling', () => {
       const { container } = render(<AssessmentPage />);
 
       const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toHaveClass('min-h-screen', 'bg-gray-50', 'py-12');
+      expect(mainContainer).toHaveClass('min-h-screen', 'bg-gray-50');
     });
 
     it('renders the content wrapper with max-width', () => {
@@ -56,11 +80,17 @@ describe('AssessmentPage', () => {
       expect(subtitle).toHaveClass('text-gray-600');
     });
 
-    it('centers the header text', () => {
-      const { container } = render(<AssessmentPage />);
+    it('renders a back button', () => {
+      render(<AssessmentPage />);
 
-      const headerContainer = container.querySelector('.text-center');
-      expect(headerContainer).toBeInTheDocument();
+      const backButton = screen.getByRole('button', { name: /back to home/i });
+      expect(backButton).toBeInTheDocument();
+    });
+
+    it('renders the SubjectPicker', () => {
+      render(<AssessmentPage />);
+
+      expect(screen.getByTestId('subject-picker')).toBeInTheDocument();
     });
   });
 
@@ -71,35 +101,24 @@ describe('AssessmentPage', () => {
       expect(screen.getByTestId('quiz-component')).toBeInTheDocument();
     });
 
-    it('Quiz component is rendered below the header', () => {
+    it('Quiz component is rendered in the main section', () => {
       const { container } = render(<AssessmentPage />);
 
-      const headerSection = container.querySelector('.text-center.mb-10');
+      const mainSection = container.querySelector('main');
       const quizComponent = screen.getByTestId('quiz-component');
 
-      expect(headerSection).toBeInTheDocument();
+      expect(mainSection).toBeInTheDocument();
       expect(quizComponent).toBeInTheDocument();
-
-      // Quiz should come after header in the DOM
-      const allElements = container.querySelectorAll('.text-center, [data-testid="quiz-component"]');
-      expect(allElements[0]).toHaveClass('text-center');
-      expect(allElements[1]).toHaveAttribute('data-testid', 'quiz-component');
+      expect(mainSection).toContainElement(quizComponent);
     });
   });
 
   describe('Layout and Spacing', () => {
-    it('has proper vertical padding', () => {
+    it('has proper main section padding', () => {
       const { container } = render(<AssessmentPage />);
 
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toHaveClass('py-12');
-    });
-
-    it('has proper header margin', () => {
-      const { container } = render(<AssessmentPage />);
-
-      const headerSection = container.querySelector('.mb-10');
-      expect(headerSection).toBeInTheDocument();
+      const mainSection = container.querySelector('main');
+      expect(mainSection).toHaveClass('py-12');
     });
 
     it('uses responsive horizontal padding', () => {
@@ -122,10 +141,16 @@ describe('AssessmentPage', () => {
     it('renders meaningful content description', () => {
       render(<AssessmentPage />);
 
-      // The subtitle provides context about the page
       expect(
         screen.getByText(/dynamically from trusted knowledge sources/i)
       ).toBeInTheDocument();
+    });
+
+    it('back button has aria-label', () => {
+      render(<AssessmentPage />);
+
+      const backButton = screen.getByRole('button', { name: /back to home/i });
+      expect(backButton).toHaveAttribute('aria-label', 'Back to home');
     });
   });
 
@@ -146,6 +171,10 @@ describe('AssessmentPage', () => {
       // Page has a containing div
       expect(container.firstChild).toBeInstanceOf(HTMLDivElement);
 
+      // Has header and main sections
+      expect(container.querySelector('header')).toBeInTheDocument();
+      expect(container.querySelector('main')).toBeInTheDocument();
+
       // Has nested structure for content
       expect(container.querySelector('.max-w-7xl')).toBeInTheDocument();
     });
@@ -153,9 +182,6 @@ describe('AssessmentPage', () => {
 });
 
 describe('AssessmentPage Integration', () => {
-  // These tests verify the page works correctly with the actual Quiz component
-  // In a real scenario, you'd use the actual component for integration tests
-
   it('renders without crashing', () => {
     expect(() => render(<AssessmentPage />)).not.toThrow();
   });
@@ -169,7 +195,8 @@ describe('AssessmentPage Integration', () => {
     // Should have centered content
     expect(container.querySelector('.mx-auto')).toBeInTheDocument();
 
-    // Should have text-center for header
-    expect(container.querySelector('.text-center')).toBeInTheDocument();
+    // Should have header and main semantic elements
+    expect(container.querySelector('header')).toBeInTheDocument();
+    expect(container.querySelector('main')).toBeInTheDocument();
   });
 });

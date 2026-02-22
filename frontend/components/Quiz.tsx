@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin, Zap, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin, Zap, RefreshCw, AlertCircle, X } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import MasteryIndicator from './MasteryIndicator';
 import PostQuizRecommendations from './PostQuizRecommendations';
@@ -195,6 +195,17 @@ export default function Quiz() {
     useEffect(() => {
         loadMasteryFromBackend();
     }, [loadMasteryFromBackend]);
+
+    // Close results modal on Escape key
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && showResults) {
+                handleRetry();
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [showResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Update local mastery display when topic changes
     useEffect(() => {
@@ -693,8 +704,16 @@ export default function Quiz() {
 
             {/* Results Modal */}
             {showResults && quiz && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl transform animate-in fade-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={handleRetry}>
+                    <div className="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl transform animate-in fade-in zoom-in duration-300 max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+                        {/* Close button */}
+                        <button
+                            onClick={handleRetry}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                            aria-label="Close results"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
                         {/* Score Circle */}
                         <div className="relative w-36 h-36 mx-auto mb-6">
                             <svg className="w-full h-full transform -rotate-90">
