@@ -110,6 +110,8 @@ class OpenSearchRetriever:
             chunks: List of chunk dicts with 'text' and metadata
             show_progress: Show progress bar
         """
+        assert self.client is not None, "Not connected. Call connect() first."
+
         if not chunks:
             logger.warning("No chunks to index")
             return
