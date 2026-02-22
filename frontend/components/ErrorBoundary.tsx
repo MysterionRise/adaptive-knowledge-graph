@@ -151,20 +151,4 @@ export function ErrorFallback({ error, onRetry }: ErrorFallbackProps) {
   );
 }
 
-/**
- * Higher-order component to wrap any component with error boundary.
- */
-export function withErrorBoundary<P extends object>(
-  WrappedComponent: React.ComponentType<P>,
-  fallback?: ReactNode
-) {
-  return function WithErrorBoundaryWrapper(props: P) {
-    return (
-      <ErrorBoundary fallback={fallback}>
-        <WrappedComponent {...props} />
-      </ErrorBoundary>
-    );
-  };
-}
-
 export default ErrorBoundary;

@@ -46,7 +46,7 @@ export default function Home() {
         setError(null);
       } catch (err) {
         console.error('Error fetching stats:', err);
-        setError('Unable to load statistics. Using demo data.');
+        setError('Unable to load statistics. Please ensure the backend is running.');
       } finally {
         setIsLoading(false);
       }
@@ -61,15 +61,7 @@ export default function Home() {
         }
       } catch (err) {
         console.error('Error fetching top concepts:', err);
-        // Use fallback concepts
-        setTopConcepts([
-          'American Revolution',
-          'Constitution',
-          'Civil War',
-          'Reconstruction',
-          'Industrialization',
-          'World War II',
-        ]);
+        setTopConcepts([]);
       }
     };
 

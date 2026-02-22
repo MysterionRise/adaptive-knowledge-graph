@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ErrorBoundary, ErrorFallback, withErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary, ErrorFallback } from '@/components/ErrorBoundary';
 
 // Component that throws an error
 const ThrowingComponent = ({ shouldThrow = true }: { shouldThrow?: boolean }) => {
@@ -272,55 +272,6 @@ describe('ErrorFallback', () => {
     const svg = container.querySelector('svg');
     expect(svg).toBeInTheDocument();
     expect(svg).toHaveClass('text-red-500');
-  });
-});
-
-describe('withErrorBoundary HOC', () => {
-  it('wraps component with error boundary', () => {
-    const SimpleComponent = () => <div>Simple content</div>;
-    const WrappedComponent = withErrorBoundary(SimpleComponent);
-
-    render(<WrappedComponent />);
-
-    expect(screen.getByText('Simple content')).toBeInTheDocument();
-  });
-
-  it('catches errors in wrapped component', () => {
-    const WrappedComponent = withErrorBoundary(ThrowingComponent);
-
-    render(<WrappedComponent />);
-
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-  });
-
-  it('uses custom fallback when provided', () => {
-    const WrappedComponent = withErrorBoundary(
-      ThrowingComponent,
-      <div>HOC custom fallback</div>
-    );
-
-    render(<WrappedComponent />);
-
-    expect(screen.getByText('HOC custom fallback')).toBeInTheDocument();
-  });
-
-  it('passes props to wrapped component', () => {
-    const PropsComponent = ({ name }: { name: string }) => <div>Hello, {name}</div>;
-    const WrappedComponent = withErrorBoundary(PropsComponent);
-
-    render(<WrappedComponent name="World" />);
-
-    expect(screen.getByText('Hello, World')).toBeInTheDocument();
-  });
-
-  it('preserves component display name', () => {
-    const NamedComponent = () => <div>Named</div>;
-    NamedComponent.displayName = 'NamedComponent';
-
-    const WrappedComponent = withErrorBoundary(NamedComponent);
-
-    // The wrapper function name contains the original component info
-    expect(WrappedComponent.name).toBe('WithErrorBoundaryWrapper');
   });
 });
 

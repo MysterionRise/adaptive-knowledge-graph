@@ -56,25 +56,14 @@ class ApiClient {
 
   /**
    * Get graph statistics (concept count, module count, relationship count).
-   * Falls back to mock data if the API is unavailable.
    *
    * @param subject - Subject ID (e.g., 'us_history', 'biology')
    */
   async getGraphStats(subject?: string): Promise<GraphStats> {
-    try {
-      const response = await this.client.get<GraphStats>(`${this.apiPrefix}/graph/stats`, {
-        params: subject ? { subject } : undefined,
-      });
-      return response.data;
-    } catch (error) {
-      console.warn('Failed to fetch graph stats, using mock data:', error);
-      // Return mock data as fallback
-      return {
-        concept_count: 450,
-        module_count: 47,
-        relationship_count: 892,
-      };
-    }
+    const response = await this.client.get<GraphStats>(`${this.apiPrefix}/graph/stats`, {
+      params: subject ? { subject } : undefined,
+    });
+    return response.data;
   }
 
   /**
@@ -107,19 +96,10 @@ class ApiClient {
    * @returns Graph data with nodes and edges
    */
   async getGraphData(limit: number = 100, subject?: string): Promise<GraphData> {
-    try {
-      const response = await this.client.get<GraphData>(`${this.apiPrefix}/graph/data`, {
-        params: { limit, ...(subject && { subject }) },
-      });
-      return response.data;
-    } catch (error) {
-      console.warn('Failed to fetch graph data:', error);
-      // Return empty graph as fallback
-      return {
-        nodes: [],
-        edges: [],
-      };
-    }
+    const response = await this.client.get<GraphData>(`${this.apiPrefix}/graph/data`, {
+      params: { limit, ...(subject && { subject }) },
+    });
+    return response.data;
   }
 
   /**
@@ -172,22 +152,8 @@ class ApiClient {
    * @returns List of subjects with default subject indicated
    */
   async getSubjects(): Promise<SubjectListResponse> {
-    try {
-      const response = await this.client.get<SubjectListResponse>(`${this.apiPrefix}/subjects`);
-      return response.data;
-    } catch (error) {
-      console.warn('Failed to fetch subjects:', error);
-      // Return fallback with default subject
-      return {
-        subjects: [
-          { id: 'us_history', name: 'US History', description: 'American History from colonial times to modern era', is_default: true },
-          { id: 'biology', name: 'Biology', description: 'Comprehensive biology covering cellular to ecosystem levels', is_default: false },
-          { id: 'economics', name: 'Economics', description: 'Principles of economics covering micro and macroeconomics', is_default: false },
-          { id: 'world_history', name: 'World History', description: 'World history from ancient civilizations to the modern era', is_default: false },
-        ],
-        default_subject: 'us_history',
-      };
-    }
+    const response = await this.client.get<SubjectListResponse>(`${this.apiPrefix}/subjects`);
+    return response.data;
   }
 
   /**
@@ -197,22 +163,10 @@ class ApiClient {
    * @returns Theme configuration with colors
    */
   async getSubjectTheme(subjectId: string): Promise<SubjectTheme> {
-    try {
-      const response = await this.client.get<SubjectTheme>(
-        `${this.apiPrefix}/subjects/${subjectId}/theme`
-      );
-      return response.data;
-    } catch (error) {
-      console.warn(`Failed to fetch theme for ${subjectId}:`, error);
-      // Return default theme
-      return {
-        subject_id: subjectId,
-        primary_color: '#6366f1',
-        secondary_color: '#e0e7ff',
-        accent_color: '#4f46e5',
-        chapter_colors: { default: '#6366f1' },
-      };
-    }
+    const response = await this.client.get<SubjectTheme>(
+      `${this.apiPrefix}/subjects/${subjectId}/theme`
+    );
+    return response.data;
   }
 
   /**

@@ -34,11 +34,6 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
-// Mock the Skeleton component
-jest.mock('@/components/Skeleton', () => ({
-  ChatMessageSkeleton: () => <div data-testid="chat-skeleton">Loading...</div>,
-}));
-
 // Mock SubjectPicker
 jest.mock('@/components/SubjectPicker', () => {
   return function MockSubjectPicker() {

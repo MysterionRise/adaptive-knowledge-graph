@@ -49,13 +49,10 @@ describe('ApiClient', () => {
       expect(stats).toEqual(mockStats);
     });
 
-    it('should fallback to mock data on error', async () => {
+    it('should propagate error when API fails', async () => {
       mockGet.mockRejectedValue(new Error('Network error'));
 
-      const stats = await client.getGraphStats();
-      expect(stats).toHaveProperty('concept_count');
-      expect(stats).toHaveProperty('module_count');
-      expect(stats).toHaveProperty('relationship_count');
+      await expect(client.getGraphStats()).rejects.toThrow('Network error');
     });
   });
 

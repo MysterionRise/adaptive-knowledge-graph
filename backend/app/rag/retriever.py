@@ -190,6 +190,10 @@ class OpenSearchRetriever:
         """
         Retrieve relevant chunks for a query.
 
+        Supports two modes via settings.retrieval_mode:
+        - "knn": Vector-only search (original behavior)
+        - "hybrid": BM25 text search + kNN vector search with reciprocal rank fusion
+
         Args:
             query: Query text
             top_k: Number of results to return
@@ -200,10 +204,19 @@ class OpenSearchRetriever:
         """
         top_k = top_k or settings.rag_retrieval_top_k
 
-        # Encode query
+        if settings.retrieval_mode == "hybrid":
+            return self._retrieve_hybrid(query, top_k, filter_dict)
+        return self._retrieve_knn(query, top_k, filter_dict)
+
+    def _retrieve_knn(
+        self,
+        query: str,
+        top_k: int,
+        filter_dict: dict | None = None,
+    ) -> list[dict]:
+        """Retrieve using kNN vector search only."""
         query_embedding = self.embedding_model.encode_query(query)
 
-        # Build kNN search query
         knn_clause: dict = {
             "knn": {
                 "embedding": {
@@ -213,7 +226,6 @@ class OpenSearchRetriever:
             }
         }
 
-        # Add filters if provided
         if filter_dict:
             query_clause: dict = {
                 "bool": {
@@ -226,11 +238,115 @@ class OpenSearchRetriever:
 
         search_body: dict = {"size": top_k, "query": query_clause}
 
-        # Search OpenSearch
         assert self.client is not None, "Not connected. Call connect() first."
         results: dict = self.client.search(index=self.index_name, body=search_body)
 
-        # Format results
+        return self._format_results(results, "knn")
+
+    def _retrieve_hybrid(
+        self,
+        query: str,
+        top_k: int,
+        filter_dict: dict | None = None,
+    ) -> list[dict]:
+        """
+        Retrieve using BM25 + kNN with reciprocal rank fusion.
+
+        Runs both a BM25 text search and a kNN vector search, then merges
+        results using RRF for better diversity and relevance.
+        """
+        query_embedding = self.embedding_model.encode_query(query)
+        assert self.client is not None, "Not connected. Call connect() first."
+
+        # kNN vector search
+        knn_clause: dict = {
+            "knn": {
+                "embedding": {
+                    "vector": query_embedding,
+                    "k": top_k,
+                }
+            }
+        }
+        knn_query: dict = {"size": top_k, "query": knn_clause}
+        if filter_dict:
+            knn_query["query"] = {"bool": {"must": [knn_clause], "filter": [{"term": filter_dict}]}}
+        knn_results: dict = self.client.search(index=self.index_name, body=knn_query)
+
+        # BM25 text search
+        bm25_clause: dict = {
+            "multi_match": {
+                "query": query,
+                "fields": ["text^3", "module_title^2", "section", "key_terms^2"],
+                "type": "best_fields",
+                "fuzziness": "AUTO",
+            }
+        }
+        bm25_query: dict = {"size": top_k, "query": bm25_clause}
+        if filter_dict:
+            bm25_query["query"] = {
+                "bool": {"must": [bm25_clause], "filter": [{"term": filter_dict}]}
+            }
+        bm25_results: dict = self.client.search(index=self.index_name, body=bm25_query)
+
+        # Reciprocal rank fusion
+        merged = self._reciprocal_rank_fusion(
+            knn_hits=knn_results["hits"]["hits"],
+            bm25_hits=bm25_results["hits"]["hits"],
+            k=60,
+            top_k=top_k,
+        )
+
+        logger.info(
+            f"Hybrid retrieval: kNN={len(knn_results['hits']['hits'])}, "
+            f"BM25={len(bm25_results['hits']['hits'])}, merged={len(merged)} "
+            f"for query: '{query[:50]}...'"
+        )
+        return merged
+
+    def _reciprocal_rank_fusion(
+        self,
+        knn_hits: list[dict],
+        bm25_hits: list[dict],
+        k: int = 60,
+        top_k: int = 20,
+    ) -> list[dict]:
+        """Combine kNN and BM25 results using reciprocal rank fusion."""
+        scores: dict[str, float] = {}
+        chunk_data: dict[str, dict] = {}
+
+        for rank, hit in enumerate(knn_hits, start=1):
+            doc_id = hit["_id"]
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+            if doc_id not in chunk_data:
+                chunk_data[doc_id] = hit
+
+        for rank, hit in enumerate(bm25_hits, start=1):
+            doc_id = hit["_id"]
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+            if doc_id not in chunk_data:
+                chunk_data[doc_id] = hit
+
+        sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+
+        merged = []
+        for doc_id in sorted_ids[:top_k]:
+            hit = chunk_data[doc_id]
+            chunk = {
+                "text": hit["_source"]["text"],
+                "score": scores[doc_id],
+                "id": hit["_source"].get("id"),
+                "module_id": hit["_source"].get("module_id"),
+                "module_title": hit["_source"].get("module_title"),
+                "section": hit["_source"].get("section"),
+                "key_terms": hit["_source"].get("key_terms", []),
+                "attribution": hit["_source"].get("attribution"),
+            }
+            merged.append(chunk)
+
+        return merged
+
+    def _format_results(self, results: dict, mode: str) -> list[dict]:
+        """Format OpenSearch results into standard chunk dicts."""
         retrieved = []
         for hit in results["hits"]["hits"]:
             chunk = {
@@ -245,7 +361,7 @@ class OpenSearchRetriever:
             }
             retrieved.append(chunk)
 
-        logger.info(f"Retrieved {len(retrieved)} chunks for query: '{query[:50]}...'")
+        logger.info(f"Retrieved {len(retrieved)} chunks ({mode})")
         return retrieved
 
     def get_collection_info(self) -> dict:

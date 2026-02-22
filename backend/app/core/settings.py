@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     rag_kg_expansion: bool = True
     rag_kg_expansion_hops: int = 1
 
+    # Retrieval mode for OpenSearch: "knn" (vector only) or "hybrid" (BM25 + kNN with RRF)
+    retrieval_mode: Literal["knn", "hybrid"] = "hybrid"
+
     # Enterprise RAG: Vector Backend
     # "opensearch" = original behavior (OpenSearch kNN)
     # "neo4j" = Neo4j native vector index

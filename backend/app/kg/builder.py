@@ -5,6 +5,7 @@ Extracts concepts from text and builds the knowledge graph structure.
 Uses NLP techniques for concept extraction and relationship mining.
 """
 
+import re
 from collections import Counter
 
 import networkx as nx
@@ -18,6 +19,102 @@ from backend.app.kg.schema import (
     Relationship,
     RelationshipType,
 )
+
+# Structural/metadata terms from OpenStax HTML that are not educational concepts
+STOP_CONCEPTS: set[str] = {
+    "data-type",
+    "cnx",
+    "cnx-pi",
+    "review questions",
+    "critical thinking",
+    "critical thinking questions",
+    "self-check questions",
+    "thinking questions",
+    "key terms",
+    "summary",
+    "references",
+    "title",
+    "class",
+    "section",
+    "chapter",
+    "introduction",
+    "conclusion",
+    "learning objectives",
+    "figure",
+    "table",
+    "link",
+    "image",
+    "eoc",
+    "eob",
+    "data type",
+    "os-teacher",
+    "os-embed",
+    "check-understanding",
+    "module",
+    "content",
+    "term",
+    "page",
+    "note",
+    "exercise",
+    "problem",
+    "solution",
+    "abstract",
+    "metadata",
+    "glossary",
+    "index",
+    "appendix",
+    "preface",
+    "answer key",
+    "suggested reading",
+    "further reading",
+    "review",
+    "practice",
+    "end-of-chapter",
+    "end-of-module",
+}
+
+# Regex patterns for extracting prerequisite relationships from educational text
+PREREQ_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"requires? (?:an? )?understanding of (.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(r"builds? (?:on|upon) (.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(r"prerequisite.{0,20}(.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(r"before (?:studying|learning|understanding) (.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(r"assumes? (?:knowledge|familiarity) (?:of|with) (.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(
+        r"(?:following|after) .{0,30}(?:chapter|section|module) on (.+?)(?:\.|,|;)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"led to (.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(r"resulted in (.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(r"paved the way for (.+?)(?:\.|,|;)", re.IGNORECASE),
+    re.compile(r"was a precursor to (.+?)(?:\.|,|;)", re.IGNORECASE),
+]
+
+
+def _is_stop_concept(name: str) -> bool:
+    """Check if a concept name is a structural/metadata term that should be filtered."""
+    return name.lower().strip() in STOP_CONCEPTS
+
+
+def _deduplicate_concepts(concepts: list[str]) -> list[str]:
+    """
+    Semantic deduplication via substring containment.
+
+    If concept A is a substring of concept B and both exist, drop A.
+    E.g., "United" + "United States" -> keep only "United States".
+    """
+    # Sort by length descending so longer (more specific) concepts come first
+    sorted_concepts = sorted(concepts, key=len, reverse=True)
+    kept: list[str] = []
+
+    for concept in sorted_concepts:
+        concept_lower = concept.lower()
+        # Check if this concept is a substring of any already-kept concept
+        is_substring = any(concept_lower in k.lower() and concept_lower != k.lower() for k in kept)
+        if not is_substring:
+            kept.append(concept)
+
+    return kept
 
 
 class KGBuilder:
@@ -42,19 +139,6 @@ class KGBuilder:
             features=None,
         )
 
-        # Common prerequisite/causality patterns (History/Political Science focus)
-        self.prereq_patterns = [
-            (r"before understanding (\w+)", "prereq"),
-            (r"requires knowledge of (\w+)", "prereq"),
-            (r"builds on (\w+)", "prereq"),
-            (r"depends on (\w+)", "prereq"),
-            (r"led to (\w+)", "causality"),
-            (r"caused (\w+)", "causality"),
-            (r"resulted in (\w+)", "causality"),
-            (r"influenced (\w+)", "causality"),
-            (r"triggered (\w+)", "causality"),
-        ]
-
     def extract_concepts_from_text(self, text: str, key_terms: list[str]) -> list[str]:
         """
         Extract concept names from text.
@@ -71,7 +155,7 @@ class KGBuilder:
         # Add key terms (highest priority)
         for term in key_terms:
             term_clean = term.strip().title()
-            if term_clean:
+            if term_clean and len(term_clean) >= 3 and not _is_stop_concept(term_clean):
                 concepts.add(term_clean)
 
         # Extract keywords using YAKE
@@ -83,12 +167,14 @@ class KGBuilder:
                 if (
                     len(keyword_clean.split()) <= 4  # Max 4 words
                     and len(keyword_clean) >= 3  # Min 3 chars
+                    and not _is_stop_concept(keyword_clean)  # Not a stop concept
                 ):
                     concepts.add(keyword_clean)
         except Exception as e:
             logger.warning(f"YAKE extraction failed: {e}")
 
-        return list(concepts)
+        # Deduplicate: remove substrings of longer concepts
+        return _deduplicate_concepts(list(concepts))
 
     def build_from_records(self, records: list[dict]) -> KnowledgeGraph:
         """
@@ -103,7 +189,7 @@ class KGBuilder:
         logger.info(f"Building KG from {len(records)} records")
 
         # Group records by module
-        modules_data = {}
+        modules_data: dict[str, dict] = {}
         for record in records:
             module_id = record["module_id"]
             if module_id not in modules_data:
@@ -138,9 +224,15 @@ class KGBuilder:
                     concept_to_modules[concept] = []
                 concept_to_modules[concept].append(module_id)
 
-        # Step 3: Keep top N concepts
-        top_concepts = [c for c, _ in all_concepts.most_common(self.max_concepts)]
-        logger.info(f"Extracted {len(top_concepts)} top concepts")
+        # Step 3: Deduplicate across all modules before selecting top N
+        all_concept_names = _deduplicate_concepts(list(all_concepts.keys()))
+        # Re-rank after dedup, keeping original counts
+        deduped_counts: Counter[str] = Counter()
+        for name in all_concept_names:
+            deduped_counts[name] = all_concepts[name]
+
+        top_concepts = [c for c, _ in deduped_counts.most_common(self.max_concepts)]
+        logger.info(f"Extracted {len(top_concepts)} top concepts (after dedup and filtering)")
 
         # Step 4: Create concept nodes
         for concept_name in top_concepts:
@@ -171,10 +263,13 @@ class KGBuilder:
                         )
                     )
 
-        # Step 6: Mine concept relationships (co-occurrence based)
+        # Step 6: Mine concept relationships (co-occurrence based, threshold=5)
         self._mine_concept_relationships(records, top_concepts)
 
-        # Step 7: Compute importance scores
+        # Step 7: Extract prerequisite relationships from text
+        self._extract_prereq_relationships(records, top_concepts)
+
+        # Step 8: Compute importance scores
         self._compute_importance_scores()
 
         logger.success(f"✓ KG built: {self.kg.get_stats()}")
@@ -205,7 +300,7 @@ class KGBuilder:
                     cooccurrence[pair] += 1
 
         # Create RELATED relationships for strong co-occurrences
-        threshold = 2  # Appear together at least 2 times
+        threshold = 5  # Appear together at least 5 times (raised from 2)
         for (c1, c2), count in cooccurrence.items():
             if count >= threshold:
                 weight = min(count / 10.0, 1.0)  # Normalize to 0-1
@@ -220,9 +315,72 @@ class KGBuilder:
                     )
                 )
 
-        logger.info(
-            f"Mined {len([r for r in self.kg.relationships if r.type == RelationshipType.RELATED])} RELATED relationships"
+        related_count = len(
+            [r for r in self.kg.relationships if r.type == RelationshipType.RELATED]
         )
+        logger.info(f"Mined {related_count} RELATED relationships (threshold={threshold})")
+
+    def _extract_prereq_relationships(self, records: list[dict], concepts: list[str]):
+        """
+        Extract prerequisite relationships from text using regex patterns.
+
+        Looks for language like "requires understanding of X", "builds on Y",
+        "led to Z" and creates PREREQ edges when matched concepts are found.
+
+        Args:
+            records: Data records
+            concepts: List of concept names
+        """
+        concept_lookup = {c.lower(): c for c in concepts}
+        prereq_count = 0
+
+        for record in records:
+            text = record["text"]
+
+            for pattern in PREREQ_PATTERNS:
+                for match in pattern.finditer(text):
+                    matched_text = match.group(1).strip().lower()
+
+                    # Try to find a matching concept
+                    target_concept = self._match_text_to_concept(matched_text, concept_lookup)
+                    if not target_concept:
+                        continue
+
+                    # Find the source concept: look for concepts mentioned earlier in the text
+                    text_before = text[: match.start()].lower()
+                    source_concept = None
+                    for c_lower, c_name in concept_lookup.items():
+                        if c_lower in text_before and c_name != target_concept:
+                            source_concept = c_name
+                            break
+
+                    if source_concept and source_concept != target_concept:
+                        self.kg.add_relationship(
+                            Relationship(
+                                source=source_concept,
+                                target=target_concept,
+                                type=RelationshipType.PREREQ,
+                                weight=0.8,
+                                confidence=0.6,
+                                evidence=text[max(0, match.start() - 50) : match.end() + 20],
+                            )
+                        )
+                        prereq_count += 1
+
+        logger.info(f"Extracted {prereq_count} PREREQ relationships from text patterns")
+
+    def _match_text_to_concept(self, text: str, concept_lookup: dict[str, str]) -> str | None:
+        """Match extracted text to a known concept."""
+        # Exact match
+        if text in concept_lookup:
+            return concept_lookup[text]
+
+        # Check if any concept is contained in the matched text
+        for c_lower, c_name in concept_lookup.items():
+            if c_lower in text or text in c_lower:
+                return c_name
+
+        return None
 
     def _compute_importance_scores(self):
         """Compute importance scores for concepts using PageRank-like algorithm."""
@@ -233,9 +391,9 @@ class KGBuilder:
         for concept_name in self.kg.concepts:
             G.add_node(concept_name)
 
-        # Add edges
+        # Add edges (include both RELATED and PREREQ)
         for rel in self.kg.relationships:
-            if rel.type == RelationshipType.RELATED:
+            if rel.type in (RelationshipType.RELATED, RelationshipType.PREREQ):
                 G.add_edge(rel.source, rel.target, weight=rel.weight)
 
         # Compute PageRank
