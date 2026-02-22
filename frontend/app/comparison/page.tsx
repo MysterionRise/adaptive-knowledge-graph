@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import type { QuestionResponse } from '@/lib/types';
-import { ArrowLeft, Loader2, Network, Sparkles } from 'lucide-react';
+import { ArrowLeft, Loader2, Network, Sparkles, AlertCircle } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
+import SubjectPicker from '@/components/SubjectPicker';
 
 export default function ComparisonPage() {
   const router = useRouter();
@@ -12,6 +14,8 @@ export default function ComparisonPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [withKG, setWithKG] = useState<QuestionResponse | null>(null);
   const [withoutKG, setWithoutKG] = useState<QuestionResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { currentSubject } = useAppStore();
 
   const handleCompare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,6 +24,7 @@ export default function ComparisonPage() {
     setIsLoading(true);
     setWithKG(null);
     setWithoutKG(null);
+    setError(null);
 
     try {
       // Fetch both responses in parallel
@@ -28,51 +33,72 @@ export default function ComparisonPage() {
           question,
           use_kg_expansion: true,
           top_k: 5,
-        }),
+        }, currentSubject),
         apiClient.askQuestion({
           question,
           use_kg_expansion: false,
           top_k: 5,
-        }),
+        }, currentSubject),
       ]);
 
       setWithKG(responseWithKG);
       setWithoutKG(responseWithoutKG);
-    } catch (error: any) {
-      console.error('Error comparing responses:', error);
-      alert(`Error: ${error.detail || 'Failed to get responses'}`);
+    } catch (err: any) {
+      console.error('Error comparing responses:', err);
+      setError(err.detail || 'Failed to get responses. Please ensure the backend is running.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const exampleQuestions = [
-    'What caused the American Revolution?',
-    'Explain the significance of the Constitution',
-    'How did the Civil War affect society?',
-  ];
+  const SUBJECT_EXAMPLES: Record<string, string[]> = {
+    us_history: [
+      'What caused the American Revolution?',
+      'Explain the significance of the Constitution',
+      'How did the Civil War affect society?',
+    ],
+    economics: [
+      'How do supply and demand determine prices?',
+      'What is the role of the Federal Reserve?',
+      'Explain the causes of inflation',
+    ],
+    biology: [
+      'What is the process of photosynthesis?',
+      'How does DNA replication work?',
+      'Explain natural selection and evolution',
+    ],
+    world_history: [
+      'What caused the fall of the Roman Empire?',
+      'Explain the impact of the Renaissance',
+      'How did colonialism shape the modern world?',
+    ],
+  };
+  const exampleQuestions = SUBJECT_EXAMPLES[currentSubject] || SUBJECT_EXAMPLES.us_history;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/')}
-              className="text-gray-600 hover:text-gray-900"
-              aria-label="Back to home"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                KG-RAG vs Regular RAG Comparison
-              </h1>
-              <p className="mt-2 text-gray-600">
-                See how knowledge graph expansion improves answer quality
-              </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push('/')}
+                className="text-gray-600 hover:text-gray-900"
+                aria-label="Back to home"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  KG-RAG vs Regular RAG Comparison
+                </h1>
+                <p className="mt-2 text-gray-600">
+                  See how knowledge graph expansion improves answer quality
+                </p>
+              </div>
             </div>
+            <SubjectPicker />
           </div>
         </div>
       </header>
@@ -136,6 +162,14 @@ export default function ComparisonPage() {
             </button>
           </form>
         </div>
+
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
 
         {/* Comparison Results */}
         {(withKG || withoutKG) && (
@@ -264,7 +298,7 @@ function ComparisonResult({ response, showKGInfo }: ComparisonResultProps) {
         <div>
           <p className="text-xs text-gray-600">Concepts Used</p>
           <p className="text-lg font-semibold text-gray-900">
-            {response.expanded_concepts?.length || 1}
+            {response.expanded_concepts?.length || 0}
           </p>
         </div>
       </div>
@@ -274,7 +308,7 @@ function ComparisonResult({ response, showKGInfo }: ComparisonResultProps) {
         <div className="pt-2">
           <p className="text-xs text-gray-600">
             Based on {response.sources.length} source
-            {response.sources.length > 1 ? 's' : ''} from OpenStax US History
+            {response.sources.length > 1 ? 's' : ''} from the knowledge base
           </p>
         </div>
       )}

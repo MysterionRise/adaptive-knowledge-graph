@@ -207,21 +207,16 @@ describe('Quiz Component', () => {
     it('handles generation error gracefully', async () => {
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
-      // Mock alert
-      const alertMock = jest.spyOn(window, 'alert').mockImplementation(() => {});
-
       render(<Quiz />);
 
       const startButton = screen.getByText('Start Adaptive Assessment');
       fireEvent.click(startButton);
 
       await waitFor(() => {
-        expect(alertMock).toHaveBeenCalledWith(
-          'Failed to generate quiz. Ensure backend is running.'
-        );
+        expect(
+          screen.getByText('Failed to generate quiz. Please ensure the backend is running.')
+        ).toBeInTheDocument();
       });
-
-      alertMock.mockRestore();
     });
   });
 
@@ -602,23 +597,19 @@ describe('Quiz Component', () => {
   });
 
   describe('Profile Reset', () => {
-    it('calls reset API and shows alert', async () => {
+    it('calls reset API and shows inline notice', async () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ message: 'Reset successful' }),
       });
-
-      const alertMock = jest.spyOn(window, 'alert').mockImplementation(() => {});
 
       render(<Quiz />);
 
       fireEvent.click(screen.getByText('Reset Profile (Demo)'));
 
       await waitFor(() => {
-        expect(alertMock).toHaveBeenCalledWith('Profile reset to initial state');
+        expect(screen.getByText('Profile reset to initial state')).toBeInTheDocument();
       });
-
-      alertMock.mockRestore();
     });
   });
 });

@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin, Zap, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin, Zap, RefreshCw, AlertCircle } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import MasteryIndicator from './MasteryIndicator';
 import PostQuizRecommendations from './PostQuizRecommendations';
+import LearningPath from './LearningPath';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const API_PREFIX = '/api/v1';
@@ -156,6 +157,10 @@ export default function Quiz() {
     const [recsLoading, setRecsLoading] = useState(false);
     const [recsError, setRecsError] = useState<string | null>(null);
 
+    // Inline error/notice state (replaces alert())
+    const [formError, setFormError] = useState<string | null>(null);
+    const [resetNotice, setResetNotice] = useState(false);
+
     // Get mastery tracking from store
     const {
         updateMastery,
@@ -195,9 +200,10 @@ export default function Quiz() {
     const handleStartQuiz = async () => {
         const effectiveTopic = topic === '__custom__' ? customTopic.trim() : topic;
         if (!effectiveTopic) {
-            alert('Please enter a topic.');
+            setFormError('Please enter a topic.');
             return;
         }
+        setFormError(null);
         setActiveTopic(effectiveTopic);
         setIsLoading(true);
         try {
@@ -242,7 +248,7 @@ export default function Quiz() {
             setSelectedOption(null);
         } catch (error) {
             console.error("Failed to generate quiz", error);
-            alert("Failed to generate quiz. Ensure backend is running.");
+            setFormError("Failed to generate quiz. Please ensure the backend is running.");
         } finally {
             setIsLoading(false);
         }
@@ -340,13 +346,15 @@ export default function Quiz() {
         setQuestionResults([]);
         setRecommendations(null);
         setRecsError(null);
+        setFormError(null);
     };
 
     const handleResetProfile = async () => {
         await resetMasteryOnBackend();
         setCurrentMastery(0.3);
         setTargetDifficulty('easy');
-        alert('Profile reset to initial state');
+        setResetNotice(true);
+        setTimeout(() => setResetNotice(false), 3000);
     };
 
     const handleViewLearningPath = () => {
@@ -485,6 +493,20 @@ export default function Quiz() {
                             topic={topic}
                             showAdaptingMessage={true}
                         />
+                    </div>
+                )}
+
+                {/* Error/Notice Banners */}
+                {formError && (
+                    <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-md flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        <p className="text-sm text-red-700">{formError}</p>
+                    </div>
+                )}
+                {resetNotice && (
+                    <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-md flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        <p className="text-sm text-green-700">Profile reset to initial state</p>
                     </div>
                 )}
 
@@ -782,6 +804,14 @@ export default function Quiz() {
                             onPractice={handlePracticeConcept}
                             onAskTutor={handleAskTutor}
                         />
+
+                        {/* Learning Path */}
+                        <div className="mt-6 border-t border-gray-200 pt-6">
+                            <LearningPath
+                                conceptName={activeTopic}
+                                onConceptClick={(name) => handleAskTutor(name)}
+                            />
+                        </div>
                     </div>
                 </div>
             )}

@@ -48,10 +48,7 @@ export default function GraphPage() {
         setError(null);
       } catch (err: any) {
         console.error('Error fetching graph data:', err);
-        setError(err.detail || 'Failed to load graph data. Showing demo data.');
-        // Fallback to mock data from API client
-        const mockData = await apiClient.getGraphData(100, currentSubject);
-        setGraphData(mockData);
+        setError(err.detail || 'Failed to load graph data. Please ensure the backend is running.');
       } finally {
         setIsLoading(false);
       }
