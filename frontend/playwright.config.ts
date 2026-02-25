@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
+  globalSetup: './tests/integration/global-setup.ts',
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -29,6 +30,15 @@ export default defineConfig({
     {
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
+    },
+    {
+      name: 'integration',
+      testDir: './tests/integration',
+      use: {
+        ...devices['Desktop Chrome'],
+        video: 'retain-on-failure',
+      },
+      timeout: 60_000,
     },
   ],
 

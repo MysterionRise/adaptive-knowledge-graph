@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test lint format type-check clean docker-build docker-up docker-down fetch-data build-kg index-rag run-api run-frontend
+.PHONY: help install install-dev test lint format type-check clean docker-build docker-up docker-down fetch-data build-kg index-rag run-api run-frontend test-integration test-integration-ui
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -101,6 +101,13 @@ dev-setup: install-dev docker-up ## Complete dev environment setup
 	@echo "   - Neo4j: http://localhost:7474 (neo4j/password)"
 	@echo "   - OpenSearch: http://localhost:9200"
 	@echo "   - API will run on: http://localhost:8000"
+
+# Integration tests (requires running infrastructure)
+test-integration: ## Run Playwright integration tests against live services
+	cd frontend && npx playwright test --project=integration
+
+test-integration-ui: ## Run integration tests with Playwright UI
+	cd frontend && npx playwright test --project=integration --ui
 
 # Quick checks before commit
 pre-commit: format lint type-check test ## Run all pre-commit checks
