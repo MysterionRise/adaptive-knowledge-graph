@@ -10,7 +10,15 @@ from collections.abc import AsyncIterator
 
 import aiohttp
 from loguru import logger
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
+from backend.app.core.exceptions import LLMConnectionError, LLMGenerationError
 from backend.app.core.settings import settings
 
 
@@ -65,7 +73,7 @@ class LLMClient:
         else:  # hybrid - try local first, fall back to remote
             try:
                 return await self._generate_ollama(prompt, system_prompt, temperature)
-            except Exception as e:
+            except (LLMConnectionError, LLMGenerationError) as e:
                 logger.warning(f"Local LLM failed ({e}), falling back to remote")
                 return await self._generate_openrouter(
                     prompt, system_prompt, temperature, max_tokens
@@ -98,7 +106,7 @@ class LLMClient:
             try:
                 async for token in self._stream_ollama(prompt, system_prompt, temperature):
                     yield token
-            except Exception as e:
+            except (LLMConnectionError, LLMGenerationError) as e:
                 logger.warning(f"Local LLM stream failed ({e}), falling back to remote")
                 async for token in self._stream_openrouter(
                     prompt, system_prompt, temperature, max_tokens
@@ -122,16 +130,33 @@ class LLMClient:
             "stream": False,
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, json=payload, timeout=aiohttp.ClientTimeout(total=60)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return str(data.get("response", ""))
-                else:
-                    error_text = await response.text()
-                    raise RuntimeError(f"Ollama API error ({response.status}): {error_text}")
+        @retry(
+            stop=stop_after_attempt(settings.llm_retry_attempts),
+            wait=wait_exponential(min=settings.llm_retry_min_wait, max=settings.llm_retry_max_wait),
+            retry=retry_if_exception_type(LLMConnectionError),
+            before_sleep=before_sleep_log(logger, "WARNING"),  # type: ignore[arg-type]
+            reraise=True,
+        )
+        async def _call() -> str:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        url,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=settings.llm_timeout),
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            return str(data.get("response", ""))
+                        else:
+                            error_text = await response.text()
+                            raise LLMGenerationError(
+                                f"Ollama API error ({response.status}): {error_text}"
+                            )
+            except aiohttp.ClientError as e:
+                raise LLMConnectionError(f"Ollama connection failed: {e}") from e
+
+        return await _call()
 
     async def _stream_ollama(
         self,
@@ -150,27 +175,34 @@ class LLMClient:
             "stream": True,
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, json=payload, timeout=aiohttp.ClientTimeout(total=120)
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise RuntimeError(f"Ollama API error ({response.status}): {error_text}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=settings.llm_stream_timeout),
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise LLMGenerationError(
+                            f"Ollama API error ({response.status}): {error_text}"
+                        )
 
-                async for line in response.content:
-                    line_text = line.decode("utf-8").strip()
-                    if not line_text:
-                        continue
-                    try:
-                        data = json.loads(line_text)
-                        token = data.get("response", "")
-                        if token:
-                            yield token
-                        if data.get("done", False):
-                            break
-                    except json.JSONDecodeError:
-                        continue
+                    async for line in response.content:
+                        line_text = line.decode("utf-8").strip()
+                        if not line_text:
+                            continue
+                        try:
+                            data = json.loads(line_text)
+                            token = data.get("response", "")
+                            if token:
+                                yield token
+                            if data.get("done", False):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+        except aiohttp.ClientError as e:
+            raise LLMConnectionError(f"Ollama connection failed: {e}") from e
 
     async def _generate_openrouter(
         self,
@@ -181,11 +213,11 @@ class LLMClient:
     ) -> str:
         """Generate using OpenRouter API."""
         if not self.openrouter_api_key:
-            raise RuntimeError("OpenRouter API key not configured")
+            raise LLMGenerationError("OpenRouter API key not configured")
 
         url = f"{self.openrouter_base_url}/chat/completions"
 
-        messages = []
+        messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
@@ -209,20 +241,35 @@ class LLMClient:
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=60),
-                ssl=ssl_context if ssl_context is not None else False,
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return str(data["choices"][0]["message"]["content"])
-                else:
-                    error_text = await response.text()
-                    raise RuntimeError(f"OpenRouter API error ({response.status}): {error_text}")
+        @retry(
+            stop=stop_after_attempt(settings.llm_retry_attempts),
+            wait=wait_exponential(min=settings.llm_retry_min_wait, max=settings.llm_retry_max_wait),
+            retry=retry_if_exception_type(LLMConnectionError),
+            before_sleep=before_sleep_log(logger, "WARNING"),  # type: ignore[arg-type]
+            reraise=True,
+        )
+        async def _call() -> str:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        url,
+                        json=payload,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=settings.llm_timeout),
+                        ssl=ssl_context if ssl_context is not None else False,
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            return str(data["choices"][0]["message"]["content"])
+                        else:
+                            error_text = await response.text()
+                            raise LLMGenerationError(
+                                f"OpenRouter API error ({response.status}): {error_text}"
+                            )
+            except aiohttp.ClientError as e:
+                raise LLMConnectionError(f"OpenRouter connection failed: {e}") from e
+
+        return await _call()
 
     async def _stream_openrouter(
         self,
@@ -233,11 +280,11 @@ class LLMClient:
     ) -> AsyncIterator[str]:
         """Stream tokens from OpenRouter API (SSE)."""
         if not self.openrouter_api_key:
-            raise RuntimeError("OpenRouter API key not configured")
+            raise LLMGenerationError("OpenRouter API key not configured")
 
         url = f"{self.openrouter_base_url}/chat/completions"
 
-        messages = []
+        messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
@@ -261,33 +308,38 @@ class LLMClient:
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=120),
-                ssl=ssl_context if ssl_context is not None else False,
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise RuntimeError(f"OpenRouter API error ({response.status}): {error_text}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=settings.llm_stream_timeout),
+                    ssl=ssl_context if ssl_context is not None else False,
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise LLMGenerationError(
+                            f"OpenRouter API error ({response.status}): {error_text}"
+                        )
 
-                async for line in response.content:
-                    line_text = line.decode("utf-8").strip()
-                    if not line_text or not line_text.startswith("data: "):
-                        continue
-                    data_str = line_text[6:]  # Strip "data: " prefix
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        data = json.loads(data_str)
-                        delta = data.get("choices", [{}])[0].get("delta", {})
-                        token = delta.get("content", "")
-                        if token:
-                            yield token
-                    except json.JSONDecodeError:
-                        continue
+                    async for line in response.content:
+                        line_text = line.decode("utf-8").strip()
+                        if not line_text or not line_text.startswith("data: "):
+                            continue
+                        data_str = line_text[6:]  # Strip "data: " prefix
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            delta = data.get("choices", [{}])[0].get("delta", {})
+                            token = delta.get("content", "")
+                            if token:
+                                yield token
+                        except json.JSONDecodeError:
+                            continue
+        except aiohttp.ClientError as e:
+            raise LLMConnectionError(f"OpenRouter connection failed: {e}") from e
 
     async def answer_question(
         self,

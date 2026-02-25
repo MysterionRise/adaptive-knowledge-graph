@@ -15,11 +15,15 @@ def setup_logging() -> None:
     # Remove default handler
     logger.remove()
 
+    # Set safe default for request_id extra field
+    logger.configure(extra={"request_id": "-"})
+
     # Add console handler with formatting
     logger.add(
         sys.stdout,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
         "<level>{level: <8}</level> | "
+        "rid={extra[request_id]} | "
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
         "<level>{message}</level>",
         level=settings.log_level,
@@ -32,7 +36,9 @@ def setup_logging() -> None:
 
     logger.add(
         log_dir / "error.log",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | "
+        "rid={extra[request_id]} | "
+        "{name}:{function}:{line} - {message}",
         level="ERROR",
         rotation="10 MB",
         retention="1 week",
@@ -44,6 +50,7 @@ def setup_logging() -> None:
         logger.add(
             log_dir / "debug.log",
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | "
+            "rid={extra[request_id]} | "
             "{name}:{function}:{line} - {message}",
             level="DEBUG",
             rotation="50 MB",

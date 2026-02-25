@@ -9,12 +9,13 @@ Supports enterprise patterns:
 
 import json
 
+import aiohttp
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from backend.app.core.exceptions import ContentNotFoundError, LLMGenerationError
+from backend.app.core.exceptions import ContentNotFoundError, LLMConnectionError, LLMGenerationError
 from backend.app.core.rate_limit import limiter
 from backend.app.core.settings import settings
 from backend.app.nlp.llm_client import get_llm_client
@@ -220,9 +221,12 @@ async def ask_question(body: QuestionRequest, request: Request):
 
     except ContentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except LLMGenerationError as e:
+    except (LLMGenerationError, LLMConnectionError) as e:
         logger.error(f"LLM generation failed: {e}")
         raise HTTPException(status_code=503, detail=f"LLM service error: {str(e)}") from e
+    except aiohttp.ClientError as e:
+        logger.error(f"Service connection error: {e}")
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
     except HTTPException:
         raise
     except Exception as e:
@@ -324,6 +328,12 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
         ctx = await _retrieve_context(body)
     except ContentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except (LLMGenerationError, LLMConnectionError) as e:
+        logger.error(f"LLM error in streaming ask retrieval: {e}")
+        raise HTTPException(status_code=503, detail=f"LLM service error: {str(e)}") from e
+    except aiohttp.ClientError as e:
+        logger.error(f"Service connection error in streaming ask retrieval: {e}")
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
     except Exception as e:
         logger.error(f"Error in streaming ask retrieval: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -368,6 +378,9 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
                 system_prompt=subject_config.prompts.system_prompt,
                 context_label=subject_config.prompts.context_label,
             ):
+                if await request.is_disconnected():
+                    logger.info("Client disconnected during streaming")
+                    break
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
         except Exception as e:
             logger.error(f"Streaming LLM error: {e}")

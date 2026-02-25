@@ -21,6 +21,7 @@ from backend.app.api import (
     subjects_router,
 )
 from backend.app.core.logging import setup_logging
+from backend.app.core.middleware import RequestIDMiddleware
 from backend.app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from backend.app.core.settings import settings
 
@@ -105,6 +106,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(RequestIDMiddleware)
 
 
 @app.get("/")

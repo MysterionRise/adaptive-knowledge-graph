@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     llm_local_model: str = "llama3.1:8b-instruct-q4_K_M"
     llm_max_context: int = 8192
     llm_temperature: float = 0.1
+    llm_timeout: int = 60  # Non-streaming timeout (seconds)
+    llm_stream_timeout: int = 120  # Streaming timeout (seconds)
+    llm_retry_attempts: int = 3  # Max retries for non-streaming calls
+    llm_retry_min_wait: float = 1.0  # Min backoff (seconds)
+    llm_retry_max_wait: float = 10.0  # Max backoff (seconds)
 
     # OpenRouter (remote fallback)
     openrouter_api_key: str = ""
