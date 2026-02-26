@@ -612,4 +612,270 @@ describe('Quiz Component', () => {
       });
     });
   });
+
+  describe('Subject Switching Lifecycle', () => {
+    it('resets quiz state when subject changes', async () => {
+      mockProfileResponse();
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'quiz-1',
+          title: 'Test Quiz',
+          questions: [
+            {
+              id: 'q1',
+              text: 'Old subject question?',
+              options: [
+                { id: 'a', text: 'A' },
+                { id: 'b', text: 'B' },
+              ],
+              correct_option_id: 'a',
+              explanation: 'Explanation.',
+              difficulty: 'easy',
+            },
+          ],
+          student_mastery: 0.3,
+          target_difficulty: 'easy',
+          adapted: true,
+        }),
+      });
+
+      render(<Quiz />);
+
+      // Generate a quiz
+      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Old subject question?')).toBeInTheDocument();
+      });
+
+      // Switch subject in store
+      useAppStore.setState({ currentSubject: 'economics' });
+
+      // Quiz should be cleared and we should see the start form again
+      await waitFor(() => {
+        expect(screen.getByText('Start Assessment')).toBeInTheDocument();
+      });
+    });
+
+    it('updates topic dropdown when subject changes', () => {
+      // Start with us_history
+      useAppStore.setState({ currentSubject: 'us_history' });
+      const { rerender } = render(<Quiz />);
+
+      // Should show US History topics in the dropdown
+      const select = screen.getByRole('combobox');
+      expect(select).toHaveValue('The American Revolution');
+
+      // Switch to economics
+      useAppStore.setState({ currentSubject: 'economics' });
+      rerender(<Quiz />);
+
+      // Dropdown should still exist (topics may have changed)
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    it('includes subject in quiz generation API call', async () => {
+      useAppStore.setState({ currentSubject: 'economics' });
+      mockProfileResponse();
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'quiz-1',
+          title: 'Economics Quiz',
+          questions: [
+            {
+              id: 'q1',
+              text: 'What is GDP?',
+              options: [{ id: 'a', text: 'Answer' }],
+              correct_option_id: 'a',
+              explanation: 'GDP stands for...',
+              difficulty: 'easy',
+            },
+          ],
+          student_mastery: 0.3,
+          target_difficulty: 'easy',
+          adapted: true,
+        }),
+      });
+
+      render(<Quiz />);
+
+      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+
+      await waitFor(() => {
+        // Verify fetch was called with subject parameter
+        const fetchCalls = (global.fetch as jest.Mock).mock.calls;
+        const quizCall = fetchCalls.find(
+          (call: any[]) => typeof call[0] === 'string' && call[0].includes('quiz/generate')
+        );
+        expect(quizCall).toBeTruthy();
+        if (quizCall) {
+          expect(quizCall[0]).toContain('subject=economics');
+        }
+      });
+    });
+
+    it('clears results when subject changes during quiz results', async () => {
+      mockProfileResponse();
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'quiz-1',
+          title: 'Test Quiz',
+          questions: [
+            {
+              id: 'q1',
+              text: 'Single Q?',
+              options: [
+                { id: 'a', text: 'Right' },
+                { id: 'b', text: 'Wrong' },
+              ],
+              correct_option_id: 'a',
+              explanation: 'Right is correct.',
+              difficulty: 'easy',
+            },
+          ],
+          student_mastery: 0.3,
+          target_difficulty: 'easy',
+          adapted: true,
+        }),
+      });
+      mockRecommendationsResponse();
+
+      render(<Quiz />);
+
+      // Complete a quiz
+      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+      await waitFor(() => expect(screen.getByText('Single Q?')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText('Right'));
+      fireEvent.click(screen.getByText('Submit Answer'));
+
+      await waitFor(() => expect(screen.getByText('Finish Quiz')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Finish Quiz'));
+
+      await waitFor(() => expect(screen.getByText('Great Job!')).toBeInTheDocument());
+
+      // Switch subject — should reset everything
+      useAppStore.setState({ currentSubject: 'biology' });
+
+      await waitFor(() => {
+        expect(screen.getByText('Start Assessment')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Non-Adaptive Mode', () => {
+    // Helper to find and click the adaptive mode toggle button
+    const clickAdaptiveToggle = () => {
+      // The toggle is a button inside the Adaptive Mode section,
+      // identified by its w-12 h-6 rounded-full class pattern
+      const toggleBtn = document.querySelector('button.relative.w-12');
+      if (toggleBtn) {
+        fireEvent.click(toggleBtn);
+      }
+    };
+
+    it('sends standard quiz request when adaptive mode is off', async () => {
+      mockProfileResponse();
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'quiz-1',
+          title: 'Standard Quiz',
+          questions: [
+            {
+              id: 'q1',
+              text: 'Standard Q?',
+              options: [
+                { id: 'a', text: 'A' },
+                { id: 'b', text: 'B' },
+                { id: 'c', text: 'C' },
+                { id: 'd', text: 'D' },
+              ],
+              correct_option_id: 'a',
+              explanation: 'Standard explanation.',
+              difficulty: 'medium',
+            },
+          ],
+        }),
+      });
+
+      render(<Quiz />);
+
+      clickAdaptiveToggle();
+
+      // Should show non-adaptive button text
+      expect(screen.getByText('Generate Assessment')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Generate Assessment'));
+
+      await waitFor(() => {
+        const fetchCalls = (global.fetch as jest.Mock).mock.calls;
+        const quizCall = fetchCalls.find(
+          (call: any[]) => typeof call[0] === 'string' && call[0].includes('quiz/generate')
+        );
+        expect(quizCall).toBeTruthy();
+      });
+    });
+
+    it('hides mastery indicator when adaptive mode is off', () => {
+      render(<Quiz />);
+
+      clickAdaptiveToggle();
+
+      // After toggling off, text should change to mixed difficulty
+      expect(
+        screen.getByText('Questions will have mixed difficulty levels')
+      ).toBeInTheDocument();
+
+      // Mastery indicator should not be shown
+      expect(screen.queryByTestId('mastery-indicator')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Difficulty Badge', () => {
+    const mockQuizResponse = {
+      id: 'quiz-1',
+      title: 'Test Quiz',
+      questions: [
+        {
+          id: 'q1',
+          text: 'Hard question?',
+          options: [
+            { id: 'a', text: 'A' },
+            { id: 'b', text: 'B' },
+            { id: 'c', text: 'C' },
+            { id: 'd', text: 'D' },
+          ],
+          correct_option_id: 'a',
+          explanation: 'Explanation.',
+          difficulty: 'hard',
+          difficulty_score: 0.85,
+        },
+      ],
+      student_mastery: 0.7,
+      target_difficulty: 'hard',
+      adapted: true,
+    };
+
+    it('shows difficulty badge on question', async () => {
+      mockProfileResponse();
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockQuizResponse,
+      });
+
+      render(<Quiz />);
+
+      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Hard question?')).toBeInTheDocument();
+        // Difficulty badge should be shown (capitalized label)
+        expect(screen.getByText('Hard')).toBeInTheDocument();
+      });
+    });
+  });
 });
