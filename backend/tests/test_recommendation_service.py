@@ -18,7 +18,6 @@ import pytest
 from backend.app.student.recommendation_service import RecommendationService
 from backend.app.ui_payloads.recommendations import QuizQuestionResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

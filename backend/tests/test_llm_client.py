@@ -22,7 +22,6 @@ import pytest
 from backend.app.core.exceptions import LLMConnectionError, LLMGenerationError
 from backend.app.nlp.llm_client import LLMClient
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -78,8 +77,8 @@ def _mock_aiohttp_response(status=200, json_data=None, text_data="", content_lin
             async def __anext__(self):
                 try:
                     return next(self._lines)
-                except StopIteration:
-                    raise StopAsyncIteration
+                except StopIteration as err:
+                    raise StopAsyncIteration from err
 
         mock_response.content = _AsyncLineIterator(content_lines)
 

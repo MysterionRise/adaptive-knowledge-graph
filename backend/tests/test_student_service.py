@@ -26,7 +26,6 @@ from backend.app.student.models import (
 )
 from backend.app.student.student_service import StudentService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

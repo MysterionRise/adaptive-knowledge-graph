@@ -14,7 +14,7 @@ Tests cover:
 - Factory functions (caching, cleanup)
 """
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,7 +32,6 @@ from backend.app.kg.schema import (
     Relationship,
     RelationshipType,
 )
-
 
 # ==========================================================================
 # Helpers
@@ -1105,7 +1104,7 @@ class TestFactoryFunction:
         mock_get_subject.return_value = mock_subject
 
         with patch.object(Neo4jAdapter, "connect"):
-            adapter = get_neo4j_adapter(None)
+            get_neo4j_adapter(None)
 
         mock_default_id.assert_called_once()
         mock_get_subject.assert_called_once_with("us_history")
