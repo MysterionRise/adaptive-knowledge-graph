@@ -250,9 +250,7 @@ class TestGenerateOllama:
     async def test_system_prompt_included_in_payload(self):
         """System prompt should be forwarded in the POST payload."""
         client = _make_client(mode="local")
-        mock_response = _mock_aiohttp_response(
-            status=200, json_data={"response": "ok"}
-        )
+        mock_response = _mock_aiohttp_response(status=200, json_data={"response": "ok"})
         mock_session = _mock_aiohttp_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -282,11 +280,7 @@ class TestGenerateOpenRouter:
     async def test_success(self):
         """Successful OpenRouter response should extract message content."""
         client = _make_client(mode="remote", api_key="sk-test-123")
-        json_data = {
-            "choices": [
-                {"message": {"content": "OpenRouter says hello"}}
-            ]
-        }
+        json_data = {"choices": [{"message": {"content": "OpenRouter says hello"}}]}
         mock_response = _mock_aiohttp_response(status=200, json_data=json_data)
         mock_session = _mock_aiohttp_session(mock_response)
 
@@ -390,11 +384,10 @@ class TestHybridFallback:
         """generate() should fall back to remote when local raises LLMConnectionError."""
         client = _make_client(mode="hybrid", api_key="sk-test")
 
-        with patch.object(
-            client, "_generate_ollama", new_callable=AsyncMock
-        ) as mock_local, patch.object(
-            client, "_generate_openrouter", new_callable=AsyncMock
-        ) as mock_remote:
+        with (
+            patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local,
+            patch.object(client, "_generate_openrouter", new_callable=AsyncMock) as mock_remote,
+        ):
             mock_local.side_effect = LLMConnectionError("connection refused")
             mock_remote.return_value = "remote answer"
 
@@ -409,11 +402,10 @@ class TestHybridFallback:
         """generate() should fall back to remote when local raises LLMGenerationError."""
         client = _make_client(mode="hybrid", api_key="sk-test")
 
-        with patch.object(
-            client, "_generate_ollama", new_callable=AsyncMock
-        ) as mock_local, patch.object(
-            client, "_generate_openrouter", new_callable=AsyncMock
-        ) as mock_remote:
+        with (
+            patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local,
+            patch.object(client, "_generate_openrouter", new_callable=AsyncMock) as mock_remote,
+        ):
             mock_local.side_effect = LLMGenerationError("model not loaded")
             mock_remote.return_value = "remote answer"
 
@@ -435,8 +427,9 @@ class TestHybridFallback:
             yield "remote"
             yield " token"
 
-        with patch.object(client, "_stream_ollama", side_effect=failing_stream), patch.object(
-            client, "_stream_openrouter", side_effect=remote_stream
+        with (
+            patch.object(client, "_stream_ollama", side_effect=failing_stream),
+            patch.object(client, "_stream_openrouter", side_effect=remote_stream),
         ):
             tokens = []
             async for token in client.generate_stream("test prompt"):
@@ -456,8 +449,9 @@ class TestHybridFallback:
         async def remote_stream(*args, **kwargs):
             yield "fallback"
 
-        with patch.object(client, "_stream_ollama", side_effect=failing_stream), patch.object(
-            client, "_stream_openrouter", side_effect=remote_stream
+        with (
+            patch.object(client, "_stream_ollama", side_effect=failing_stream),
+            patch.object(client, "_stream_openrouter", side_effect=remote_stream),
         ):
             tokens = []
             async for token in client.generate_stream("test prompt"):
@@ -470,11 +464,10 @@ class TestHybridFallback:
         """When local succeeds in hybrid mode, remote should not be called."""
         client = _make_client(mode="hybrid", api_key="sk-test")
 
-        with patch.object(
-            client, "_generate_ollama", new_callable=AsyncMock
-        ) as mock_local, patch.object(
-            client, "_generate_openrouter", new_callable=AsyncMock
-        ) as mock_remote:
+        with (
+            patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local,
+            patch.object(client, "_generate_openrouter", new_callable=AsyncMock) as mock_remote,
+        ):
             mock_local.return_value = "local answer"
 
             result = await client.generate("test prompt")

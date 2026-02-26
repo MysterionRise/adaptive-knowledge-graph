@@ -300,10 +300,12 @@ class TestQueryConceptNeighbors:
 
     def test_returns_neighbors(self):
         adapter, mock_session = _make_adapter(label_prefix="bio")
-        mock_session.run.return_value = _make_mock_result([
-            {"name": "Chloroplast", "importance_score": 0.8, "key_term": True},
-            {"name": "ATP", "importance_score": 0.7, "key_term": False},
-        ])
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {"name": "Chloroplast", "importance_score": 0.8, "key_term": True},
+                {"name": "ATP", "importance_score": 0.7, "key_term": False},
+            ]
+        )
 
         result = adapter.query_concept_neighbors("Photosynthesis", max_hops=2)
 
@@ -371,17 +373,21 @@ class TestGetGraphStats:
 
         concept_rels = MagicMock()
         concept_rels.__iter__ = MagicMock(
-            return_value=iter([
-                {"type": "RELATED", "count": 30},
-                {"type": "PREREQ", "count": 15},
-            ])
+            return_value=iter(
+                [
+                    {"type": "RELATED", "count": 30},
+                    {"type": "PREREQ", "count": 15},
+                ]
+            )
         )
 
         module_rels = MagicMock()
         module_rels.__iter__ = MagicMock(
-            return_value=iter([
-                {"type": "COVERS", "count": 40},
-            ])
+            return_value=iter(
+                [
+                    {"type": "COVERS", "count": 40},
+                ]
+            )
         )
 
         mock_session.run.side_effect = [
@@ -413,20 +419,24 @@ class TestGetGraphStats:
         # labels query
         labels_result = MagicMock()
         labels_result.__iter__ = MagicMock(
-            return_value=iter([
-                {"labels": ["Concept"], "count": 100},
-                {"labels": ["Module"], "count": 20},
-                {"labels": ["Chunk"], "count": 500},
-            ])
+            return_value=iter(
+                [
+                    {"labels": ["Concept"], "count": 100},
+                    {"labels": ["Module"], "count": 20},
+                    {"labels": ["Chunk"], "count": 500},
+                ]
+            )
         )
 
         # relationships query
         rels_result = MagicMock()
         rels_result.__iter__ = MagicMock(
-            return_value=iter([
-                {"type": "COVERS", "count": 80},
-                {"type": "RELATED", "count": 60},
-            ])
+            return_value=iter(
+                [
+                    {"type": "COVERS", "count": 80},
+                    {"type": "RELATED", "count": 60},
+                ]
+            )
         )
 
         mock_session.run.side_effect = [labels_result, rels_result]
@@ -444,9 +454,11 @@ class TestGetGraphStats:
 
         labels_result = MagicMock()
         labels_result.__iter__ = MagicMock(
-            return_value=iter([
-                {"labels": [], "count": 5},
-            ])
+            return_value=iter(
+                [
+                    {"labels": [], "count": 5},
+                ]
+            )
         )
 
         rels_result = MagicMock()
@@ -473,16 +485,20 @@ class TestGetGraphStats:
         # Concept nodes have COVERS relationships too (same key)
         concept_rels = MagicMock()
         concept_rels.__iter__ = MagicMock(
-            return_value=iter([
-                {"type": "COVERS", "count": 10},
-            ])
+            return_value=iter(
+                [
+                    {"type": "COVERS", "count": 10},
+                ]
+            )
         )
 
         module_rels = MagicMock()
         module_rels.__iter__ = MagicMock(
-            return_value=iter([
-                {"type": "COVERS", "count": 20},
-            ])
+            return_value=iter(
+                [
+                    {"type": "COVERS", "count": 20},
+                ]
+            )
         )
 
         mock_session.run.side_effect = [
@@ -668,10 +684,17 @@ class TestFulltextSearch:
 
     def test_returns_results_with_scores(self):
         adapter, mock_session = _make_adapter(label_prefix=None)
-        mock_session.run.return_value = _make_mock_result([
-            {"name": "Photosynthesis", "importance_score": 0.9, "key_term": True, "score": 5.5},
-            {"name": "Photorespiration", "importance_score": 0.6, "key_term": False, "score": 3.2},
-        ])
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {"name": "Photosynthesis", "importance_score": 0.9, "key_term": True, "score": 5.5},
+                {
+                    "name": "Photorespiration",
+                    "importance_score": 0.6,
+                    "key_term": False,
+                    "score": 3.2,
+                },
+            ]
+        )
 
         results = adapter.fulltext_concept_search("photo", limit=5)
 
@@ -730,24 +753,26 @@ class TestVectorSearch:
 
     def test_returns_chunks_with_scores(self):
         adapter, mock_session = _make_adapter()
-        mock_session.run.return_value = _make_mock_result([
-            {
-                "chunk_id": "c1",
-                "text": "Some text",
-                "module_id": "m1",
-                "section": "Intro",
-                "chunk_index": 0,
-                "score": 0.95,
-            },
-            {
-                "chunk_id": "c2",
-                "text": "More text",
-                "module_id": "m1",
-                "section": "Body",
-                "chunk_index": 1,
-                "score": 0.88,
-            },
-        ])
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {
+                    "chunk_id": "c1",
+                    "text": "Some text",
+                    "module_id": "m1",
+                    "section": "Intro",
+                    "chunk_index": 0,
+                    "score": 0.95,
+                },
+                {
+                    "chunk_id": "c2",
+                    "text": "More text",
+                    "module_id": "m1",
+                    "section": "Body",
+                    "chunk_index": 1,
+                    "score": 0.88,
+                },
+            ]
+        )
 
         results = adapter.vector_search([0.1, 0.2, 0.3], top_k=5)
 
@@ -950,11 +975,31 @@ class TestGetChunkWindow:
 
     def test_returns_window_of_chunks(self):
         adapter, mock_session = _make_adapter(label_prefix="test")
-        mock_session.run.return_value = _make_mock_result([
-            {"chunk_id": "c1", "text": "Before", "module_id": "m1", "section": "A", "chunk_index": 0},
-            {"chunk_id": "c2", "text": "Center", "module_id": "m1", "section": "A", "chunk_index": 1},
-            {"chunk_id": "c3", "text": "After", "module_id": "m1", "section": "A", "chunk_index": 2},
-        ])
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {
+                    "chunk_id": "c1",
+                    "text": "Before",
+                    "module_id": "m1",
+                    "section": "A",
+                    "chunk_index": 0,
+                },
+                {
+                    "chunk_id": "c2",
+                    "text": "Center",
+                    "module_id": "m1",
+                    "section": "A",
+                    "chunk_index": 1,
+                },
+                {
+                    "chunk_id": "c3",
+                    "text": "After",
+                    "module_id": "m1",
+                    "section": "A",
+                    "chunk_index": 2,
+                },
+            ]
+        )
 
         results = adapter.get_chunk_window("c2", window_before=1, window_after=1)
 

@@ -272,9 +272,7 @@ class TestGetTargetDifficulty:
         # We need exactly 0.4: start 0.3, wrong => 0.2, correct => 0.35, correct => 0.50
         # Actually, let's manipulate directly
         profile = svc.get_profile("default")
-        profile.mastery_map["topic"] = ConceptMastery(
-            concept_name="topic", mastery_level=0.4
-        )
+        profile.mastery_map["topic"] = ConceptMastery(concept_name="topic", mastery_level=0.4)
         resp = svc.get_target_difficulty("topic")
         assert resp.target_difficulty == "medium"
 
@@ -282,9 +280,7 @@ class TestGetTargetDifficulty:
         """Mastery exactly 0.7 should be medium (<=0.7)."""
         svc = _make_service(tmp_path)
         profile = svc.get_profile("default")
-        profile.mastery_map["topic"] = ConceptMastery(
-            concept_name="topic", mastery_level=0.7
-        )
+        profile.mastery_map["topic"] = ConceptMastery(concept_name="topic", mastery_level=0.7)
         resp = svc.get_target_difficulty("topic")
         assert resp.target_difficulty == "medium"
 
@@ -637,8 +633,8 @@ class TestGetAllTargetDifficulties:
     def test_returns_difficulty_for_all_tracked_concepts(self, tmp_path):
         svc = _make_service(tmp_path)
 
-        svc.update_mastery("easy_topic", correct=False)    # 0.2 -> easy
-        svc.update_mastery("medium_topic", correct=True)   # 0.45 -> medium
+        svc.update_mastery("easy_topic", correct=False)  # 0.2 -> easy
+        svc.update_mastery("medium_topic", correct=True)  # 0.45 -> medium
 
         # Push hard_topic to 0.75 (3 correct: 0.3 + 3*0.15)
         for _ in range(3):

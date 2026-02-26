@@ -587,9 +587,7 @@ class TestQueryErrors:
         """When _query_dependents fails, advancement block should have no advanced_topics."""
         svc, mock_neo4j, _, mock_llm, _, _ = _build_mocks()
 
-        mock_neo4j._get_session.return_value.__enter__.side_effect = RuntimeError(
-            "Neo4j timeout"
-        )
+        mock_neo4j._get_session.return_value.__enter__.side_effect = RuntimeError("Neo4j timeout")
         mock_llm.generate.return_value = "Deep dive content."
 
         questions = _make_questions(5, 5)
