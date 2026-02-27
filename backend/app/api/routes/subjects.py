@@ -82,8 +82,8 @@ async def list_subjects():
             default_subject=default_id,
         )
     except Exception as e:
-        logger.error(f"Error listing subjects: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error listing subjects: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/ids", response_model=list[str])
@@ -96,8 +96,8 @@ async def list_subject_ids():
     try:
         return get_subject_ids()
     except Exception as e:
-        logger.error(f"Error listing subject IDs: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error listing subject IDs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/{subject_id}", response_model=SubjectDetailResponse)
@@ -124,11 +124,11 @@ async def get_subject_detail(subject_id: str):
             book_count=len(subject.books),
             is_default=(subject.id == default_id),
         )
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Subject not found") from None
     except Exception as e:
-        logger.error(f"Error getting subject {subject_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting subject {subject_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/{subject_id}/theme", response_model=SubjectThemeResponse)
@@ -154,11 +154,11 @@ async def get_subject_theme(subject_id: str):
             accent_color=subject.theme.accent_color,
             chapter_colors=subject.theme.chapter_colors,
         )
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Theme not found") from None
     except Exception as e:
-        logger.error(f"Error getting theme for {subject_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting theme for {subject_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/{subject_id}/books", response_model=list[dict])
@@ -190,8 +190,8 @@ async def get_subject_books(subject_id: str):
                 entry["branch"] = book.branch
             result.append(entry)
         return result
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Books not found for this subject") from None
     except Exception as e:
-        logger.error(f"Error getting books for {subject_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting books for {subject_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e

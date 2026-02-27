@@ -4,7 +4,7 @@ Quiz generation and student mastery endpoints.
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from loguru import logger
 
 from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
@@ -32,7 +32,10 @@ router = APIRouter(tags=["Quiz & Adaptive Learning"])
 @router.post("/quiz/generate", response_model=Quiz)
 @limiter.limit("5/minute")
 async def generate_quiz(
-    request: Request, topic: str, num_questions: int = 3, subject: str | None = None
+    request: Request,
+    topic: str = Query(..., min_length=1, max_length=500),
+    num_questions: int = Query(default=3, ge=1, le=20),
+    subject: str | None = None,
 ):
     """
     Generate a quiz for a topic (non-adaptive, mixed difficulty).
@@ -46,26 +49,32 @@ async def generate_quiz(
         generator = get_quiz_generator(subject_id=subject)
         quiz = await generator.generate_from_topic(topic, num_questions)
         return quiz
-    except ValueError as e:
-        # No content found for topic
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ContentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError:
+        raise HTTPException(
+            status_code=404, detail="Topic not found or no content available"
+        ) from None
+    except ContentNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="Topic not found or no content available"
+        ) from None
     except QuizGenerationError as e:
         logger.error(f"Quiz generation failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Quiz generation failed: {str(e)}") from e
+        raise HTTPException(
+            status_code=503,
+            detail="Quiz generation service temporarily unavailable",
+        ) from e
     except Exception as e:
-        logger.error(f"Error generating quiz: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error generating quiz: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.post("/quiz/generate-adaptive", response_model=AdaptiveQuiz)
 @limiter.limit("5/minute")
 async def generate_adaptive_quiz(
     request: Request,
-    topic: str,
-    num_questions: int = 3,
-    student_id: str = "default",
+    topic: str = Query(..., min_length=1, max_length=500),
+    num_questions: int = Query(default=3, ge=1, le=20),
+    student_id: str = Query(default="default", max_length=100),
     subject: str | None = None,
 ):
     """
@@ -105,16 +114,23 @@ async def generate_adaptive_quiz(
             target_difficulty=target_info.target_difficulty,
             adapted=True,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ContentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError:
+        raise HTTPException(
+            status_code=404, detail="Topic not found or no content available"
+        ) from None
+    except ContentNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="Topic not found or no content available"
+        ) from None
     except QuizGenerationError as e:
         logger.error(f"Adaptive quiz generation failed: {e}")
-        raise HTTPException(status_code=503, detail=f"Quiz generation failed: {str(e)}") from e
+        raise HTTPException(
+            status_code=503,
+            detail="Quiz generation service temporarily unavailable",
+        ) from e
     except Exception as e:
-        logger.error(f"Error generating adaptive quiz: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error generating adaptive quiz: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 # =============================================================================
@@ -129,8 +145,8 @@ async def get_student_profile(student_id: str = "default"):
         student_service = get_student_service()
         return student_service.get_profile_response(student_id)
     except Exception as e:
-        logger.error(f"Error getting student profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting student profile: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.post("/student/mastery", response_model=MasteryUpdateResponse)
@@ -153,8 +169,8 @@ async def update_student_mastery(
             student_id=student_id,
         )
     except Exception as e:
-        logger.error(f"Error updating mastery: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error updating mastery: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/student/target-difficulty", response_model=TargetDifficultyResponse)
@@ -174,8 +190,8 @@ async def get_target_difficulty(
         student_service = get_student_service()
         return student_service.get_target_difficulty(concept, student_id)
     except Exception as e:
-        logger.error(f"Error getting target difficulty: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting target difficulty: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.post("/student/reset", response_model=StudentProfileResponse)
@@ -185,8 +201,8 @@ async def reset_student_profile(student_id: str = "default"):
         student_service = get_student_service()
         return student_service.reset_profile(student_id)
     except Exception as e:
-        logger.error(f"Error resetting student profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error resetting student profile: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 # =============================================================================
@@ -211,8 +227,8 @@ async def get_quiz_recommendations(request: RecommendationRequest):
             student_id=request.student_id,
         )
     except Exception as e:
-        logger.error(f"Error generating recommendations: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error generating recommendations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/student/all-difficulties")
@@ -224,5 +240,5 @@ async def get_all_target_difficulties(
         student_service = get_student_service()
         return student_service.get_all_target_difficulties(student_id)
     except Exception as e:
-        logger.error(f"Error getting all target difficulties: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting all target difficulties: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e

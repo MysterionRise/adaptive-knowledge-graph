@@ -205,7 +205,7 @@ class TestStreamingErrors:
             )
 
         assert response.status_code == 503
-        assert "LLM service error" in response.json()["detail"]
+        assert "LLM service temporarily unavailable" in response.json()["detail"]
 
     def test_stream_llm_connection_error_503(self, client):
         """Should return 503 when LLM connection fails."""
@@ -267,7 +267,7 @@ class TestStreamingErrors:
 
         error_events = [e for e in events if isinstance(e, dict) and e.get("type") == "error"]
         assert len(error_events) == 1
-        assert "GPU out of memory" in error_events[0]["content"]
+        assert "An error occurred during streaming" in error_events[0]["content"]
 
     def test_stream_validation_error(self, client):
         """Should return 422 for invalid request."""

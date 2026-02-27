@@ -95,8 +95,8 @@ async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str 
         logger.error(f"Neo4j connection failed: {e}")
         raise HTTPException(status_code=503, detail="Database connection failed") from e
     except Exception as e:
-        logger.error(f"Error getting learning path: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting learning path: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/concepts/{concept_name}/prerequisites", response_model=PrerequisiteResponse)
@@ -152,8 +152,8 @@ async def get_prerequisites(concept_name: str, depth: int = 2, subject: str | No
         )
 
     except Exception as e:
-        logger.error(f"Error getting prerequisites: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting prerequisites: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/concepts/{concept_name}/dependents")
@@ -209,5 +209,5 @@ async def get_dependents(concept_name: str, depth: int = 2, subject: str | None 
         }
 
     except Exception as e:
-        logger.error(f"Error getting dependents: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting dependents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e

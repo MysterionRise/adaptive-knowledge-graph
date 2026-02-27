@@ -41,10 +41,11 @@ class QuestionRequest(BaseModel):
         }
     }
 
-    question: str = Field(..., description="User's question", min_length=3)
+    question: str = Field(..., description="User's question", min_length=3, max_length=2000)
     subject: str | None = Field(
         default=None,
         description="Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.",
+        max_length=100,
     )
     use_kg_expansion: bool = Field(default=True, description="Use knowledge graph expansion")
     use_window_retrieval: bool = Field(
@@ -219,19 +220,21 @@ async def ask_question(body: QuestionRequest, request: Request):
             attribution=subject_config.attribution,
         )
 
-    except ContentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ContentNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="No relevant content found for this question"
+        ) from None
     except (LLMGenerationError, LLMConnectionError) as e:
         logger.error(f"LLM generation failed: {e}")
-        raise HTTPException(status_code=503, detail=f"LLM service error: {str(e)}") from e
+        raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e
     except aiohttp.ClientError as e:
         logger.error(f"Service connection error: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in ask endpoint: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}") from e
+        logger.error(f"Error in ask endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 async def _retrieve_context(body: QuestionRequest):
@@ -326,17 +329,19 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
     """
     try:
         ctx = await _retrieve_context(body)
-    except ContentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ContentNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="No relevant content found for this question"
+        ) from None
     except (LLMGenerationError, LLMConnectionError) as e:
         logger.error(f"LLM error in streaming ask retrieval: {e}")
-        raise HTTPException(status_code=503, detail=f"LLM service error: {str(e)}") from e
+        raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e
     except aiohttp.ClientError as e:
         logger.error(f"Service connection error in streaming ask retrieval: {e}")
         raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
     except Exception as e:
-        logger.error(f"Error in streaming ask retrieval: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error in streaming ask retrieval: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
     subject_config = ctx["subject_config"]
     expanded_concepts = ctx["expanded_concepts"]
@@ -384,7 +389,7 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
         except Exception as e:
             logger.error(f"Streaming LLM error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': 'An error occurred during streaming'})}\n\n"
 
         # Final event
         yield "data: [DONE]\n\n"

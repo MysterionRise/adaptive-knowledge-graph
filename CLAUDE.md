@@ -53,7 +53,7 @@ Frontend (Next.js)          Backend (FastAPI)           Services
 **Key flow for Q&A (`/api/v1/ask`):**
 1. Query → KG expansion (extract concepts, traverse graph)
 2. OpenSearch retrieval (semantic search + BM25 hybrid)
-3. BGE-Reranker filtering
+3. Reranker filtering (planned — not yet implemented)
 4. LLM answer generation with citations
 
 ## Key Modules

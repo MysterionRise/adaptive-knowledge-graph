@@ -7,6 +7,7 @@ Includes:
 - Concept search with fulltext index
 """
 
+import re
 import time
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,6 +16,12 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.exceptions import Neo4jConnectionError, Neo4jQueryError
 from backend.app.core.rate_limit import limiter
+
+# Pattern to detect destructive intent in natural language questions
+_DESTRUCTIVE_NL_PATTERN = re.compile(
+    r"\b(delete|remove|drop|destroy|truncate|erase|wipe|detach)\b",
+    re.IGNORECASE,
+)
 
 router = APIRouter(tags=["Knowledge Graph"])
 
@@ -84,10 +91,10 @@ async def get_graph_stats(request: Request, subject: str | None = None):
         raise HTTPException(status_code=503, detail="Database connection failed") from e
     except Neo4jQueryError as e:
         logger.error(f"Neo4j query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
     except Exception as e:
-        logger.error(f"Error getting graph stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting graph stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/concepts/top", response_model=list[dict])
@@ -124,8 +131,8 @@ async def get_top_concepts(limit: int = 20, subject: str | None = None):
         return concepts
 
     except Exception as e:
-        logger.error(f"Error getting top concepts: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting top concepts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/graph/data")
@@ -225,8 +232,8 @@ async def get_graph_data(request: Request, limit: int = 100, subject: str | None
         return result
 
     except Exception as e:
-        logger.error(f"Error getting graph data: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting graph data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 # ==========================================================================
@@ -237,7 +244,9 @@ async def get_graph_data(request: Request, limit: int = 100, subject: str | None
 class GraphQueryRequest(BaseModel):
     """Request for natural language graph query."""
 
-    question: str = Field(..., description="Natural language question about the graph")
+    question: str = Field(
+        ..., description="Natural language question about the graph", max_length=2000
+    )
     preview_only: bool = Field(
         default=False, description="If True, generate Cypher without executing"
     )
@@ -269,6 +278,13 @@ async def query_graph_natural_language(request: GraphQueryRequest):
     - "Find the most important concepts"
     - "What concepts are related to mitosis?"
     """
+    # Route-level guard: reject questions with obvious destructive intent
+    if _DESTRUCTIVE_NL_PATTERN.search(request.question):
+        raise HTTPException(
+            status_code=400,
+            detail="This endpoint only supports read queries against the knowledge graph.",
+        )
+
     try:
         from backend.app.kg.cypher_qa import get_cypher_qa_service
 
@@ -295,9 +311,16 @@ async def query_graph_natural_language(request: GraphQueryRequest):
             error=result.get("error"),
         )
 
+    except ValueError as e:
+        # Raised by _validate_cypher_read_only for destructive Cypher
+        logger.warning(f"Blocked destructive graph query: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail="This endpoint only supports read queries against the knowledge graph.",
+        ) from e
     except Exception as e:
-        logger.error(f"Graph query error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Graph query error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 # ==========================================================================
@@ -308,7 +331,7 @@ async def query_graph_natural_language(request: GraphQueryRequest):
 class ConceptSearchRequest(BaseModel):
     """Request for fuzzy concept search."""
 
-    query: str = Field(..., description="Search query for concepts")
+    query: str = Field(..., description="Search query for concepts", min_length=1, max_length=500)
     limit: int = Field(default=10, description="Maximum results", ge=1, le=50)
 
 
@@ -356,8 +379,8 @@ async def search_concepts(request: ConceptSearchRequest, subject: str | None = N
         ]
 
     except Exception as e:
-        logger.error(f"Concept search error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Concept search error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
 @router.get("/graph/schema")
@@ -377,5 +400,5 @@ async def get_graph_schema():
         return {"schema": schema}
 
     except Exception as e:
-        logger.error(f"Error getting graph schema: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Error getting graph schema: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e

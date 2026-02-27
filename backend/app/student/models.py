@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 class ConceptMastery(BaseModel):
     """Mastery level for a single concept."""
 
-    concept_name: str
+    concept_name: str = Field(..., max_length=200)
     mastery_level: float = Field(default=0.3, ge=0.0, le=1.0)
     attempts: int = 0
     correct_attempts: int = 0
@@ -65,7 +65,7 @@ class StudentProfile(BaseModel):
 class MasteryUpdate(BaseModel):
     """Request model for updating mastery after an answer."""
 
-    concept: str
+    concept: str = Field(..., max_length=200)
     correct: bool
 
 

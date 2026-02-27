@@ -10,6 +10,7 @@ These are optional dependencies - the module gracefully handles their absence.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -21,6 +22,20 @@ if TYPE_CHECKING:
 
 # Lazy imports tracking
 _langchain_available: bool | None = None
+
+
+DESTRUCTIVE_CYPHER_PATTERNS = re.compile(
+    r"\b(CREATE|DELETE|DETACH|REMOVE|SET|MERGE|DROP|CALL\s*\{)\b",
+    re.IGNORECASE,
+)
+
+
+def _validate_cypher_read_only(cypher: str) -> None:
+    """Reject Cypher queries that contain write operations."""
+    # Strip string literals first to avoid false positives
+    stripped = re.sub(r"'[^']*'|\"[^\"]*\"", "", cypher)
+    if DESTRUCTIVE_CYPHER_PATTERNS.search(stripped):
+        raise ValueError("Write operations are not permitted through the query interface")
 
 
 def _check_langchain() -> bool:
@@ -148,16 +163,26 @@ class CypherQAService:
 
     @property
     def graph(self) -> Neo4jGraph:
-        """Lazy-load Neo4j graph connection."""
+        """Lazy-load Neo4j graph connection with read-only query wrapper."""
         if self._graph is None:
             self._ensure_langchain()
             from langchain_neo4j import Neo4jGraph
 
-            self._graph = Neo4jGraph(
+            graph = Neo4jGraph(
                 url=self.neo4j_uri,
                 username=self.neo4j_user,
                 password=self.neo4j_password,
             )
+
+            # Wrap the query method to enforce read-only access
+            _original_query = graph.query
+
+            def _read_only_query(cypher: str, params: dict | None = None):
+                _validate_cypher_read_only(cypher)
+                return _original_query(cypher, params=params or {})
+
+            graph.query = _read_only_query  # type: ignore[assignment]
+            self._graph = graph
         return self._graph
 
     @property
@@ -255,13 +280,13 @@ class CypherQAService:
             return result
 
         except Exception as e:
-            logger.error(f"CypherQA error: {e}")
+            logger.error(f"CypherQA error: {e}", exc_info=True)
             return {
                 "question": question,
                 "cypher": None,
                 "result": None,
-                "answer": f"Error: {str(e)}",
-                "error": str(e),
+                "answer": "An error occurred while processing the query",
+                "error": "An error occurred while processing the query",
             }
 
     def generate_cypher_only(self, question: str) -> str | None:
@@ -304,14 +329,18 @@ class CypherQAService:
 
     def execute_cypher(self, cypher: str) -> list[dict]:
         """
-        Execute a Cypher query directly.
+        Execute a read-only Cypher query directly.
 
         Args:
             cypher: Cypher query string
 
         Returns:
             List of result records as dicts
+
+        Raises:
+            ValueError: If the query contains write operations
         """
+        _validate_cypher_read_only(cypher)
         try:
             results = self.graph.query(cypher)
             return results

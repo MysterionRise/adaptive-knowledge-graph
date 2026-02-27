@@ -125,7 +125,7 @@ class TestAskEndpoint:
             )
 
         assert response.status_code == 503
-        assert "LLM service error" in response.json()["detail"]
+        assert "LLM service temporarily unavailable" in response.json()["detail"]
 
     def test_ask_validation_question_too_short(self, client):
         """Test validation error for question shorter than 3 characters."""
@@ -250,7 +250,7 @@ class TestAskEndpoint:
             )
 
         assert response.status_code == 500
-        assert "Internal server error" in response.json()["detail"]
+        assert "An internal error occurred" in response.json()["detail"]
 
     def test_ask_default_parameters(
         self,

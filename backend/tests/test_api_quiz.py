@@ -80,7 +80,7 @@ class TestQuizGenerateEndpoint:
             )
 
         assert response.status_code == 404
-        assert "No content found" in response.json()["detail"]
+        assert "Topic not found or no content available" in response.json()["detail"]
 
     def test_generate_quiz_value_error(self, client):
         """Test 404 when ValueError raised (no content)."""
@@ -115,7 +115,7 @@ class TestQuizGenerateEndpoint:
             )
 
         assert response.status_code == 503
-        assert "Quiz generation failed" in response.json()["detail"]
+        assert "Quiz generation service temporarily unavailable" in response.json()["detail"]
 
     def test_generate_quiz_internal_error(self, client):
         """Test 500 on unexpected errors."""
@@ -184,19 +184,17 @@ class TestQuizGenerateEndpoint:
         mock_quiz_generator.generate_from_topic.assert_called_once_with("Biology", 10)
 
     def test_generate_quiz_empty_topic(self, client, mock_quiz_generator):
-        """Test that empty topic is handled."""
+        """Test that empty topic is rejected by input validation."""
         with patch(
             "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
         ):
-            # FastAPI should still accept empty string (validation is in the generator)
             response = client.post(
                 "/api/v1/quiz/generate",
                 params={"topic": ""},
             )
 
-        # The endpoint doesn't validate topic length, so it passes through
-        # Generator would handle the empty topic
-        assert response.status_code == 200
+        # Endpoint validates topic min_length=1, so empty string returns 422
+        assert response.status_code == 422
 
 
 @pytest.mark.unit
