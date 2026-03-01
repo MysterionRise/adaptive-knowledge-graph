@@ -28,7 +28,7 @@ spacy = "^3.7.2"
 neo4j = "^5.28.0"
 networkx = "^3.2.1"
 rdflib = "^7.0.0"
-hdbscan = "^0.8.33"
+hdbscan = "^0.8.41"
 
 # Vector DB & Search
 opensearch-py = "^3.0.0"
