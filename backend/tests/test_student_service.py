@@ -36,6 +36,14 @@ def _make_service(tmp_path: Path) -> StudentService:
     return StudentService(storage_path=str(tmp_path / "profiles.json"))
 
 
+@pytest.fixture(autouse=True)
+def _disable_bkt(monkeypatch):
+    """Disable BKT for all tests by default so existing linear assertions hold."""
+    from backend.app.core.settings import settings
+
+    monkeypatch.setattr(settings, "student_bkt_enabled", False)
+
+
 # ===========================================================================
 # TestGetProfile
 # ===========================================================================
@@ -668,3 +676,177 @@ class TestGetAllTargetDifficulties:
         assert "topic_b" not in alice_diffs
         assert "topic_b" in bob_diffs
         assert "topic_a" not in bob_diffs
+
+
+# ===========================================================================
+# TestBKTUpdate
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestBKTUpdate:
+    """Tests for Bayesian Knowledge Tracing mastery updates."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_bkt(self, monkeypatch):
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "student_bkt_enabled", True)
+
+    def test_correct_answer_increases_mastery(self, tmp_path):
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.new_mastery > resp.previous_mastery
+        assert resp.bkt_p_known is not None
+        assert resp.bkt_p_known > 0.3
+
+    def test_incorrect_answer_decreases_mastery(self, tmp_path):
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=False)
+
+        assert resp.new_mastery < resp.previous_mastery
+        assert resp.bkt_p_known is not None
+        assert resp.bkt_p_known < 0.3
+
+    def test_exact_single_correct_from_default(self, tmp_path):
+        """Verify exact BKT math for one correct answer from P(L)=0.3."""
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=True)
+
+        # P(L)=0.3, P(S)=0.1, P(G)=0.25
+        # posterior = 0.3*0.9 / (0.3*0.9 + 0.7*0.25) = 0.27/0.445 ≈ 0.6067
+        # P(L_new) = 0.6067 + (1 - 0.6067)*0.1 ≈ 0.6461
+        assert resp.bkt_p_known == pytest.approx(0.646, abs=0.001)
+
+    def test_exact_single_incorrect_from_default(self, tmp_path):
+        """Verify exact BKT math for one incorrect answer from P(L)=0.3."""
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=False)
+
+        # P(L)=0.3, P(S)=0.1, P(G)=0.25
+        # posterior = 0.3*0.1 / (0.3*0.1 + 0.7*0.75) = 0.03/0.555 ≈ 0.05405
+        # P(L_new) = 0.05405 + (1 - 0.05405)*0.1 ≈ 0.14865
+        assert resp.bkt_p_known == pytest.approx(0.1486, abs=0.001)
+
+    def test_convergence_many_correct(self, tmp_path):
+        """15 consecutive correct answers should yield P(L) > 0.9."""
+        svc = _make_service(tmp_path)
+        for _ in range(15):
+            resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.bkt_p_known is not None
+        assert resp.bkt_p_known > 0.9
+
+    def test_five_correct_convergence(self, tmp_path):
+        """5 correct answers from P(L)=0.3 should yield high mastery (clamped at 0.99)."""
+        svc = _make_service(tmp_path)
+        for _ in range(5):
+            resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.bkt_p_known is not None
+        # BKT converges rapidly with these parameters; 5 correct → hits 0.99 clamp
+        assert resp.bkt_p_known >= 0.95
+
+    def test_bootstrap_from_existing_mastery(self, tmp_path):
+        """bkt_p_known should bootstrap from existing mastery_level."""
+        svc = _make_service(tmp_path)
+        profile = svc.get_profile("default")
+        profile.mastery_map["topic"] = ConceptMastery(
+            concept_name="topic",
+            mastery_level=0.6,
+        )
+        # bkt_p_known is None, should bootstrap from 0.6
+        resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.bkt_p_known is not None
+        assert resp.bkt_p_known > 0.6
+
+    def test_bkt_p_known_clamped(self, tmp_path):
+        """bkt_p_known should be clamped to [0.01, 0.99]."""
+        svc = _make_service(tmp_path)
+
+        # Many incorrect to drive p_known down
+        for _ in range(50):
+            resp = svc.update_mastery("topic", correct=False)
+
+        assert resp.bkt_p_known is not None
+        assert resp.bkt_p_known >= 0.01
+
+        # Many correct to drive p_known up
+        svc2 = _make_service(tmp_path / "sub")
+        for _ in range(50):
+            resp2 = svc2.update_mastery("topic2", correct=True)
+
+        assert resp2.bkt_p_known is not None
+        assert resp2.bkt_p_known <= 0.99
+
+    def test_json_round_trip_preserves_bkt(self, tmp_path):
+        """BKT fields survive JSON serialization and reload."""
+        storage = str(tmp_path / "profiles.json")
+        svc = StudentService(storage_path=storage)
+        svc.update_mastery("topic", correct=True)
+
+        svc2 = StudentService(storage_path=storage)
+        mastery = svc2.get_profile("default").mastery_map["topic"]
+
+        assert mastery.bkt_p_known is not None
+        assert mastery.bkt_p_known == pytest.approx(0.646, abs=0.001)
+        assert mastery.bkt_p_transit == 0.1
+        assert mastery.bkt_p_slip == 0.1
+        assert mastery.bkt_p_guess == 0.25
+
+    def test_response_includes_bkt_p_known(self, tmp_path):
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.bkt_p_known is not None
+        assert isinstance(resp.bkt_p_known, float)
+
+    def test_mastery_level_maps_from_bkt(self, tmp_path):
+        """mastery_level should be clamped to [0.1, 1.0] from bkt_p_known."""
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.new_mastery >= 0.1
+        assert resp.new_mastery <= 1.0
+
+
+# ===========================================================================
+# TestLinearFallback
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestLinearFallback:
+    """Verify the linear model still works when BKT is disabled."""
+
+    def test_correct_answer_linear(self, tmp_path):
+        """BKT disabled: correct answer uses +0.15 delta."""
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.new_mastery == pytest.approx(0.45)
+        assert resp.bkt_p_known is None
+
+    def test_incorrect_answer_linear(self, tmp_path):
+        """BKT disabled: incorrect answer uses -0.10 delta."""
+        svc = _make_service(tmp_path)
+        resp = svc.update_mastery("topic", correct=False)
+
+        assert resp.new_mastery == pytest.approx(0.2)
+        assert resp.bkt_p_known is None
+
+    def test_linear_clamp_min(self, tmp_path):
+        svc = _make_service(tmp_path)
+        for _ in range(10):
+            resp = svc.update_mastery("topic", correct=False)
+
+        assert resp.new_mastery == pytest.approx(0.1)
+
+    def test_linear_clamp_max(self, tmp_path):
+        svc = _make_service(tmp_path)
+        for _ in range(10):
+            resp = svc.update_mastery("topic", correct=True)
+
+        assert resp.new_mastery == pytest.approx(1.0)

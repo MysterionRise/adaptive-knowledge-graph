@@ -20,6 +20,12 @@ class ConceptMastery(BaseModel):
     correct_attempts: int = 0
     last_assessed: datetime | None = None
 
+    # BKT (Bayesian Knowledge Tracing) fields
+    bkt_p_known: float | None = None
+    bkt_p_transit: float = 0.1
+    bkt_p_slip: float = 0.1
+    bkt_p_guess: float = 0.25
+
     @property
     def accuracy(self) -> float:
         """Calculate accuracy rate for this concept."""
@@ -77,6 +83,7 @@ class MasteryUpdateResponse(BaseModel):
     new_mastery: float
     target_difficulty: Literal["easy", "medium", "hard"]
     total_attempts: int
+    bkt_p_known: float | None = None
 
 
 class StudentProfileResponse(BaseModel):

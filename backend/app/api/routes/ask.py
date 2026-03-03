@@ -25,6 +25,25 @@ from backend.app.rag.retriever import get_retriever
 router = APIRouter(tags=["Q&A"])
 
 
+def _maybe_rerank(query: str, chunks: list[dict], top_k: int) -> list[dict]:
+    """Rerank chunks if reranker is enabled, otherwise pass through."""
+    if not settings.reranker_enabled:
+        return chunks
+
+    try:
+        from backend.app.rag.reranker import get_reranker
+
+        reranker = get_reranker()
+        if not reranker.is_loaded:
+            reranker.load()
+        reranked = reranker.rerank(query, chunks, top_k)
+        logger.info(f"Reranked {len(chunks)} chunks, kept top {len(reranked)}")
+        return reranked
+    except Exception as e:
+        logger.warning(f"Reranking failed, using original chunks: {e}")
+        return chunks
+
+
 class QuestionRequest(BaseModel):
     """Request for Q&A endpoint."""
 
@@ -141,7 +160,8 @@ async def ask_question(body: QuestionRequest, request: Request):
 
         # Step 2: Retrieve relevant chunks from subject-specific index
         retriever = get_retriever(subject_id)
-        retrieved_chunks = retriever.retrieve(query, top_k=body.top_k)
+        retrieval_top_k = settings.rag_retrieval_top_k if settings.reranker_enabled else body.top_k
+        retrieved_chunks = retriever.retrieve(query, top_k=retrieval_top_k)
 
         if not retrieved_chunks:
             raise ContentNotFoundError("No relevant content found for this question")
@@ -185,6 +205,9 @@ async def ask_question(body: QuestionRequest, request: Request):
                         )
             except Exception as e:
                 logger.warning(f"Window retrieval failed, using original chunks: {e}")
+
+        # Step 2c: Rerank chunks (if enabled)
+        retrieved_chunks = _maybe_rerank(body.question, retrieved_chunks, body.top_k)
 
         # Step 3: Generate answer using LLM with subject-specific prompts
         llm_client = get_llm_client()
@@ -265,7 +288,8 @@ async def _retrieve_context(body: QuestionRequest):
 
     # Step 2: Retrieve chunks
     retriever = get_retriever(subject_id)
-    retrieved_chunks = retriever.retrieve(query, top_k=body.top_k)
+    retrieval_top_k = settings.rag_retrieval_top_k if settings.reranker_enabled else body.top_k
+    retrieved_chunks = retriever.retrieve(query, top_k=retrieval_top_k)
 
     if not retrieved_chunks:
         raise ContentNotFoundError("No relevant content found for this question")
@@ -307,6 +331,9 @@ async def _retrieve_context(body: QuestionRequest):
                     )
         except Exception as e:
             logger.warning(f"Window retrieval failed, using original chunks: {e}")
+
+    # Step 2c: Rerank chunks (if enabled)
+    retrieved_chunks = _maybe_rerank(body.question, retrieved_chunks, body.top_k)
 
     return {
         "subject_config": subject_config,

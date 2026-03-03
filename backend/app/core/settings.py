@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 32
 
     # Reranker
+    reranker_enabled: bool = False
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_top_k: int = 10
     reranker_device: str = "cuda"
