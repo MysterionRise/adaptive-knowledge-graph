@@ -168,7 +168,8 @@ export default function Quiz() {
         loadMasteryFromBackend,
         resetMasteryOnBackend,
         getMastery,
-        currentSubject
+        currentSubject,
+        masteryMap,
     } = useAppStore();
 
     // Get topics for the current subject
@@ -207,16 +208,16 @@ export default function Quiz() {
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [showResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Update local mastery display when topic changes
+    // Update local mastery display when topic changes or store updates (e.g. BKT backend sync)
     useEffect(() => {
-        const displayTopic = topic === '__custom__' ? customTopic.trim() : topic;
+        const displayTopic = activeTopic || (topic === '__custom__' ? customTopic.trim() : topic);
         const mastery = getMastery(displayTopic || topic);
         setCurrentMastery(mastery);
         // Determine target difficulty
         if (mastery < 0.4) setTargetDifficulty('easy');
         else if (mastery <= 0.7) setTargetDifficulty('medium');
         else setTargetDifficulty('hard');
-    }, [topic, customTopic, getMastery]);
+    }, [topic, customTopic, activeTopic, getMastery, masteryMap]);
 
     const handleStartQuiz = async () => {
         const effectiveTopic = topic === '__custom__' ? customTopic.trim() : topic;
@@ -302,23 +303,13 @@ export default function Quiz() {
             },
         ]);
 
-        // Update mastery tracking for the topic (syncs to backend)
+        // Update mastery tracking for the topic (syncs to backend via BKT)
         updateMastery(activeTopic, isCorrect);
-
-        // Update local mastery display
-        const delta = isCorrect ? 0.15 : -0.1;
-        const newMastery = Math.max(0.1, Math.min(1, currentMastery + delta));
-        setCurrentMastery(newMastery);
-
-        // Update target difficulty based on new mastery
-        if (newMastery < 0.4) setTargetDifficulty('easy');
-        else if (newMastery <= 0.7) setTargetDifficulty('medium');
-        else setTargetDifficulty('hard');
     };
 
     const handleNextQuestion = () => {
         if (!quiz) return;
-        if (currentQuestionIndex < quiz.questions.length - 1) {
+        if (currentQuestionIndex < quiz.questions?.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
             setSelectedOption(null);
             setIsSubmitted(false);
@@ -585,7 +576,7 @@ export default function Quiz() {
 
             {/* Progress */}
             <div className="mb-6 flex justify-between items-center text-sm text-gray-500">
-                <span>Question {currentQuestionIndex + 1} of {quiz.questions.length}</span>
+                <span>Question {currentQuestionIndex + 1} of {quiz.questions?.length}</span>
                 <div className="flex items-center gap-4">
                     <span>Score: {score}</span>
                     {isAdaptiveQuiz(quiz) && (
@@ -658,12 +649,10 @@ export default function Quiz() {
                                 {isAdaptiveQuiz(quiz) && (
                                     <div className="mt-3 p-3 bg-white/80 rounded-lg border border-gray-200">
                                         <p className="text-sm text-gray-600">
-                                            <span className="font-medium">Mastery updated:</span>{' '}
-                                            <span className={isCorrect ? 'text-green-600' : 'text-red-600'}>
-                                                {isCorrect ? '+15%' : '-10%'}
+                                            <span className="font-medium">Mastery:</span>{' '}
+                                            <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                                {Math.round(currentMastery * 100)}%
                                             </span>
-                                            {' '}&rarr;{' '}
-                                            <span className="font-medium">{Math.round(currentMastery * 100)}%</span>
                                         </p>
                                     </div>
                                 )}
@@ -682,7 +671,7 @@ export default function Quiz() {
                                 onClick={handleNextQuestion}
                                 className="px-6 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700"
                             >
-                                {currentQuestionIndex < quiz.questions.length - 1 ? "Next Question" : "Finish Quiz"}
+                                {currentQuestionIndex < quiz.questions?.length - 1 ? "Next Question" : "Finish Quiz"}
                             </button>
                         </div>
                     </div>
@@ -730,29 +719,29 @@ export default function Quiz() {
                                     r="64"
                                     strokeWidth="10"
                                     className={`fill-none transition-all duration-1000 ease-out ${
-                                        score / quiz.questions.length >= 0.7
+                                        score / quiz.questions?.length >= 0.7
                                             ? 'stroke-green-500'
-                                            : score / quiz.questions.length >= 0.4
+                                            : score / quiz.questions?.length >= 0.4
                                             ? 'stroke-yellow-500'
                                             : 'stroke-red-500'
                                     }`}
                                     style={{
                                         strokeDasharray: 402,
-                                        strokeDashoffset: 402 - (402 * score / quiz.questions.length),
+                                        strokeDashoffset: 402 - (402 * score / quiz.questions?.length),
                                         strokeLinecap: 'round',
                                     }}
                                 />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
                                 <Trophy className={`w-8 h-8 mb-1 ${
-                                    score / quiz.questions.length >= 0.7
+                                    score / quiz.questions?.length >= 0.7
                                         ? 'text-green-500'
-                                        : score / quiz.questions.length >= 0.4
+                                        : score / quiz.questions?.length >= 0.4
                                         ? 'text-yellow-500'
                                         : 'text-red-500'
                                 }`} />
                                 <span className="text-3xl font-bold text-gray-900">
-                                    {Math.round((score / quiz.questions.length) * 100)}%
+                                    {Math.round((score / quiz.questions?.length) * 100)}%
                                 </span>
                             </div>
                         </div>
@@ -760,15 +749,15 @@ export default function Quiz() {
                         {/* Score Summary */}
                         <div className="text-center mb-6">
                             <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                                {score / quiz.questions.length >= 0.7
+                                {score / quiz.questions?.length >= 0.7
                                     ? 'Great Job!'
-                                    : score / quiz.questions.length >= 0.4
+                                    : score / quiz.questions?.length >= 0.4
                                     ? 'Good Effort!'
                                     : 'Keep Learning!'}
                             </h3>
                             <p className="text-gray-600">
                                 You answered <span className="font-semibold text-blue-600">{score}</span> out of{' '}
-                                <span className="font-semibold">{quiz.questions.length}</span> questions correctly
+                                <span className="font-semibold">{quiz.questions?.length}</span> questions correctly
                             </p>
                             <p className="text-sm text-gray-500 mt-2">
                                 Topic: {activeTopic}

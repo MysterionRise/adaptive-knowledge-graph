@@ -61,7 +61,13 @@ export default function LearningPath({
           throw new Error('Failed to fetch learning path');
         }
         const data = await response.json();
-        setPathData(data);
+        // API returns {target_concept, prerequisites, total_concepts}
+        // Normalize to {concept, path, depth}
+        setPathData({
+          concept: data.target_concept || data.concept || conceptName,
+          path: data.path || data.prerequisites || [],
+          depth: data.depth ?? data.total_concepts ?? 0,
+        });
       } catch (err) {
         console.error('Error fetching learning path:', err);
         setError('Unable to load learning path. Please try again.');
@@ -119,7 +125,7 @@ export default function LearningPath({
     );
   }
 
-  if (!pathData || pathData.path.length === 0) {
+  if (!pathData || !pathData.path || pathData.path.length === 0) {
     return (
       <div className={`flex flex-col items-center justify-center p-8 ${className}`}>
         <Target className="w-8 h-8 text-gray-400 mb-3" />
