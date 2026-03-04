@@ -660,7 +660,12 @@ export default function Quiz() {
                                 {!isCorrect && (
                                     <div className="mt-4 p-4 bg-white rounded border border-red-200">
                                         <p className="text-xs uppercase font-bold text-gray-400 mb-1">Recommended Reading</p>
-                                        <p className="text-sm text-gray-800 italic">"Refer to section on {activeTopic}..."</p>
+                                        <button
+                                            onClick={() => router.push(`/chat?question=${encodeURIComponent(`Explain ${currentQ.related_concept || activeTopic}`)}`)}
+                                            className="text-sm text-blue-600 hover:text-blue-800 underline text-left"
+                                        >
+                                            Ask the tutor about {currentQ.related_concept || activeTopic}
+                                        </button>
                                     </div>
                                 )}
                             </div>
