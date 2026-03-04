@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adaptive Knowledge Graph — Conference Slides</title>
+
+  <!-- Reveal.js 5.x from CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" />
+
+  <style>
+    /* ── EPAM theme adaptation ── */
+    :root {
+      --color-bg: #000000;
+      --color-bg-code: #0d0f14;
+      --color-accent: #00F6FF;
+      --color-accent-green: #00F4AB;
+      --color-accent-purple: #B896FF;
+      --color-accent-blue: #428DFF;
+      --color-text: #ffffff;
+      --color-text-muted: #9ca3af;
+      --color-warning: #FF4B9B;
+      --color-danger: #FF4D40;
+      --bg-card: rgba(255,255,255,0.06);
+      --radius: 4px;
+    }
+
+    .reveal {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 28px;
+      color: var(--color-text);
+    }
+
+    .reveal .slides section {
+      background: var(--color-bg);
+      text-align: left;
+    }
+
+    .reveal h1, .reveal h2, .reveal h3 {
+      text-transform: none;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .reveal h2 {
+      color: var(--color-accent);
+      font-size: 34px;
+      margin-bottom: 15px;
+      border-bottom: 2px solid rgba(0, 246, 255, 0.4);
+      padding-bottom: 10px;
+    }
+
+    .reveal h3 {
+      color: var(--color-text);
+      font-size: 30px;
+      margin-bottom: 10px;
+    }
+
+    .reveal p, .reveal li {
+      font-size: 1.3em;
+      line-height: 1.5;
+    }
+
+    .reveal strong {
+      color: var(--color-accent);
+    }
+
+    .reveal em {
+      color: var(--color-text-muted);
+      font-style: italic;
+    }
+
+    .reveal ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .reveal li::marker {
+      color: var(--color-accent);
+    }
+
+    .reveal blockquote {
+      background: rgba(0, 246, 255, 0.06);
+      border-left: 3px solid var(--color-accent);
+      padding: 15px 20px;
+      margin: 15px 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 24px;
+      box-shadow: none;
+    }
+
+    /* ── Pain-point cards (Slide 1) ── */
+    .pain-points {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6em;
+      margin-top: 0.5em;
+    }
+
+    .pain-card {
+      background: var(--bg-card);
+      border-left: 3px solid var(--color-warning);
+      border-radius: var(--radius);
+      padding: 0.5em 0.8em;
+      font-size: 1.3em;
+      line-height: 1.45;
+    }
+
+    .pain-card strong {
+      color: var(--color-warning);
+    }
+
+    /* ── Side-by-side comparison (Slide 2) ── */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2em;
+      margin-bottom: 1em;
+    }
+
+    .flow-box {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 0.7em 0.9em;
+    }
+
+    .flow-box h4 {
+      margin: 0 0 0.5em 0;
+      font-size: 1em;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .flow-box.kg h4 {
+      color: var(--color-accent-green);
+    }
+
+    .flow-step {
+      display: inline-block;
+      background: rgba(255,255,255,0.08);
+      border-radius: var(--radius);
+      padding: 0.18em 0.45em;
+      margin: 0.12em 0;
+      font-size: 0.72em;
+      white-space: nowrap;
+    }
+
+    .flow-box.kg .flow-step {
+      background: rgba(0, 244, 171, 0.12);
+    }
+
+    .flow-arrow {
+      color: #666;
+      margin: 0 0.15em;
+      font-size: 0.72em;
+    }
+
+    .flow-box.kg .flow-arrow {
+      color: var(--color-accent-green);
+    }
+
+    .flow-note {
+      font-size: 0.65em;
+      color: var(--color-text-muted);
+      margin-top: 0.8em;
+      font-style: italic;
+    }
+
+    /* ── Architecture diagram (Slide 3) ── */
+    .arch {
+      width: 100%;
+      max-width: 820px;
+      margin: 0 auto;
+    }
+
+    .arch-layer {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 0.5em 0.7em;
+      margin-bottom: 0.35em;
+      text-align: center;
+    }
+
+    .arch-layer .layer-title {
+      font-size: 0.9em;
+      font-weight: 700;
+      color: var(--color-accent);
+    }
+
+    .arch-layer .layer-sub {
+      font-size: 0.6em;
+      color: var(--color-text-muted);
+      margin-top: 0.15em;
+    }
+
+    .arch-services {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.35em;
+    }
+
+    .arch-services .arch-layer {
+      margin-bottom: 0;
+      border-top: 3px solid var(--color-accent);
+    }
+
+    .arch-badges {
+      display: flex;
+      gap: 0.7em;
+      justify-content: center;
+      margin-top: 0.7em;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      background: rgba(0, 246, 255, 0.08);
+      border: 1px solid rgba(0, 246, 255, 0.3);
+      border-radius: 4px;
+      padding: 0.25em 0.65em;
+      font-size: 0.65em;
+      color: var(--color-accent);
+      font-weight: 600;
+    }
+
+    .arch-connector {
+      text-align: center;
+      font-size: 0.8em;
+      color: rgba(0, 246, 255, 0.4);
+      margin: -0.15em 0;
+      line-height: 1;
+    }
+
+    /* ── Demo steps (Slide 4) ── */
+    .demo-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55em;
+      margin-top: 0.3em;
+    }
+
+    .demo-step {
+      display: flex;
+      align-items: center;
+      gap: 0.6em;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 0.45em 0.7em;
+      font-size: 1.1em;
+    }
+
+    .step-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.6em;
+      height: 1.6em;
+      border-radius: 50%;
+      background: var(--color-accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 0.9em;
+      flex-shrink: 0;
+    }
+
+    .step-desc strong {
+      color: #fff;
+    }
+
+    .step-desc .step-detail {
+      color: var(--color-text-muted);
+      font-size: 0.75em;
+    }
+
+    .demo-note {
+      text-align: center;
+      color: var(--color-text-muted);
+      font-size: 0.7em;
+      margin-top: 1em;
+      font-style: italic;
+    }
+
+    /* ── Roadmap (Slide 5) ── */
+    .roadmap {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5em;
+      margin-top: 0.3em;
+    }
+
+    .roadmap-item {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 0.45em 0.7em;
+      font-size: 1.15em;
+      line-height: 1.4;
+    }
+
+    .roadmap-item strong {
+      color: var(--color-accent-green);
+    }
+
+    .slide-footer {
+      margin-top: 1.2em;
+      text-align: center;
+      font-size: 0.6em;
+      color: var(--color-text-muted);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 1 — The Problem                                        -->
+      <!-- ============================================================ -->
+      <section data-transition="slide">
+        <h2>Why Another AI Tutor?</h2>
+        <div class="pain-points">
+          <div class="pain-card fragment fade-up">
+            <strong>Expensive</strong> &mdash; LLM API costs make personalized tutoring hard to scale
+          </div>
+          <div class="pain-card fragment fade-up">
+            <strong>Generic</strong> &mdash; One-size-fits-all content ignores what each student already knows
+          </div>
+          <div class="pain-card fragment fade-up">
+            <strong>Privacy-Invasive</strong> &mdash; Student data sent to cloud APIs, no local-first option
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 2 — KG-Aware RAG: How It Works                        -->
+      <!-- ============================================================ -->
+      <section data-transition="fade">
+        <h2>KG-Aware RAG: How It Works</h2>
+
+        <div class="comparison">
+          <!-- Regular RAG -->
+          <div class="flow-box">
+            <h4>Regular RAG</h4>
+            <span class="flow-step">Question</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Semantic Search</span><span class="flow-arrow">&rarr;</span><span class="flow-step">5 Chunks</span><span class="flow-arrow">&rarr;</span><span class="flow-step">LLM</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Answer</span>
+          </div>
+          <!-- KG-Aware RAG -->
+          <div class="flow-box kg fragment fade-left">
+            <h4>KG-Aware RAG (Ours)</h4>
+            <span class="flow-step">Question</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Concept Extraction</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Graph Traversal</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Expanded Query</span><br/>
+            <span class="flow-arrow">&rarr;</span><span class="flow-step">Hybrid Search (20)</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Cross-Encoder Rerank</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Top 5</span><span class="flow-arrow">&rarr;</span><span class="flow-step">LLM</span><span class="flow-arrow">&rarr;</span><span class="flow-step">Answer</span>
+          </div>
+        </div>
+
+        <div class="flow-note fragment fade-up">
+          KG adds concept extraction + graph traversal before retrieval. Cross-encoder reranker filters 20 &rarr; 5 chunks by semantic relevance to the query.
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 3 — Architecture                                       -->
+      <!-- ============================================================ -->
+      <section data-transition="slide">
+        <h2>Architecture &mdash; Local-First, Open-Source</h2>
+
+        <div class="arch">
+          <div class="arch-layer fragment fade-down">
+            <div class="layer-title">Frontend &mdash; Next.js</div>
+            <div class="layer-sub">Graph Viz &middot; Chat &middot; Quiz &middot; Mastery</div>
+          </div>
+          <div class="arch-connector fragment fade-down">&darr;</div>
+          <div class="arch-layer fragment fade-down">
+            <div class="layer-title">Backend &mdash; FastAPI</div>
+            <div class="layer-sub">RAG + Reranker &middot; KG Ops &middot; BKT Mastery &middot; Quiz Gen</div>
+          </div>
+          <div class="arch-connector fragment fade-down">&darr;</div>
+          <div class="arch-services fragment fade-down">
+            <div class="arch-layer">
+              <div class="layer-title">Neo4j</div>
+              <div class="layer-sub">Knowledge Graph</div>
+            </div>
+            <div class="arch-layer">
+              <div class="layer-title">OpenSearch</div>
+              <div class="layer-sub">Vector + BM25</div>
+            </div>
+            <div class="arch-layer">
+              <div class="layer-title">Ollama</div>
+              <div class="layer-sub">Local LLM</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arch-badges fragment fade-up">
+          <span class="badge">400 Concepts</span>
+          <span class="badge">37K Relationships</span>
+          <span class="badge">19K Chunks</span>
+          <span class="badge">2 Subjects</span>
+          <span class="badge">Runs Locally</span>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 4 — Live Demo                                          -->
+      <!-- ============================================================ -->
+      <section data-transition="fade">
+        <h2>Let's See It in Action</h2>
+
+        <div class="demo-steps">
+          <div class="demo-step fragment fade-right">
+            <div class="step-num">1</div>
+            <div class="step-desc">
+              <strong>Ask a Question</strong><br/>
+              <span class="step-detail">KG expansion &rarr; hybrid search (20 chunks) &rarr; BGE reranker (top 5) &rarr; LLM</span>
+            </div>
+          </div>
+          <div class="demo-step fragment fade-right">
+            <div class="step-num">2</div>
+            <div class="step-desc">
+              <strong>Explore the Knowledge Graph</strong><br/>
+              <span class="step-detail">Interactive Cytoscape.js &mdash; 400 concepts, 37K relationships</span>
+            </div>
+          </div>
+          <div class="demo-step fragment fade-right">
+            <div class="step-num">3</div>
+            <div class="step-desc">
+              <strong>Take an Adaptive Quiz</strong><br/>
+              <span class="step-detail">Difficulty auto-targets student mastery level</span>
+            </div>
+          </div>
+          <div class="demo-step fragment fade-right">
+            <div class="step-num">4</div>
+            <div class="step-desc">
+              <strong>Watch BKT Mastery Update</strong><br/>
+              <span class="step-detail">Bayesian update: 0.30 &rarr; 0.65 &rarr; 0.88 &rarr; 0.97 over 3 correct answers</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-note">switching to live demo&hellip;</div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 5 — What's Next                                        -->
+      <!-- ============================================================ -->
+      <section data-transition="slide">
+        <h2>What's Next</h2>
+
+        <div class="roadmap">
+          <div class="roadmap-item fragment fade-up" style="border-left: 3px solid var(--color-accent-green);">
+            <strong>Bayesian Mastery (BKT)</strong> &mdash; Shipped! Replaces linear +/-&Delta; with probabilistic skill tracking
+          </div>
+          <div class="roadmap-item fragment fade-up" style="border-left: 3px solid var(--color-accent-green);">
+            <strong>BGE-Reranker</strong> &mdash; Shipped! Cross-encoder reranks 20 candidates &rarr; top 5 for LLM
+          </div>
+          <div class="roadmap-item fragment fade-up">
+            <strong>More Subjects</strong> &mdash; Pluggable knowledge graph configs per domain
+          </div>
+          <div class="roadmap-item fragment fade-up">
+            <strong>Evaluation</strong> &mdash; RAGAS benchmarks to measure actual retrieval quality
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          Proof of Concept &mdash; Adaptive Knowledge Graph
+        </div>
+      </section>
+
+    </div><!-- .slides -->
+  </div><!-- .reveal -->
+
+  <!-- Reveal.js core from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      transition: 'slide',
+      transitionSpeed: 'default',
+      backgroundTransition: 'fade',
+      center: true,
+      width: 1280,
+      height: 720,
+      margin: 0.08,
+      controls: true,
+      progress: true,
+    });
+  </script>
+</body>
+</html>
