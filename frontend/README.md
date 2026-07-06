@@ -8,7 +8,7 @@ Modern, responsive web interface for the Adaptive Knowledge Graph project, built
 - **AI Tutor Chat** - Ask questions with KG-aware RAG
 - **Comparison View** - See KG-RAG vs Regular RAG side-by-side
 - **Comprehensive Testing** - Unit tests (Jest) + E2E tests (Playwright)
-- **Mock Data Support** - Works standalone for development/demos
+- **Backend API Integration** - Designed to run against the FastAPI service
 - **Fully Responsive** - Mobile, tablet, and desktop optimized
 
 ---
@@ -18,7 +18,7 @@ Modern, responsive web interface for the Adaptive Knowledge Graph project, built
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Backend API running on `http://localhost:8000` (optional, can use mock data)
+- Backend API running on `http://localhost:8000`
 
 ### Installation
 
@@ -98,8 +98,6 @@ Create `.env.local` from `.env.example`:
 # Backend API URL
 NEXT_PUBLIC_API_URL=http://localhost:8000
 
-# Use mock data when backend is unavailable
-NEXT_PUBLIC_USE_MOCK_DATA=false
 ```
 
 ---
@@ -202,17 +200,11 @@ const response = await apiClient.askQuestion({
 const graphData = await apiClient.getGraphData();
 ```
 
-### Mock Data Fallback
+### Backend Requirement
 
-When backend is unavailable, API client automatically falls back to mock data:
-- 15 sample biology concepts
-- Realistic graph structure
-- Example Q&A responses
-
-Enable explicitly:
-```env
-NEXT_PUBLIC_USE_MOCK_DATA=true
-```
+The frontend expects the FastAPI backend to be available. It does not currently
+implement automatic mock-data fallback; keep tests and demos wired to explicit
+mocks or a running backend.
 
 ---
 
@@ -244,7 +236,6 @@ CMD ["npm", "start"]
 
 ```env
 NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-NEXT_PUBLIC_USE_MOCK_DATA=false
 ```
 
 ---
@@ -258,7 +249,7 @@ NEXT_PUBLIC_USE_MOCK_DATA=false
 **Fix:**
 1. Check backend is running: `curl http://localhost:8000/health`
 2. Verify `NEXT_PUBLIC_API_URL` in `.env.local`
-3. Enable mock data temporarily: `NEXT_PUBLIC_USE_MOCK_DATA=true`
+3. Restart the frontend after changing environment variables
 
 ### Graph visualization not rendering
 

@@ -2,6 +2,30 @@
 Custom exceptions for the Adaptive Knowledge Graph application.
 """
 
+import re
+
+_SECRET_PATTERNS = [
+    re.compile(r"(?i)(api[_-]?key|token|password|secret)=([^&\s]+)"),
+    re.compile(r"(?i)(api[_-]?key|token|password|secret):\s*([^\s,]+)"),
+    re.compile(r"(?i)(bearer\s+)[a-z0-9._\-]+"),
+    re.compile(r"(?i)(sk-[a-z0-9._\-]+)"),
+    re.compile(r"(?i)(sk-or-v1-[a-z0-9._\-]+)"),
+]
+
+
+def safe_error_message(error: Exception | str, fallback: str = "Service unavailable") -> str:
+    """Return a bounded, redacted message safe for API responses and health checks."""
+    message = str(error)
+    if not message:
+        return fallback
+
+    for pattern in _SECRET_PATTERNS:
+        message = pattern.sub(lambda match: match.group(1) + "[REDACTED]", message)
+
+    # Avoid exposing very long driver traces or connection strings in health responses.
+    message = message.replace("\n", " ").replace("\r", " ")
+    return message[:160]
+
 
 class AdaptiveKGException(Exception):
     """Base exception for the application."""

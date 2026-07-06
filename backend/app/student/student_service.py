@@ -1,11 +1,14 @@
 """
 Student service for managing student profiles and mastery tracking.
 
-Implements a simple JSON file-based persistence for student profiles,
-suitable for demos and small-scale deployments.
+The default storage backend is SQLite for transactional local persistence.
+JSON storage is retained for backwards compatibility with existing fixtures,
+seed scripts, and small offline demos.
 """
 
 import json
+import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -26,9 +29,11 @@ class StudentService:
     """
     Service for managing student profiles and mastery tracking.
 
-    Uses JSON file persistence at data/processed/student_profiles.json.
-    Thread-safe for single-process usage (demo/dev scenarios).
+    Uses SQLite persistence by default. JSON is supported when a `.json`
+    storage path is explicitly provided.
     """
+
+    _storage_lock = threading.RLock()
 
     # Mastery update parameters
     CORRECT_DELTA = 0.15  # Increase on correct answer
@@ -40,13 +45,28 @@ class StudentService:
         """Initialize student service with optional custom storage path."""
         if storage_path:
             self.storage_path = Path(storage_path)
+            self.storage_backend = (
+                "sqlite" if self.storage_path.suffix in {".db", ".sqlite", ".sqlite3"} else "json"
+            )
         else:
-            self.storage_path = Path(settings.data_processed_dir) / "student_profiles.json"
+            self.storage_backend = settings.student_storage_backend
+            self.storage_path = (
+                Path(settings.student_profiles_db)
+                if self.storage_backend == "sqlite"
+                else Path(settings.data_processed_dir) / "student_profiles.json"
+            )
 
         self._profiles: dict[str, StudentProfile] = {}
         self._load_profiles()
 
     def _load_profiles(self) -> None:
+        """Load profiles from the configured storage backend."""
+        if self.storage_backend == "sqlite":
+            self._load_profiles_sqlite()
+        else:
+            self._load_profiles_json()
+
+    def _load_profiles_json(self) -> None:
         """Load profiles from JSON file."""
         try:
             if self.storage_path.exists():
@@ -82,7 +102,48 @@ class StudentService:
             logger.warning(f"Failed to load profiles, starting fresh: {e}")
             self._profiles = {}
 
+    def _ensure_sqlite_schema(self) -> None:
+        """Create SQLite schema if needed."""
+        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.storage_path) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS student_profiles (
+                    student_id TEXT PRIMARY KEY,
+                    profile_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+
+    def _load_profiles_sqlite(self) -> None:
+        """Load profiles from SQLite."""
+        try:
+            self._ensure_sqlite_schema()
+            with sqlite3.connect(self.storage_path) as conn:
+                rows = conn.execute(
+                    "SELECT student_id, profile_json FROM student_profiles"
+                ).fetchall()
+            self._profiles = {
+                student_id: StudentProfile(**json.loads(profile_json))
+                for student_id, profile_json in rows
+            }
+            logger.info(f"Loaded {len(self._profiles)} student profiles from SQLite")
+        except Exception as e:
+            logger.warning(f"Failed to load SQLite profiles, starting fresh: {e}")
+            self._profiles = {}
+
     def _save_profiles(self) -> None:
+        """Save all profiles to the configured storage backend."""
+        if self.storage_backend == "sqlite":
+            for profile in self._profiles.values():
+                self._save_profile_sqlite(profile)
+        else:
+            self._save_profiles_json()
+
+    def _save_profiles_json(self) -> None:
         """Save profiles to JSON file."""
         try:
             self.storage_path.parent.mkdir(parents=True, exist_ok=True)
@@ -115,6 +176,34 @@ class StudentService:
         except Exception as e:
             logger.error(f"Failed to save profiles: {e}")
 
+    def _save_profile_sqlite(self, profile: StudentProfile) -> None:
+        """Save one profile to SQLite using an atomic upsert."""
+        try:
+            self._ensure_sqlite_schema()
+            profile_json = profile.model_dump_json()
+            with self._storage_lock, sqlite3.connect(self.storage_path, timeout=10) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO student_profiles (student_id, profile_json, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(student_id) DO UPDATE SET
+                        profile_json = excluded.profile_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (profile.student_id, profile_json, profile.updated_at.isoformat()),
+                )
+                conn.commit()
+            logger.debug(f"Saved profile {profile.student_id} to {self.storage_path}")
+        except Exception as e:
+            logger.error(f"Failed to save SQLite profile {profile.student_id}: {e}")
+
+    def _persist_profile(self, profile: StudentProfile) -> None:
+        """Persist one profile, or all profiles for JSON compatibility."""
+        if self.storage_backend == "sqlite":
+            self._save_profile_sqlite(profile)
+        else:
+            self._save_profiles()
+
     def get_profile(self, student_id: str = "default") -> StudentProfile:
         """Get or create a student profile."""
         if student_id not in self._profiles:
@@ -122,7 +211,7 @@ class StudentService:
                 student_id=student_id,
                 overall_ability=settings.student_initial_mastery,
             )
-            self._save_profiles()
+            self._persist_profile(self._profiles[student_id])
 
         return self._profiles[student_id]
 
@@ -230,7 +319,7 @@ class StudentService:
         profile.updated_at = datetime.now()
 
         # Persist changes
-        self._save_profiles()
+        self._persist_profile(profile)
 
         # Get new target difficulty
         target_difficulty = profile.get_target_difficulty(concept)
@@ -271,7 +360,7 @@ class StudentService:
             student_id=student_id,
             overall_ability=settings.student_initial_mastery,
         )
-        self._save_profiles()
+        self._persist_profile(self._profiles[student_id])
 
         logger.info(f"Reset profile for student {student_id}")
 

@@ -130,84 +130,10 @@ async def ask_question(body: QuestionRequest, request: Request):
     """
     try:
         logger.info(f"Question: {body.question} (subject: {body.subject or 'default'})")
-
-        # Get subject configuration for prompts and attribution
-        from backend.app.core.subjects import get_subject
-
-        subject_config = get_subject(body.subject)
-        subject_id = subject_config.id
-
-        # Step 1: Knowledge Graph Expansion (if enabled)
-        expanded_concepts = []
-        query = body.question
-
-        if body.use_kg_expansion and settings.rag_kg_expansion:
-            try:
-                all_concepts = get_all_concepts_from_neo4j(subject_id)
-                if all_concepts:
-                    expander = get_kg_expander(subject_id)
-                    expansion_result = expander.expand_query(body.question, all_concepts)
-
-                    expanded_concepts = expansion_result["expanded_concepts"]
-                    query = expansion_result["expanded_query"]
-
-                    logger.info(
-                        f"KG Expansion: {len(expansion_result['extracted_concepts'])} -> "
-                        f"{len(expanded_concepts)} concepts"
-                    )
-            except Exception as e:
-                logger.warning(f"KG expansion failed, continuing without it: {e}")
-
-        # Step 2: Retrieve relevant chunks from subject-specific index
-        retriever = get_retriever(subject_id)
-        retrieval_top_k = settings.rag_retrieval_top_k if settings.reranker_enabled else body.top_k
-        retrieved_chunks = retriever.retrieve(query, top_k=retrieval_top_k)
-
-        if not retrieved_chunks:
-            raise ContentNotFoundError("No relevant content found for this question")
-
-        initial_count = len(retrieved_chunks)
-        window_expanded_count = None
-
-        # Step 2b: Window expansion via NEXT relationships (enterprise pattern)
-        if (
-            body.use_window_retrieval
-            and settings.rag_window_retrieval
-            and settings.vector_backend in ("neo4j", "hybrid")
-        ):
-            try:
-                from backend.app.rag.window_retriever import get_window_retriever
-
-                window_retriever = get_window_retriever()
-                chunk_ids: list[str] = [c["id"] for c in retrieved_chunks if c.get("id")]
-
-                if chunk_ids:
-                    window_results = window_retriever.retrieve_window_text(
-                        chunk_ids=chunk_ids,
-                        window_size=body.window_size,
-                    )
-
-                    # Replace retrieved chunks with window-expanded results
-                    if window_results:
-                        retrieved_chunks = [
-                            {
-                                "text": r["text"],
-                                "module_id": r.get("module_id"),
-                                "section": r.get("section"),
-                                "score": 1.0,  # Window chunks don't have scores
-                                "chunk_count": r.get("chunk_count", 1),
-                            }
-                            for r in window_results
-                        ]
-                        window_expanded_count = sum(r.get("chunk_count", 1) for r in window_results)
-                        logger.info(
-                            f"Window expansion: {initial_count} -> {window_expanded_count} chunks"
-                        )
-            except Exception as e:
-                logger.warning(f"Window retrieval failed, using original chunks: {e}")
-
-        # Step 2c: Rerank chunks (if enabled)
-        retrieved_chunks = _maybe_rerank(body.question, retrieved_chunks, body.top_k)
+        ctx = await _retrieve_context(body)
+        subject_config = ctx["subject_config"]
+        expanded_concepts = ctx["expanded_concepts"]
+        retrieved_chunks = ctx["retrieved_chunks"]
 
         # Step 3: Generate answer using LLM with subject-specific prompts
         llm_client = get_llm_client()
@@ -237,8 +163,8 @@ async def ask_question(body: QuestionRequest, request: Request):
             answer=answer_result["answer"],
             sources=sources,
             expanded_concepts=expanded_concepts if expanded_concepts else None,
-            retrieved_count=initial_count,
-            window_expanded_count=window_expanded_count,
+            retrieved_count=ctx["initial_count"],
+            window_expanded_count=ctx["window_expanded_count"],
             model=answer_result["model"],
             attribution=subject_config.attribution,
         )

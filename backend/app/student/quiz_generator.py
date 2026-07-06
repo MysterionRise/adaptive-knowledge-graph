@@ -223,7 +223,7 @@ JSON Output:"""
             difficulty_str: Difficulty level from LLM (easy/medium/hard)
 
         Returns:
-            Tuple of (difficulty level, IRT-style score 0.0-1.0)
+            Tuple of (difficulty level, heuristic difficulty score 0.0-1.0)
         """
         difficulty_str = difficulty_str.lower().strip()
 

@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ from backend.app.api import (
     quiz_router,
     subjects_router,
 )
+from backend.app.core.exceptions import safe_error_message
 from backend.app.core.logging import setup_logging
 from backend.app.core.middleware import RequestIDMiddleware
 from backend.app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -79,7 +80,7 @@ app = FastAPI(
         "(Ollama/OpenRouter) for personalized education.\n\n"
         "## Key Features\n"
         "- **KG-Aware RAG**: Query expansion via knowledge graph traversal + semantic retrieval\n"
-        "- **Adaptive Quizzes**: Difficulty targeting based on real-time student mastery (BKT/IRT)\n"
+        "- **Adaptive Quizzes**: Difficulty targeting with BKT-inspired mastery updates\n"
         "- **Streaming Responses**: SSE-based token streaming for real-time answer generation\n"
         "- **Multi-Subject**: Isolated knowledge graphs and search indices per subject\n"
         "- **Privacy-First**: Local-only mode with Ollama for on-premise deployments\n\n"
@@ -178,7 +179,7 @@ async def check_neo4j_health() -> ServiceHealth:
 
     except Exception as e:
         logger.warning(f"Neo4j health check failed: {e}")
-        return ServiceHealth(status=ServiceStatus.ERROR, message=str(e)[:100])
+        return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
 
 
 async def check_opensearch_health() -> ServiceHealth:
@@ -192,7 +193,10 @@ async def check_opensearch_health() -> ServiceHealth:
         protocol = "https" if settings.opensearch_use_ssl else "http"
         url = f"{protocol}://{settings.opensearch_host}:{settings.opensearch_port}/_cluster/health"
 
-        async with httpx.AsyncClient(verify=False, timeout=5.0) as client:
+        async with httpx.AsyncClient(
+            verify=settings.opensearch_verify_certs,
+            timeout=5.0,
+        ) as client:
             if settings.opensearch_password:
                 auth = (settings.opensearch_user, settings.opensearch_password)
                 response = await client.get(url, auth=auth)
@@ -227,7 +231,7 @@ async def check_opensearch_health() -> ServiceHealth:
 
     except Exception as e:
         logger.warning(f"OpenSearch health check failed: {e}")
-        return ServiceHealth(status=ServiceStatus.ERROR, message=str(e)[:100])
+        return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
 
 
 async def check_ollama_health() -> ServiceHealth:
@@ -268,11 +272,11 @@ async def check_ollama_health() -> ServiceHealth:
 
     except Exception as e:
         logger.warning(f"Ollama health check failed: {e}")
-        return ServiceHealth(status=ServiceStatus.ERROR, message=str(e)[:100])
+        return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
 
 
 @app.get("/health/ready", response_model=ReadinessResponse, tags=["Health"])
-async def health_ready():
+async def health_ready(response: Response):
     """
     Readiness check endpoint with service dependency verification.
 
@@ -311,10 +315,13 @@ async def health_ready():
         critical_services = ["neo4j", "opensearch"]
         if any(services[svc].status == ServiceStatus.ERROR for svc in critical_services):
             overall_status = "unhealthy"
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         else:
             overall_status = "degraded"
+            response.status_code = status.HTTP_200_OK
     else:
         overall_status = "degraded"
+        response.status_code = status.HTTP_200_OK
 
     return ReadinessResponse(
         status=overall_status,  # type: ignore[arg-type]

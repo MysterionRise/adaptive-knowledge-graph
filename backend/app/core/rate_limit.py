@@ -17,8 +17,8 @@ def get_rate_limit_key(request: Request) -> str:
     """
     Get the rate limit key for a request.
 
-    Uses X-Forwarded-For header if available (for reverse proxies),
-    otherwise falls back to remote address.
+    Uses X-Forwarded-For only when trusted proxy headers are explicitly enabled,
+    otherwise falls back to the direct remote address.
 
     Args:
         request: The incoming request
@@ -26,9 +26,8 @@ def get_rate_limit_key(request: Request) -> str:
     Returns:
         The client identifier for rate limiting
     """
-    # Check for X-Forwarded-For header (reverse proxy)
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
+    if settings.trust_proxy_headers and forwarded:
         # X-Forwarded-For can contain multiple IPs, use the first one
         return forwarded.split(",")[0].strip()
 

@@ -17,7 +17,7 @@ class QuizQuestion(BaseModel):
     source_chunk_id: str | None = None
     related_concept: str | None = None
     difficulty: Literal["easy", "medium", "hard"] | None = None
-    difficulty_score: float | None = None  # 0.0-1.0 IRT-style difficulty
+    difficulty_score: float | None = None  # 0.0-1.0 heuristic difficulty
 
 
 class Quiz(BaseModel):

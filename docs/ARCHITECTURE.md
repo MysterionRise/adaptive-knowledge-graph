@@ -1,314 +1,156 @@
-# Architecture Documentation
+# Architecture
 
-This document describes the technical architecture of the Adaptive Knowledge Graph platform.
+Adaptive Knowledge Graph is a production-shaped KG-RAG prototype. The system is
+designed to show CTO-level AI platform judgment: graph-aware retrieval,
+local-first inference, transparent citations, adaptive assessment, and explicit
+operational tradeoffs.
 
-## System Overview
+## System Shape
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                        │
-│  ┌───────────────────────────────────────────────────────────────────────────┐  │
-│  │                      Next.js Frontend (Port 3000)                          │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐  │  │
-│  │  │ KnowledgeGraph│ │  Quiz.tsx   │ │ LearningPath │ │    Chat Interface   │  │  │
-│  │  │  (Cytoscape) │ │             │ │    .tsx      │ │                     │  │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────────────┘  │  │
-│  │                           ↓ HTTP/REST ↓                                    │  │
-│  └───────────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                               API LAYER                                          │
-│  ┌───────────────────────────────────────────────────────────────────────────┐  │
-│  │                    FastAPI Backend (Port 8000)                              │  │
-│  │                                                                             │  │
-│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
-│  │  │ MIDDLEWARE: CORS │ Rate Limiting (slowapi) │ API Key Auth (optional) │  │  │
-│  │  └──────────────────────────────────────────────────────────────────────┘  │  │
-│  │                                                                             │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐  │  │
-│  │  │  /api/v1/ask │ │/api/v1/quiz │ │/api/v1/graph│ │/api/v1/learning-path│  │  │
-│  │  │  (Q&A RAG)   │ │ (Generate)  │ │  (Stats)    │ │   (Prerequisites)   │  │  │
-│  │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └─────────┬───────────┘  │  │
-│  │         │               │               │                   │              │  │
-│  │         ▼               ▼               ▼                   ▼              │  │
-│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
-│  │  │              BUSINESS LOGIC LAYER (backend/app/)                      │  │  │
-│  │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   │  │  │
-│  │  │  │ RAG      │ │ NLP      │ │ KG       │ │ Student  │ │ Quiz     │   │  │  │
-│  │  │  │ Retriever│ │ LLM      │ │ Adapter  │ │ Model    │ │ Generator│   │  │  │
-│  │  │  │          │ │ Client   │ │          │ │ (BKT/IRT)│ │          │   │  │  │
-│  │  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘   │  │  │
-│  │  └──────────────────────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                    │                   │                   │
-                    ▼                   ▼                   ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                             DATA LAYER                                           │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────────┐  │
-│  │     Neo4j        │  │   OpenSearch      │  │         Ollama                │  │
-│  │  (Port 7474)     │  │   (Port 9200)     │  │       (Port 11434)            │  │
-│  │                  │  │                   │  │                               │  │
-│  │  • Concepts      │  │  • Chunk vectors  │  │  • Llama 3.1 8B (4-bit)       │  │
-│  │  • Modules       │  │  • BGE-M3 1024d   │  │  • Structured output          │  │
-│  │  • PREREQUISITE  │  │  • Hybrid search  │  │  • Answer generation          │  │
-│  │  • RELATED_TO    │  │    (kNN + BM25)   │  │  • Quiz MCQ creation          │  │
-│  │  • NEXT (chunks) │  │                   │  │                               │  │
-│  └──────────────────┘  └──────────────────┘  └──────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────┘
+```text
+Browser / Next.js
+  - graph visualization
+  - chat with SSE streaming
+  - KG-RAG vs plain RAG comparison
+  - adaptive quiz and recommendations
+
+FastAPI
+  - /api/v1/ask and /ask/stream
+  - /api/v1/quiz/*
+  - /api/v1/graph/*
+  - /api/v1/student/*
+  - /health/live and /health/ready
+
+Data and model services
+  - Neo4j: concepts, modules, prerequisite/related relationships, chunk windows
+  - OpenSearch: BM25 + vector retrieval over textbook chunks
+  - Ollama/OpenRouter: answer and quiz generation
+  - SQLite: local student mastery profiles
 ```
 
-## Component Details
+## Request Flow
 
-### 1. Frontend (Next.js)
+### KG-RAG answer
 
-**Location:** `frontend/`
+1. Validate question, subject, top-k, and retrieval options.
+2. Resolve subject config from `config/subjects.yaml`.
+3. Extract query concepts and expand them with Neo4j neighbors when enabled.
+4. Retrieve chunks from OpenSearch with kNN or hybrid BM25 + vector search.
+5. Optionally add window context when Neo4j chunk windows are enabled.
+6. Optionally rerank retrieved chunks.
+7. Generate an answer with source-grounded prompt instructions.
+8. Return answer, sources, expanded concepts, model, attribution, and counts.
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| KnowledgeGraph | `components/KnowledgeGraph.tsx` | Cytoscape.js graph visualization |
-| Quiz | `components/Quiz.tsx` | Interactive quiz with mastery tracking |
-| LearningPath | `components/LearningPath.tsx` | Prerequisite chain visualization |
-| ErrorBoundary | `components/ErrorBoundary.tsx` | Graceful error handling |
-| Providers | `components/Providers.tsx` | Client-side context providers |
+Both blocking and streaming answer endpoints now share the same retrieval helper
+so retrieval behavior does not drift between API modes.
 
-**State Management:** Zustand store (`lib/store.ts`) for:
-- Mastery tracking per concept
-- Quiz answers and scores
-- User preferences
+### Adaptive assessment
 
-### 2. API Layer (FastAPI)
+1. Retrieve topic-relevant content.
+2. Ask the LLM to generate MCQs with difficulty labels and explanations.
+3. Update concept mastery after each answer.
+4. Use BKT-inspired Bayesian updates when enabled; otherwise fall back to simple
+   linear updates.
+5. Generate remediation or advancement recommendations from weak/strong concepts.
 
-**Location:** `backend/app/api/`
+This is a credible adaptive-learning demo, not a validated certification engine.
+Question difficulty is LLM-estimated and should not be treated as calibrated IRT.
 
-#### Route Modules
+## Data Boundaries
 
-| Module | Endpoints | Purpose |
-|--------|-----------|---------|
-| `routes/ask.py` | `POST /api/v1/ask` | KG-aware RAG Q&A |
-| `routes/quiz.py` | `POST /api/v1/quiz/generate` | LLM quiz generation |
-| `routes/graph.py` | `GET /api/v1/graph/*` | Graph operations |
-| `routes/learning_path.py` | `GET /api/v1/learning-path/*` | Prerequisite chains |
+Subjects are isolated by configuration:
 
-#### Middleware Stack
+- Neo4j labels use a subject prefix such as `us_history_Concept`.
+- OpenSearch indices are subject-specific.
+- Prompts, theme colors, attribution, and books are subject-specific.
 
-1. **CORS** - Allow frontend origins
-2. **Rate Limiting** (slowapi) - Prevent abuse
-   - `/ask`: 10 req/min
-   - `/quiz`: 5 req/min
-   - `/graph/*`: 30 req/min
-3. **API Key Auth** (optional) - Protect sensitive endpoints
+This works on Neo4j Community Edition. A production multi-tenant deployment
+should add tenant IDs, role boundaries, and stronger data isolation.
 
-#### Health Endpoints
+## Security Model
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /health` | Basic liveness (always healthy if running) |
-| `GET /health/live` | Kubernetes liveness probe |
-| `GET /health/ready` | Readiness with dependency checks |
+Local development is open by default. When `API_KEY` is configured, protected
+student and graph-query endpoints require `X-API-Key`.
 
-### 3. Business Logic Layer
+Implemented hardening:
 
-**Location:** `backend/app/`
+- external TLS verification enabled by default
+- local OpenSearch uses HTTP in Compose instead of pretending to use TLS
+- `/health/ready` returns 503 when Neo4j or OpenSearch are unavailable
+- health/error details are redacted before exposure
+- OpenSearch image is pinned instead of using `latest`
+- `X-Forwarded-For` is ignored for rate limiting unless trusted proxy headers
+  are explicitly enabled
 
-#### RAG Pipeline (`rag/`)
+Not implemented yet:
 
-```
-Question → KG Expansion → Retrieval → Reranking → LLM Generation → Answer
-    │           │             │            │             │
-    │           ▼             ▼            ▼             ▼
-    │      Neo4j:       OpenSearch:   BGE-Reranker:  Ollama:
-    │      Extract      Hybrid kNN    Score & filter Generate
-    │      concepts     + BM25        top-k          with context
-    │           │             │            │             │
-    └───────────┴─────────────┴────────────┴─────────────┘
-                    Window Retrieval (NEXT relationships)
-```
+- full user identity
+- tenant-aware authorization
+- audit-grade assessment attempts
+- production secret management
 
-**Key Components:**
+## Observability
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| Retriever | `rag/retriever.py` | OpenSearch hybrid search |
-| KG Expander | `rag/kg_expansion.py` | Query enhancement via graph |
-| Window Retriever | `rag/window_retriever.py` | NEXT relationship traversal |
-| Chunker | `rag/chunker.py` | 512-token overlapping chunks |
+Every request receives an `X-Request-ID`. The middleware logs method, path,
+status code, and elapsed milliseconds, and returns `X-Response-Time-ms` for
+simple latency checks.
 
-#### Knowledge Graph (`kg/`)
+The next production step is structured tracing across retrieval, graph
+expansion, LLM generation, and student-model updates.
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| Neo4jAdapter | `kg/neo4j_adapter.py` | Graph CRUD operations |
-| Schema | `kg/schema.py` | Node/edge type definitions |
-| CypherQA | `kg/cypher_qa.py` | Natural language → Cypher |
+## Evaluation
 
-#### NLP Services (`nlp/`)
-
-| Component | File | Purpose |
-|-----------|------|---------|
-| LLM Client | `nlp/llm_client.py` | Ollama + OpenRouter wrapper |
-| Embeddings | `nlp/embeddings.py` | BGE-M3 encoding |
-| Concept Extractor | `nlp/concept_extractor.py` | YAKE + KeyBERT extraction |
-
-### 4. Data Layer
-
-#### Neo4j Graph Schema
-
-```cypher
-// Nodes
-(:Concept {name, importance_score, key_term, chapter})
-(:Module {id, title, chapter})
-(:Chunk {id, text, embedding})
-
-// Relationships
-(:Concept)-[:PREREQUISITE]->(:Concept)
-(:Concept)-[:RELATED_TO]->(:Concept)
-(:Module)-[:CONTAINS]->(:Concept)
-(:Chunk)-[:NEXT]->(:Chunk)  // Window retrieval
-```
-
-#### OpenSearch Index
-
-```json
-{
-  "mappings": {
-    "properties": {
-      "text": { "type": "text" },
-      "embedding": {
-        "type": "knn_vector",
-        "dimension": 1024
-      },
-      "module_id": { "type": "keyword" },
-      "chapter": { "type": "keyword" }
-    }
-  }
-}
-```
-
-## Request Flow Examples
-
-### 1. Q&A Request (`POST /api/v1/ask`)
-
-```
-1. User asks: "What caused the American Revolution?"
-
-2. KG Expansion (if enabled):
-   - Extract concepts: ["American Revolution"]
-   - Query Neo4j for related concepts
-   - Expand to: ["American Revolution", "Taxation", "Boston Tea Party", "Independence"]
-
-3. Retrieval:
-   - Hybrid search in OpenSearch (kNN + BM25)
-   - Retrieve top 20 chunks
-   - BGE-Reranker filters to top 5
-
-4. Window Expansion (if enabled):
-   - For each chunk, traverse NEXT relationships
-   - Include surrounding context chunks
-
-5. LLM Generation:
-   - Format context + question as prompt
-   - Generate answer via Ollama
-   - Include source citations
-
-6. Response with sources, expanded concepts, model info
-```
-
-### 2. Quiz Generation (`POST /api/v1/quiz/generate`)
-
-```
-1. User requests quiz on "American Revolution"
-
-2. Content Retrieval:
-   - Search for chunks mentioning topic
-   - Select diverse content for question variety
-
-3. LLM Generation:
-   - For each chunk, generate MCQ with:
-     - Question text
-     - 4 options (1 correct, 3 distractors)
-     - Explanation
-     - Related concept
-
-4. Response with quiz questions, metadata
-```
-
-## Security Considerations
-
-### Authentication
-
-- **API Key Auth**: Optional, configured via `API_KEY` env var
-- **Development Mode**: Auth disabled when no key configured
-- **Timing-safe comparison**: Prevents timing attacks
-
-### Rate Limiting
-
-- Prevents DOS and abuse
-- Per-IP tracking with X-Forwarded-For support
-- Configurable limits per endpoint type
-
-### Data Privacy
-
-- **Local-first**: Default mode runs entirely on-device
-- **No telemetry**: No usage data sent externally
-- **Opt-in remote**: OpenRouter fallback is explicit opt-in
-
-## Deployment Options
-
-### Development
+The repo includes a lightweight evaluator:
 
 ```bash
-docker compose -f infra/compose/compose.yaml --profile cpu up -d
-poetry run uvicorn backend.app.main:app --reload
-cd frontend && npm run dev
+poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
 ```
 
-### Production (Docker Compose)
+It runs a small golden set with KG expansion on/off and tracks:
 
-```bash
-docker compose -f infra/compose/compose.yaml --profile gpu up -d
-```
+- answer term recall
+- citation hit rate
+- expected-source MRR
+- KG-vs-plain metric deltas
+- latency
+- expanded concepts
+- approximate answer tokens
 
-### Production (Kubernetes)
+This creates a baseline for AI engineering discipline. A production system would
+expand this into a larger human-reviewed and regression-gated evaluation suite.
 
-See `infra/k8s/` for:
-- Deployment manifests
-- Service definitions
-- ConfigMaps and Secrets
-- Horizontal Pod Autoscaler
+## Key Tradeoffs
 
-## Performance Characteristics
+### Neo4j
 
-| Operation | Typical Latency | Notes |
-|-----------|-----------------|-------|
-| Q&A (local LLM) | 2-5s | Depends on context length |
-| Q&A (remote LLM) | 1-3s | Network dependent |
-| Quiz generation | 5-10s | 3 questions default |
-| Graph visualization | <500ms | Limited to 100 nodes |
-| Health check | <100ms | Cached connections |
+Chosen because prerequisite traversal, concept neighborhoods, and learning-path
+queries are graph-native. The tradeoff is operational weight and a need for
+careful Cypher safety.
 
-## Monitoring
+### OpenSearch
 
-### Metrics (Prometheus)
+Chosen because the prototype needs lexical BM25 and dense retrieval in one
+service. For very small corpora, SQLite FTS or Chroma would be simpler but would
+not demonstrate hybrid production retrieval as clearly.
 
-- Request latency (p50, p95, p99)
-- Error rates by endpoint
-- LLM token usage
-- Database connection pool
+### Local-first LLMs
 
-### Logging (Loguru)
+Chosen because education data has privacy concerns. The tradeoff is hardware
+cost and cold-start latency. Remote fallback exists for demo reliability, not as
+the preferred privacy posture.
 
-- Structured JSON logs
-- Request tracing
-- Error stack traces
-- Performance timing
+### Next.js frontend
 
----
+Chosen over Streamlit because graph interaction, streaming chat, and repeated
+learning workflows need a real frontend. The tradeoff is a larger build and test
+surface.
 
-## Further Reading
+## Production Gap List
 
-- [Testing Guide](../TESTING.md) - How to run and write tests
-- [Compliance](../COMPLIANCE.md) - OpenStax licensing compliance
-- [Contributing](../CONTRIBUTING.md) - How to contribute
+- Replace API-key auth with identity, roles, and tenant-aware access control.
+- Move blocking Neo4j/OpenSearch calls off the event loop or use async clients.
+- Add OpenTelemetry spans for retrieval and generation.
+- Add a persistent question bank and assessment attempt ledger.
+- Add database migrations and backups.
+- Expand RAG evaluation and require eval deltas in CI.
+- Provision a real staging environment for automated browser E2E tests.

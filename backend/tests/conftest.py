@@ -7,6 +7,8 @@ Provides:
 - TestClient fixture for API testing
 """
 
+import os
+import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,6 +16,26 @@ from fastapi.testclient import TestClient
 
 from backend.app.core.settings import Settings
 from backend.app.main import app
+
+
+@pytest.fixture(autouse=True)
+def per_test_timeout():
+    """Bound individual backend tests so CI cannot hang indefinitely."""
+    timeout_seconds = int(os.getenv("PYTEST_TEST_TIMEOUT_SECONDS", "60"))
+    if timeout_seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _handle_timeout(signum, frame):
+        raise TimeoutError(f"Test exceeded {timeout_seconds}s timeout")
+
+    previous_handler = signal.signal(signal.SIGALRM, _handle_timeout)
+    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 @pytest.fixture(scope="session")

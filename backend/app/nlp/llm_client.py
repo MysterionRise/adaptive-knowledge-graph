@@ -240,6 +240,7 @@ class LLMClient:
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_param: ssl.SSLContext | bool = ssl_context if ssl_context is not None else True
 
         @retry(
             stop=stop_after_attempt(settings.llm_retry_attempts),
@@ -256,7 +257,7 @@ class LLMClient:
                         json=payload,
                         headers=headers,
                         timeout=aiohttp.ClientTimeout(total=settings.llm_timeout),
-                        ssl=ssl_context if ssl_context is not None else False,
+                        ssl=ssl_param,
                     ) as response:
                         if response.status == 200:
                             data = await response.json()
@@ -307,6 +308,7 @@ class LLMClient:
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_param: ssl.SSLContext | bool = ssl_context if ssl_context is not None else True
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -315,7 +317,7 @@ class LLMClient:
                     json=payload,
                     headers=headers,
                     timeout=aiohttp.ClientTimeout(total=settings.llm_stream_timeout),
-                    ssl=ssl_context if ssl_context is not None else False,
+                    ssl=ssl_param,
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
