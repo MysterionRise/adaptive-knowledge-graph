@@ -10,10 +10,11 @@ Includes:
 import re
 import time
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from backend.app.core.auth import verify_api_key
 from backend.app.core.exceptions import Neo4jConnectionError, Neo4jQueryError
 from backend.app.core.rate_limit import limiter
 
@@ -262,7 +263,11 @@ class GraphQueryResponse(BaseModel):
     error: str | None = None
 
 
-@router.post("/graph/query", response_model=GraphQueryResponse)
+@router.post(
+    "/graph/query",
+    response_model=GraphQueryResponse,
+    dependencies=[Depends(verify_api_key)],
+)
 async def query_graph_natural_language(request: GraphQueryRequest):
     """
     Query the knowledge graph using natural language.

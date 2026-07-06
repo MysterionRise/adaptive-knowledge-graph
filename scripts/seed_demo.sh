@@ -68,10 +68,19 @@ else
 fi
 
 # Check OpenSearch
-if curl -sf -k https://localhost:9200 -u admin:Admin@123 > /dev/null 2>&1; then
+OPENSEARCH_URL="${OPENSEARCH_URL:-http://localhost:9200}"
+OPENSEARCH_CURL_ARGS=(-sf)
+if [[ "$OPENSEARCH_URL" == https://* ]]; then
+    OPENSEARCH_CURL_ARGS+=(-k)
+fi
+if [[ -n "${OPENSEARCH_PASSWORD:-}" ]]; then
+    OPENSEARCH_CURL_ARGS+=(-u "${OPENSEARCH_USER:-admin}:$OPENSEARCH_PASSWORD")
+fi
+
+if curl "${OPENSEARCH_CURL_ARGS[@]}" "$OPENSEARCH_URL" > /dev/null 2>&1; then
     ok "OpenSearch is reachable"
 else
-    error "OpenSearch is not reachable at localhost:9200"
+    error "OpenSearch is not reachable at $OPENSEARCH_URL"
     echo "  Start it with: docker compose -f infra/compose/compose.yaml up -d opensearch"
     exit 1
 fi

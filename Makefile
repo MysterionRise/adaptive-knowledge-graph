@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test lint format type-check clean docker-build docker-up docker-down fetch-data build-kg index-rag run-api run-frontend test-integration test-integration-ui
+.PHONY: help install install-dev test test-fast test-tribunal lint format type-check clean docker-build docker-up docker-down fetch-data build-kg index-rag run-api run-frontend demo-seed demo-check eval-rag eval-rag-api test-integration test-integration-ui
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -19,6 +19,12 @@ install-student: ## Install optional student modeling dependencies (requires Pyt
 
 test: ## Run tests with coverage
 	poetry run pytest
+
+test-fast: ## Run non-adversarial backend tests with per-test timeout
+	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal"
+
+test-tribunal: ## Run adversarial/risk-register tests separately
+	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal
 
 test-watch: ## Run tests in watch mode
 	poetry run pytest-watch
@@ -89,8 +95,17 @@ run-frontend: ## Run Next.js frontend (cd to frontend first)
 	cd frontend && npm run dev
 
 # Evaluation
-eval-rag: ## Run RAGAS evaluation notebook
-	poetry run jupyter notebook notebooks/eval_ragas.ipynb
+eval-rag: ## Run lightweight live API KG-RAG evaluation
+	poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
+
+eval-rag-api: eval-rag ## Alias for live API KG-RAG evaluation
+
+# Demo acceptance
+demo-seed: ## Seed local demo data into Neo4j and OpenSearch
+	bash scripts/seed_demo.sh
+
+demo-check: ## Verify local demo services and core workflows
+	bash scripts/validate_setup.sh
 
 # Complete pipeline
 pipeline-all: fetch-data parse-data normalize-data build-kg index-rag ## Run complete data pipeline

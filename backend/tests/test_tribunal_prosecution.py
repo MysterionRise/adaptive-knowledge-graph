@@ -684,32 +684,25 @@ class TestQuizEdgeCases:
 class TestRateLimitingGaps:
     """Charge: Rate limiting can be bypassed or is misconfigured."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_rate_limit_bypass_via_x_forwarded_for(self, client):
-        """Charge: Rate limiting can be bypassed by spoofing X-Forwarded-For."""
+    def test_rate_limit_bypass_via_x_forwarded_for(self, client, mock_services):
+        """Regression: spoofed X-Forwarded-For should not bypass direct API rate limits."""
         from backend.app.core.rate_limit import limiter
 
         limiter.enabled = True
 
         try:
-            # Send many requests with different spoofed IPs
+            got_rate_limited = False
             for i in range(20):
                 resp = client.post(
                     "/api/v1/ask",
                     json={"question": "What is biology?"},
                     headers={"X-Forwarded-For": f"10.0.0.{i}"},
                 )
-                # Each request appears to come from a different IP
-                # so rate limiting is never triggered
                 if resp.status_code == 429:
+                    got_rate_limited = True
                     break
-            else:
-                # If we completed all 20 requests without 429,
-                # rate limiting was bypassed
-                pytest.fail(
-                    "Rate limiting bypassed by rotating X-Forwarded-For headers. "
-                    "The rate limiter trusts client-provided IP headers."
-                )
+
+            assert got_rate_limited, "Spoofed X-Forwarded-For bypassed direct API rate limits"
         finally:
             limiter.enabled = False
 
@@ -1027,9 +1020,8 @@ class TestServiceFailureHandling:
                     body.get("answer") != ""
                 ), "LLM returned empty answer and it was passed through to client"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_health_ready_returns_200_even_when_unhealthy(self, client):
-        """Charge: /health/ready returns HTTP 200 even when services are down."""
+    def test_health_ready_returns_503_when_unhealthy(self, client):
+        """Regression: /health/ready returns HTTP 503 when critical services are down."""
         from backend.app.main import ServiceHealth, ServiceStatus
 
         error_health = ServiceHealth(status=ServiceStatus.ERROR, message="Connection refused")

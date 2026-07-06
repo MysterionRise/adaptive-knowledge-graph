@@ -102,7 +102,7 @@ class TestHealthReadyEndpoint:
         ), patch("backend.app.main.check_ollama_health", return_value=mock_ollama):
             response = client.get("/health/ready")
 
-        assert response.status_code == 200
+        assert response.status_code == 503
         data = response.json()
         assert data["status"] == "unhealthy"
         assert data["services"]["neo4j"]["status"] == "error"
@@ -120,7 +120,7 @@ class TestHealthReadyEndpoint:
         ), patch("backend.app.main.check_ollama_health", return_value=mock_ollama):
             response = client.get("/health/ready")
 
-        assert response.status_code == 200
+        assert response.status_code == 503
         data = response.json()
         assert data["status"] == "unhealthy"
 
@@ -177,3 +177,40 @@ def test_openapi_docs_available(client):
     assert "info" in data
     # App title can be configured via .env - just verify it exists
     assert "title" in data["info"] and data["info"]["title"], "title should be present"
+
+
+@pytest.mark.asyncio
+async def test_opensearch_health_respects_verify_certs(monkeypatch):
+    """OpenSearch readiness should use the configured TLS verification setting."""
+    from backend.app import main
+
+    captured_kwargs = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"status": "green"}
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, auth=None):
+            return FakeResponse()
+
+    monkeypatch.setattr(main.settings, "opensearch_verify_certs", True)
+    monkeypatch.setattr(main.settings, "opensearch_use_ssl", True)
+    monkeypatch.setattr(main.settings, "opensearch_password", "")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    health = await main.check_opensearch_health()
+
+    assert health.status == ServiceStatus.OK
+    assert captured_kwargs["verify"] is True

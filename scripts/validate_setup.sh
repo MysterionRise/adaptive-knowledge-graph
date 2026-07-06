@@ -21,17 +21,17 @@ WARNINGS=0
 
 check_pass() {
     echo -e "${GREEN}✓${NC} $1"
-    ((PASSED++))
+    ((PASSED+=1))
 }
 
 check_fail() {
     echo -e "${RED}✗${NC} $1"
-    ((FAILED++))
+    ((FAILED+=1))
 }
 
 check_warn() {
     echo -e "${YELLOW}⚠${NC} $1"
-    ((WARNINGS++))
+    ((WARNINGS+=1))
 }
 
 check_info() {
@@ -115,10 +115,10 @@ echo "Checking backend..."
 if [ -d "backend" ]; then
     check_pass "Backend directory exists"
 
-    if [ -f "backend/pyproject.toml" ]; then
-        check_pass "pyproject.toml found"
+    if [ -f "pyproject.toml" ]; then
+        check_pass "root pyproject.toml found"
     else
-        check_fail "pyproject.toml not found"
+        check_fail "root pyproject.toml not found"
     fi
 else
     check_fail "Backend directory not found"
@@ -132,7 +132,7 @@ echo "Checking services..."
 if curl -s -f http://localhost:8000/health > /dev/null 2>&1; then
     check_pass "Backend API running (http://localhost:8000)"
 else
-    check_warn "Backend API not running - start with: cd backend && poetry run uvicorn app.main:app --reload"
+    check_warn "Backend API not running - start with: make run-api"
 fi
 
 # Frontend dev server
@@ -150,8 +150,17 @@ else
 fi
 
 # OpenSearch
-if curl -s -f -k https://localhost:9200 > /dev/null 2>&1; then
-    check_pass "OpenSearch running (https://localhost:9200)"
+OPENSEARCH_URL="${OPENSEARCH_URL:-http://localhost:9200}"
+OPENSEARCH_CURL_ARGS=(-s -f)
+if [[ "$OPENSEARCH_URL" == https://* ]]; then
+    OPENSEARCH_CURL_ARGS+=(-k)
+fi
+if [[ -n "${OPENSEARCH_PASSWORD:-}" ]]; then
+    OPENSEARCH_CURL_ARGS+=(-u "${OPENSEARCH_USER:-admin}:$OPENSEARCH_PASSWORD")
+fi
+
+if curl "${OPENSEARCH_CURL_ARGS[@]}" "$OPENSEARCH_URL" > /dev/null 2>&1; then
+    check_pass "OpenSearch running ($OPENSEARCH_URL)"
 else
     check_warn "OpenSearch not running - start with: docker compose -f infra/compose/compose.yaml up -d opensearch"
 fi
@@ -184,6 +193,34 @@ if curl -s -f http://localhost:8000/api/v1/graph/stats > /dev/null 2>&1; then
     fi
 else
     check_warn "Cannot check graph stats (API not running)"
+fi
+echo ""
+
+# Check demo API flow
+echo "Checking demo API flow..."
+if curl -s -f http://localhost:8000/health/ready > /dev/null 2>&1; then
+    check_pass "API readiness is healthy"
+else
+    check_warn "API readiness is not healthy - check /health/ready for dependency details"
+fi
+
+ASK_PAYLOAD='{"question":"What caused the American Revolution?","subject":"us_history","top_k":3}'
+if curl -s -f --max-time 120 \
+    -H "Content-Type: application/json" \
+    -d "$ASK_PAYLOAD" \
+    http://localhost:8000/api/v1/ask > /dev/null 2>&1; then
+    check_pass "KG-RAG ask endpoint returns a cited answer"
+else
+    check_warn "KG-RAG ask endpoint did not complete - start API, seed data, and ensure an LLM is available"
+fi
+
+if curl -s -f --max-time 120 \
+    -X POST \
+    "http://localhost:8000/api/v1/quiz/generate?topic=American%20Revolution&num_questions=1&subject=us_history" \
+    > /dev/null 2>&1; then
+    check_pass "Quiz generation endpoint returns a demo quiz"
+else
+    check_warn "Quiz generation did not complete - start API, seed data, and ensure an LLM is available"
 fi
 echo ""
 
@@ -222,7 +259,7 @@ if [ $WARNINGS -gt 0 ] || [ $FAILED -gt 0 ]; then
     echo "  cd frontend && npm install && cp .env.example .env.local"
     echo ""
     echo "  # Start backend"
-    echo "  cd backend && poetry install && poetry run uvicorn app.main:app --reload"
+    echo "  poetry install --without pyirt,pybkt && make run-api"
     echo ""
     echo "  # Start frontend"
     echo "  cd frontend && npm run dev"
@@ -230,4 +267,8 @@ if [ $WARNINGS -gt 0 ] || [ $FAILED -gt 0 ]; then
     echo "  # Run data pipeline (if needed)"
     echo "  ./scripts/run_pipeline.sh"
     echo ""
+fi
+
+if [ $FAILED -ne 0 ]; then
+    exit 1
 fi

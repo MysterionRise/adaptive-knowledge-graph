@@ -46,8 +46,8 @@ class Settings(BaseSettings):
     opensearch_host: str = "localhost"
     opensearch_port: int = 9200
     opensearch_index: str = "textbook_chunks"
-    opensearch_use_ssl: bool = True
-    opensearch_verify_certs: bool = False
+    opensearch_use_ssl: bool = False
+    opensearch_verify_certs: bool = True
     opensearch_user: str = "admin"
     opensearch_password: str = ""  # Set via OPENSEARCH_PASSWORD env var
 
@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "mistralai/mixtral-8x7b-instruct"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_verify_ssl: bool = False
+    openrouter_verify_ssl: bool = True
 
     # Embeddings
     embedding_model: str = "BAAI/bge-m3"
@@ -108,11 +108,14 @@ class Settings(BaseSettings):
 
     # Student Model
     student_bkt_enabled: bool = True
-    student_irt_enabled: bool = True
+    student_irt_enabled: bool = False
     student_initial_mastery: float = 0.3
+    student_storage_backend: Literal["sqlite", "json"] = "sqlite"
+    student_profiles_db: str = "data/processed/student_profiles.sqlite3"
 
     # CORS
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
+    trust_proxy_headers: bool = False
 
     # Privacy & Compliance
     privacy_local_only: bool = True  # Toggle for local-only mode

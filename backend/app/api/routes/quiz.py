@@ -4,9 +4,10 @@ Quiz generation and student mastery endpoints.
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
 
+from backend.app.core.auth import verify_api_key
 from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
 from backend.app.core.rate_limit import limiter
 from backend.app.student.models import (
@@ -138,7 +139,11 @@ async def generate_adaptive_quiz(
 # =============================================================================
 
 
-@router.get("/student/profile", response_model=StudentProfileResponse)
+@router.get(
+    "/student/profile",
+    response_model=StudentProfileResponse,
+    dependencies=[Depends(verify_api_key)],
+)
 async def get_student_profile(student_id: str = "default"):
     """Get student's current mastery levels for all tracked concepts."""
     try:
@@ -149,7 +154,11 @@ async def get_student_profile(student_id: str = "default"):
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
-@router.post("/student/mastery", response_model=MasteryUpdateResponse)
+@router.post(
+    "/student/mastery",
+    response_model=MasteryUpdateResponse,
+    dependencies=[Depends(verify_api_key)],
+)
 async def update_student_mastery(
     update: MasteryUpdate,
     student_id: str = "default",
@@ -173,7 +182,11 @@ async def update_student_mastery(
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
-@router.get("/student/target-difficulty", response_model=TargetDifficultyResponse)
+@router.get(
+    "/student/target-difficulty",
+    response_model=TargetDifficultyResponse,
+    dependencies=[Depends(verify_api_key)],
+)
 async def get_target_difficulty(
     concept: str,
     student_id: str = "default",
@@ -194,7 +207,11 @@ async def get_target_difficulty(
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
-@router.post("/student/reset", response_model=StudentProfileResponse)
+@router.post(
+    "/student/reset",
+    response_model=StudentProfileResponse,
+    dependencies=[Depends(verify_api_key)],
+)
 async def reset_student_profile(student_id: str = "default"):
     """Reset student profile to initial state (for demo purposes)."""
     try:
@@ -210,7 +227,11 @@ async def reset_student_profile(student_id: str = "default"):
 # =============================================================================
 
 
-@router.post("/quiz/recommendations", response_model=RecommendationResponse)
+@router.post(
+    "/quiz/recommendations",
+    response_model=RecommendationResponse,
+    dependencies=[Depends(verify_api_key)],
+)
 async def get_quiz_recommendations(request: RecommendationRequest):
     """
     Generate personalized recommendations after a quiz attempt.
@@ -234,6 +255,7 @@ async def get_quiz_recommendations(request: RecommendationRequest):
 @router.get("/student/all-difficulties")
 async def get_all_target_difficulties(
     student_id: str = "default",
+    _api_key: str = Depends(verify_api_key),
 ) -> dict[str, Literal["easy", "medium", "hard"]]:
     """Get target difficulties for all tracked concepts."""
     try:

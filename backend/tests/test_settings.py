@@ -18,6 +18,8 @@ def test_settings_defaults():
     # New settings
     assert settings.api_key == ""  # Empty by default (dev mode)
     assert settings.rate_limit_enabled is True
+    assert settings.student_irt_enabled is False
+    assert settings.trust_proxy_headers is False
 
 
 def test_settings_attribution():

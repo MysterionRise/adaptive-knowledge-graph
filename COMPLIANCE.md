@@ -28,10 +28,10 @@ OpenStax states: "do not train or ingest into LLM offerings without permission"
 **Our approach**:
 - **Local mode (default)**: All LLM processing happens on user's hardware; no external ingestion
 - **Remote mode (opt-in)**:
-  - Only **transformed excerpts** sent to OpenRouter (e.g., extracted concepts, not raw passages)
+  - Retrieved context excerpts may be sent to the configured remote LLM provider
   - Users must explicitly enable via `PRIVACY_LOCAL_ONLY=false`
-  - Minimal context in prompts (typically <500 tokens)
-  - Prompts are **transformative** (e.g., "Is concept A a prerequisite for B?")
+  - Use local mode for deployments where textbook excerpts or student questions
+    must not leave the deployment boundary
 
 #### ✅ Commercial Use
 CC BY 4.0 allows commercial use **with attribution**. This PoC:
@@ -67,7 +67,8 @@ OPENROUTER_API_KEY=sk-your-key
 
 When enabled:
 - User explicitly opts in to remote LLM calls
-- Only **transformed excerpts** sent (not full textbook passages)
+- Retrieved context excerpts and user questions may be sent to the configured
+  provider for answer generation
 - OpenRouter privacy policy applies: https://openrouter.ai/privacy
 
 ### User Data
@@ -118,11 +119,12 @@ This is a **self-hosted PoC**. Compliance depends on deployment:
 | Service | Data Sent | Purpose |
 |---------|-----------|---------|
 | OpenRouter | Minimal prompts (<500 tokens) | Remote LLM fallback |
-| *(User-configured)* | Transformed excerpts only | Edge induction, QA |
+| *(User-configured)* | Retrieved excerpts and user prompts | Edge induction, QA |
 
 **OpenRouter Privacy**: https://openrouter.ai/privacy
 - OpenRouter may log requests per their policy
-- We send only **transformed concepts** (e.g., "photosynthesis", "cellular respiration"), not full textbook pages
+- We send retrieved snippets rather than full textbook pages, but those snippets
+  can contain source text. Use local mode when this is not acceptable.
 
 ---
 
