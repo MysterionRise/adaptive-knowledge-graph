@@ -38,6 +38,12 @@ class OpenSearchRetriever:
         self.client: OpenSearch | None = None
         self.embedding_model = get_embedding_model()
 
+    def _require_client(self) -> OpenSearch:
+        """Return the connected OpenSearch client."""
+        if self.client is None:
+            raise RuntimeError("Not connected. Call connect() first.")
+        return self.client
+
     def connect(self) -> None:
         """Connect to OpenSearch."""
         logger.info(f"Connecting to OpenSearch at {self.host}:{self.port}")
@@ -59,12 +65,12 @@ class OpenSearchRetriever:
             embedding_dim: Dimension of embeddings
             recreate: If True, delete existing index
         """
-        assert self.client is not None, "Not connected. Call connect() first."
-        if recreate and self.client.indices.exists(index=self.index_name):
+        client = self._require_client()
+        if recreate and client.indices.exists(index=self.index_name):
             logger.warning(f"Deleting existing index: {self.index_name}")
-            self.client.indices.delete(index=self.index_name)
+            client.indices.delete(index=self.index_name)
 
-        if not self.client.indices.exists(index=self.index_name):
+        if not client.indices.exists(index=self.index_name):
             # Create index with kNN settings
             index_body = {
                 "settings": {
@@ -96,8 +102,7 @@ class OpenSearchRetriever:
                 },
             }
 
-            assert self.client is not None
-            self.client.indices.create(index=self.index_name, body=index_body)
+            client.indices.create(index=self.index_name, body=index_body)
             logger.success(f"✓ Created index: {self.index_name}")
         else:
             logger.info(f"Index already exists: {self.index_name}")
@@ -110,7 +115,7 @@ class OpenSearchRetriever:
             chunks: List of chunk dicts with 'text' and metadata
             show_progress: Show progress bar
         """
-        assert self.client is not None, "Not connected. Call connect() first."
+        client = self._require_client()
 
         if not chunks:
             logger.warning("No chunks to index")
@@ -154,7 +159,7 @@ class OpenSearchRetriever:
             batch = actions[batch_start : batch_start + batch_size]
             try:
                 success, failed = helpers.bulk(
-                    self.client, batch, chunk_size=batch_size, raise_on_error=False
+                    client, batch, chunk_size=batch_size, raise_on_error=False
                 )
                 total_success += success
                 if failed:
@@ -174,7 +179,7 @@ class OpenSearchRetriever:
                 )
 
         # Force refresh so docs are immediately searchable
-        self.client.indices.refresh(index=self.index_name)
+        client.indices.refresh(index=self.index_name)
 
         if show_progress:
             logger.info(f"Successfully indexed: {total_success} documents")
@@ -240,8 +245,8 @@ class OpenSearchRetriever:
 
         search_body: dict = {"size": top_k, "query": query_clause}
 
-        assert self.client is not None, "Not connected. Call connect() first."
-        results: dict = self.client.search(index=self.index_name, body=search_body)
+        client = self._require_client()
+        results: dict = client.search(index=self.index_name, body=search_body)
 
         return self._format_results(results, "knn")
 
@@ -258,7 +263,7 @@ class OpenSearchRetriever:
         results using RRF for better diversity and relevance.
         """
         query_embedding = self.embedding_model.encode_query(query)
-        assert self.client is not None, "Not connected. Call connect() first."
+        client = self._require_client()
 
         # kNN vector search
         knn_clause: dict = {
@@ -272,7 +277,7 @@ class OpenSearchRetriever:
         knn_query: dict = {"size": top_k, "query": knn_clause}
         if filter_dict:
             knn_query["query"] = {"bool": {"must": [knn_clause], "filter": [{"term": filter_dict}]}}
-        knn_results: dict = self.client.search(index=self.index_name, body=knn_query)
+        knn_results: dict = client.search(index=self.index_name, body=knn_query)
 
         # BM25 text search
         bm25_clause: dict = {
@@ -288,7 +293,7 @@ class OpenSearchRetriever:
             bm25_query["query"] = {
                 "bool": {"must": [bm25_clause], "filter": [{"term": filter_dict}]}
             }
-        bm25_results: dict = self.client.search(index=self.index_name, body=bm25_query)
+        bm25_results: dict = client.search(index=self.index_name, body=bm25_query)
 
         # Reciprocal rank fusion
         merged = self._reciprocal_rank_fusion(
@@ -368,11 +373,11 @@ class OpenSearchRetriever:
 
     def get_collection_info(self) -> dict:
         """Get index information."""
-        assert self.client is not None, "Not connected. Call connect() first."
-        if not self.client.indices.exists(index=self.index_name):
+        client = self._require_client()
+        if not client.indices.exists(index=self.index_name):
             return {"exists": False}
 
-        stats = self.client.indices.stats(index=self.index_name)
+        stats = client.indices.stats(index=self.index_name)
         doc_count = stats["indices"][self.index_name]["total"]["docs"]["count"]
 
         return {
