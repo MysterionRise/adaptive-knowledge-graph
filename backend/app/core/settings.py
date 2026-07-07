@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # API
-    api_host: str = "0.0.0.0"
+    api_host: str = "127.0.0.1"
     api_port: int = 8000
     api_prefix: str = "/api/v1"
     api_key: str = ""  # Set via API_KEY env var for authentication

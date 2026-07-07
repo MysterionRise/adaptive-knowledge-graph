@@ -50,7 +50,8 @@ class Neo4jAdapter:
 
     def _get_session(self) -> Session:
         """Get a session for the configured database."""
-        assert self.driver is not None, "Not connected. Call connect() first."
+        if self.driver is None:
+            raise RuntimeError("Not connected. Call connect() first.")
         return self.driver.session(database=self.database)
 
     def connect(self):

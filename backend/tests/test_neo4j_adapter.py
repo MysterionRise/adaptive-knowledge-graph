@@ -276,11 +276,11 @@ class TestClose:
 class TestGetSession:
     """Tests for _get_session() assertion behavior."""
 
-    def test_asserts_when_driver_is_none(self):
+    def test_raises_when_driver_is_none(self):
         adapter = Neo4jAdapter()
         adapter.driver = None
 
-        with pytest.raises(AssertionError, match="Not connected. Call connect\\(\\) first."):
+        with pytest.raises(RuntimeError, match="Not connected. Call connect\\(\\) first."):
             adapter._get_session()
 
     def test_returns_session_when_driver_exists(self):
