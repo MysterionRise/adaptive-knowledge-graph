@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, CheckCircle, XCircle, BookOpen, Trophy, RotateCcw, MapPin, Zap, RefreshCw, AlertCircle, X } from 'lucide-react';
+import { buildApiHeaders } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
 import MasteryIndicator from './MasteryIndicator';
 import PostQuizRecommendations from './PostQuizRecommendations';
@@ -235,7 +236,7 @@ export default function Quiz() {
                 // Use adaptive endpoint
                 const res = await fetch(
                     `${API_BASE}${API_PREFIX}/quiz/generate-adaptive?topic=${encodeURIComponent(effectiveTopic)}&num_questions=3&subject=${encodeURIComponent(currentSubject)}`,
-                    { method: 'POST' }
+                    { method: 'POST', headers: buildApiHeaders() }
                 );
                 if (!res.ok) {
                     const errBody = await res.text();
@@ -250,7 +251,7 @@ export default function Quiz() {
                 // Use standard endpoint
                 const res = await fetch(
                     `${API_BASE}${API_PREFIX}/quiz/generate?topic=${encodeURIComponent(effectiveTopic)}&num_questions=3&subject=${encodeURIComponent(currentSubject)}`,
-                    { method: 'POST' }
+                    { method: 'POST', headers: buildApiHeaders() }
                 );
                 if (!res.ok) {
                     const errBody = await res.text();
@@ -327,7 +328,7 @@ export default function Quiz() {
         try {
             const res = await fetch(`${API_BASE}${API_PREFIX}/quiz/recommendations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: buildApiHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     topic: activeTopic,
                     question_results: questionResults,

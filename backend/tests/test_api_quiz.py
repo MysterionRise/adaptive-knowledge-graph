@@ -7,11 +7,13 @@ Tests cover:
 - Error handling (content not found, generation errors)
 """
 
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
+from backend.app.core.settings import settings
 from backend.app.ui_payloads.quiz import Quiz, QuizOption, QuizQuestion
 
 
@@ -245,3 +247,61 @@ class TestQuizResponseModel:
         assert quiz.id == "quiz_001"
         assert quiz.title == "Math Quiz"
         assert len(quiz.questions) == 1
+
+
+@pytest.mark.unit
+class TestProtectedStudentEndpoints:
+    """API-key behavior for protected student demo routes."""
+
+    def test_student_profile_allows_dev_mode_without_configured_api_key(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "")
+        mock_service = MagicMock()
+        mock_service.get_profile_response.return_value = {
+            "student_id": "default",
+            "overall_ability": 0.3,
+            "mastery_levels": {"American Revolution": 0.4},
+            "updated_at": datetime.now(UTC),
+        }
+
+        with patch("backend.app.api.routes.quiz.get_student_service", return_value=mock_service):
+            response = client.get("/api/v1/student/profile")
+
+        assert response.status_code == 200
+        assert response.json()["mastery_levels"]["American Revolution"] == 0.4
+
+    def test_student_profile_accepts_configured_api_key(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "demo-secret")
+        mock_service = MagicMock()
+        mock_service.get_profile_response.return_value = {
+            "student_id": "default",
+            "overall_ability": 0.3,
+            "mastery_levels": {},
+            "updated_at": datetime.now(UTC),
+        }
+
+        with patch("backend.app.api.routes.quiz.get_student_service", return_value=mock_service):
+            response = client.get(
+                "/api/v1/student/profile",
+                headers={"X-API-Key": "demo-secret"},
+            )
+
+        assert response.status_code == 200
+
+    def test_student_profile_rejects_missing_configured_api_key(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "demo-secret")
+
+        response = client.get("/api/v1/student/profile")
+
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Missing API key. Include X-API-Key header."
+
+    def test_student_profile_rejects_invalid_configured_api_key(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "demo-secret")
+
+        response = client.get(
+            "/api/v1/student/profile",
+            headers={"X-API-Key": "wrong-key"},
+        )
+
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid API key"

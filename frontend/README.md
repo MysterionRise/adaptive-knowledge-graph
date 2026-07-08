@@ -1,309 +1,167 @@
-# Adaptive Knowledge Graph - Frontend
+# Adaptive Knowledge Graph Frontend
 
-Modern, responsive web interface for the Adaptive Knowledge Graph project, built with Next.js 14, TypeScript, and Tailwind CSS.
+Next.js 14 interface for the Adaptive Knowledge Graph client demo.
 
-## Features
+The app is designed for a local OpenStax walkthrough: demo readiness, KG-RAG
+chat with citations, graph exploration, KG/plain comparison, and adaptive
+assessment over synthetic learner state.
 
-- **Interactive Knowledge Graph Visualization** - Explore Biology concepts with Cytoscape.js
-- **AI Tutor Chat** - Ask questions with KG-aware RAG
-- **Comparison View** - See KG-RAG vs Regular RAG side-by-side
-- **Comprehensive Testing** - Unit tests (Jest) + E2E tests (Playwright)
-- **Backend API Integration** - Designed to run against the FastAPI service
-- **Fully Responsive** - Mobile, tablet, and desktop optimized
+## Prerequisites
 
----
+- Node.js 20
+- npm
+- FastAPI backend running on `http://localhost:8000`
+
+The repo includes `.node-version` at the project root. Use your Node manager to
+select Node 20 before running demo checks.
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js 18+ and npm
-- Backend API running on `http://localhost:8000`
-
-### Installation
-
 ```bash
-# Install dependencies
-npm install
-
-# Copy environment file
+npm ci
 cp .env.example .env.local
-
-# Start development server
 npm run dev
 ```
 
-Visit `http://localhost:3000`
+Open `http://localhost:3000`.
 
----
+For the full client demo path, run the root-level commands first:
 
-## Available Scripts
-
-### Development
 ```bash
-npm run dev          # Start dev server (http://localhost:3000)
-npm run build        # Build for production
+make demo-client-prep
+make run-api
+make demo-eval
+make demo-client-check
+```
+
+## Environment
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Optional. Set to backend API_KEY when protected demo endpoints are enabled.
+NEXT_PUBLIC_API_KEY=
+```
+
+`NEXT_PUBLIC_API_KEY` is sent as `X-API-Key` by the shared API client, streaming
+chat requests, quiz/recommendation requests, and student profile calls.
+
+## Routes
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Client-demo home page and graph summary |
+| `/demo-status` | Readiness dashboard for services, seeded data, and latest eval |
+| `/chat` | KG-aware tutor with citations and expanded concepts |
+| `/graph` | Cytoscape knowledge graph visualization |
+| `/comparison` | KG-expanded retrieval vs plain retrieval |
+| `/assessment` | Adaptive quiz and mastery workflow |
+| `/about` | Project overview |
+
+## Key UI Surfaces
+
+### Demo Status
+
+`/demo-status` calls `GET /api/v1/demo/status` and shows Neo4j, OpenSearch,
+Ollama, subject data, latest eval validity, and next actions.
+
+### Chat
+
+The chat view exposes KG expansion, streaming responses, citations, source
+scores, and expanded concepts.
+
+### Graph
+
+The graph view uses Cytoscape.js. Relationship coloring includes `PREREQ`,
+`RELATED_TO`, and content/module edges returned by the backend.
+
+### Assessment
+
+The assessment flow generates topic-based questions, updates synthetic mastery,
+and requests recommendations from protected backend endpoints when API-key
+protection is enabled.
+
+## Scripts
+
+```bash
+npm run dev          # Start dev server
+npm run build        # Build production bundle
 npm run start        # Start production server
-npm run lint         # Run ESLint
-npm run type-check   # Run TypeScript type checking
+npm run lint         # Run Next lint
+npm run type-check   # Run TypeScript checks
+npm test             # Run Jest tests
+npm run test:e2e     # Run Playwright tests
 ```
 
-### Testing
+Current CI-style frontend verification:
+
 ```bash
-npm test                    # Run Jest unit tests
-npm run test:watch          # Run tests in watch mode
-npm run test:coverage       # Run tests with coverage report
-npm run test:e2e            # Run Playwright E2E tests
-npm run test:e2e:ui         # Run E2E tests with UI
+npm run type-check
+npm test -- --ci --runInBand --forceExit
 ```
 
----
+The Jest suite reports all tests before force-exiting; some existing tests keep
+asynchronous handles open after completion.
 
 ## Project Structure
 
-```
+```text
 frontend/
-├── app/                    # Next.js 14 App Router pages
-│   ├── page.tsx           # Home page (/)
-│   ├── graph/             # Graph visualization (/graph)
-│   ├── chat/              # AI chat interface (/chat)
-│   ├── comparison/        # KG-RAG comparison (/comparison)
-│   ├── about/             # About page (/about)
-│   ├── layout.tsx         # Root layout
-│   └── globals.css        # Global styles
-├── components/            # Reusable React components
-│   └── KnowledgeGraph.tsx # Cytoscape graph component
-├── lib/                   # Utilities and services
-│   ├── api-client.ts      # API client with types
-│   └── types.ts           # TypeScript type definitions
-├── tests/
-│   ├── unit/              # Jest unit tests
-│   └── e2e/               # Playwright E2E tests
-├── public/                # Static assets
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts
-├── jest.config.js
-├── playwright.config.ts
-└── README.md
+├── app/
+│   ├── page.tsx
+│   ├── demo-status/
+│   ├── graph/
+│   ├── chat/
+│   ├── comparison/
+│   ├── assessment/
+│   └── about/
+├── components/
+├── lib/
+│   ├── api-client.ts
+│   ├── store.ts
+│   └── types.ts
+└── tests/
+    ├── unit/
+    └── e2e/
 ```
 
----
+## Backend Contract
 
-## Environment Variables
+The frontend expects a running FastAPI backend. Unit tests use explicit mocks;
+the app itself does not silently switch to mock data for demo-critical flows.
 
-Create `.env.local` from `.env.example`:
+Useful backend endpoints:
 
-```env
-# Backend API URL
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-```
-
----
-
-## Key Features
-
-### 1. Knowledge Graph Visualization (`/graph`)
-
-Interactive graph powered by Cytoscape.js:
-- **Node sizing** by concept importance (PageRank scores)
-- **Edge coloring** by relationship type (PREREQ=red, COVERS=blue, RELATED=purple)
-- **Click interactions** to select nodes and highlight neighbors
-- **Zoom & pan** controls
-- **Legend** and instructions sidebar
-
-### 2. AI Tutor Chat (`/chat`)
-
-Conversational interface with:
-- **KG expansion toggle** - Show difference between KG-aware and regular RAG
-- **Real-time streaming** (if supported by backend)
-- **Expanded concepts display** - See which concepts were pulled in
-- **Source citations** - View textbook sources with scores
-- **Example questions** - Quick start prompts
-
-### 3. Comparison View (`/comparison`)
-
-Side-by-side comparison:
-- **With KG Expansion** (left panel)
-- **Regular RAG** (right panel)
-- Shows concept count, answer quality difference
-- Clear visual distinction (green vs gray theme)
-
-### 4. Responsive Design
-
-- Mobile-first approach
-- Tailwind CSS for consistent styling
-- Breakpoints: `sm:640px`, `md:768px`, `lg:1024px`, `xl:1280px`
-
----
-
-## Testing
-
-### Unit Tests (Jest + React Testing Library)
-
-Test individual components and utilities:
-
-```bash
-npm test                 # Run all tests
-npm run test:watch       # Watch mode for TDD
-npm run test:coverage    # Generate coverage report
-```
-
-**Coverage targets:**
-- Branches: 70%
-- Functions: 70%
-- Lines: 70%
-- Statements: 70%
-
-### E2E Tests (Playwright)
-
-Test full user flows across browsers:
-
-```bash
-npm run test:e2e         # Run E2E tests (headless)
-npm run test:e2e:ui      # Run with UI for debugging
-```
-
-**Test coverage:**
-- Home page navigation
-- Graph interaction (click, zoom, select)
-- Chat message flow
-- Comparison feature
-- Responsive layouts
-
-### Manual Testing
-
-See `TESTING_CHECKLIST.md` for comprehensive manual test scenarios.
-
----
-
-## API Integration
-
-### API Client (`lib/api-client.ts`)
-
-Typed API methods:
-```typescript
-import { apiClient } from '@/lib/api-client';
-
-// Get graph statistics
-const stats = await apiClient.getGraphStats();
-
-// Ask a question
-const response = await apiClient.askQuestion({
-  question: 'What is photosynthesis?',
-  use_kg_expansion: true,
-  top_k: 5,
-});
-
-// Get graph data for visualization
-const graphData = await apiClient.getGraphData();
-```
-
-### Backend Requirement
-
-The frontend expects the FastAPI backend to be available. It does not currently
-implement automatic mock-data fallback; keep tests and demos wired to explicit
-mocks or a running backend.
-
----
-
-## Deployment
-
-### Production Build
-
-```bash
-npm run build
-npm start
-```
-
-### Docker
-
-```dockerfile
-FROM node:20-alpine
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --production
-COPY . .
-RUN npm run build
-
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-### Environment Variables (Production)
-
-```env
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-```
-
----
+- `GET /health/ready`
+- `GET /api/v1/demo/status`
+- `GET /api/v1/graph/stats`
+- `POST /api/v1/ask`
+- `POST /api/v1/ask/stream`
+- `POST /api/v1/quiz/generate`
+- `GET /api/v1/student/profile`
 
 ## Troubleshooting
 
-### "API client error: Unable to reach the server"
+### API client cannot reach the server
 
-**Cause:** Backend is not running or incorrect URL
+1. Confirm backend health: `curl http://localhost:8000/health`.
+2. Confirm `NEXT_PUBLIC_API_URL` in `.env.local`.
+3. Restart the frontend after changing environment variables.
 
-**Fix:**
-1. Check backend is running: `curl http://localhost:8000/health`
-2. Verify `NEXT_PUBLIC_API_URL` in `.env.local`
-3. Restart the frontend after changing environment variables
+### Protected student/profile calls fail
 
-### Graph visualization not rendering
+If backend `API_KEY` is configured, set the same value in
+`NEXT_PUBLIC_API_KEY` for the local demo.
 
-**Cause:** Cytoscape SSR issue
+### Graph is empty
 
-**Fix:** Component uses `dynamic import` with `ssr: false`. Check browser console for errors.
+Run the root-level setup:
 
-### Tests failing
-
-**Cause:** Missing dependencies or configuration
-
-**Fix:**
 ```bash
-# Reinstall dependencies
-rm -rf node_modules package-lock.json
-npm install
-
-# Install Playwright browsers
-npx playwright install
+make demo-client-prep
+make demo-client-check
 ```
 
----
+### Next.js refuses to start
 
-## Contributing
-
-1. Follow TypeScript strict mode
-2. Write tests for new features
-3. Run linter before committing: `npm run lint`
-4. Ensure tests pass: `npm test && npm run test:e2e`
-5. Check type safety: `npm run type-check`
-
----
-
-## License
-
-MIT License - See LICENSE file for details.
-
----
-
-## Credits
-
-- **Content:** OpenStax Biology 2e (CC BY 4.0)
-- **Graph Viz:** Cytoscape.js
-- **Icons:** Lucide React
-- **Framework:** Next.js 14
-
----
-
-## Support
-
-- **Documentation:** See `TESTING_CHECKLIST.md`
-- **Issues:** Report bugs with screenshots and browser info
-- **Questions:** Include steps to reproduce
-
----
-
-**Built for the BLIS Department VP Demo** 🚀
+Check `node --version`. The demo path expects Node 20.

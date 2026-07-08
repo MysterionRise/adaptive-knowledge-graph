@@ -59,7 +59,7 @@ async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str 
             # Find prerequisites recursively using variable-length path
             result = session.run(
                 f"""
-                MATCH path = (prereq:{concept_label})-[:PREREQUISITE*1..]->(target:{concept_label} {{name: $name}})
+                MATCH path = (prereq:{concept_label})-[:PREREQ*1..]->(target:{concept_label} {{name: $name}})
                 WHERE length(path) <= $max_depth
                 WITH prereq, length(path) as depth
                 RETURN DISTINCT
@@ -120,7 +120,7 @@ async def get_prerequisites(concept_name: str, depth: int = 2, subject: str | No
             result = session.run(
                 f"""
                 MATCH (target:{concept_label} {{name: $name}})
-                OPTIONAL MATCH path = (prereq:{concept_label})-[:PREREQUISITE*1..]->(target)
+                OPTIONAL MATCH path = (prereq:{concept_label})-[:PREREQ*1..]->(target)
                 WHERE length(path) <= $depth
                 WITH prereq, length(path) as level
                 WHERE prereq IS NOT NULL
@@ -177,7 +177,7 @@ async def get_dependents(concept_name: str, depth: int = 2, subject: str | None 
             result = session.run(
                 f"""
                 MATCH (source:{concept_label} {{name: $name}})
-                OPTIONAL MATCH path = (source)-[:PREREQUISITE*1..]->(dependent:{concept_label})
+                OPTIONAL MATCH path = (source)-[:PREREQ*1..]->(dependent:{concept_label})
                 WHERE length(path) <= $depth
                 WITH dependent, length(path) as level
                 WHERE dependent IS NOT NULL

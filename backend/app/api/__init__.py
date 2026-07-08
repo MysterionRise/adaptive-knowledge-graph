@@ -2,6 +2,7 @@
 
 from backend.app.api.routes import (
     ask_router,
+    demo_router,
     graph_router,
     learning_path_router,
     quiz_router,
@@ -10,6 +11,7 @@ from backend.app.api.routes import (
 
 __all__ = [
     "ask_router",
+    "demo_router",
     "graph_router",
     "quiz_router",
     "learning_path_router",

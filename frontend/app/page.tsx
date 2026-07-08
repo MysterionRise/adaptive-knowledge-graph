@@ -54,11 +54,8 @@ export default function Home() {
 
     const fetchTopConcepts = async () => {
       try {
-        const response = await fetch(`/api/v1/concepts/top?limit=6&subject=${currentSubject}`);
-        if (response.ok) {
-          const data = await response.json();
-          setTopConcepts(data.concepts || []);
-        }
+        const data = await apiClient.getTopConceptsForSubject(6, currentSubject);
+        setTopConcepts(data.map((concept) => concept.name));
       } catch (err) {
         console.error('Error fetching top concepts:', err);
         setTopConcepts([]);
@@ -85,14 +82,20 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Adaptive Certifications
+                Adaptive Knowledge Graph
               </h1>
               <p className="mt-2 text-gray-600">
-                AI-Powered Prep for Professional Exams
+                Grounded AI tutoring over approved course content
               </p>
             </div>
             <div className="flex items-center gap-4">
               <SubjectPicker />
+              <Link
+                href="/demo-status"
+                className="inline-flex items-center px-4 py-2 border border-amber-300 text-sm font-medium rounded-md text-amber-800 bg-amber-50 hover:bg-amber-100 transition-colors"
+              >
+                Demo Status
+              </Link>
               <Link
                 href="/graph"
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 transition-colors"
@@ -115,12 +118,12 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
-            Master Your
-            <span className="text-primary-600"> Certification</span> Exams
+            Adaptive Learning Over
+            <span className="text-primary-600"> Approved Content</span>
           </h2>
           <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-            Adaptive study plans powered by Knowledge Graphs, Retrieval-Augmented Generation,
-            and AI-driven personalization.
+            A controlled OpenStax demo for publishers and institutions: KG-grounded answers,
+            citation traceability, adaptive practice, and measurable AI quality.
           </p>
         </div>
 
@@ -350,12 +353,12 @@ export default function Home() {
             <Step
               number={2}
               title="Build Graph"
-              description="Relationships (PREREQ, COVERS, RELATED) are mined and stored in Neo4j"
+              description="Relationships (PREREQ, COVERS, RELATED) are extracted and stored in Neo4j"
             />
             <Step
               number={3}
               title="Smart Retrieval"
-              description="Questions retrieved based on semantic similarity and historical attribution"
+              description="Questions are answered with KG expansion, hybrid retrieval, and source citations"
             />
           </div>
         </div>

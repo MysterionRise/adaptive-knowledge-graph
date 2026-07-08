@@ -8,6 +8,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { buildApiHeaders } from './api-client';
 import type { SubjectTheme } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -159,9 +160,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const response = await fetch(`${API_BASE}${API_PREFIX}/student/mastery`, {
         method: 'POST',
-        headers: {
+        headers: buildApiHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
         body: JSON.stringify({ concept, correct }),
       });
 
@@ -207,7 +208,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isSyncing: true, lastSyncError: null });
 
     try {
-      const response = await fetch(`${API_BASE}${API_PREFIX}/student/profile`);
+      const response = await fetch(`${API_BASE}${API_PREFIX}/student/profile`, {
+        headers: buildApiHeaders(),
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to load profile: ${response.status}`);
@@ -242,6 +245,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const response = await fetch(`${API_BASE}${API_PREFIX}/student/reset`, {
         method: 'POST',
+        headers: buildApiHeaders(),
       });
 
       if (!response.ok) {

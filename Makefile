@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-fast test-tribunal lint format type-check clean docker-build docker-up docker-down fetch-data build-kg index-rag run-api run-frontend demo-seed demo-check eval-rag eval-rag-api test-integration test-integration-ui
+.PHONY: help install install-dev test test-fast test-tribunal lint format type-check clean docker-build docker-up docker-down fetch-data build-kg index-rag run-api run-frontend demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval eval-rag eval-rag-api test-integration test-integration-ui
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -106,6 +106,19 @@ demo-seed: ## Seed local demo data into Neo4j and OpenSearch
 
 demo-check: ## Verify local demo services and core workflows
 	bash scripts/validate_setup.sh
+
+demo-client-prep: ## Prepare local OpenStax client demo data and services
+	bash scripts/demo_client_prep.sh
+
+demo-client-check: ## Validate local client demo readiness and latest eval gate
+	bash scripts/demo_client_check.sh
+
+demo-client-reset: ## Reset transient client demo learner state
+	bash scripts/demo_client_reset.sh
+
+demo-eval: ## Run live client-demo eval and validate the latest report
+	poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
+	poetry run python scripts/check_demo_eval.py
 
 # Complete pipeline
 pipeline-all: fetch-data parse-data normalize-data build-kg index-rag ## Run complete data pipeline

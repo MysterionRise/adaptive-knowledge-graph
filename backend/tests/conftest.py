@@ -133,7 +133,7 @@ def mock_neo4j_adapter():
         "Module_count": 25,
         "CONTAINS_relationships": 300,
         "RELATED_TO_relationships": 200,
-        "PREREQUISITE_relationships": 100,
+        "PREREQ_relationships": 100,
     }
 
     # Default fulltext search response
@@ -275,7 +275,7 @@ def mock_cypher_qa_service():
     service = MagicMock()
     service.query.return_value = {
         "question": "What concepts are prerequisites for Photosynthesis?",
-        "cypher": "MATCH (p:Concept)-[:PREREQUISITE]->(c:Concept {name: 'Photosynthesis'}) RETURN p",
+        "cypher": "MATCH (p:Concept)-[:PREREQ]->(c:Concept {name: 'Photosynthesis'}) RETURN p",
         "result": [
             {"name": "Chemistry Basics", "importance_score": 0.7},
             {"name": "Cell Structure", "importance_score": 0.8},
@@ -284,11 +284,10 @@ def mock_cypher_qa_service():
         "error": None,
     }
     service.generate_cypher_only.return_value = (
-        "MATCH (p:Concept)-[:PREREQUISITE]->(c:Concept {name: 'Photosynthesis'}) RETURN p"
+        "MATCH (p:Concept)-[:PREREQ]->(c:Concept {name: 'Photosynthesis'}) RETURN p"
     )
     service.get_schema.return_value = (
-        "Node types: Concept, Module, Chunk. "
-        "Relationships: CONTAINS, RELATED_TO, PREREQUISITE, NEXT."
+        "Node types: Concept, Module, Chunk. " "Relationships: CONTAINS, RELATED_TO, PREREQ, NEXT."
     )
     return service
 

@@ -1,34 +1,56 @@
 # 5-Minute Demo Script
 
-Purpose: show a credible KG-RAG AI platform prototype, not a production
-certification product.
+Purpose: executive cutdown of the local OpenStax client demo. This is a
+controlled pilot prototype, not a production certification product.
+
+## Pre-Demo Commands
+
+Run before the meeting:
+
+```bash
+make demo-client-prep
+make run-api
+```
+
+In another terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Then:
+
+```bash
+make demo-eval
+make demo-client-check
+```
 
 ## 0:00-0:45 - Positioning
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000` and `/demo-status`.
 
 Say:
 
-> This is a production-shaped KG-RAG learning prototype. The signal is not a
-> chatbot wrapper; it is graph-aware retrieval, citations, streaming UX,
-> adaptive assessment, local-first LLM support, and measurable evaluation hooks.
+> This is a controlled local demo for AI over approved course content:
+> citations, graph-aware retrieval, adaptive practice, and measurable quality
+> checks over OpenStax material.
 
-## 0:45-1:45 - Knowledge Graph
+## 0:45-1:35 - Knowledge Graph
 
 Open `/graph`.
 
 Show:
 
-- concept nodes
-- relationship highlighting
-- subject switcher
-- graph statistics
+- US History concept graph
+- selected concept details
+- prerequisite and related-concept edges
 
 Say:
 
-> The graph drives query expansion and recommendations. It is not just a visual.
+> The graph drives query expansion and remediation. It is not just a visual.
 
-## 1:45-3:00 - KG-RAG Chat
+## 1:35-2:45 - KG-RAG Chat
 
 Open `/chat`.
 
@@ -40,53 +62,36 @@ What caused the American Revolution?
 
 Show:
 
-- streaming answer
-- expanded concepts
 - citations
-- source scores
+- expanded concepts
+- KG expansion state
 
 Say:
 
-> The system exposes what it retrieved and why. The evaluator can compare this
-> KG-expanded path against plain retrieval.
+> The system exposes what it retrieved and why, then evals compare the KG path
+> against plain retrieval.
 
-## 3:00-4:15 - Adaptive Quiz
+## 2:45-3:50 - Adaptive Practice
 
 Open `/assessment`.
 
-Generate a quiz, answer one question, and show:
+Generate a quiz for `The American Revolution` and show:
 
-- explanation
+- question and explanation
 - mastery update
-- recommendations
+- recommendation direction
 
 Say:
 
-> This is adaptive practice infrastructure. BKT-style mastery updates are
-> implemented; full psychometric calibration is future work.
+> This is adaptive practice infrastructure. A production pilot would add
+> reviewed question banks and learner-response calibration.
 
-## 4:15-5:00 - Engineering Evidence
+## 3:50-5:00 - Evidence And Pilot Path
 
-Flash README or terminal:
-
-```bash
-make test-fast
-cd frontend && npm run type-check
-poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
-```
+Show `/demo-status` and `docs/evals/latest.md`.
 
 Say:
 
-> The repo now separates implemented features from roadmap claims, has stricter
-> CI boundaries, SQLite-backed local persistence, secure TLS defaults for remote
-> LLM calls, and a small golden-set evaluation harness.
-
-## Pre-Demo Commands
-
-```bash
-cp .env.demo.example .env
-docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
-bash scripts/seed_demo.sh
-make run-api
-cd frontend && npm run dev
-```
+> The next step is a 4-6 week pilot over one approved content slice, with
+> success metrics for citation quality, learner usefulness, author review
+> effort, refusal behavior, and latency.

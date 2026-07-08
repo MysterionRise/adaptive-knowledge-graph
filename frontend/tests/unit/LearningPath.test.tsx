@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LearningPath from '@/components/LearningPath';
+import { apiClient } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
 
 // Mock next/navigation
@@ -13,11 +14,15 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock fetch
-global.fetch = jest.fn();
+jest.mock('@/lib/api-client', () => ({
+  apiClient: {
+    getLearningPath: jest.fn(),
+  },
+}));
 
 // Reset store between tests
 const initialStoreState = useAppStore.getState();
+const mockGetLearningPath = apiClient.getLearningPath as jest.Mock;
 
 const mockLearningPath = {
   concept: 'Advanced Topic',
@@ -33,14 +38,12 @@ describe('LearningPath Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAppStore.setState(initialStoreState);
-    (global.fetch as jest.Mock).mockReset();
+    mockGetLearningPath.mockReset();
   });
 
   describe('Loading State', () => {
     it('shows loading spinner while fetching', () => {
-      (global.fetch as jest.Mock).mockImplementation(
-        () => new Promise(() => {})
-      );
+      mockGetLearningPath.mockImplementation(() => new Promise(() => {}));
 
       render(<LearningPath conceptName="Test Concept" />);
 
@@ -50,9 +53,7 @@ describe('LearningPath Component', () => {
 
   describe('Error State', () => {
     it('shows error message when fetch fails', async () => {
-      (global.fetch as jest.Mock).mockRejectedValueOnce(
-        new Error('Network error')
-      );
+      mockGetLearningPath.mockRejectedValueOnce(new Error('Network error'));
 
       render(<LearningPath conceptName="Test Concept" />);
 
@@ -66,10 +67,7 @@ describe('LearningPath Component', () => {
 
   describe('Empty State', () => {
     it('shows empty message when no path found', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ concept: 'Test', path: [], depth: 0 }),
-      });
+      mockGetLearningPath.mockResolvedValueOnce({ concept: 'Test', path: [], depth: 0 });
 
       render(<LearningPath conceptName="Test Concept" />);
 
@@ -83,10 +81,7 @@ describe('LearningPath Component', () => {
 
   describe('Successful Render', () => {
     beforeEach(async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
     });
 
     it('renders learning path header', async () => {
@@ -142,10 +137,7 @@ describe('LearningPath Component', () => {
 
   describe('Mastery Display', () => {
     it('shows mastery percentage for each concept', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       render(<LearningPath conceptName="Advanced Topic" />);
 
@@ -169,10 +161,7 @@ describe('LearningPath Component', () => {
         },
       });
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       render(<LearningPath conceptName="Advanced Topic" />);
 
@@ -184,10 +173,7 @@ describe('LearningPath Component', () => {
 
   describe('Summary Section', () => {
     it('shows mastery summary counts', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       render(<LearningPath conceptName="Advanced Topic" />);
 
@@ -201,10 +187,7 @@ describe('LearningPath Component', () => {
 
   describe('Actions', () => {
     beforeEach(async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
     });
 
     it('renders Ask Tutor buttons for each concept', async () => {
@@ -257,11 +240,7 @@ describe('LearningPath Component', () => {
   describe('Callbacks', () => {
     it('calls onConceptClick when concept card is clicked', async () => {
       const onConceptClick = jest.fn();
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       render(
         <LearningPath
@@ -287,46 +266,39 @@ describe('LearningPath Component', () => {
 
   describe('API Call', () => {
     it('fetches learning path on mount', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       render(<LearningPath conceptName="Test Concept" />);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/learning-path/Test%20Concept')
+        expect(apiClient.getLearningPath).toHaveBeenCalledWith(
+          'Test Concept',
+          5,
+          useAppStore.getState().currentSubject
         );
       });
     });
 
     it('refetches when conceptName changes', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValue(mockLearningPath);
 
       const { rerender } = render(<LearningPath conceptName="Concept A" />);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(apiClient.getLearningPath).toHaveBeenCalledTimes(1);
       });
 
       rerender(<LearningPath conceptName="Concept B" />);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(apiClient.getLearningPath).toHaveBeenCalledTimes(2);
       });
     });
   });
 
   describe('Custom ClassName', () => {
     it('applies custom className', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       const { container } = render(
         <LearningPath conceptName="Test" className="custom-class" />
@@ -352,10 +324,7 @@ describe('LearningPath Component', () => {
         },
       });
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       render(<LearningPath conceptName="Advanced Topic" />);
 
@@ -368,10 +337,7 @@ describe('LearningPath Component', () => {
 
   describe('Progress Bars', () => {
     it('renders progress bars for each concept', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockLearningPath,
-      });
+      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
       const { container } = render(
         <LearningPath conceptName="Advanced Topic" />

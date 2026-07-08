@@ -15,6 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.app.api import (
     ask_router,
+    demo_router,
     graph_router,
     learning_path_router,
     quiz_router,
@@ -343,6 +344,7 @@ async def health_live():
 
 # Include routers
 app.include_router(ask_router, prefix=settings.api_prefix)
+app.include_router(demo_router, prefix=settings.api_prefix)
 app.include_router(graph_router, prefix=settings.api_prefix)
 app.include_router(quiz_router, prefix=settings.api_prefix)
 app.include_router(learning_path_router, prefix=settings.api_prefix)

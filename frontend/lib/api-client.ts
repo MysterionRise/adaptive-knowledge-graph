@@ -5,6 +5,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import type {
+  DemoStatusResponse,
   GraphStats,
   QuestionRequest,
   QuestionResponse,
@@ -15,6 +16,22 @@ import type {
   SubjectTheme,
   SubjectDetailResponse,
 } from './types';
+
+const API_KEY_HEADER = 'X-API-Key';
+
+/**
+ * Build API headers, including the optional demo API key when configured.
+ */
+export function buildApiHeaders(
+  headers: Record<string, string> = {}
+): Record<string, string> {
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY || '';
+  if (!apiKey) return headers;
+  return {
+    ...headers,
+    [API_KEY_HEADER]: apiKey,
+  };
+}
 
 /**
  * API Client class for interacting with the backend.
@@ -30,9 +47,9 @@ class ApiClient {
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 30000, // 30 second timeout
-      headers: {
+      headers: buildApiHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
     });
 
     // Response interceptor for error handling
@@ -109,9 +126,19 @@ class ApiClient {
    * @returns Array of top concepts
    */
   async getTopConcepts(limit: number = 20): Promise<TopConcept[]> {
+    return this.getTopConceptsForSubject(limit);
+  }
+
+  /**
+   * Get top concepts by importance score, optionally scoped to a subject.
+   */
+  async getTopConceptsForSubject(
+    limit: number = 20,
+    subject?: string
+  ): Promise<TopConcept[]> {
     try {
       const response = await this.client.get<TopConcept[]>(`${this.apiPrefix}/concepts/top`, {
-        params: { limit },
+        params: { limit, ...(subject && { subject }) },
       });
       return response.data;
     } catch (error) {
@@ -140,6 +167,33 @@ class ApiClient {
    */
   getBaseURL(): string {
     return this.baseURL;
+  }
+
+  /**
+   * Get client-demo readiness status.
+   */
+  async getDemoStatus(): Promise<DemoStatusResponse> {
+    const response = await this.client.get<DemoStatusResponse>(
+      `${this.apiPrefix}/demo/status`
+    );
+    return response.data;
+  }
+
+  /**
+   * Get a prerequisite learning path for a concept.
+   */
+  async getLearningPath(
+    conceptName: string,
+    maxDepth: number = 5,
+    subject?: string
+  ): Promise<any> {
+    const response = await this.client.get(
+      `${this.apiPrefix}/learning-path/${encodeURIComponent(conceptName)}`,
+      {
+        params: { max_depth: maxDepth, ...(subject && { subject }) },
+      }
+    );
+    return response.data;
   }
 
   // ==========================================================================
@@ -230,7 +284,7 @@ class ApiClient {
 
     const response = await fetch(`${this.baseURL}${this.apiPrefix}/ask/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildApiHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
       signal,
     });
