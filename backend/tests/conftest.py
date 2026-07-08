@@ -287,8 +287,7 @@ def mock_cypher_qa_service():
         "MATCH (p:Concept)-[:PREREQ]->(c:Concept {name: 'Photosynthesis'}) RETURN p"
     )
     service.get_schema.return_value = (
-        "Node types: Concept, Module, Chunk. "
-        "Relationships: CONTAINS, RELATED_TO, PREREQ, NEXT."
+        "Node types: Concept, Module, Chunk. " "Relationships: CONTAINS, RELATED_TO, PREREQ, NEXT."
     )
     return service
 
