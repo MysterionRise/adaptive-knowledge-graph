@@ -6,6 +6,7 @@ import { apiClient } from '@/lib/api-client';
 jest.mock('@/lib/api-client', () => ({
   apiClient: {
     getGraphStats: jest.fn(),
+    getTopConceptsForSubject: jest.fn().mockResolvedValue([]),
     getSubjects: jest.fn().mockResolvedValue({
       subjects: [
         { id: 'us_history', name: 'US History', description: 'US History', is_default: true },
@@ -42,22 +43,10 @@ jest.mock('next/link', () => {
   };
 });
 
-// Mock global fetch for the /api/v1/concepts/top call
-beforeEach(() => {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ concepts: [] }),
-  }) as jest.Mock;
-});
-
 describe('Home Page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Re-set the fetch mock after clearAllMocks
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ concepts: [] }),
-    }) as jest.Mock;
+    (apiClient.getTopConceptsForSubject as jest.Mock).mockResolvedValue([]);
   });
 
   it('renders the main heading', () => {
@@ -69,7 +58,7 @@ describe('Home Page', () => {
 
     render(<Home />);
 
-    expect(screen.getByText('Adaptive Certifications')).toBeInTheDocument();
+    expect(screen.getByText('Adaptive Knowledge Graph')).toBeInTheDocument();
   });
 
   it('displays graph statistics after loading', async () => {
@@ -127,6 +116,7 @@ describe('Home Page', () => {
 
     expect(screen.getByText('Explore Graph')).toBeInTheDocument();
     expect(screen.getByText('Ask Questions')).toBeInTheDocument();
+    expect(screen.getByText('Demo Status')).toBeInTheDocument();
   });
 
   it('displays feature cards', () => {

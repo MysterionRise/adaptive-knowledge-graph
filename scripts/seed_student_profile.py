@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import json
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -186,6 +187,50 @@ def create_demo_profile(student_id: str = "default") -> dict:
     return profile
 
 
+def write_sqlite_profile(output_path: Path, profiles: dict) -> None:
+    """Write demo profiles to the SQLite store used by the API default."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(output_path) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                student_id TEXT PRIMARY KEY,
+                profile_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        for student_id, profile in profiles.items():
+            conn.execute(
+                """
+                INSERT INTO student_profiles (student_id, profile_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(student_id) DO UPDATE SET
+                    profile_json = excluded.profile_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    student_id,
+                    json.dumps(profile, default=str),
+                    profile.get("updated_at", datetime.now().isoformat()),
+                ),
+            )
+        conn.commit()
+
+
+def write_json_profile(output_path: Path, profiles: dict) -> None:
+    """Write demo profiles to the legacy JSON store."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = {}
+    if output_path.exists():
+        with open(output_path) as f:
+            existing = json.load(f)
+    existing.update(profiles)
+    with open(output_path, "w") as f:
+        json.dump(existing, f, indent=2, default=str)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Seed demo student profile")
     parser.add_argument(
@@ -195,28 +240,19 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="data/processed/student_profiles.json",
-        help="Output path for student profiles JSON",
+        default="data/processed/student_profiles.sqlite3",
+        help="Output path for student profiles (.sqlite3/.db or .json)",
     )
     args = parser.parse_args()
 
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Load existing profiles if any
-    existing = {}
-    if output_path.exists():
-        with open(output_path) as f:
-            existing = json.load(f)
-
     # Create demo profile
+    output_path = Path(args.output)
     demo_profile = create_demo_profile(args.student_id)
 
-    # Merge — demo profile overwrites existing for the same student_id
-    existing.update(demo_profile)
-
-    with open(output_path, "w") as f:
-        json.dump(existing, f, indent=2, default=str)
+    if output_path.suffix in {".db", ".sqlite", ".sqlite3"}:
+        write_sqlite_profile(output_path, demo_profile)
+    else:
+        write_json_profile(output_path, demo_profile)
 
     print(f"Demo student profile seeded at {output_path}")
     print(f"  Student ID: {args.student_id}")

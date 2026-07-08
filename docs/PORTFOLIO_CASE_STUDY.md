@@ -2,12 +2,15 @@
 
 ## Problem
 
-Most AI tutor demos are thin chat wrappers. They retrieve semantically similar
-text, but they do not model prerequisite relationships, expose retrieval
-evidence, or adapt practice based on learner state.
+Publishers and institutions do not need another generic chatbot over course
+material. They need AI experiences over approved learning content: answers that
+cite licensed sources, concept relationships that authors can inspect, adaptive
+practice that educators can review, and quality metrics that technical teams can
+regress.
 
-This project explores a stronger architecture: KG-aware RAG plus adaptive
-assessment over open textbook content.
+This project demonstrates that shape as a controlled local OpenStax demo:
+KG-aware RAG plus adaptive assessment over open textbook content. It is a
+client-demo and pilot prototype, not production certification infrastructure.
 
 ## Product Thesis
 
@@ -18,6 +21,7 @@ For adult retraining and certification prep, a useful AI learning system needs:
 - adaptive practice based on mastery
 - local-first deployment options for privacy
 - measurable retrieval and answer quality
+- human-review paths before high-stakes assessment use
 
 ## Architecture
 
@@ -71,14 +75,18 @@ Implemented:
 - request IDs and response-time headers
 - API-key protection for sensitive endpoints when configured
 - golden-set evaluator for KG vs plain retrieval
+- client demo status dashboard
+- local-only OpenStax client demo scripts
 
 Current validation commands:
 
 ```bash
+make demo-client-prep
+make demo-eval
+make demo-client-check
 make test-fast
 cd frontend && npm run type-check
-cd frontend && npm test -- --ci --runInBand
-poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
+cd frontend && npm test -- --ci --runInBand --forceExit
 ```
 
 ## Known Gaps
@@ -88,15 +96,17 @@ poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
 - no production deployment manifests
 - browser E2E is manual until a demo backend exists in CI
 - graph/search clients still use synchronous calls in async routes
-- evaluation set is intentionally small and should be expanded
+- evaluation metrics are heuristic and need human review before production use
+- no LMS/LTI integration yet
 
 ## Next 30/60/90 Days
 
 30 days:
 
-- expand golden QA set to 50+ cases
+- keep golden QA set at 50+ cases and add client-specific cases per pilot
 - require eval report in PRs touching retrieval/prompting
 - finish CI split between unit, tribunal, and browser suites
+- capture client-demo screenshots and a short local walkthrough recording
 
 60 days:
 

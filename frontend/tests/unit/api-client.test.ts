@@ -28,15 +28,48 @@ jest.mock('axios', () => {
 });
 
 import axios from 'axios';
-import ApiClient from '@/lib/api-client';
+import ApiClient, { buildApiHeaders } from '@/lib/api-client';
 
 describe('ApiClient', () => {
   let client: ApiClient;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.NEXT_PUBLIC_API_KEY;
     (axios.create as jest.Mock).mockReturnValue(mockAxiosInstance);
     client = new ApiClient('http://localhost:8000');
+  });
+
+  describe('API key headers', () => {
+    it('builds headers without API key by default', () => {
+      expect(buildApiHeaders({ 'Content-Type': 'application/json' })).toEqual({
+        'Content-Type': 'application/json',
+      });
+    });
+
+    it('adds X-API-Key when NEXT_PUBLIC_API_KEY is configured', () => {
+      process.env.NEXT_PUBLIC_API_KEY = 'demo-key';
+
+      expect(buildApiHeaders({ 'Content-Type': 'application/json' })).toEqual({
+        'Content-Type': 'application/json',
+        'X-API-Key': 'demo-key',
+      });
+    });
+
+    it('configures axios with the optional API key header', () => {
+      process.env.NEXT_PUBLIC_API_KEY = 'demo-key';
+
+      new ApiClient('http://localhost:8000');
+
+      expect(axios.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+            'X-API-Key': 'demo-key',
+          }),
+        })
+      );
+    });
   });
 
   describe('getGraphStats', () => {
@@ -165,6 +198,26 @@ describe('ApiClient', () => {
   describe('getBaseURL', () => {
     it('should return the configured base URL', () => {
       expect(client.getBaseURL()).toBe('http://localhost:8000');
+    });
+  });
+
+  describe('getDemoStatus', () => {
+    it('fetches demo readiness status', async () => {
+      const mockStatus = {
+        status: 'ready',
+        positioning: 'Controlled local demo',
+        services: {},
+        subjects: [],
+        latest_eval: { status: 'ok', environment_valid: true, cases: 1, kg_successful_cases: 1, plain_successful_cases: 1 },
+        script_readiness: {},
+        next_actions: [],
+      };
+      mockGet.mockResolvedValue({ data: mockStatus });
+
+      const result = await client.getDemoStatus();
+
+      expect(result).toEqual(mockStatus);
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/demo/status');
     });
   });
 
@@ -503,6 +556,40 @@ describe('ApiClient', () => {
           }),
           signal: undefined,
         }
+      );
+    });
+
+    it('should include API key header for streaming requests when configured', async () => {
+      process.env.NEXT_PUBLIC_API_KEY = 'stream-key';
+      const mockReader = {
+        read: jest.fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode('data: [DONE]\n'),
+          })
+          .mockResolvedValueOnce({ done: true, value: undefined }),
+        releaseLock: jest.fn(),
+      };
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        body: { getReader: () => mockReader },
+      });
+
+      await client.askQuestionStream(
+        { question: 'Protected stream?' },
+        undefined,
+        { onDone: jest.fn() }
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/ask/stream',
+        expect.objectContaining({
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': 'stream-key',
+          },
+        })
       );
     });
 

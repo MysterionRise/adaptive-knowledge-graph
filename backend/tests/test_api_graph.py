@@ -208,7 +208,7 @@ class TestGraphQueryEndpoint:
         assert "answer" in data
 
         # Verify content
-        assert "PREREQUISITE" in data["cypher"]
+        assert "PREREQ" in data["cypher"]
         assert len(data["result"]) == 2
 
     def test_query_graph_preview_only(self, client, mock_cypher_qa_service):
@@ -360,6 +360,8 @@ class TestLearningPathEndpoint:
         assert data["target_concept"] == "Photosynthesis"
         assert len(data["prerequisites"]) == 2
         assert data["total_concepts"] == 3  # 2 prerequisites + 1 target
+        assert "PREREQ" in mock_session.run.call_args.args[0]
+        assert "PREREQUISITE" not in mock_session.run.call_args.args[0]
 
     def test_get_learning_path_no_prerequisites(self, client):
         """Test learning path for concept with no prerequisites."""
@@ -394,6 +396,8 @@ class TestLearningPathEndpoint:
         assert data["concept"] == "TestConcept"
         assert len(data["prerequisites"]) == 2
         assert data["depth"] == 2
+        assert "PREREQ" in mock_session.run.call_args.args[0]
+        assert "PREREQUISITE" not in mock_session.run.call_args.args[0]
 
     def test_get_dependents_success(self, client):
         """Test successful dependents retrieval."""
@@ -411,6 +415,8 @@ class TestLearningPathEndpoint:
         data = response.json()
         assert data["concept"] == "BasicConcept"
         assert len(data["dependents"]) == 1
+        assert "PREREQ" in mock_session.run.call_args.args[0]
+        assert "PREREQUISITE" not in mock_session.run.call_args.args[0]
 
     def test_learning_path_connection_error(self, client):
         """Test 503 when Neo4j connection fails."""

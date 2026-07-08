@@ -1,52 +1,38 @@
 # Adaptive Knowledge Graph
 
-Production-shaped KG-RAG learning platform prototype for AI engineering portfolio review.
+Controlled client-demo and AI engineering portfolio prototype for grounded,
+adaptive learning over approved course content.
 
-This project demonstrates how to combine a knowledge graph, hybrid retrieval,
-local-first LLM inference, streaming answers, and adaptive assessment workflows
-in one end-to-end system. It is intentionally positioned as a serious prototype:
-real architecture, real tests, real data pipelines, and explicit production gaps.
+The project combines a knowledge graph, hybrid retrieval, local-first LLM
+inference, citations, adaptive practice, and live evaluation checks. It is built
+to support a 30-minute education-client demo using OpenStax content and
+synthetic learner data.
 
-## Current Portfolio Rating
+Position this as a **controlled local demo and pilot prototype**, not as a
+production certification platform.
 
-- Engineering portfolio project: 7/10
-- Real AI platform prototype: 6/10
-- Production readiness: 4/10
+## Demo Scope
 
-The repo is not a toy shell. It has FastAPI, Next.js, Neo4j, OpenSearch,
-Ollama/OpenRouter support, KG-aware RAG, SSE streaming, multi-subject config,
-Docker Compose, data ingestion scripts, and broad tests. The remaining work is
-mostly hardening: evaluation depth, auth, persistence, observability, CI
-strictness, and deployment discipline.
+- Content: OpenStax demo material only unless a client provides approved sample
+  content under written permission.
+- Learners: synthetic profiles only; no real student PII in the demo.
+- Runtime: local laptop stack with Neo4j, OpenSearch, Ollama, FastAPI, and
+  Next.js.
+- Evidence: live readiness checks plus a golden-set KG-RAG evaluation report.
+- Boundaries: no LMS/LTI integration, no tenant model, no production compliance
+  certification, and no psychometrically calibrated IRT.
 
-## What Is Implemented
+## What It Demonstrates
 
 | Area | Current state |
 | --- | --- |
-| KG-RAG Q&A | FastAPI endpoint with KG expansion, OpenSearch retrieval, optional reranking, citations, and streaming |
-| Knowledge graph | Neo4j concept/module/chunk schema, subject label isolation, graph visualization payloads |
-| Retrieval | OpenSearch kNN and hybrid BM25 + vector retrieval with reciprocal rank fusion |
-| LLM layer | Ollama local mode, OpenRouter remote mode, hybrid fallback, streaming support |
-| Frontend | Next.js app with graph, chat, comparison, assessment, learning path, and subject picker views |
-| Adaptive assessment | LLM-generated MCQs, BKT-inspired mastery updates, target difficulty, post-quiz recommendations |
-| Multi-subject | `config/subjects.yaml` drives subject prompts, indices, labels, themes, and attribution |
-| Local infrastructure | Docker Compose for Neo4j, OpenSearch, CPU/GPU API containers |
-| Evaluation | Lightweight golden-set RAG evaluator in `scripts/evaluate_rag.py` |
-
-## What Is Not Yet Production-Grade
-
-- Authentication is API-key based and intended as a local/deployment boundary,
-  not a full user identity system.
-- Student profile persistence now defaults to SQLite, but there is no tenant,
-  role, or institutional data model.
-- BKT is implemented as an in-app Bayesian update; IRT is not calibrated with
-  real learner response data.
-- LLM-generated quiz difficulty is useful for demos, but not psychometrically
-  validated.
-- Some integrations use synchronous clients inside async routes. This is
-  acceptable for the demo path, but not for high concurrency.
-- CI has been tightened for core checks, while full browser E2E is manual until
-  a reliable demo backend is provisioned in CI.
+| Grounded tutoring | KG-aware RAG answers with citations, source snippets, expanded concepts, and streaming support |
+| Knowledge graph | Neo4j concept/module/chunk schema with prerequisite and related-concept edges |
+| Retrieval | OpenSearch hybrid BM25 + vector retrieval with optional reranking |
+| Local-first LLM | Ollama local mode by default; remote fallback exists but is not the main client-demo posture |
+| Adaptive practice | LLM-generated quizzes, synthetic mastery state, target difficulty, and recommendations |
+| Demo operations | `/demo-status`, strict `make demo-client-check`, reset scripts, and Node 20 pinning |
+| Evaluation | 50+ OpenStax golden cases comparing KG-expanded retrieval with plain retrieval |
 
 ## Architecture
 
@@ -54,157 +40,131 @@ strictness, and deployment discipline.
 Next.js UI
   -> FastAPI API
       -> Neo4j knowledge graph
-      -> OpenSearch hybrid/vector retrieval
-      -> Ollama local LLM or OpenRouter fallback
-      -> SQLite student mastery store
+      -> OpenSearch hybrid retrieval
+      -> Ollama local LLM
+      -> SQLite synthetic learner profile
 ```
 
-Important design choices:
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for implementation tradeoffs
+and production gaps.
 
-- Neo4j is used because prerequisite chains and concept expansion are naturally
-  graph-shaped.
-- OpenSearch is used because the prototype needs both lexical BM25 and dense
-  vector retrieval in one service.
-- Local-first LLM mode is the default privacy posture; remote fallback is a demo
-  reliability option.
-- Multi-subject support uses label/index isolation rather than separate Neo4j
-  databases so it works on Neo4j Community Edition.
-
-## Quick Start
+## Client Demo Workflow
 
 Prerequisites:
 
 - Python 3.11-3.13
 - Poetry
 - Docker and Docker Compose
-- Node.js 20+
-- Optional: Ollama with a local model
+- Node.js 20
+- Ollama with the configured local model
+
+Prepare local services and seed OpenStax demo data:
 
 ```bash
-poetry install --without pyirt,pybkt
-cd frontend && npm ci && cd ..
-docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
-poetry run uvicorn backend.app.main:app --reload --port 8000
+make demo-client-prep
 ```
 
-In another terminal:
+Start the API:
+
+```bash
+make run-api
+```
+
+Start the frontend in another terminal:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
+Generate the live evaluation report, then run the strict rehearsal gate:
+
+```bash
+make demo-eval
+make demo-client-check
+```
+
 Open:
 
 - Frontend: `http://localhost:3000`
+- Demo readiness: `http://localhost:3000/demo-status`
 - API docs: `http://localhost:8000/docs`
-- Readiness: `http://localhost:8000/health/ready`
+- Backend readiness: `http://localhost:8000/health/ready`
 
-## Demo Path
+After `make demo-client-check` passes, capture screenshots and a short local
+walkthrough using [docs/DEMO_ASSET_CAPTURE.md](docs/DEMO_ASSET_CAPTURE.md).
 
-Use the demo env template and seed script:
+## Important Eval Caveat
 
-```bash
-cp .env.demo.example .env
-make demo-seed
-make run-api
-cd frontend && npm run dev
-```
+`docs/evals/latest.json` and `docs/evals/latest.md` are only demo-quality
+evidence after a live seeded run succeeds and `environment_valid` is `true`.
+The demo gate intentionally fails when the latest report is missing, invalid, or
+has zero successful KG/plain cases.
 
-Expected demo flow:
+## Documentation Map
 
-1. Load graph statistics and visualize concepts.
-2. Ask a KG-RAG question with citations.
-3. Compare KG-RAG against plain retrieval.
-4. Generate an adaptive quiz.
-5. Show mastery update and post-quiz recommendations.
+- [docs/CLIENT_DEMO_30MIN.md](docs/CLIENT_DEMO_30MIN.md): primary client demo
+  script and fallback paths.
+- [docs/CLIENT_PILOT_PROPOSAL.md](docs/CLIENT_PILOT_PROPOSAL.md): 4-6 week
+  pilot shape, success metrics, and responsibilities.
+- [docs/TRUST_AND_PRIVACY.md](docs/TRUST_AND_PRIVACY.md): local-only posture,
+  PII boundaries, and compliance caveats.
+- [docs/CLIENT_LEAVE_BEHIND.md](docs/CLIENT_LEAVE_BEHIND.md): one-page client
+  brief with architecture snapshot.
+- [docs/PORTFOLIO_CASE_STUDY.md](docs/PORTFOLIO_CASE_STUDY.md): AI engineering
+  portfolio narrative and roadmap.
+- [docs/evals/README.md](docs/evals/README.md): evaluation harness notes.
 
-## Evaluation
+## Development Commands
 
-Run the lightweight RAG evaluator against a live backend:
-
-```bash
-make eval-rag-api
-```
-
-Inputs live in `data/evals/golden_qa.yaml`; reports are written to
-`docs/evals/latest.json` and `docs/evals/latest.md`.
-
-Tracked signals:
-
-- answer term recall
-- citation hit rate
-- expected-source MRR
-- KG-vs-plain retrieval deltas
-- KG expansion concepts
-- latency
-- failure count
-- approximate answer token count
-
-## Test Commands
-
-Backend fast suite:
+Install dependencies:
 
 ```bash
-make test-fast
+poetry install --without pyirt,pybkt
+cd frontend
+npm ci
 ```
 
-Backend adversarial/risk-register suite:
+Run backend checks:
 
 ```bash
-make test-tribunal
+make lint
+make type-check
+make test
 ```
 
-Frontend:
+Run frontend checks:
 
 ```bash
 cd frontend
 npm run type-check
-npm test -- --ci --runInBand
-npm run test:e2e -- --project=chromium
+npm test -- --ci --runInBand --forceExit
 ```
 
-Demo acceptance:
+The frontend Jest suite currently needs `--forceExit` because existing tests
+leave asynchronous handles open after reporting all suites complete.
 
-```bash
-make demo-check
-```
-
-## Security Posture
+## Security And Privacy Posture
 
 - `API_KEY` is empty by default for local development.
 - When `API_KEY` is configured, protected endpoints require `X-API-Key`.
-- OpenRouter TLS verification is enabled by default.
-- OpenSearch defaults to local HTTP in Compose; production should use managed
-  TLS, auth, snapshots, and network isolation.
+- The frontend can send that header via `NEXT_PUBLIC_API_KEY`.
 - `/health/ready` returns 503 when critical dependencies are unavailable.
-- Error messages are redacted before they are exposed through health surfaces.
-- `X-Forwarded-For` is ignored for rate limiting unless trusted proxy headers
-  are explicitly enabled.
+- Demo-status responses avoid secrets, local paths, and raw exception details.
+- OpenRouter support exists, but the client demo should stay local-only unless
+  a client explicitly approves remote calls.
 
-## CTO Notes
+## Known Gaps
 
-Tradeoffs made intentionally:
+- No full identity, role, or tenant model.
+- No LMS/LTI integration.
+- No production deployment manifests or SOC2-style controls.
+- No calibrated psychometric question bank.
+- Browser E2E is manual until a live demo backend is provisioned in CI.
+- Evaluation metrics are heuristic and require human review before production
+  use.
 
-- Chose Neo4j + OpenSearch over a simpler single-database stack because the
-  portfolio signal is graph-aware RAG, not just a chatbot.
-- Kept local-first LLM support despite hardware cost because student data
-  privacy is central to the domain.
-- Kept the frontend as a real Next.js app rather than Streamlit because graph
-  visualization, streaming, and repeated workflows matter for the demo.
-- Kept demo-grade adaptive learning, but documented the psychometric limits
-  instead of pretending the system is certification-ready.
-
-Next production steps:
-
-- Replace API-key auth with real identity, roles, and tenant boundaries.
-- Add managed deployment manifests and observability dashboards.
-- Expand the evaluation set and require eval deltas in pull requests.
-- Move blocking graph/search calls off the event loop or adopt async clients.
-- Add signed assessment attempts and a real question bank before using the
-  platform for credentials.
-
-## License and Attribution
+## License And Attribution
 
 Project code is MIT licensed. OpenStax content is CC BY 4.0 and is attributed in
 API responses, docs, and UI flows. This project is not affiliated with or

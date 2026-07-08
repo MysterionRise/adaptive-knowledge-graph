@@ -51,6 +51,22 @@ def _reciprocal_rank(rank: int | None) -> float:
     return 0.0 if rank is None else 1.0 / rank
 
 
+def _looks_like_refusal(answer: str) -> bool:
+    """Heuristic unsupported-answer refusal detector."""
+    answer_lower = answer.lower()
+    refusal_markers = [
+        "not contain enough information",
+        "doesn't contain enough information",
+        "does not contain enough information",
+        "not enough information",
+        "provided context",
+        "cannot answer",
+        "can't answer",
+        "not supported",
+    ]
+    return any(marker in answer_lower for marker in refusal_markers)
+
+
 def _ask(client: httpx.Client, api_url: str, case: dict[str, Any], use_kg: bool) -> dict[str, Any]:
     started = time.perf_counter()
     try:
@@ -85,6 +101,7 @@ def _ask(client: httpx.Client, api_url: str, case: dict[str, Any], use_kg: bool)
     answer = payload.get("answer", "")
     sources = payload.get("sources", [])
     source_rank = _source_match_rank(sources, case.get("expected_sources", []))
+    is_unsupported = "unsupported_claim" in case.get("tags", [])
 
     return {
         "status_code": response.status_code,
@@ -92,6 +109,7 @@ def _ask(client: httpx.Client, api_url: str, case: dict[str, Any], use_kg: bool)
         "answer_term_recall": round(_contains_all_terms(answer, case.get("expected_terms", [])), 3),
         "citation_hit": bool(source_rank) if case.get("expected_sources") else None,
         "mrr": round(_reciprocal_rank(source_rank), 3),
+        "unsupported_refusal": _looks_like_refusal(answer) if is_unsupported else None,
         "retrieved_count": payload.get("retrieved_count"),
         "expanded_concepts": payload.get("expanded_concepts") or [],
         "answer_tokens_approx": len(answer.split()),
@@ -105,6 +123,12 @@ def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     kg_citation_cases = [r for r in kg_successful if r["kg"].get("citation_hit") is not None]
     plain_citation_cases = [
         r for r in plain_successful if r["plain"].get("citation_hit") is not None
+    ]
+    kg_unsupported_cases = [
+        r for r in kg_successful if r["kg"].get("unsupported_refusal") is not None
+    ]
+    plain_unsupported_cases = [
+        r for r in plain_successful if r["plain"].get("unsupported_refusal") is not None
     ]
 
     def avg_metric(rows: list[dict[str, Any]], mode: str, metric: str) -> float:
@@ -123,12 +147,20 @@ def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     def failure_count(mode: str) -> int:
         return sum(1 for r in results if r[mode].get("status_code") != 200)
 
+    def refusal_rate(rows: list[dict[str, Any]], mode: str) -> float:
+        return round(
+            sum(1 for r in rows if r[mode].get("unsupported_refusal")) / max(len(rows), 1),
+            3,
+        )
+
     kg_recall = avg_metric(kg_successful, "kg", "answer_term_recall")
     plain_recall = avg_metric(plain_successful, "plain", "answer_term_recall")
     kg_mrr = avg_metric(kg_citation_cases, "kg", "mrr")
     plain_mrr = avg_metric(plain_citation_cases, "plain", "mrr")
     kg_hit_rate = hit_rate(kg_citation_cases, "kg")
     plain_hit_rate = hit_rate(plain_citation_cases, "plain")
+    kg_refusal_rate = refusal_rate(kg_unsupported_cases, "kg")
+    plain_refusal_rate = refusal_rate(plain_unsupported_cases, "plain")
     kg_latency = round(
         sum(r["kg"].get("latency_ms", 0.0) for r in kg_successful) / max(len(kg_successful), 1),
         2,
@@ -151,6 +183,9 @@ def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
         "kg_citation_hit_rate": kg_hit_rate,
         "plain_citation_hit_rate": plain_hit_rate,
         "citation_hit_rate_delta": round(kg_hit_rate - plain_hit_rate, 3),
+        "kg_unsupported_refusal_rate": kg_refusal_rate,
+        "plain_unsupported_refusal_rate": plain_refusal_rate,
+        "unsupported_refusal_rate_delta": round(kg_refusal_rate - plain_refusal_rate, 3),
         "kg_mrr_avg": kg_mrr,
         "plain_mrr_avg": plain_mrr,
         "mrr_delta": round(kg_mrr - plain_mrr, 3),
@@ -174,6 +209,24 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     for key, value in report["summary"].items():
         lines.append(f"- `{key}`: {value}")
 
+    lines.extend(
+        [
+            "",
+            "## Client-Readable Signals",
+            "",
+            "- Citation hit rate checks whether expected source sections appear in returned citations.",
+            "- Expected-source MRR rewards the expected source appearing higher in the citation list.",
+            "- Unsupported refusal rate checks whether unsupported or unsafe questions are not answered as facts.",
+            "- KG-vs-plain deltas show whether graph expansion helped this eval set, not a universal guarantee.",
+            "",
+            "## Known Limitations",
+            "",
+            "- Metrics are heuristic and should be paired with human review before production use.",
+            "- The report is only valid when `environment_valid` is `True` and successful case counts are non-zero.",
+            "- LLM-generated answer quality can vary by local model, hardware, and seed data freshness.",
+        ]
+    )
+
     lines.extend(["", "## Cases", ""])
     for result in report["results"]:
         kg = result["kg"]
@@ -187,9 +240,11 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
                 f"- KG status/latency: `{kg.get('status_code')}` / `{kg.get('latency_ms')}ms`",
                 f"- KG term recall: `{kg.get('answer_term_recall')}`",
                 f"- KG citation hit / MRR: `{kg.get('citation_hit')}` / `{kg.get('mrr')}`",
+                f"- KG unsupported refusal: `{kg.get('unsupported_refusal')}`",
                 f"- Plain status/latency: `{plain.get('status_code')}` / `{plain.get('latency_ms')}ms`",
                 f"- Plain term recall: `{plain.get('answer_term_recall')}`",
                 f"- Plain citation hit / MRR: `{plain.get('citation_hit')}` / `{plain.get('mrr')}`",
+                f"- Plain unsupported refusal: `{plain.get('unsupported_refusal')}`",
                 f"- Expanded concepts: `{', '.join(kg.get('expanded_concepts', [])[:8])}`",
                 "",
             ]

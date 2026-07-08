@@ -44,7 +44,7 @@ export default function LearningPath({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { getMastery, masteryMap } = useAppStore();
+  const { getMastery, masteryMap, currentSubject } = useAppStore();
 
   useEffect(() => {
     const fetchLearningPath = async () => {
@@ -54,13 +54,7 @@ export default function LearningPath({
       setError(null);
 
       try {
-        const response = await fetch(
-          `/api/v1/learning-path/${encodeURIComponent(conceptName)}?max_depth=5`
-        );
-        if (!response.ok) {
-          throw new Error('Failed to fetch learning path');
-        }
-        const data = await response.json();
+        const data = await apiClient.getLearningPath(conceptName, 5, currentSubject);
         // API returns {target_concept, prerequisites, total_concepts}
         // Normalize to {concept, path, depth}
         setPathData({
@@ -77,7 +71,7 @@ export default function LearningPath({
     };
 
     fetchLearningPath();
-  }, [conceptName]);
+  }, [conceptName, currentSubject]);
 
   const handleAskTutor = (concept: string) => {
     router.push(`/chat?question=${encodeURIComponent(`Explain ${concept}`)}`);

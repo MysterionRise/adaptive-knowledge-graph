@@ -100,6 +100,47 @@ export interface HealthResponse {
   attribution?: string;
 }
 
+export type DemoReadinessStatus = 'ok' | 'degraded' | 'error' | 'missing';
+
+export interface DemoServiceStatus {
+  status: DemoReadinessStatus;
+  message?: string | null;
+  latency_ms?: number | null;
+}
+
+export interface DemoSubjectStatus {
+  id: string;
+  name: string;
+  status: DemoReadinessStatus;
+  concept_count: number;
+  module_count: number;
+  relationship_count: number;
+  message?: string | null;
+}
+
+export interface DemoEvalStatus {
+  status: DemoReadinessStatus;
+  environment_valid: boolean;
+  generated_at?: string | null;
+  cases: number;
+  kg_successful_cases: number;
+  plain_successful_cases: number;
+  citation_hit_rate_delta?: number | null;
+  mrr_delta?: number | null;
+  unsupported_refusal_rate?: number | null;
+  message?: string | null;
+}
+
+export interface DemoStatusResponse {
+  status: 'ready' | 'degraded' | 'not_ready';
+  positioning: string;
+  services: Record<string, DemoServiceStatus>;
+  subjects: DemoSubjectStatus[];
+  latest_eval: DemoEvalStatus;
+  script_readiness: Record<string, boolean>;
+  next_actions: string[];
+}
+
 /**
  * Subject summary for listing.
  */
