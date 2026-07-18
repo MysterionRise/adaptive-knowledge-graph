@@ -89,7 +89,7 @@ toml = "^0.10.2"
 
 # Jupyter for evaluation
 jupyter = "^1.0.0"
-ipykernel = "^7.0.0"
+ipykernel = "^7.2.0"
 matplotlib = "^3.8.2"
 seaborn = "^0.13.2"
 
