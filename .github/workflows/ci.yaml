@@ -293,7 +293,7 @@ jobs:
         run: |
           test -f README.md
           test -f LICENSE
-          test -f COMPLIANCE.md
+          test -f docs/COMPLIANCE.md
           test -f .env.example
 
       - name: Lint markdown files
