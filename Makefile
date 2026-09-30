@@ -60,7 +60,7 @@ test: ## Run tests with coverage
 	poetry run pytest
 
 test-fast: ## Run non-adversarial backend tests with per-test timeout
-	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal"
+	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov-fail-under=75
 
 test-tribunal: ## Run adversarial/risk-register tests separately (no coverage gate)
 	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal --no-cov
@@ -78,8 +78,8 @@ format: ## Format code with ruff
 	poetry run ruff format backend/ scripts/
 	poetry run ruff check --fix backend/ scripts/
 
-type-check: ## Run type checking with mypy
-	poetry run mypy backend/app scripts/
+type-check: ## Run type checking with mypy (paths from [tool.mypy] files)
+	poetry run mypy
 
 pre-commit: format lint type-check test ## Run all pre-commit checks
 

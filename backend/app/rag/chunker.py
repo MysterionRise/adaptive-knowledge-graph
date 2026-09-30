@@ -2,12 +2,18 @@
 Text chunking for RAG.
 
 Splits long documents into overlapping chunks suitable for retrieval.
+OpenStax markup (``<cnx-pi>`` processing instructions, ``data-type="…"``
+attributes, leftover HTML) is stripped with :func:`clean_text` before chunking,
+so it never reaches the index or the LLM context.
 Enterprise pattern: tracks sequential linking for NEXT relationship creation.
 """
 
 from loguru import logger
 
 from backend.app.core.settings import settings
+from backend.app.kg.markup import clean_text
+
+__all__ = ["TextChunker", "chunk_for_rag", "clean_text"]
 
 
 class TextChunker:
@@ -18,6 +24,7 @@ class TextChunker:
         chunk_size: int | None = None,
         chunk_overlap: int | None = None,
         track_sequential: bool = True,
+        clean_markup: bool = True,
     ):
         """
         Initialize text chunker.
@@ -26,35 +33,45 @@ class TextChunker:
             chunk_size: Target chunk size in characters
             chunk_overlap: Overlap between chunks in characters
             track_sequential: Track previous_chunk_id for NEXT relationships
+            clean_markup: Strip OpenStax/HTML markup with ``clean_text`` before chunking
         """
         self.chunk_size = chunk_size or settings.rag_chunk_size
         self.chunk_overlap = chunk_overlap or settings.rag_chunk_overlap
         self.track_sequential = track_sequential
+        self.clean_markup = clean_markup
 
     def chunk_text(
         self,
         text: str,
         metadata: dict | None = None,
         previous_chunk_id: str | None = None,
+        start_index: int = 0,
     ) -> list[dict]:
         """
         Chunk a single text into overlapping segments.
+
+        When ``clean_markup`` is enabled the text is cleaned first, so
+        ``start_char``/``end_char`` are offsets into the cleaned text.
 
         Args:
             text: Text to chunk
             metadata: Optional metadata to attach to each chunk
             previous_chunk_id: ID of chunk preceding this text's first chunk
                                (for cross-document NEXT linking)
+            start_index: Index of this text's first chunk, so chunk IDs stay unique
+                         when several texts share an ID prefix
 
         Returns:
             List of chunk dicts with text, metadata, and sequential linking info
         """
+        if self.clean_markup:
+            text = clean_text(text)
         if not text:
             return []
 
         chunks: list[dict] = []
         start = 0
-        chunk_id = 0
+        chunk_id = start_index
         prev_id = previous_chunk_id
 
         while start < len(text):
@@ -84,13 +101,17 @@ class TextChunker:
                 )
                 current_id = f"{prefix}_{chunk_id}"
 
-                chunk = {
-                    "id": current_id,
-                    "text": chunk_text,
-                    "start_char": start,
-                    "end_char": end,
-                    "chunk_index": chunk_id,
-                }
+                # Metadata first, so a record's own "id" cannot overwrite the chunk ID
+                chunk = dict(metadata) if metadata else {}
+                chunk.update(
+                    {
+                        "id": current_id,
+                        "text": chunk_text,
+                        "start_char": start,
+                        "end_char": end,
+                        "chunk_index": chunk_id,
+                    }
+                )
 
                 # Add sequential linking for enterprise RAG
                 if self.track_sequential:
@@ -102,10 +123,6 @@ class TextChunker:
                         chunks[-1]["next_chunk_id"] = current_id
 
                     prev_id = current_id
-
-                # Add metadata
-                if metadata:
-                    chunk.update(metadata)
 
                 chunks.append(chunk)
                 chunk_id += 1
@@ -147,8 +164,10 @@ class TextChunker:
         all_chunks = []
         first_chunks_by_group: dict[str, str] = {}
 
-        # Track the last chunk_id per group for sequential linking
-        last_chunk_id_per_group: dict[str, str] = {}
+        # Track the last chunk and chunk count per group for sequential linking,
+        # so a module split over several records gets unique, ordered chunk IDs.
+        last_chunk_per_group: dict[str, dict] = {}
+        chunk_count_per_group: dict[str, int] = {}
 
         for record in records:
             text = record.get(text_field, "")
@@ -160,19 +179,28 @@ class TextChunker:
 
             # Determine group for sequential linking
             group_id = record.get(group_by) if group_by else None
+            last_chunk = last_chunk_per_group.get(group_id) if group_id else None
 
-            # Get previous chunk ID for this group
-            prev_chunk_id = last_chunk_id_per_group.get(group_id) if group_id else None
-
-            chunks = self.chunk_text(text, metadata, previous_chunk_id=prev_chunk_id)
+            chunks = self.chunk_text(
+                text,
+                metadata,
+                previous_chunk_id=last_chunk["id"] if last_chunk else None,
+                start_index=chunk_count_per_group.get(group_id, 0) if group_id else 0,
+            )
 
             if chunks and group_id:
                 # Track first chunk for this group
                 if group_id not in first_chunks_by_group:
                     first_chunks_by_group[group_id] = chunks[0]["id"]
 
-                # Update last chunk ID for this group
-                last_chunk_id_per_group[group_id] = chunks[-1]["id"]
+                # Link the group's previous record to this one
+                if last_chunk is not None and self.track_sequential:
+                    last_chunk["next_chunk_id"] = chunks[0]["id"]
+
+                last_chunk_per_group[group_id] = chunks[-1]
+                chunk_count_per_group[group_id] = chunk_count_per_group.get(group_id, 0) + len(
+                    chunks
+                )
 
             all_chunks.extend(chunks)
 
@@ -186,6 +214,7 @@ class TextChunker:
 def chunk_for_rag(
     records: list[dict],
     with_sequential_linking: bool = True,
+    clean_markup: bool = True,
 ) -> tuple[list[dict], dict[str, str]] | list[dict]:
     """
     Convenience function to chunk records for RAG.
@@ -194,6 +223,7 @@ def chunk_for_rag(
         records: List of text records
         with_sequential_linking: If True, returns (chunks, first_chunks_by_module) tuple.
                                  If False, returns just chunks list (legacy behavior).
+        clean_markup: Strip OpenStax/HTML markup before chunking (default True).
 
     Returns:
         If with_sequential_linking:
@@ -201,7 +231,7 @@ def chunk_for_rag(
         Else:
             List of chunks ready for indexing
     """
-    chunker = TextChunker(track_sequential=with_sequential_linking)
+    chunker = TextChunker(track_sequential=with_sequential_linking, clean_markup=clean_markup)
 
     if with_sequential_linking:
         return chunker.chunk_records(records)

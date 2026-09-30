@@ -125,6 +125,8 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Never lint or format Python code blocks inside Markdown, however ruff is run.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = [
@@ -140,16 +142,20 @@ ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
-    # TODO(#67 follow-up): migrate `(str, Enum)` classes to `enum.StrEnum`. Not auto-fixed:
-    # StrEnum changes str()/format() output ("NodeType.CONCEPT" -> "concept").
-    "UP042",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Unused imports in __init__.py
+# TODO(#67 follow-up): migrate these `(str, Enum)` classes to `enum.StrEnum`. Not
+# auto-fixed because StrEnum changes str()/format() output:
+# str(NodeType.CONCEPT) is "NodeType.CONCEPT" today and would become "Concept".
+"backend/app/kg/schema.py" = ["UP042"]  # NodeType, RelationshipType
+"backend/app/main.py" = ["UP042"]  # ServiceStatus
 
 [tool.mypy]
 python_version = "3.11"
+# Checked when mypy runs without paths (CI, the pre-commit hook).
+files = ["backend/app", "scripts"]
 mypy_path = "."
 explicit_package_bases = true
 warn_return_any = true

@@ -2,11 +2,21 @@
 Test Poetry configuration and dependency resolution.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 import toml
+
+
+def _python_floor(data: dict) -> tuple[int, int]:
+    """Return the lowest supported Python (major, minor) declared in pyproject.toml."""
+    project_spec = data.get("project", {}).get("requires-python")
+    spec = project_spec or data["tool"]["poetry"]["dependencies"]["python"]
+    match = re.search(r"(?:>=|\^|~=?)\s*(\d+)\.(\d+)", spec)
+    assert match, f"no minimum Python version found in {spec!r}"
+    return int(match.group(1)), int(match.group(2))
 
 
 def test_pyproject_toml_exists():
@@ -79,7 +89,8 @@ def test_ruff_configuration():
     assert "ruff" in data["tool"]
     ruff_config = data["tool"]["ruff"]
     assert "line-length" in ruff_config
-    assert ruff_config["target-version"] == "py311"
+    major, minor = _python_floor(data)
+    assert ruff_config["target-version"] == f"py{major}{minor}"
 
 
 def test_mypy_configuration():
@@ -89,7 +100,10 @@ def test_mypy_configuration():
 
     assert "mypy" in data["tool"]
     mypy_config = data["tool"]["mypy"]
-    assert mypy_config["python_version"] == "3.11"
+    major, minor = _python_floor(data)
+    assert mypy_config["python_version"] == f"{major}.{minor}"
+    # CI and the pre-commit hook run bare `mypy`, which relies on this list.
+    assert {"backend/app", "scripts"} <= set(mypy_config["files"])
 
 
 def test_pytest_configuration():
