@@ -84,6 +84,27 @@ MATHML = (
     "where P and Q are the price and quantity of items purchased."
 )
 
+# data/processed/books_economics.jsonl (m48614): the first price-elasticity example
+ELASTICITY = (
+    '<math xmlns="http://www.w3.org/1998/Math/MathML"><mtable columnalign="right center left">'
+    "<mtr><mtd><mtext>% change in quantity</mtext></mtd><mtd><mo>=</mo></mtd><mtd><mfrac>"
+    "<mrow><mn>3,000</mn><mo>–</mo><mn>2,800</mn></mrow><mrow><mo>(</mo><mn>3,000</mn>"
+    "<mo>+</mo><mn>2,800</mn><mo>)</mo><mo>/2</mo></mrow></mfrac><mn> × 100</mn></mtd></mtr>"
+    "<mtr><mtd /><mtd><mo>=</mo></mtd><mtd><mfrac><mn>200</mn><mn>2,900</mn></mfrac>"
+    "<mn> × 100</mn></mtd></mtr><mtr><mtd /><mtd><mo>=</mo></mtd><mtd><mn>6.9</mn></mtd></mtr>"
+    "<mtr><mtd><mtext>Price Elasticity of Demand</mtext></mtd><mtd><mo>=</mo></mtd><mtd><mfrac>"
+    "<mrow><mn>    6.9%</mn></mrow><mrow><mn>–15.4%</mn></mrow></mfrac></mtd></mtr>"
+    "<mtr><mtd /><mtd><mo>=</mo></mtd><mtd><mn>0.45</mn></mtd></mtr></mtable></math>"
+)
+
+# data/processed/books_economics.jsonl (m48662, m48729): exponents written as <sup>
+HHI = "it has 100% market share. The HHI is 100<sup>2</sup> = 10,000."
+HHI_SUM = (
+    "In this case, the HHI is 16<sup>2</sup> + 10<sup>2</sup> + 8<sup>2</sup> + "
+    "7(6<sup>2</sup>) + 8(3<sup>2</sup>) = 744."
+)
+HYPERINFLATION = "for an annual rate that month of 4.69 × 10<sup>28</sup>%), came in the same month"
+
 # data/processed/books_us_history.jsonl: an image title cut short upstream, then prose
 IMAGE_REMNANT = (
     'n. The strand binding the three women may represent tobacco."){: #CNX_History_01_00_ThreeWomen}'
@@ -149,12 +170,128 @@ class TestCleanText:
         assert "Right to freedoms of religion and speech" in cleaned
         assert "A table lists" not in cleaned
 
-    def test_flattens_mathml(self):
+    def test_linearises_mathml_subscripts(self):
         cleaned = clean_text(MATHML)
 
         assert_no_markup(cleaned)
-        assert cleaned.startswith("Budget=P1 × Q1 + P2")
+        assert cleaned.startswith("Budget = P_1 × Q_1 + P_2")
         assert cleaned.endswith("where P and Q are the price and quantity of items purchased.")
+
+    def test_linearises_mathml_fractions_without_merging_numbers(self):
+        assert clean_text(ELASTICITY) == (
+            "% change in quantity = (3,000 – 2,800)/((3,000 + 2,800)/2) × 100\n"
+            "= 200/2,900 × 100\n"
+            "= 6.9\n"
+            "Price Elasticity of Demand = 6.9%/(–15.4%)\n"
+            "= 0.45"
+        )
+
+    @pytest.mark.parametrize(
+        ("math", "expected"),
+        [
+            # m48626, m48700, m48715: powers
+            ("<mi>π</mi><msup><mi>r</mi><mn>2</mn></msup>", "πr^2"),
+            (
+                "<mrow><mn>3</mn><mo>,</mo><mn>000</mn><msup><mrow><mo>(</mo><mn>1</mn><mo>+</mo>"
+                "<mn>.07</mn><mo>)</mo></mrow><mrow><mn>40</mn></mrow></msup><mo>=</mo>"
+                "<mtext>$</mtext><mn>44,923</mn></mrow>",
+                "3,000(1 + .07)^40 = $44,923",
+            ),
+            (
+                "<msup><mtext>Future Value = Present Value × (1 + g)</mtext>"
+                "<mtext>n</mtext></msup>",
+                "Future Value = Present Value × (1 + g)^n",
+            ),
+            # m48614: an inequality keeps its operator
+            (
+                "<mtext>% change in quantity</mtext><mo>&gt;</mo><mtext>% change in price</mtext>",
+                "% change in quantity > % change in price",
+            ),
+            ("<msubsup><mi>x</mi><mn>1</mn><mn>2</mn></msubsup>", "x_1^2"),
+            (
+                "<msqrt><mn>16</mn></msqrt><mo>+</mo><mroot><mn>8</mn><mn>3</mn></mroot>",
+                "√(16) + 8^(1/3)",
+            ),
+            (
+                "<mfenced><mn>1</mn><mn>2</mn></mfenced><mo>&#x2260;</mo><mi>x</mi>",
+                "(1, 2) ≠ x",
+            ),
+            (
+                "<mfrac><mrow><mi>a</mi><mo>+</mo><mi>b</mi></mrow><mi>c</mi></mfrac>",
+                "(a + b)/c",
+            ),
+        ],
+    )
+    def test_linearises_mathml_scripts(self, math, expected):
+        block = f'<math xmlns="http://www.w3.org/1998/Math/MathML">{math}</math>'
+        assert clean_text(block) == expected
+
+    def test_malformed_mathml_falls_back_to_separate_tokens(self):
+        assert clean_text("<math><mn>200</mn><mn>2,900</math> was the ratio.") == (
+            "200 2,900 was the ratio."
+        )
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            (HHI, "it has 100% market share. The HHI is 100^2 = 10,000."),
+            (HHI_SUM, "In this case, the HHI is 16^2 + 10^2 + 8^2 + 7(6^2) + 8(3^2) = 744."),
+            (
+                HYPERINFLATION,
+                "for an annual rate that month of 4.69 × 10^28%), came in the same month",
+            ),
+            ("(1 + interest rate)<sup>time</sup>", "(1 + interest rate)^time"),
+            ("x<sup>n + 1</sup>", "x^(n + 1)"),
+            # ordinals, marks and footnote markers are not exponents
+            ("Work in the 21<sup>st</sup> Century", "Work in the 21st Century"),
+            ("courses for AP<sup>&#xAE;</sup> students", "courses for AP® students"),
+            ("Total Revenue<sup>*</sup>", "Total Revenue*"),
+            (
+                'The Chart<sup><a data-type="footnote-link" href="#footnote1">1</a></sup> shows',
+                "The Chart shows",
+            ),
+        ],
+    )
+    def test_superscripts(self, text, expected):
+        assert clean_text(text) == expected
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "A firm should expand output if P > MC and cut output if P < MC.",
+            "If P<MC, reduce output; if P>MC, expand it.",
+            "The condition P<AVC means shut down, while P>ATC means profit.",
+            "If Qd<Qs there is a surplus; if Qd>Qs a shortage.",
+            "the ratio a<b holds, but c>d does not",
+            "The placeholder <name> should be replaced.",
+            "Use the form <Your Name> <Your Address> and sign.",
+            "less than <5% of the labor force",
+            "Is x<? Yes. Is y?>",
+            "Texas A&M, AT&T, Marks&notes and the &copy symbol",
+            "x**2 + y**2 = z**2 and a*b*c",
+            "call __init__ to construct snake_case_name",
+            "Significant at the 1% level*** and Stars: * * *",
+            "Refs [1][2][3] support this, see [sic].",
+            "The cost [C](in dollars) rises.",
+            "[Answer]: The equilibrium price is $5.",
+            "[1]: Smith, 2020",
+            "Press the # key, C# and Channel 5 ##",
+            'The book title="Common Sense" was popular and type="A" personalities',
+            "The <firm decides\nto expand output> today.",
+        ],
+    )
+    def test_prose_that_only_looks_like_markup_is_kept(self, text):
+        assert clean_text(text) == text
+
+    def test_reference_links_need_a_definition(self):
+        text = "See [the codices][1] and [the Aztec][2].\n\n[1]: http://openstax.org/l/mayancodex"
+
+        assert clean_text(text) == "See the codices and [the Aztec][2]."
+
+    def test_table_rule_rows_are_removed_without_splitting_the_table(self):
+        text = "| Price | Quantity |\n|---|---|\n| $1 | 100 |\n|----------\n| $2 | 80 |"
+
+        assert clean_text(text) == "| Price | Quantity |\n| $1 | 100 |\n| $2 | 80 |"
 
     def test_removes_image_title_remnants(self):
         cleaned = clean_text(IMAGE_REMNANT)
