@@ -108,7 +108,7 @@ Backend tests are in `backend/tests/` with shared mocks in `conftest.py`; see `d
 
 The tribunal suite (`backend/tests/test_tribunal_prosecution.py`) encodes the findings of the archived adversarial review in `docs/archive/tribunal-2026-02/`. `xfail_strict = true`: when a known defect is fixed, remove its `xfail` marker in the same change. The remaining strict xfails are linked to #73 (per-learner identity) and #74 (server-side grading). CI runs the regular suite on Python 3.11-3.13 with `-m "not tribunal"` and the tribunal suite in its own job (advisory until the v0.3.0 release makes it required). The required status check on `main` is `All Checks Passed`; see `docs/TESTING.md` for the job list.
 
-Coverage targets `backend/app`, excluding tests and `__init__.py`; the minimum is enforced with `fail_under` in `pyproject.toml`.
+Coverage targets `backend/app`, excluding tests and `__init__.py`; CI's Tests job and `make test-fast` fail below 75% (`--cov-fail-under=75`).
 
 ## Code Style
 

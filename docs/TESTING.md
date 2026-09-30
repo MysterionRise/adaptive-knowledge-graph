@@ -55,8 +55,9 @@ uses `SIGALRM`, so it has no effect on Windows.
 ### Coverage
 
 `pytest` always measures coverage of `backend/app` (see `addopts` in
-`pyproject.toml`), excluding the tests and `__init__.py` files. The minimum is
-enforced with `fail_under` in `[tool.coverage.report]`. For an HTML report:
+`pyproject.toml`), excluding the tests and `__init__.py` files. The regular
+(non-tribunal) suite must keep coverage at 75% or more: the CI Tests job and
+`make test-fast` pass `--cov-fail-under=75`. For an HTML report:
 
 ```bash
 poetry run pytest --cov=backend/app --cov-report=html
@@ -121,7 +122,7 @@ for merging into `main`):
 | --- | --- |
 | Lint & Format Check | `ruff check` and `ruff format --check`, plus a `poetry.lock` consistency check |
 | Type Check (mypy) | `mypy backend/app scripts/` |
-| Tests (Python 3.11, 3.12, 3.13) | `pytest -m "not tribunal"` with coverage |
+| Tests (Python 3.11, 3.12, 3.13) | `pytest -m "not tribunal"`, failing below 75% coverage |
 | Frontend (lint, types, tests, build) | `npm run lint`, `npm run type-check`, Jest with coverage, `npm run build` |
 | Docker Compose Validation | Starts Neo4j and OpenSearch, waits until they are healthy and checks that they respond |
 | Documentation Check | markdownlint on `*.md`, `docs/**`, `frontend/*.md`, `infra/**` and `.github/*.md` |
