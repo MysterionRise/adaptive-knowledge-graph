@@ -53,11 +53,20 @@ shares), so recreate it after pulling:
 
 ```bash
 poetry env remove --all
-poetry install
+poetry install --without pyirt,pybkt
+make quickstart   # reinstalls the spaCy model en_core_web_sm; safe to re-run
 ```
 
-If you would rather keep the environment, reinstall the affected package
-instead: `poetry run pip install --force-reinstall --no-deps typer-slim`.
+The spaCy model is not in the lock file, so `poetry sync` also removes it;
+`make quickstart` puts it back, and `make doctor` reports when it is missing.
+
+If you must repair an environment in place instead, reinstall the locked
+`typer-slim` version (an unpinned install pulls an empty meta-package and spaCy
+still fails):
+
+```bash
+poetry run pip install --force-reinstall --no-deps "typer-slim==0.20.0"
+```
 
 The local Docker stack also changed (new Compose project name and images); see
 [infra/compose/README.md](infra/compose/README.md#upgrading-from-an-older-checkout)

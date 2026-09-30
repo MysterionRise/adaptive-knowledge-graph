@@ -84,11 +84,11 @@ If anyone other than you can reach the API, run it in production mode:
 
 ## Accepted risks
 
-- **Advisories that need a major upgrade.** A small number of published
-  advisories can only be fixed by a major-version upgrade. They are
-  allowlisted, each with an expiry date, in `osv-scanner.toml` at the
-  repository root. That file is the source of truth for exactly which
-  advisories are accepted. Each upgrade has its own issue:
+- **Advisories that need a disruptive upgrade.** A small number of published
+  advisories can only be fixed by a major-version upgrade or a change of the
+  wheel set. They are allowlisted, each with an expiry date and a reason, in
+  [`osv-scanner.toml`](osv-scanner.toml), which is the source of truth for
+  exactly which advisories are accepted. Each upgrade has its own issue:
   - `transformers` 4.x, including remote-code-execution advisories, until the
     move to transformers 5 and sentence-transformers 6
     ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
@@ -99,8 +99,10 @@ If anyone other than you can reach the API, run it in production mode:
     ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
     This project does not use the affected APIs, such as the legacy prompt
     loader.
-  - `torch`, for two advisories that need local access to exploit
-    ([#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79)).
+  - `torch` 2.10, for two local-only advisories in features this project does
+    not use (`torch.jit.script` and loading `.pt2` archives). The fixed
+    releases switch the Linux wheels to CUDA 13, which is deferred to
+    [#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79).
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
   read that key. An API key therefore only gates non-browser clients such as
