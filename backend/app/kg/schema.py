@@ -2,7 +2,7 @@
 Knowledge Graph schema definitions.
 
 Defines node types, relationship types, and their properties for the
-Biology Knowledge Graph.
+subject knowledge graphs (one per configured subject).
 """
 
 from enum import Enum
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 class NodeType(str, Enum):
     """Types of nodes in the knowledge graph."""
 
-    CONCEPT = "Concept"  # Biological concepts (e.g., "Photosynthesis", "Mitosis")
+    CONCEPT = "Concept"  # Subject concepts (e.g., "Reconstruction", "Opportunity Cost")
     SECTION = "Section"  # Textbook sections
     MODULE = "Module"  # Textbook modules
     CHUNK = "Chunk"  # Text chunks for RAG (enterprise pattern)
@@ -105,6 +105,12 @@ class Relationship(BaseModel):
     weight: float = Field(default=1.0, description="Relationship strength (0-1)")
     confidence: float = Field(default=1.0, description="Confidence score (0-1)")
     evidence: str | None = Field(None, description="Text evidence for this relationship")
+    # ``default=`` as a keyword so type checkers see the field as optional.
+    provenance: dict[str, str] | None = Field(
+        default=None,
+        description="Where an extracted relationship came from, e.g. "
+        '{"source": "glossary", "module_id": "m48590"}',
+    )
 
 
 class KnowledgeGraph(BaseModel):
@@ -122,8 +128,10 @@ class KnowledgeGraph(BaseModel):
             # Update frequency
             existing = self.concepts[concept.name]
             existing.frequency += concept.frequency
-            existing.source_modules.extend(concept.source_modules)
-            existing.source_modules = list(set(existing.source_modules))
+            # Merge preserving first-seen order so repeated builds serialise identically.
+            existing.source_modules = list(
+                dict.fromkeys([*existing.source_modules, *concept.source_modules])
+            )
         else:
             self.concepts[concept.name] = concept
 

@@ -1,10 +1,11 @@
 name: Set up Python and Poetry
 description: >-
   Install Python and a pinned Poetry (via pipx), then build the in-project
-  .venv with `poetry sync`. The .venv is restored from the Actions cache and,
-  on a miss, saved again straight after the install, before any job step can
-  change it. The cache key covers the OS, runner image, full Python version,
-  Poetry version, install arguments and poetry.lock.
+  .venv with `poetry sync`. The .venv is restored from the Actions cache. On a
+  miss outside pull requests it is saved straight after the install, before
+  any job step can change it; pull requests only restore, to stay within the
+  repository cache quota. The cache key covers the OS, runner image, full
+  Python version, Poetry version, install arguments and poetry.lock.
 
 inputs:
   python-version:
@@ -22,10 +23,17 @@ inputs:
     default: "2.4.1"
   cache:
     description: >-
-      "true" restores and saves the .venv cache; "false" always installs from
-      scratch (for environments that would overflow the repository cache quota).
+      "true" restores the .venv cache (and saves it on a miss, except on
+      pull_request events); "false" always installs from scratch (for
+      environments that would overflow the repository cache quota).
     required: false
     default: "true"
+  check-lock:
+    description: >-
+      "true" runs `poetry check --lock` before the install, so a stale
+      poetry.lock fails with a clear message instead of an install error.
+    required: false
+    default: "false"
   free-disk-space:
     description: >-
       "true" deletes unused preinstalled toolchains before the install when
@@ -71,6 +79,11 @@ runs:
         pipx install --python "${PYTHON_PATH}" "poetry==${POETRY_VERSION}"
         poetry --version
         poetry config virtualenvs.in-project true
+
+    - name: Check poetry.lock is up to date with pyproject.toml
+      if: inputs.check-lock == 'true'
+      shell: bash
+      run: poetry check --lock
 
     - name: Compute .venv cache key
       id: key
@@ -134,8 +147,14 @@ runs:
         # shellcheck disable=SC2086
         poetry sync --no-interaction ${INSTALL_ARGS}
 
+    # Pull requests never save: each lock-changing PR would otherwise add
+    # ~3.5 GB per full venv and push the repository over its cache quota.
+    # They still warm-start from the main-branch cache via restore-keys.
     - name: Save .venv cache
-      if: inputs.cache == 'true' && steps.restore.outputs.cache-hit != 'true'
+      if: >-
+        inputs.cache == 'true' &&
+        steps.restore.outputs.cache-hit != 'true' &&
+        github.event_name != 'pull_request'
       uses: actions/cache/save@v6
       with:
         path: .venv

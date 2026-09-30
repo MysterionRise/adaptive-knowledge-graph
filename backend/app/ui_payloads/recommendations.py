@@ -4,18 +4,30 @@ Pydantic models for post-quiz recommendation request/response payloads.
 
 from pydantic import BaseModel, Field
 
+from backend.app.ui_payloads.constraints import (
+    DEFAULT_STUDENT_ID,
+    ConceptStr,
+    StudentId,
+    SubjectId,
+    TopicStr,
+)
+
+# Each concept can trigger KG queries and an LLM call, so a request is bounded
+# (a generated quiz has at most 20 questions).
+MAX_QUESTION_RESULTS = 50
+
 
 class QuizQuestionResult(BaseModel):
-    question_id: str = Field(..., max_length=200)
-    related_concept: str = Field(..., max_length=200)
+    question_id: str = Field(..., min_length=1, max_length=200)
+    related_concept: ConceptStr
     correct: bool
 
 
 class RecommendationRequest(BaseModel):
-    topic: str = Field(..., max_length=500)
-    question_results: list[QuizQuestionResult]
-    student_id: str = Field(default="default", max_length=100)
-    subject: str | None = Field(default=None, max_length=100)
+    topic: TopicStr
+    question_results: list[QuizQuestionResult] = Field(..., max_length=MAX_QUESTION_RESULTS)
+    student_id: StudentId = DEFAULT_STUDENT_ID
+    subject: SubjectId | None = None
 
 
 class ReadingMaterial(BaseModel):

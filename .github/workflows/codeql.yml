@@ -12,8 +12,10 @@ on:
 permissions:
   contents: read
 
+# One group per PR (superseded runs are cancelled); every other run gets its
+# own group so a pending push, schedule or dispatch run is never dropped.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

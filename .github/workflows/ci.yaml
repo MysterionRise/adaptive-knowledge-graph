@@ -10,8 +10,12 @@ on:
 permissions:
   contents: read
 
+# Pull requests share one group per PR, so a new push cancels the superseded
+# run. Every other run (push to main, manual dispatch) gets its own group:
+# GitHub cancels a *pending* run in a shared group even without
+# cancel-in-progress, which could drop a queued main push or E2E dispatch.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -31,14 +35,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python and Poetry (dev group only)
+      - name: Set up Python and Poetry (dev group only, lock checked first)
         uses: ./.github/actions/setup-python-poetry
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           install-args: --only dev
-
-      - name: Check poetry.lock is up to date with pyproject.toml
-        run: poetry check --lock
+          check-lock: "true"
 
       - name: Run ruff linting
         run: poetry run ruff check backend/ scripts/
@@ -62,8 +64,8 @@ jobs:
           install-args: --without pyirt,pybkt
           free-disk-space: "true"
 
-      - name: Run mypy
-        run: poetry run mypy backend/app scripts/
+      - name: Run mypy (paths from [tool.mypy] files)
+        run: poetry run mypy
 
   test:
     name: Tests (Python ${{ matrix.python-version }})
@@ -73,18 +75,18 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        # A full venv with the CUDA torch wheels is ~3.7 GB compressed and the
-        # repository cache quota is 10 GB, so only two full venvs are cached:
-        # 3.11 (shared with type-check and tribunal) and 3.13 (slow source
-        # builds). 3.12 installs from wheels in about two minutes.
-        # Revisit once CPU-only torch wheels land (#79).
+        # A full venv with the CUDA torch wheels is ~3.5 GB compressed and the
+        # repository cache quota is 10 GB, so only the 3.11 venv (shared with
+        # type-check and tribunal) is cached. 3.12 and 3.13 install from wheels
+        # in about two minutes since #115. Revisit once CPU-only torch wheels
+        # land (#79).
         include:
           - python-version: "3.11"
             cache: "true"
           - python-version: "3.12"
             cache: "false"
           - python-version: "3.13"
-            cache: "true"
+            cache: "false"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -99,7 +101,7 @@ jobs:
           free-disk-space: "true"
 
       - name: Run fast tests with coverage
-        run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov=backend/app --cov-report=term
+        run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov=backend/app --cov-report=term --cov-fail-under=75
 
   frontend:
     name: Frontend (lint, types, tests, build)
@@ -116,18 +118,24 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js and install dependencies
+        id: setup
         uses: ./.github/actions/setup-frontend
 
+      # Once dependencies are installed, each check runs even if an earlier one
+      # failed, so a lint error does not hide type, test or build failures.
       - name: Lint
         run: npm run lint
 
       - name: Type-check
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: npm run type-check
 
       - name: Unit tests with coverage (Jest)
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: npm run test:coverage -- --ci
 
       - name: Production build
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: npm run build
 
       - name: Audit dependencies (advisory)
@@ -151,8 +159,11 @@ jobs:
         run: docker compose -f infra/compose/compose.yaml up -d --wait --wait-timeout 240 neo4j opensearch
 
       - name: Assert OpenSearch and Neo4j respond
+        # --max-time bounds each attempt and --retry-max-time the retries, so a
+        # red cluster fails in minutes instead of stalling the job.
         run: |
           health=$(curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
+            --max-time 75 --retry-max-time 150 \
             "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=60s")
           echo "OpenSearch cluster health: ${health}"
           status=$(jq -r '.status' <<<"${health}")
@@ -161,12 +172,13 @@ jobs:
             exit 1
           fi
           discovery=$(curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
+            --max-time 10 --retry-max-time 120 \
             --header "Accept: application/json" http://localhost:7474/)
           echo "Neo4j HTTP discovery: ${discovery}"
           jq -e '.neo4j_version' <<<"${discovery}" > /dev/null
 
       - name: Show container status and logs
-        if: failure()
+        if: failure() || cancelled()
         run: |
           docker compose -f infra/compose/compose.yaml ps --all
           docker compose -f infra/compose/compose.yaml logs --no-color --timestamps --tail 300
@@ -341,17 +353,36 @@ jobs:
           fail: true
           token: "" # not needed offline; keep the GITHUB_TOKEN away from the tool
 
+  shellcheck:
+    name: Shellcheck (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Lint shell scripts
+        # Uses the shellcheck preinstalled on the runner image; a
+        # scripts/.shellcheckrc, when present, is picked up automatically.
+        run: |
+          shellcheck --version
+          shellcheck scripts/*.sh
+
   # ---------------------------------------------------------------------------
-  # Manual only: needs a running demo environment (WS-D is making the specs
-  # hermetic; the release PR may promote it). Drop the `if:` before adding it
-  # to `All Checks Passed`, or the gate would see it as skipped.
+  # Advisory, on every PR, push and manual dispatch: `npm run test:e2e` runs
+  # the hermetic chromium project (API calls stubbed in tests/e2e/fixtures.ts,
+  # no backend needed). The release PR promotes it by adding it to
+  # `All Checks Passed` and dropping `continue-on-error`.
   # ---------------------------------------------------------------------------
   e2e-tests:
-    name: E2E Tests (Playwright, manual demo env)
+    name: E2E Tests (Playwright, advisory)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [frontend]
-    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
     defaults:
       run:
         working-directory: frontend
@@ -363,19 +394,21 @@ jobs:
       - name: Set up Node.js and install dependencies
         uses: ./.github/actions/setup-frontend
 
-      - name: Install Playwright browsers
+      - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright tests
-        run: npm run test:e2e -- --project=chromium
+      - name: Run Playwright tests (hermetic chromium project)
+        run: npm run test:e2e
 
       - name: Upload Playwright report
-        if: ${{ !cancelled() }}
+        # always(): also keep the report when the job times out or is cancelled.
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
+          overwrite: true # a re-run replaces the previous attempt's report
 
   # ---------------------------------------------------------------------------
   # The required status check on `main`. Keep the name unchanged.

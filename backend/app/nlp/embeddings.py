@@ -1,15 +1,71 @@
 """
 Embeddings module for text vectorization.
 
-Uses BGE-M3 multilingual embeddings for semantic search.
-Supports both CPU and GPU inference.
+Uses BGE-M3 multilingual embeddings for semantic search. The inference device
+comes from EMBEDDING_DEVICE: ``auto`` (the default) picks CUDA, then Apple MPS,
+then CPU. torch and sentence-transformers are imported only when a model is
+loaded, so importing this module stays cheap.
 """
 
-import torch
+from __future__ import annotations
+
+import threading
+from typing import TYPE_CHECKING
+
 from loguru import logger
-from sentence_transformers import SentenceTransformer
 
 from backend.app.core.settings import settings
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
+
+
+def resolve_device(requested: str | None = None) -> str:
+    """
+    Resolve a requested inference device to one that is available.
+
+    Args:
+        requested: "auto", "cuda" (or "cuda:N"), "mps" or "cpu". None means "auto".
+
+    Returns:
+        The device string to pass to torch; "cpu" whenever the requested
+        accelerator is unavailable.
+    """
+    choice = (requested or "auto").strip().lower()
+    if choice == "cpu":
+        return "cpu"
+
+    try:
+        import torch
+    except ImportError:
+        logger.warning("torch is not installed, using CPU")
+        return "cpu"
+
+    cuda_available = bool(torch.cuda.is_available())
+    mps_backend = getattr(torch.backends, "mps", None)
+    mps_available = bool(mps_backend is not None and mps_backend.is_available())
+
+    if choice == "auto":
+        if cuda_available:
+            return "cuda"
+        if mps_available:
+            return "mps"
+        return "cpu"
+
+    if choice.startswith("cuda"):
+        if cuda_available:
+            return choice
+        logger.warning(f"Device {choice!r} requested but CUDA is not available, using CPU")
+        return "cpu"
+
+    if choice == "mps":
+        if mps_available:
+            return "mps"
+        logger.warning("Device 'mps' requested but Apple MPS is not available, using CPU")
+        return "cpu"
+
+    logger.warning(f"Unknown device {requested!r}, using CPU")
+    return "cpu"
 
 
 class EmbeddingModel:
@@ -22,27 +78,26 @@ class EmbeddingModel:
         batch_size: int | None = None,
     ):
         """
-        Initialize embedding model.
+        Initialize embedding model (nothing is loaded until load()).
 
         Args:
             model_name: Model name (defaults to settings)
-            device: Device for inference ('cuda' or 'cpu', defaults to settings)
+            device: Requested device ('auto', 'cuda', 'mps' or 'cpu'; defaults to settings)
             batch_size: Batch size for embedding (defaults to settings)
         """
         self.model_name = model_name or settings.embedding_model
-        self.device = device or settings.embedding_device
+        self.requested_device = device or settings.embedding_device
+        self.device: str | None = None  # resolved in load()
         self.batch_size = batch_size or settings.embedding_batch_size
-
-        # Validate device
-        if self.device == "cuda" and not torch.cuda.is_available():
-            logger.warning("CUDA not available, falling back to CPU")
-            self.device = "cpu"
 
         self.model: SentenceTransformer | None = None
         self.embedding_dim: int | None = None
 
-    def load(self):
-        """Load the embedding model."""
+    def load(self) -> None:
+        """Resolve the device and load the embedding model."""
+        from sentence_transformers import SentenceTransformer
+
+        self.device = resolve_device(self.requested_device)
         logger.info(f"Loading embedding model: {self.model_name} on {self.device}")
 
         try:
@@ -62,7 +117,7 @@ class EmbeddingModel:
         texts: str | list[str],
         normalize: bool = True,
         show_progress: bool = False,
-    ) -> torch.Tensor | list[list[float]]:
+    ) -> list[list[float]]:
         """
         Encode text(s) into embeddings.
 
@@ -72,7 +127,7 @@ class EmbeddingModel:
             show_progress: Show progress bar
 
         Returns:
-            Embeddings as tensor or list
+            One embedding (list of floats) per input text
         """
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
@@ -106,11 +161,7 @@ class EmbeddingModel:
         Returns:
             Query embedding
         """
-        embeddings = self.encode(query, normalize=True)
-        result = embeddings[0]
-        if isinstance(result, list):
-            return result
-        return list(result)
+        return self.encode(query, normalize=True)[0]
 
     def encode_batch(self, texts: list[str]) -> list[list[float]]:
         """
@@ -122,10 +173,7 @@ class EmbeddingModel:
         Returns:
             List of embeddings
         """
-        result = self.encode(texts, normalize=True, show_progress=True)
-        if isinstance(result, list):
-            return result
-        return list(result)
+        return self.encode(texts, normalize=True, show_progress=True)
 
     def get_embedding_dimension(self) -> int:
         """Get the embedding dimension."""
@@ -136,11 +184,15 @@ class EmbeddingModel:
 
 # Global singleton instance (lazy loaded)
 _embedding_model: EmbeddingModel | None = None
+_embedding_model_lock = threading.Lock()
 
 
 def get_embedding_model() -> EmbeddingModel:
     """
     Get or create the global embedding model instance.
+
+    Thread-safe: concurrent first calls load the model only once, and a model
+    that failed to load is not cached.
 
     Returns:
         EmbeddingModel instance
@@ -148,7 +200,10 @@ def get_embedding_model() -> EmbeddingModel:
     global _embedding_model
 
     if _embedding_model is None:
-        _embedding_model = EmbeddingModel()
-        _embedding_model.load()
+        with _embedding_model_lock:
+            if _embedding_model is None:
+                model = EmbeddingModel()
+                model.load()
+                _embedding_model = model
 
     return _embedding_model

@@ -33,12 +33,29 @@ export const subjects = {
       name: 'US History',
       description: 'American History from colonial times to modern era',
       is_default: true,
+      available: true,
     },
     {
       id: 'economics',
       name: 'Economics',
       description: 'Principles of economics covering micro and macroeconomics',
       is_default: false,
+      available: true,
+    },
+    // Configured, but without knowledge-graph data yet
+    {
+      id: 'biology',
+      name: 'Biology',
+      description: 'Biology 2e and Concepts of Biology',
+      is_default: false,
+      available: false,
+    },
+    {
+      id: 'world_history',
+      name: 'World History',
+      description: 'World History Volumes 1 and 2',
+      is_default: false,
+      available: false,
     },
   ],
   default_subject: 'us_history',
@@ -89,6 +106,15 @@ export const tutorAnswer = {
   model: 'llama3.1:8b',
   attribution: 'Content adapted from OpenStax U.S. History, licensed under CC BY 4.0.',
 };
+
+/** Answers of `POST /api/v1/ask`; LLM answers are Markdown. */
+export const kgRagAnswer = [
+  '**With prerequisite context:** colonial taxation disputes escalated into revolution.',
+  '',
+  '- Stamp Act',
+  '- Boston Tea Party',
+].join('\n');
+export const plainRagAnswer = 'Colonists opposed British taxes.';
 
 /** A server-sent-events body in the format produced by `POST /api/v1/ask/stream`. */
 export function tutorStream(answer = tutorAnswer): string {
@@ -193,9 +219,7 @@ const defaultHandlers: Record<string, StubHandler> = {
     return {
       json: {
         question,
-        answer: useKg
-          ? 'With prerequisite context: colonial taxation disputes escalated into revolution.'
-          : 'Colonists opposed British taxes.',
+        answer: useKg ? kgRagAnswer : plainRagAnswer,
         sources: useKg ? tutorAnswer.sources : tutorAnswer.sources.slice(0, 1),
         expanded_concepts: useKg ? tutorAnswer.expanded_concepts : null,
         retrieved_count: useKg ? 8 : 5,
@@ -236,12 +260,12 @@ const defaultHandlers: Record<string, StubHandler> = {
       summary: 'Great work! You are ready for the next topic.',
     },
   }),
-  'GET /learning-path/*': () => ({
+  // Prerequisites only (the target is not listed); depth = PREREQ steps to the target
+  'GET /learning-path/*': (request) => ({
     json: {
-      target_concept: 'The American Revolution',
+      target_concept: decodeURIComponent(new URL(request.url()).pathname.split('/').at(-1) ?? ''),
       prerequisites: [
-        { name: 'Colonial America', depth: 1, importance: 0.7 },
-        { name: 'The American Revolution', depth: 0, importance: 0.95 },
+        { id: 'c1', name: 'Colonial America', importance: 0.7, chapter: 'Colonial', depth: 1 },
       ],
       total_concepts: 2,
     },

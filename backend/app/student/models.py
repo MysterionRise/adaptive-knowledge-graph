@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from backend.app.core.settings import settings
+
 
 class ConceptMastery(BaseModel):
     """Mastery level for a single concept."""
@@ -44,10 +46,10 @@ class StudentProfile(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
 
     def get_mastery(self, concept: str) -> float:
-        """Get mastery level for a concept (default: initial mastery)."""
+        """Get mastery level for a concept (STUDENT_INITIAL_MASTERY if it has no history)."""
         if concept in self.mastery_map:
             return self.mastery_map[concept].mastery_level
-        return 0.3  # Initial mastery from settings
+        return settings.student_initial_mastery
 
     def get_target_difficulty(self, concept: str) -> Literal["easy", "medium", "hard"]:
         """
@@ -71,8 +73,16 @@ class StudentProfile(BaseModel):
 class MasteryUpdate(BaseModel):
     """Request model for updating mastery after an answer."""
 
-    concept: str = Field(..., max_length=200)
+    concept: str = Field(..., min_length=1, max_length=200)
     correct: bool
+    subject: str | None = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Subject whose knowledge graph must contain the concept when concept "
+            "validation is enabled (defaults to the default subject)"
+        ),
+    )
 
 
 class MasteryUpdateResponse(BaseModel):
