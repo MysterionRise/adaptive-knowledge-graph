@@ -80,7 +80,8 @@ neighbours are added.
 
 ### Adaptive assessment
 
-1. Retrieve content for the topic.
+1. Validate the topic (HTML markup is rejected with `422`) and retrieve content
+   for it; a topic with no content returns `404`.
 2. Ask the LLM for multiple-choice questions with difficulty labels and
    explanations at the learner's target difficulty (easy below 0.4 mastery,
    medium up to 0.7, hard above).
