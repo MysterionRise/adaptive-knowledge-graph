@@ -109,18 +109,34 @@ Before a release or demo, walk through the manual
 ## Continuous integration
 
 [`.github/workflows/ci.yaml`](../.github/workflows/ci.yaml) runs on every pull
-request and on pushes to `main`. It covers:
+request, on pushes to `main` and on manual dispatch.
 
-- ruff lint and format check, and mypy
-- backend tests on Python 3.11, 3.12 and 3.13, and the tribunal suite
-- frontend lint, type check and tests
-- Docker Compose validation
-- documentation checks (markdownlint)
-- security scanning
+Required jobs, all gated by **All Checks Passed** (the required status check
+for merging into `main`):
 
-The `All Checks Passed` job depends on the required jobs and is the required
-status check for merging into `main`. Browser tests against a live stack are
-not part of CI; run `make test-integration` locally.
+| Job | What it runs |
+| --- | --- |
+| Lint & Format Check | `ruff check` and `ruff format --check`, plus a `poetry.lock` consistency check |
+| Type Check (mypy) | `mypy backend/app scripts/` |
+| Tests (Python 3.11, 3.12, 3.13) | `pytest -m "not tribunal"` with coverage |
+| Frontend (lint, types, tests, build) | `npm run lint`, `npm run type-check`, Jest with coverage, `npm run build` |
+| Docker Compose Validation | Starts Neo4j and OpenSearch, waits until they are healthy and checks that they respond |
+| Documentation Check | markdownlint on `*.md`, `docs/**`, `frontend/*.md`, `infra/**` and `.github/*.md` |
+| Security Scan | bandit, with results uploaded to code scanning |
+
+Advisory jobs (they report but do not block yet; the v0.3.0 release makes them
+required):
+
+- **Tribunal Tests:** `pytest -m tribunal`.
+- **Dependency Audit:** osv-scanner over `poetry.lock` and
+  `frontend/package-lock.json`.
+- **Link Check:** lychee in offline mode over the same Markdown files as the
+  documentation check.
+- **npm audit:** part of the frontend job.
+
+Separate workflows run CodeQL analysis, build the Docker images when their
+inputs change, and publish a GitHub Release for `v*` tags. Playwright tests
+against a live stack are manual only; run `make test-integration` locally.
 
 ## Evaluation
 

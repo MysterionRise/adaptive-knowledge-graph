@@ -114,9 +114,12 @@ Documentation, from the repository root:
 npx --yes markdownlint-cli2 "*.md" "docs/**/*.md" "frontend/*.md" "infra/**/*.md" ".github/*.md"
 ```
 
+CI also checks relative links in those files with
+[lychee](https://github.com/lycheeverse/lychee) in offline mode.
+
 If you installed the hooks with `make install-dev`, `pre-commit` runs the
 formatters, ruff and mypy on each commit. See [docs/TESTING.md](docs/TESTING.md)
-for test markers, the tribunal suite and coverage.
+for the full list of CI jobs, test markers, the tribunal suite and coverage.
 
 ## Coding standards
 
