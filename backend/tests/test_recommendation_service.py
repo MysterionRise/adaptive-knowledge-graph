@@ -10,6 +10,7 @@ Tests cover:
 - Graceful error handling for Neo4j and retriever failures
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -324,28 +325,38 @@ class TestAdvancementBlock:
         assert call_kwargs["max_tokens"] == 512
 
     @pytest.mark.asyncio
-    async def test_deep_dive_timeout_returns_none(self):
-        """When LLM generation exceeds the timeout, deep_dive_content should be None."""
+    async def test_deep_dive_timeout_returns_none(self, monkeypatch):
+        """A real asyncio.wait_for timeout takes the timeout branch and yields None."""
+        from backend.app.student import recommendation_service as module
+
         svc, _, _, mock_llm, _, mock_session = _build_mocks()
         mock_session.run.return_value = []
+        monkeypatch.setattr(module, "_DEEP_DIVE_TIMEOUT_SECONDS", 0.01)
+        mock_logger = MagicMock()
+        monkeypatch.setattr(module, "logger", mock_logger)
 
-        # Simulate a timeout by making generate raise TimeoutError
         async def slow_generate(**kwargs):
-            raise TimeoutError()
+            await asyncio.sleep(1)  # far longer than the patched timeout
+            return "too late"
 
         mock_llm.generate.side_effect = slow_generate
 
-        questions = _make_questions(5, 5)
-        result = await svc.generate_recommendations("topic", questions)
+        result = await svc.generate_recommendations("topic", _make_questions(1, 1))
 
-        block = result.advancement[0]
-        assert block.deep_dive_content is None
+        assert result.advancement[0].deep_dive_content is None
+        warnings = [call.args[0] for call in mock_logger.warning.call_args_list]
+        assert any("timed out" in message for message in warnings)
+        assert not any("failed" in message for message in warnings)
 
     @pytest.mark.asyncio
-    async def test_deep_dive_error_returns_none(self):
+    async def test_deep_dive_error_returns_none(self, monkeypatch):
         """When LLM generation fails with a generic exception, deep_dive_content should be None."""
+        from backend.app.student import recommendation_service as module
+
         svc, _, _, mock_llm, _, mock_session = _build_mocks()
         mock_session.run.return_value = []
+        mock_logger = MagicMock()
+        monkeypatch.setattr(module, "logger", mock_logger)
 
         async def failing_generate(**kwargs):
             raise RuntimeError("LLM service unavailable")
@@ -357,6 +368,9 @@ class TestAdvancementBlock:
 
         block = result.advancement[0]
         assert block.deep_dive_content is None
+        warnings = [call.args[0] for call in mock_logger.warning.call_args_list]
+        assert any("failed" in message for message in warnings)
+        assert not any("timed out" in message for message in warnings)
 
     @pytest.mark.asyncio
     async def test_no_advancement_for_remediation_path(self):
