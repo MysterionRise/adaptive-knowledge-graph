@@ -42,7 +42,7 @@ slowapi = "^0.1.10"
 # NLP & Embeddings
 transformers = ">=4.57.6,<5"  # 5.x together with sentence-transformers 6: #71
 sentence-transformers = "^2.7.0"
-torch = ">=2.10.0,<2.11"  # 2.11+ switches the Linux wheels to CUDA 13; upgrade deliberately (#79)
+torch = ">=2.10.0,<2.14"  # 2.11+ switches the Linux wheels to CUDA 13; upgrade deliberately (#79)
 yake = "^0.4.8"
 spacy = "^3.7.2"
 
