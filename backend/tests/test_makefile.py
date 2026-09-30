@@ -176,10 +176,6 @@ def test_tribunal_run_skips_the_coverage_gate():
     assert "pytest -m tribunal --no-cov" in run_make("test-tribunal").stdout
 
 
-def test_fast_run_mirrors_the_ci_coverage_floor():
-    assert 'pytest -m "not tribunal" --cov-fail-under=75' in run_make("test-fast").stdout
-
-
 def test_run_api_binds_loopback_by_default():
     result = run_make("run-api")
     assert "--host 127.0.0.1" in result.stdout

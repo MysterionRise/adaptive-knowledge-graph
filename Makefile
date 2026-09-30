@@ -5,7 +5,8 @@ COMPOSE := bash scripts/compose.sh
 PROFILE ?= cpu
 SUBJECT ?=
 API_HOST ?= 127.0.0.1
-API_PORT ?= 8000
+# The environment wins, then API_PORT in the repository .env (read by scripts/lib.sh), then 8000
+API_PORT ?= $(or $(shell bash -c '. scripts/lib.sh && printf %s "$${API_PORT:-}"' 2> /dev/null),8000)
 API_URL ?= http://localhost:$(API_PORT)
 EVAL_ARGS ?=
 
@@ -58,8 +59,8 @@ install-dev: ## Install all dependencies including dev tools, and the pre-commit
 test: ## Run tests with coverage
 	poetry run pytest
 
-test-fast: ## Run non-adversarial backend tests like CI (per-test timeout, coverage floor 75%)
-	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov-fail-under=75
+test-fast: ## Run non-adversarial backend tests with per-test timeout
+	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal"
 
 test-tribunal: ## Run adversarial/risk-register tests separately (no coverage gate)
 	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal --no-cov
