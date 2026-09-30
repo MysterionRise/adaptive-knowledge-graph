@@ -4,8 +4,8 @@ Tests for the /ask/stream SSE streaming endpoint.
 Tests cover:
 - SSE protocol: metadata event, token events, [DONE] event
 - Metadata structure and ordering
-- Error events during streaming
-- HTTP error codes: 404 (no content), 503 (LLM errors)
+- Error events during streaming, including empty answers
+- HTTP error codes: 404 (no content, unknown subject), 422 (invalid question), 503 (LLM errors)
 - Client disconnect handling (backpressure)
 """
 
@@ -148,7 +148,7 @@ class TestStreamingProtocol:
         assert len(metadata["sources"][0]["text"]) == 203  # 200 + "..."
 
     def test_stream_empty_tokens(self, client, mock_retriever):
-        """Stream with no tokens should still produce metadata and [DONE]."""
+        """A stream with no tokens reports an empty-answer error before [DONE]."""
         mock_llm = self._mock_stream([])
 
         with (
@@ -166,6 +166,52 @@ class TestStreamingProtocol:
 
         events = _parse_sse_events(response.text)
         assert events[0]["type"] == "metadata"
+        assert events[1:] == [
+            {"type": "error", "content": "The language model returned an empty answer"},
+            "[DONE]",
+        ]
+
+    def test_stream_whitespace_tokens_report_empty_answer(self, client, mock_retriever):
+        """Whitespace-only tokens are forwarded, then reported as an empty answer."""
+        mock_llm = self._mock_stream([" ", "\n"])
+
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
+        ):
+            response = client.post(
+                "/api/v1/ask/stream",
+                json={
+                    "question": "What is photosynthesis?",
+                    "use_kg_expansion": False,
+                    "use_window_retrieval": False,
+                },
+            )
+
+        events = _parse_sse_events(response.text)
+        assert [e["type"] for e in events[1:-1]] == ["token", "token", "error"]
+        assert events[-2]["content"] == "The language model returned an empty answer"
+        assert events[-1] == "[DONE]"
+
+    def test_stream_with_text_has_no_error_event(self, client, mock_retriever):
+        """A normal answer does not produce an error event."""
+        mock_llm = self._mock_stream(["", "Plants", " use light."])
+
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
+        ):
+            response = client.post(
+                "/api/v1/ask/stream",
+                json={
+                    "question": "What is photosynthesis?",
+                    "use_kg_expansion": False,
+                    "use_window_retrieval": False,
+                },
+            )
+
+        events = _parse_sse_events(response.text)
+        assert not [e for e in events if isinstance(e, dict) and e.get("type") == "error"]
         assert events[-1] == "[DONE]"
 
 
@@ -326,3 +372,37 @@ class TestStreamingWithKGExpansion:
         metadata = events[0]
         assert metadata["expanded_concepts"] is not None
         assert len(metadata["expanded_concepts"]) > 0
+
+
+@pytest.mark.unit
+class TestStreamingValidation:
+    """Request validation shared with /ask."""
+
+    def test_stream_unknown_subject_is_404(self, client, mock_retriever):
+        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever):
+            response = client.post(
+                "/api/v1/ask/stream",
+                json={"question": "What is photosynthesis?", "subject": "no_such_subject"},
+            )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Subject not found"
+        mock_retriever.retrieve.assert_not_called()
+
+    def test_stream_rejects_markup_without_echo(self, client, mock_retriever):
+        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever):
+            response = client.post(
+                "/api/v1/ask/stream",
+                json={"question": "<script>alert(1)</script> What is DNA?"},
+            )
+
+        assert response.status_code == 422
+        assert "<script>" not in response.text
+        mock_retriever.retrieve.assert_not_called()
+
+    def test_stream_rejects_whitespace_question(self, client, mock_retriever):
+        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever):
+            response = client.post("/api/v1/ask/stream", json={"question": "      "})
+
+        assert response.status_code == 422
+        mock_retriever.retrieve.assert_not_called()

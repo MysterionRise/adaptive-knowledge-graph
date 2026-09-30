@@ -9,20 +9,62 @@ Includes:
 
 import re
 import time
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+from starlette.concurrency import run_in_threadpool
 
+from backend.app.api.validators import (
+    NonBlankStr,
+    SearchQueryStr,
+    SubjectParam,
+    error_responses,
+    escape_lucene,
+)
 from backend.app.core.auth import verify_api_key
 from backend.app.core.exceptions import Neo4jConnectionError, Neo4jQueryError
 from backend.app.core.rate_limit import limiter
+from backend.app.core.settings import settings
 
-# Pattern to detect destructive intent in natural language questions
-_DESTRUCTIVE_NL_PATTERN = re.compile(
-    r"\b(delete|remove|drop|destroy|truncate|erase|wipe|detach)\b",
-    re.IGNORECASE,
+_DESTRUCTIVE_VERBS = r"(?:delete|remove|drop|destroy|truncate|erase|wipe|purge|detach)"
+_GRAPH_OBJECTS = (
+    r"(?:nodes?|relationships?|rels?|edges?|labels?|propert(?:y|ies)|index(?:es)?|indices"
+    r"|constraints?|databases?|db|graphs?|data|everything|concepts?|modules?|chunks?)"
 )
+_DETERMINERS = r"(?:all|every|each|any|a|an|the|these|those|this|that|of|existing|entire|whole)"
+# Start of a Cypher node pattern: "(", an optional variable, then ":", ")" or "{"
+_NODE_PATTERN = r"\(\s*(?:[a-z_]\w*)?\s*[:){]"
+
+# Signals of a write or destructive request in a natural-language graph question.
+# Questions that merely use these words ("What caused the drop in GDP?") do not match.
+_DESTRUCTIVE_REQUEST_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE | re.DOTALL)
+    for pattern in (
+        # Cypher write clauses typed into the question
+        r"\bdetach\s+delete\b",
+        r"\b(?:create|drop)\s+(?:(?:fulltext|vector|range|text|point|lookup|unique)\s+)?"
+        r"(?:index|constraint|database)\b",
+        rf"\b(?:create|merge)\s*{_NODE_PATTERN}",
+        rf"\bmatch\s*{_NODE_PATTERN}.*\b(?:delete|set|remove|merge|create)\b",
+        r"\b(?:set|remove)\s+[a-z_]\w*[.:][a-z_]",
+        # Requests to destroy graph objects: "delete all nodes", "clear the database"
+        rf"\b{_DESTRUCTIVE_VERBS}\s+(?:{_DETERMINERS}\s+){{0,3}}{_GRAPH_OBJECTS}\b",
+        rf"\bclear\s+(?:{_DETERMINERS}\s+){{1,3}}{_GRAPH_OBJECTS}\b",
+        # Imperatives that open with a destructive verb: "Remove the Photosynthesis concept"
+        r"^\W*(?:please\s+|(?:can|could|would|will)\s+you\s+(?:please\s+)?"
+        rf"|i\s+(?:want|need)\s+(?:you\s+)?to\s+|let'?s\s+)?{_DESTRUCTIVE_VERBS}\b",
+    )
+)
+
+_READ_ONLY_DETAIL = "This endpoint only supports read queries against the knowledge graph."
+
+
+def _is_destructive_request(question: str) -> bool:
+    """Return True when a natural-language graph question asks for a write operation."""
+    return any(pattern.search(question) for pattern in _DESTRUCTIVE_REQUEST_PATTERNS)
+
 
 router = APIRouter(tags=["Knowledge Graph"])
 
@@ -59,14 +101,18 @@ class GraphStatsResponse(BaseModel):
     relationship_count: int
 
 
-@router.get("/graph/stats", response_model=GraphStatsResponse)
-@limiter.limit("30/minute")
-async def get_graph_stats(request: Request, subject: str | None = None):
+@router.get(
+    "/graph/stats",
+    response_model=GraphStatsResponse,
+    responses=error_responses(404, 429, 503),
+)
+@limiter.limit(settings.rate_limit_graph)
+async def get_graph_stats(request: Request, subject: SubjectParam):
     """
     Get knowledge graph statistics.
 
     Args:
-        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
     """
     cache_key = f"stats:{subject or 'default'}"
     cached = _cache_get(cache_key)
@@ -98,14 +144,19 @@ async def get_graph_stats(request: Request, subject: str | None = None):
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
-@router.get("/concepts/top", response_model=list[dict])
-async def get_top_concepts(limit: int = 20, subject: str | None = None):
+@router.get("/concepts/top", response_model=list[dict], responses=error_responses(404))
+async def get_top_concepts(
+    subject: SubjectParam,
+    limit: Annotated[
+        int, Query(ge=1, le=100, description="Maximum number of concepts to return (1-100)")
+    ] = 20,
+):
     """
     Get top concepts by importance.
 
     Args:
-        limit: Maximum number of concepts to return
-        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+        limit: Maximum number of concepts to return (1-100)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
     """
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
@@ -136,9 +187,15 @@ async def get_top_concepts(limit: int = 20, subject: str | None = None):
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
-@router.get("/graph/data")
-@limiter.limit("30/minute")
-async def get_graph_data(request: Request, limit: int = 100, subject: str | None = None):
+@router.get("/graph/data", responses=error_responses(404, 429))
+@limiter.limit(settings.rate_limit_graph)
+async def get_graph_data(
+    request: Request,
+    subject: SubjectParam,
+    limit: Annotated[
+        int, Query(ge=1, le=500, description="Maximum number of concepts to return (1-500)")
+    ] = 100,
+):
     """
     Get graph data for visualization (concepts and relationships).
 
@@ -146,8 +203,8 @@ async def get_graph_data(request: Request, limit: int = 100, subject: str | None
     Limits to top N concepts by importance to prevent overwhelming the frontend.
 
     Args:
-        limit: Maximum number of concepts to return (default 100)
-        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+        limit: Maximum number of concepts to return (1-500, default 100)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
 
     Returns:
         GraphData with nodes and edges arrays
@@ -245,8 +302,8 @@ async def get_graph_data(request: Request, limit: int = 100, subject: str | None
 class GraphQueryRequest(BaseModel):
     """Request for natural language graph query."""
 
-    question: str = Field(
-        ..., description="Natural language question about the graph", max_length=2000
+    question: NonBlankStr = Field(
+        ..., description="Natural language question about the graph (1-2000 characters)"
     )
     preview_only: bool = Field(
         default=False, description="If True, generate Cypher without executing"
@@ -267,8 +324,10 @@ class GraphQueryResponse(BaseModel):
     "/graph/query",
     response_model=GraphQueryResponse,
     dependencies=[Depends(verify_api_key)],
+    responses=error_responses(400, 401, 429),
 )
-async def query_graph_natural_language(request: GraphQueryRequest):
+@limiter.limit(settings.rate_limit_graph_query)
+async def query_graph_natural_language(request: Request, body: GraphQueryRequest):
     """
     Query the knowledge graph using natural language.
 
@@ -282,47 +341,48 @@ async def query_graph_natural_language(request: GraphQueryRequest):
     - "Which modules cover DNA replication?"
     - "Find the most important concepts"
     - "What concepts are related to mitosis?"
+
+    Requests to modify the graph ("delete all nodes", raw Cypher write clauses)
+    are rejected with 400.
     """
-    # Route-level guard: reject questions with obvious destructive intent
-    if _DESTRUCTIVE_NL_PATTERN.search(request.question):
-        raise HTTPException(
-            status_code=400,
-            detail="This endpoint only supports read queries against the knowledge graph.",
-        )
+    # Route-level guard: reject requests with obvious write/destructive intent
+    if _is_destructive_request(body.question):
+        raise HTTPException(status_code=400, detail=_READ_ONLY_DETAIL)
 
     try:
         from backend.app.kg.cypher_qa import get_cypher_qa_service
 
         service = get_cypher_qa_service()
 
-        if request.preview_only:
+        if body.preview_only:
             # Generate Cypher without executing
-            cypher = service.generate_cypher_only(request.question)
+            cypher = await run_in_threadpool(service.generate_cypher_only, body.question)
             return GraphQueryResponse(
-                question=request.question,
+                question=body.question,
                 cypher=cypher,
                 result=None,
                 answer="Preview only - query not executed",
             )
 
-        # Full query execution
-        result = service.query(request.question)
+        # Full query execution (LLM + Neo4j, blocking)
+        result = await run_in_threadpool(service.query, body.question)
 
         return GraphQueryResponse(
-            question=result.get("question", request.question),
+            question=result.get("question", body.question),
             cypher=result.get("cypher"),
             result=result.get("result"),
             answer=result.get("answer"),
             error=result.get("error"),
         )
 
+    except ValidationError as e:
+        # Malformed service output; must not be mistaken for a blocked query below
+        logger.error(f"Graph query returned an invalid result: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
     except ValueError as e:
-        # Raised by _validate_cypher_read_only for destructive Cypher
+        # Raised by the Cypher QA service's read-only guard for write queries
         logger.warning(f"Blocked destructive graph query: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail="This endpoint only supports read queries against the knowledge graph.",
-        ) from e
+        raise HTTPException(status_code=400, detail=_READ_ONLY_DETAIL) from e
     except Exception as e:
         logger.error(f"Graph query error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
@@ -334,9 +394,14 @@ async def query_graph_natural_language(request: GraphQueryRequest):
 
 
 class ConceptSearchRequest(BaseModel):
-    """Request for fuzzy concept search."""
+    """Request for concept search."""
 
-    query: str = Field(..., description="Search query for concepts", min_length=1, max_length=500)
+    query: SearchQueryStr = Field(
+        ...,
+        description=(
+            "Search query for concepts (1-500 characters). Lucene syntax is matched literally."
+        ),
+    )
     limit: int = Field(default=10, description="Maximum results", ge=1, le=50)
 
 
@@ -349,19 +414,22 @@ class ConceptSearchResult(BaseModel):
     score: float  # Fulltext search score
 
 
-@router.post("/concepts/search", response_model=list[ConceptSearchResult])
-async def search_concepts(request: ConceptSearchRequest, subject: str | None = None):
+@router.post(
+    "/concepts/search",
+    response_model=list[ConceptSearchResult],
+    responses=error_responses(404),
+)
+async def search_concepts(body: ConceptSearchRequest, subject: SubjectParam):
     """
-    Search for concepts using fulltext index with fuzzy matching.
+    Search for concepts using the fulltext index.
 
-    Supports:
-    - Partial matches
-    - Fuzzy matching (typo tolerance)
-    - Relevance ranking
+    Results are ranked by fulltext relevance. Lucene query syntax in the query
+    (wildcards, fuzzy operators, field prefixes, boolean operators) is escaped, so the
+    text is matched literally.
 
     Args:
-        request: Search request with query and limit
-        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+        body: Search request with query and limit
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
     """
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
@@ -369,8 +437,8 @@ async def search_concepts(request: ConceptSearchRequest, subject: str | None = N
         adapter = get_neo4j_adapter(subject)
 
         results = adapter.fulltext_concept_search(
-            query_text=request.query,
-            limit=request.limit,
+            query_text=escape_lucene(body.query),
+            limit=body.limit,
         )
 
         return [
