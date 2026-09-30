@@ -51,6 +51,20 @@ class IntersectionObserverMock {
 }
 window.IntersectionObserver = IntersectionObserverMock
 
+// Unit tests run without a backend. axios uses jsdom's XMLHttpRequest, which would open a real
+// socket and keep Jest alive until the request times out, so fail fast with a clear error instead.
+const originalXhrOpen = window.XMLHttpRequest.prototype.open
+window.XMLHttpRequest.prototype.open = function open(method, url, ...rest) {
+  this.unitTestRequest = `${method} ${url}`
+  return originalXhrOpen.call(this, method, url, ...rest)
+}
+window.XMLHttpRequest.prototype.send = function send() {
+  throw new Error(
+    `Unexpected network request in a unit test (${this.unitTestRequest}). ` +
+      'Mock @/lib/api-client, the component that calls it, or global.fetch.'
+  )
+}
+
 // Suppress console errors during tests for expected errors
 const originalError = console.error
 beforeAll(() => {

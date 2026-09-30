@@ -1,12 +1,54 @@
 import { useAppStore } from '@/lib/store';
 
-// Mock fetch
-global.fetch = jest.fn();
+// Mock fetch. Each test queues the responses it expects; anything else is rejected.
+const fetchMock = jest.fn();
+const originalFetch = global.fetch;
+
+const jsonResponse = (body: unknown, status = 200) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
+
+const masteryResponse = (concept: string, newMastery: number, totalAttempts = 1) =>
+  jsonResponse({
+    concept,
+    previous_mastery: 0.3,
+    new_mastery: newMastery,
+    target_difficulty: 'medium',
+    total_attempts: totalAttempts,
+  });
+
+/** Resolves once no backend sync is in flight (updateMastery syncs fire-and-forget). */
+const syncSettled = () =>
+  new Promise<void>((resolve) => {
+    if (!useAppStore.getState().isSyncing) {
+      resolve();
+      return;
+    }
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (!state.isSyncing) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+
+beforeAll(() => {
+  global.fetch = fetchMock as unknown as typeof fetch;
+});
+
+afterAll(() => {
+  global.fetch = originalFetch;
+});
 
 describe('useAppStore', () => {
   beforeEach(() => {
     // Reset store to initial state
     useAppStore.setState({
+      currentSubject: 'us_history',
+      subjectTheme: null,
+      isLoadingTheme: false,
       highlightedConcepts: [],
       lastQueryConcepts: [],
       lastQuery: null,
@@ -16,6 +58,17 @@ describe('useAppStore', () => {
       isGraphLoading: false,
     });
     jest.clearAllMocks();
+    // mockReset also drops implementations left behind by a previous test
+    fetchMock.mockReset();
+    fetchMock.mockImplementation((url: string) =>
+      Promise.reject(new Error(`Unexpected fetch: ${url}`))
+    );
+  });
+
+  afterEach(async () => {
+    // Never let a pending sync from one test update the store during the next one
+    await syncSettled();
+    jest.restoreAllMocks();
   });
 
   describe('Highlighted Concepts', () => {
@@ -81,6 +134,55 @@ describe('useAppStore', () => {
     });
   });
 
+  describe('Subject', () => {
+    it('sets the current subject and remembers it', () => {
+      const setItem = jest.spyOn(Storage.prototype, 'setItem');
+
+      useAppStore.getState().setCurrentSubject('economics');
+
+      expect(useAppStore.getState().currentSubject).toBe('economics');
+      expect(setItem).toHaveBeenCalledWith('akg_current_subject', 'economics');
+    });
+
+    it('loads the subject theme', async () => {
+      const theme = {
+        subject_id: 'economics',
+        primary_color: '#d97706',
+        secondary_color: '#fbbf24',
+        accent_color: '#f59e0b',
+        chapter_colors: {},
+      };
+      fetchMock.mockResolvedValueOnce(jsonResponse(theme));
+
+      await useAppStore.getState().loadSubjectTheme('economics');
+
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/subjects/economics/theme'));
+      expect(useAppStore.getState().subjectTheme).toEqual(theme);
+      expect(useAppStore.getState().isLoadingTheme).toBe(false);
+    });
+
+    it('keeps the previous theme when the theme request fails', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'Not found' }, 404));
+
+      await useAppStore.getState().loadSubjectTheme('unknown');
+
+      expect(useAppStore.getState().subjectTheme).toBeNull();
+      expect(useAppStore.getState().isLoadingTheme).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith('Failed to load subject theme:', 404);
+    });
+
+    it('handles theme network errors gracefully', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockRejectedValueOnce(new Error('Network error'));
+
+      await useAppStore.getState().loadSubjectTheme('economics');
+
+      expect(useAppStore.getState().isLoadingTheme).toBe(false);
+      expect(consoleError).toHaveBeenCalled();
+    });
+  });
+
   describe('Mastery Tracking', () => {
     it('initializes mastery for new concept', () => {
       const { getMastery } = useAppStore.getState();
@@ -90,17 +192,8 @@ describe('useAppStore', () => {
       expect(mastery).toBe(0.3); // Default initial mastery
     });
 
-    it('updates mastery on correct answer', () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Test Concept',
-          previous_mastery: 0.3,
-          new_mastery: 0.45,
-          target_difficulty: 'medium',
-          total_attempts: 1,
-        }),
-      });
+    it('updates mastery on correct answer', async () => {
+      fetchMock.mockResolvedValueOnce(masteryResponse('Test Concept', 0.45));
 
       const { updateMastery, getMastery } = useAppStore.getState();
 
@@ -109,19 +202,11 @@ describe('useAppStore', () => {
       // Local optimistic update
       const mastery = getMastery('Test Concept');
       expect(mastery).toBeCloseTo(0.45, 1); // 0.3 + 0.15 = 0.45
+      await syncSettled();
     });
 
-    it('updates mastery on incorrect answer', () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Test Concept',
-          previous_mastery: 0.3,
-          new_mastery: 0.2,
-          target_difficulty: 'easy',
-          total_attempts: 1,
-        }),
-      });
+    it('updates mastery on incorrect answer', async () => {
+      fetchMock.mockResolvedValueOnce(masteryResponse('Test Concept', 0.2));
 
       const { updateMastery, getMastery } = useAppStore.getState();
 
@@ -129,19 +214,11 @@ describe('useAppStore', () => {
 
       const mastery = getMastery('Test Concept');
       expect(mastery).toBeCloseTo(0.2, 1); // 0.3 - 0.1 = 0.2
+      await syncSettled();
     });
 
-    it('clamps mastery to minimum 0.1', () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Test Concept',
-          previous_mastery: 0.1,
-          new_mastery: 0.1,
-          target_difficulty: 'easy',
-          total_attempts: 1,
-        }),
-      });
+    it('clamps mastery to minimum 0.1', async () => {
+      fetchMock.mockResolvedValueOnce(masteryResponse('Low Concept', 0.1));
 
       const { updateMastery, getMastery } = useAppStore.getState();
 
@@ -159,21 +236,12 @@ describe('useAppStore', () => {
 
       updateMastery('Low Concept', false);
 
-      const mastery = getMastery('Low Concept');
-      expect(mastery).toBeGreaterThanOrEqual(0.1);
+      expect(getMastery('Low Concept')).toBe(0.1);
+      await syncSettled();
     });
 
-    it('clamps mastery to maximum 1.0', () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Test Concept',
-          previous_mastery: 0.95,
-          new_mastery: 1.0,
-          target_difficulty: 'hard',
-          total_attempts: 1,
-        }),
-      });
+    it('clamps mastery to maximum 1.0', async () => {
+      fetchMock.mockResolvedValueOnce(masteryResponse('High Concept', 1.0));
 
       const { updateMastery, getMastery } = useAppStore.getState();
 
@@ -191,21 +259,12 @@ describe('useAppStore', () => {
 
       updateMastery('High Concept', true);
 
-      const mastery = getMastery('High Concept');
-      expect(mastery).toBeLessThanOrEqual(1.0);
+      expect(getMastery('High Concept')).toBe(1.0);
+      await syncSettled();
     });
 
-    it('increments attempts counter', () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Test Concept',
-          previous_mastery: 0.3,
-          new_mastery: 0.45,
-          target_difficulty: 'medium',
-          total_attempts: 1,
-        }),
-      });
+    it('increments attempts counter', async () => {
+      fetchMock.mockResolvedValueOnce(masteryResponse('Attempt Concept', 0.45));
 
       const { updateMastery } = useAppStore.getState();
 
@@ -213,19 +272,11 @@ describe('useAppStore', () => {
 
       const { masteryMap } = useAppStore.getState();
       expect(masteryMap['Attempt Concept'].attempts).toBe(1);
+      await syncSettled();
     });
 
-    it('sets lastAssessed timestamp', () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Test Concept',
-          previous_mastery: 0.3,
-          new_mastery: 0.45,
-          target_difficulty: 'medium',
-          total_attempts: 1,
-        }),
-      });
+    it('sets lastAssessed timestamp', async () => {
+      fetchMock.mockResolvedValueOnce(masteryResponse('Timestamp Concept', 0.45));
 
       const { updateMastery } = useAppStore.getState();
 
@@ -233,30 +284,19 @@ describe('useAppStore', () => {
 
       const { masteryMap } = useAppStore.getState();
       expect(masteryMap['Timestamp Concept'].lastAssessed).not.toBeNull();
+      await syncSettled();
     });
   });
 
   describe('Backend Sync', () => {
     it('syncs mastery to backend on update', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Sync Concept',
-          previous_mastery: 0.3,
-          new_mastery: 0.45,
-          target_difficulty: 'medium',
-          total_attempts: 1,
-        }),
-      });
+      fetchMock.mockResolvedValueOnce(masteryResponse('Sync Concept', 0.52, 3));
 
       const { updateMastery } = useAppStore.getState();
 
       updateMastery('Sync Concept', true);
 
-      // Wait for async sync
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/student/mastery'),
         expect.objectContaining({
           method: 'POST',
@@ -264,10 +304,18 @@ describe('useAppStore', () => {
           body: JSON.stringify({ concept: 'Sync Concept', correct: true }),
         })
       );
+
+      await syncSettled();
+
+      // The backend's estimate replaces the optimistic local value
+      const entry = useAppStore.getState().masteryMap['Sync Concept'];
+      expect(entry.masteryLevel).toBe(0.52);
+      expect(entry.attempts).toBe(3);
     });
 
     it('handles sync errors gracefully', async () => {
-      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockRejectedValueOnce(new Error('Network error'));
 
       const { syncMasteryToBackend } = useAppStore.getState();
 
@@ -275,28 +323,29 @@ describe('useAppStore', () => {
 
       expect(result).toBeNull();
 
-      const { lastSyncError } = useAppStore.getState();
+      const { lastSyncError, isSyncing } = useAppStore.getState();
       expect(lastSyncError).toBe('Network error');
+      expect(isSyncing).toBe(false);
+      expect(consoleError).toHaveBeenCalled();
+    });
+
+    it('reports HTTP errors from the mastery endpoint', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'boom' }, 500));
+
+      const result = await useAppStore.getState().syncMasteryToBackend('Error Concept', true);
+
+      expect(result).toBeNull();
+      expect(useAppStore.getState().lastSyncError).toBe('Failed to sync mastery: 500');
     });
 
     it('sets isSyncing during sync', async () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      let resolveFetch!: (response: unknown) => void;
+      fetchMock.mockImplementationOnce(
         () =>
-          new Promise((resolve) =>
-            setTimeout(() =>
-              resolve({
-                ok: true,
-                json: async () => ({
-                  concept: 'Sync Concept',
-                  previous_mastery: 0.3,
-                  new_mastery: 0.45,
-                  target_difficulty: 'medium',
-                  total_attempts: 1,
-                }),
-              }),
-            50
-          )
-        )
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          })
       );
 
       const { syncMasteryToBackend } = useAppStore.getState();
@@ -304,21 +353,20 @@ describe('useAppStore', () => {
       const syncPromise = syncMasteryToBackend('Sync Concept', true);
 
       // Check isSyncing is true during sync
-      const { isSyncing } = useAppStore.getState();
-      expect(isSyncing).toBe(true);
+      expect(useAppStore.getState().isSyncing).toBe(true);
 
-      await syncPromise;
+      resolveFetch(masteryResponse('Sync Concept', 0.45));
+      const result = await syncPromise;
 
-      const { isSyncing: isSyncingAfter } = useAppStore.getState();
-      expect(isSyncingAfter).toBe(false);
+      expect(result).toEqual(expect.objectContaining({ new_mastery: 0.45 }));
+      expect(useAppStore.getState().isSyncing).toBe(false);
     });
   });
 
   describe('Load Mastery from Backend', () => {
     it('loads mastery profile from backend', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
           student_id: 'test-student',
           overall_ability: 0.6,
           mastery_levels: {
@@ -326,19 +374,25 @@ describe('useAppStore', () => {
             'Concept B': 0.5,
           },
           updated_at: '2024-01-01T00:00:00Z',
-        }),
-      });
+        })
+      );
 
       const { loadMasteryFromBackend, getMastery } = useAppStore.getState();
 
       await loadMasteryFromBackend();
 
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/student/profile'),
+        expect.any(Object)
+      );
       expect(getMastery('Concept A')).toBe(0.8);
       expect(getMastery('Concept B')).toBe(0.5);
+      expect(useAppStore.getState().isSyncing).toBe(false);
     });
 
     it('handles load errors gracefully', async () => {
-      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Load failed'));
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockRejectedValueOnce(new Error('Load failed'));
 
       const { loadMasteryFromBackend } = useAppStore.getState();
 
@@ -347,14 +401,20 @@ describe('useAppStore', () => {
       const { lastSyncError } = useAppStore.getState();
       expect(lastSyncError).toBe('Load failed');
     });
+
+    it('reports HTTP errors from the profile endpoint', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'Unauthorized' }, 401));
+
+      await useAppStore.getState().loadMasteryFromBackend();
+
+      expect(useAppStore.getState().lastSyncError).toBe('Failed to load profile: 401');
+    });
   });
 
   describe('Reset Mastery', () => {
     it('resets mastery on backend', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: 'Reset successful' }),
-      });
+      fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'Reset successful' }));
 
       // Set some initial mastery
       useAppStore.setState({
@@ -376,14 +436,15 @@ describe('useAppStore', () => {
       expect(getMastery('Concept A')).toBe(0.3); // Default value
 
       // API should have been called
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/student/reset'),
         expect.objectContaining({ method: 'POST' })
       );
     });
 
     it('handles reset errors gracefully', async () => {
-      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Reset failed'));
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockRejectedValueOnce(new Error('Reset failed'));
 
       const { resetMasteryOnBackend } = useAppStore.getState();
 
@@ -391,6 +452,26 @@ describe('useAppStore', () => {
 
       const { lastSyncError } = useAppStore.getState();
       expect(lastSyncError).toBe('Reset failed');
+    });
+
+    it('keeps local mastery when the reset endpoint returns an error', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'boom' }, 500));
+      useAppStore.setState({
+        masteryMap: {
+          'Concept A': {
+            conceptName: 'Concept A',
+            masteryLevel: 0.8,
+            attempts: 5,
+            lastAssessed: '2024-01-01',
+          },
+        },
+      });
+
+      await useAppStore.getState().resetMasteryOnBackend();
+
+      expect(useAppStore.getState().getMastery('Concept A')).toBe(0.8);
+      expect(useAppStore.getState().lastSyncError).toBe('Failed to reset profile: 500');
     });
   });
 
@@ -411,20 +492,10 @@ describe('useAppStore', () => {
   });
 
   describe('State Isolation', () => {
-    it('maintains separate state for different properties', () => {
-      const { setHighlightedConcepts, setLastQuery, updateMastery } =
-        useAppStore.getState();
+    it('maintains separate state for different properties', async () => {
+      const { setHighlightedConcepts, setLastQuery, updateMastery } = useAppStore.getState();
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          concept: 'Test',
-          previous_mastery: 0.3,
-          new_mastery: 0.45,
-          target_difficulty: 'medium',
-          total_attempts: 1,
-        }),
-      });
+      fetchMock.mockResolvedValueOnce(masteryResponse('Test', 0.45));
 
       setHighlightedConcepts(['Concept']);
       setLastQuery('Query');
@@ -434,6 +505,7 @@ describe('useAppStore', () => {
       expect(state.highlightedConcepts).toEqual(['Concept']);
       expect(state.lastQuery).toBe('Query');
       expect(state.masteryMap['Test']).toBeDefined();
+      await syncSettled();
     });
   });
 });

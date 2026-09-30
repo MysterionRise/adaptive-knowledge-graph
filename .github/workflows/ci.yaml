@@ -2,44 +2,40 @@ name: CI
 
 on:
   push:
-    branches: [ main, claude/** ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PYTHON_VERSION: "3.11"
-  POETRY_VERSION: "2.4.1"
 
 jobs:
-  # Linting and code quality
+  # ---------------------------------------------------------------------------
+  # Required gates: every job in this section is listed in `All Checks Passed`.
+  # None of them has an `if:` condition or a paths filter, so none is skipped.
+  # ---------------------------------------------------------------------------
   lint:
     name: Lint & Format Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python and Poetry (dev group only)
+        uses: ./.github/actions/setup-python-poetry
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v5
-        with:
-          path: .venv
-          key: venv-lint-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies (dev only - no ML libraries)
-        run: poetry install --no-interaction --only dev
+          install-args: --only dev
 
       - name: Check poetry.lock is up to date with pyproject.toml
         run: poetry check --lock
@@ -50,321 +46,367 @@ jobs:
       - name: Run ruff format check
         run: poetry run ruff format --check backend/ scripts/
 
-  # Type checking
   type-check:
     name: Type Check (mypy)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v5
-        with:
-          path: .venv
-          key: venv-typecheck-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies (no optional groups)
-        run: poetry install --no-interaction --without pyirt,pybkt
+          install-args: --without pyirt,pybkt
+          free-disk-space: "true"
 
       - name: Run mypy
         run: poetry run mypy backend/app scripts/
 
-      - name: Cleanup large dependencies to free disk space
-        run: |
-          rm -rf .venv/lib/python*/site-packages/torch*
-          rm -rf .venv/lib/python*/site-packages/transformers*
-          rm -rf ~/.cache/pip
-
-  # Unit and integration tests
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
+        # A full venv with the CUDA torch wheels is ~3.7 GB compressed and the
+        # repository cache quota is 10 GB, so only two full venvs are cached:
+        # 3.11 (shared with type-check and tribunal) and 3.13 (slow source
+        # builds). 3.12 installs from wheels in about two minutes.
+        # Revisit once CPU-only torch wheels land (#79).
+        include:
+          - python-version: "3.11"
+            cache: "true"
+          - python-version: "3.12"
+            cache: "false"
+          - python-version: "3.13"
+            cache: "true"
     steps:
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          df -h
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/checkout@v6
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v5
-        with:
-          path: .venv
-          key: venv-test-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies
-        run: poetry install --no-interaction --without pyirt,pybkt
-        env:
-          PIP_DEFAULT_TIMEOUT: 100
-          PIP_RETRIES: 5
+          install-args: --without pyirt,pybkt
+          cache: ${{ matrix.cache }}
+          free-disk-space: "true"
 
       - name: Run fast tests with coverage
         run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov=backend/app --cov-report=term
 
-      - name: Cleanup to free disk space
-        if: always()
-        run: |
-          rm -rf .venv
-          rm -rf ~/.cache/pip
-
-  tribunal-tests:
-    name: Tribunal Tests (manual risk register)
+  frontend:
+    name: Frontend (lint, types, tests, build)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    defaults:
+      run:
+        working-directory: frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-frontend
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run type-check
+
+      - name: Unit tests with coverage (Jest)
+        run: npm run test:coverage -- --ci
+
+      - name: Production build
+        run: npm run build
+
+      - name: Audit dependencies (advisory)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  docker-compose-validate:
+    name: Docker Compose Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate compose file
+        run: docker compose -f infra/compose/compose.yaml config --quiet
+
+      - name: Start databases and wait until they are healthy
+        run: docker compose -f infra/compose/compose.yaml up -d --wait --wait-timeout 240 neo4j opensearch
+
+      - name: Assert OpenSearch and Neo4j respond
+        run: |
+          health=$(curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
+            "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=60s")
+          echo "OpenSearch cluster health: ${health}"
+          status=$(jq -r '.status' <<<"${health}")
+          if [ "${status}" != "green" ] && [ "${status}" != "yellow" ]; then
+            echo "::error::OpenSearch cluster status is '${status}'"
+            exit 1
+          fi
+          discovery=$(curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
+            --header "Accept: application/json" http://localhost:7474/)
+          echo "Neo4j HTTP discovery: ${discovery}"
+          jq -e '.neo4j_version' <<<"${discovery}" > /dev/null
+
+      - name: Show container status and logs
+        if: failure()
+        run: |
+          docker compose -f infra/compose/compose.yaml ps --all
+          docker compose -f infra/compose/compose.yaml logs --no-color --timestamps --tail 300
+
+      - name: Tear down and remove volumes
+        if: always()
+        run: docker compose -f infra/compose/compose.yaml down --volumes --remove-orphans
+
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
+        with:
+          globs: |
+            *.md
+            docs/**/*.md
+            frontend/*.md
+            infra/**/*.md
+            .github/*.md
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # upload the bandit SARIF to code scanning
+    env:
+      BANDIT_VERSION: "1.9.4"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+      - name: Install bandit (outside the project environment)
+        run: python -m pip install --disable-pip-version-check "bandit[sarif]==${BANDIT_VERSION}"
+
+      - name: Run bandit (gate, human-readable report)
+        run: bandit -r backend/app
+
+      - name: Run bandit (SARIF for code scanning)
+        if: ${{ !cancelled() }}
+        run: bandit -r backend/app --format sarif --output bandit.sarif --exit-zero
+
+      - name: Upload bandit results to code scanning
+        if: ${{ !cancelled() && hashFiles('bandit.sarif') != '' }}
+        # Best effort: pull requests from forks get a read-only token.
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
         with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+          sarif_file: bandit.sarif
+          category: bandit
 
-      - name: Install dependencies
-        run: poetry install --no-interaction --without pyirt,pybkt
-
-      - name: Run tribunal tests
-        run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal
-
-  # Frontend linting
-  frontend-lint:
-    name: Frontend Lint (ESLint)
+  # ---------------------------------------------------------------------------
+  # Advisory gates: not in `All Checks Passed` yet. Release PR #104 promotes
+  # them by adding them to its `needs` and dropping `continue-on-error`.
+  # ---------------------------------------------------------------------------
+  tribunal:
+    name: Tribunal Tests (advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          persist-credentials: false
 
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
+      - name: Set up Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          install-args: --without pyirt,pybkt
+          free-disk-space: "true"
 
-      - name: Run ESLint
-        working-directory: frontend
-        run: npm run lint
+      - name: Run tribunal suite (adversarial risk register)
+        # --no-cov: coverage is measured on the main suite; this partial run
+        # must not trip a coverage threshold.
+        run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal -rxX --no-cov
 
-  # Frontend type checking
-  frontend-type-check:
-    name: Frontend Type Check (TypeScript)
+  dependency-audit:
+    name: Dependency Audit (osv-scanner, advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write # upload the osv-scanner SARIF to code scanning
+    env:
+      OSV_SCANNER_VERSION: "2.6.0"
+      # SHA-256 of osv-scanner_linux_amd64 from the release's osv-scanner_SHA256SUMS.
+      OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          persist-credentials: false
 
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
+      - name: Install osv-scanner ${{ env.OSV_SCANNER_VERSION }} (checksum-verified)
+        run: |
+          install_dir="${RUNNER_TEMP}/osv-scanner"
+          mkdir -p "${install_dir}"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "${install_dir}/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  ${install_dir}/osv-scanner" | sha256sum --check --strict
+          chmod +x "${install_dir}/osv-scanner"
+          echo "${install_dir}" >> "${GITHUB_PATH}"
 
-      - name: Run TypeScript compiler
-        working-directory: frontend
-        run: npm run type-check
+      # osv-scanner applies the osv-scanner.toml found next to each scanned
+      # lockfile (the repository root for poetry.lock, frontend/ for
+      # package-lock.json), so allowlists are honoured without a --config flag.
+      - name: Scan lockfiles (SARIF for code scanning)
+        # Exit code 1 means "vulnerabilities found"; the report step is the gate.
+        run: |
+          osv-scanner scan source --lockfile poetry.lock --lockfile frontend/package-lock.json \
+            --format sarif --output-file osv.sarif || [ "$?" -eq 1 ]
 
-  # Frontend tests
-  frontend-test:
-    name: Frontend Tests (Jest)
+      - name: Upload osv-scanner results to code scanning
+        if: ${{ !cancelled() && hashFiles('osv.sarif') != '' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: osv.sarif
+          category: osv-scanner
+
+      - name: Report vulnerabilities (fails when any are found)
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          osv-scanner scan source --lockfile poetry.lock --lockfile frontend/package-lock.json \
+            --format markdown --output-file osv-report.md
+          rc=$?
+          set -e
+          if [ -s osv-report.md ]; then
+            cat osv-report.md
+            {
+              echo "## osv-scanner (advisory)"
+              echo
+              cat osv-report.md
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          exit "${rc}"
+
+  link-check:
+    name: Link Check (advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          persist-credentials: false
 
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
+      - name: Check relative links in Markdown (offline)
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # Same file set as the markdownlint step; --offline skips remote URLs.
+          args: >-
+            --offline --no-progress --root-dir ${{ github.workspace }}
+            './*.md' './docs/**/*.md' './frontend/*.md' './infra/**/*.md' './.github/*.md'
+          fail: true
+          token: "" # not needed offline; keep the GITHUB_TOKEN away from the tool
 
-      - name: Run Jest tests with coverage
-        working-directory: frontend
-        run: npm run test:coverage -- --ci
-
-  # E2E Tests (Playwright)
+  # ---------------------------------------------------------------------------
+  # Manual only: needs a running demo environment (WS-D is making the specs
+  # hermetic; the release PR may promote it). Drop the `if:` before adding it
+  # to `All Checks Passed`, or the gate would see it as skipped.
+  # ---------------------------------------------------------------------------
   e2e-tests:
     name: E2E Tests (Playwright, manual demo env)
     runs-on: ubuntu-latest
-    needs: [frontend-test]
+    timeout-minutes: 30
+    needs: [frontend]
     if: github.event_name == 'workflow_dispatch'
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
+    defaults:
+      run:
         working-directory: frontend
-        run: npm ci
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js and install dependencies
+        uses: ./.github/actions/setup-frontend
 
       - name: Install Playwright browsers
-        working-directory: frontend
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        working-directory: frontend
         run: npm run test:e2e -- --project=chromium
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
 
-  # Docker Compose validation
-  docker-compose-validate:
-    name: Docker Compose Validation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Validate docker-compose.yaml
-        run: docker compose -f infra/compose/compose.yaml config
-
-      - name: Check services start (databases only)
-        run: |
-          docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
-          sleep 10
-          docker compose -f infra/compose/compose.yaml ps
-          docker compose -f infra/compose/compose.yaml logs
-          docker compose -f infra/compose/compose.yaml down -v
-
-  # Documentation validation
-  docs-check:
-    name: Documentation Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Check markdown files exist
-        run: |
-          test -f README.md
-          test -f LICENSE
-          test -f COMPLIANCE.md
-          test -f .env.example
-
-      - name: Lint markdown files
-        uses: DavidAnson/markdownlint-cli2-action@v22
-        with:
-          globs: |
-            *.md
-            docs/**/*.md
-
-  # Security scanning
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v5
-        with:
-          path: .venv
-          key: venv-security-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies (dev only - no ML libraries)
-        run: poetry sync --no-interaction --only dev
-
-      - name: Run dependency vulnerability audit (advisory)
-        continue-on-error: true
-        run: |
-          poetry run pip install safety
-          poetry run safety check --json
-
-      - name: Run bandit security scan
-        run: |
-          poetry run pip install bandit
-          poetry run bandit -r backend/app -f json
-
-  # All checks pass
+  # ---------------------------------------------------------------------------
+  # The required status check on `main`. Keep the name unchanged.
+  # ---------------------------------------------------------------------------
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [lint, type-check, test, frontend-lint, frontend-type-check, frontend-test, docker-compose-validate, docs-check, security]
+    timeout-minutes: 5
+    needs:
+      - lint
+      - type-check
+      - test
+      - frontend
+      - docker-compose-validate
+      - docs-check
+      - security
     if: always()
     steps:
-      - name: Check if all jobs succeeded
+      - name: Show required job results
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
-          if [[ "${{ needs.lint.result }}" != "success" ]] || \
-             [[ "${{ needs.type-check.result }}" != "success" ]] || \
-             [[ "${{ needs.test.result }}" != "success" ]] || \
-             [[ "${{ needs.frontend-lint.result }}" != "success" ]] || \
-             [[ "${{ needs.frontend-type-check.result }}" != "success" ]] || \
-             [[ "${{ needs.frontend-test.result }}" != "success" ]] || \
-             [[ "${{ needs.docker-compose-validate.result }}" != "success" ]] || \
-             [[ "${{ needs.docs-check.result }}" != "success" ]] || \
-             [[ "${{ needs.security.result }}" != "success" ]]; then
-            echo "One or more required checks failed"
-            exit 1
-          fi
-          echo "✅ All required checks passed!"
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"${NEEDS_JSON}"
+
+      - name: Fail unless every required job succeeded
+        # `skipped` counts as a failure: no required job is conditional, so a
+        # skip means something upstream went wrong.
+        if: >-
+          contains(needs.*.result, 'failure') ||
+          contains(needs.*.result, 'cancelled') ||
+          contains(needs.*.result, 'skipped')
+        run: |
+          echo "::error::A required job failed, was cancelled or was skipped"
+          exit 1
