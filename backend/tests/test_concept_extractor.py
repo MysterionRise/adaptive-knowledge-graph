@@ -240,6 +240,37 @@ class TestFulltextStrategy:
         ):
             assert ConceptExtractor().extract_concepts("The Stamp Act", "fulltext") == []
 
+    @pytest.mark.parametrize(
+        ("subject_id", "index_name"),
+        [
+            ("economics", "economics_fullTextConceptNames"),
+            (None, "us_history_fullTextConceptNames"),  # the default subject
+        ],
+    )
+    def test_queries_the_subject_prefixed_fulltext_index(self, subject_id, index_name):
+        """The fulltext strategy must hit the index WS-I's seeding creates per subject."""
+        from backend.app.kg import neo4j_adapter
+
+        session = MagicMock()
+        driver = MagicMock()
+        driver.session.return_value.__enter__.return_value = session
+        extractor = ConceptExtractor(subject_id=subject_id)
+        extractor._yake_extractor = MagicMock()
+        extractor._yake_extractor.extract_keywords.return_value = [("gdp", 0.1)]
+
+        neo4j_adapter.clear_neo4j_adapters()
+        try:
+            with patch.object(neo4j_adapter.GraphDatabase, "driver", return_value=driver):
+                extractor.extract_concepts("What is GDP?", strategy="fulltext")
+        finally:
+            neo4j_adapter.clear_neo4j_adapters()
+
+        queried = [
+            c.kwargs["index_name"] for c in session.run.call_args_list if "index_name" in c.kwargs
+        ]
+        assert queried == [index_name]
+        assert "fullTextConceptNames" not in queried
+
     def test_search_terms_fall_back_to_words(self):
         extractor = ConceptExtractor()
         extractor._yake_extractor = MagicMock()
