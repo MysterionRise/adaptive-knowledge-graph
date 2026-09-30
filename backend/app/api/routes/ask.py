@@ -56,7 +56,7 @@ def _maybe_rerank(query: str, chunks: list[dict], top_k: int) -> list[dict]:
         logger.info(f"Reranked {len(chunks)} chunks, kept top {len(reranked)}")
         return reranked
     except Exception as e:
-        logger.warning(f"Reranking failed, using original chunks: {e}")
+        logger.warning("Reranking failed, using original chunks: {}", e)
         return chunks
 
 
@@ -161,7 +161,7 @@ async def ask_question(body: QuestionRequest, request: Request):
     """
     ensure_no_markup(body.question, field="question")
     try:
-        logger.info(f"Question: {body.question} (subject: {body.subject or 'default'})")
+        logger.info("Question: {} (subject: {})", body.question, body.subject or "default")
         ctx = await _retrieve_context(body)
         subject_config = ctx.subject_config
 
@@ -201,13 +201,13 @@ async def ask_question(body: QuestionRequest, request: Request):
             status_code=404, detail="No relevant content found for this question"
         ) from None
     except (LLMGenerationError, LLMConnectionError) as e:
-        logger.error(f"LLM generation failed: {e}")
+        logger.exception("LLM generation failed: {}", e)
         raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e
     except aiohttp.ClientError as e:
-        logger.error(f"Service connection error: {e}")
+        logger.exception("Service connection error: {}", e)
         raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
     except Exception as e:
-        logger.error(f"Error in ask endpoint: {e}", exc_info=True)
+        logger.exception("Error in ask endpoint: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -313,7 +313,7 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
                 _expand_query, subject_id, body.question
             )
         except Exception as e:
-            logger.warning(f"KG expansion failed, continuing without it: {e}")
+            logger.warning("KG expansion failed, continuing without it: {}", e)
 
     # Step 2: Retrieve chunks
     retrieval_top_k = settings.rag_retrieval_top_k if settings.reranker_enabled else body.top_k
@@ -338,7 +338,7 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
             if window_expanded_count is not None:
                 logger.info(f"Window expansion: {initial_count} -> {window_expanded_count} chunks")
         except Exception as e:
-            logger.warning(f"Window retrieval failed, using original chunks: {e}")
+            logger.warning("Window retrieval failed, using original chunks: {}", e)
 
     # Step 2c: Rerank chunks (if enabled)
     if settings.reranker_enabled:
@@ -389,13 +389,13 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
             status_code=404, detail="No relevant content found for this question"
         ) from None
     except (LLMGenerationError, LLMConnectionError) as e:
-        logger.error(f"LLM error in streaming ask retrieval: {e}")
+        logger.exception("LLM error in streaming ask retrieval: {}", e)
         raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e
     except aiohttp.ClientError as e:
-        logger.error(f"Service connection error in streaming ask retrieval: {e}")
+        logger.exception("Service connection error in streaming ask retrieval: {}", e)
         raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
     except Exception as e:
-        logger.error(f"Error in streaming ask retrieval: {e}", exc_info=True)
+        logger.exception("Error in streaming ask retrieval: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
     subject_config = ctx.subject_config
@@ -438,7 +438,7 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
                 yield _sse_event({"type": "token", "content": token})
         except Exception as e:
             stream_failed = True
-            logger.error(f"Streaming LLM error: {e}")
+            logger.exception("Streaming LLM error: {}", e)
             yield _sse_event({"type": "error", "content": "An error occurred during streaming"})
 
         if not (received_text or stream_failed or client_disconnected):

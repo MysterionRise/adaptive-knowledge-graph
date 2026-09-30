@@ -24,7 +24,12 @@ from backend.app.api.validators import (
     escape_lucene,
 )
 from backend.app.core.auth import verify_api_key
-from backend.app.core.exceptions import Neo4jConnectionError, Neo4jQueryError
+from backend.app.core.exceptions import (
+    LLMConnectionError,
+    LLMGenerationError,
+    Neo4jConnectionError,
+    Neo4jQueryError,
+)
 from backend.app.core.rate_limit import limiter
 from backend.app.core.settings import settings
 
@@ -134,13 +139,13 @@ async def get_graph_stats(request: Request, subject: SubjectParam):
         return result
 
     except Neo4jConnectionError as e:
-        logger.error(f"Neo4j connection failed: {e}")
+        logger.exception("Neo4j connection failed: {}", e)
         raise HTTPException(status_code=503, detail="Database connection failed") from e
     except Neo4jQueryError as e:
-        logger.error(f"Neo4j query failed: {e}")
+        logger.exception("Neo4j query failed: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
     except Exception as e:
-        logger.error(f"Error getting graph stats: {e}", exc_info=True)
+        logger.exception("Error getting graph stats: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -183,7 +188,7 @@ async def get_top_concepts(
         return concepts
 
     except Exception as e:
-        logger.error(f"Error getting top concepts: {e}", exc_info=True)
+        logger.exception("Error getting top concepts: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -290,7 +295,7 @@ async def get_graph_data(
         return result
 
     except Exception as e:
-        logger.error(f"Error getting graph data: {e}", exc_info=True)
+        logger.exception("Error getting graph data: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -324,7 +329,7 @@ class GraphQueryResponse(BaseModel):
     "/graph/query",
     response_model=GraphQueryResponse,
     dependencies=[Depends(verify_api_key)],
-    responses=error_responses(400, 401, 429),
+    responses=error_responses(400, 401, 429, 503),
 )
 @limiter.limit(settings.rate_limit_graph_query)
 async def query_graph_natural_language(request: Request, body: GraphQueryRequest):
@@ -343,7 +348,7 @@ async def query_graph_natural_language(request: Request, body: GraphQueryRequest
     - "What concepts are related to mitosis?"
 
     Requests to modify the graph ("delete all nodes", raw Cypher write clauses)
-    are rejected with 400.
+    are rejected with 400; an unavailable LLM or Neo4j answers 503.
     """
     # Route-level guard: reject requests with obvious write/destructive intent
     if _is_destructive_request(body.question):
@@ -377,14 +382,20 @@ async def query_graph_natural_language(request: Request, body: GraphQueryRequest
 
     except ValidationError as e:
         # Malformed service output; must not be mistaken for a blocked query below
-        logger.error(f"Graph query returned an invalid result: {e}")
+        logger.exception("Graph query returned an invalid result: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
     except ValueError as e:
-        # Raised by the Cypher QA service's read-only guard for write queries
-        logger.warning(f"Blocked destructive graph query: {e}")
+        # CypherQAService raises CypherValidationError (a ValueError) for blocked queries
+        logger.warning("Blocked graph query: {}", e)
         raise HTTPException(status_code=400, detail=_READ_ONLY_DETAIL) from e
+    except Neo4jConnectionError as e:
+        logger.exception("Neo4j unavailable for graph query: {}", e)
+        raise HTTPException(status_code=503, detail="Database connection failed") from e
+    except (LLMGenerationError, LLMConnectionError) as e:
+        logger.exception("LLM failed during graph query: {}", e)
+        raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e
     except Exception as e:
-        logger.error(f"Graph query error: {e}", exc_info=True)
+        logger.exception("Graph query error: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -452,7 +463,7 @@ async def search_concepts(body: ConceptSearchRequest, subject: SubjectParam):
         ]
 
     except Exception as e:
-        logger.error(f"Concept search error: {e}", exc_info=True)
+        logger.exception("Concept search error: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -473,5 +484,5 @@ async def get_graph_schema():
         return {"schema": schema}
 
     except Exception as e:
-        logger.error(f"Error getting graph schema: {e}", exc_info=True)
+        logger.exception("Error getting graph schema: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e

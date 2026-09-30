@@ -114,10 +114,10 @@ async def get_learning_path(
         )
 
     except Neo4jConnectionError as e:
-        logger.error(f"Neo4j connection failed: {e}")
+        logger.exception("Neo4j connection failed: {}", e)
         raise HTTPException(status_code=503, detail="Database connection failed") from e
     except Exception as e:
-        logger.error(f"Error getting learning path: {e}", exc_info=True)
+        logger.exception("Error getting learning path: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -180,7 +180,7 @@ async def get_prerequisites(
         )
 
     except Exception as e:
-        logger.error(f"Error getting prerequisites: {e}", exc_info=True)
+        logger.exception("Error getting prerequisites: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -239,5 +239,5 @@ async def get_dependents(
         }
 
     except Exception as e:
-        logger.error(f"Error getting dependents: {e}", exc_info=True)
+        logger.exception("Error getting dependents: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e

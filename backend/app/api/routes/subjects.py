@@ -44,7 +44,7 @@ def _subject_has_concepts(subject_id: str) -> bool:
         return int(stats.get("Concept_count", 0)) > 0
     except Exception as e:
         logger.warning(
-            f"Could not check graph data for subject '{subject_id}': {safe_error_message(e)}"
+            "Could not check graph data for subject '{}': {}", subject_id, safe_error_message(e)
         )
         return False
 
@@ -156,7 +156,7 @@ async def list_subjects():
             default_subject=default_id,
         )
     except Exception as e:
-        logger.error(f"Error listing subjects: {e}", exc_info=True)
+        logger.exception("Error listing subjects: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -170,7 +170,7 @@ async def list_subject_ids():
     try:
         return get_subject_ids()
     except Exception as e:
-        logger.error(f"Error listing subject IDs: {e}", exc_info=True)
+        logger.exception("Error listing subject IDs: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -205,7 +205,7 @@ async def get_subject_detail(subject_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting subject {subject_id}: {e}", exc_info=True)
+        logger.exception("Error getting subject {}: {}", subject_id, e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -239,7 +239,7 @@ async def get_subject_theme(subject_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting theme for {subject_id}: {e}", exc_info=True)
+        logger.exception("Error getting theme for {}: {}", subject_id, e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -279,5 +279,5 @@ async def get_subject_books(subject_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting books for {subject_id}: {e}", exc_info=True)
+        logger.exception("Error getting books for {}: {}", subject_id, e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e

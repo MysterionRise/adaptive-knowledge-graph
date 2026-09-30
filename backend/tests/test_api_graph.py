@@ -17,7 +17,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.app.core.exceptions import Neo4jConnectionError, Neo4jQueryError
+from backend.app.core.exceptions import (
+    LLMConnectionError,
+    LLMGenerationError,
+    Neo4jConnectionError,
+    Neo4jQueryError,
+)
+from backend.app.main import app
 
 
 def create_mock_adapter_with_session(mock_session):
@@ -689,6 +695,34 @@ class TestGraphQueryGuard:
             )
 
         assert response.status_code == 400
+
+    @pytest.mark.parametrize(
+        ("error", "detail"),
+        [
+            (LLMGenerationError("Cypher QA chain failed"), "LLM service temporarily unavailable"),
+            (LLMConnectionError("Ollama connection failed"), "LLM service temporarily unavailable"),
+            (Neo4jConnectionError("Neo4j is not available"), "Database connection failed"),
+        ],
+        ids=["llm-error", "llm-unreachable", "neo4j-unavailable"],
+    )
+    def test_upstream_failures_are_503(self, client, mock_cypher_qa_service, error, detail):
+        mock_cypher_qa_service.query.side_effect = error
+
+        with patch(
+            "backend.app.kg.cypher_qa.get_cypher_qa_service",
+            return_value=mock_cypher_qa_service,
+        ):
+            response = client.post(
+                "/api/v1/graph/query", json={"question": "Which concepts cover tariffs?"}
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == detail
+
+    def test_error_responses_are_declared_in_openapi(self):
+        responses = app.openapi()["paths"]["/api/v1/graph/query"]["post"]["responses"]
+
+        assert {"400", "401", "422", "429", "503"} <= set(responses)
 
     def test_malformed_service_result_is_500(self, client, mock_cypher_qa_service):
         mock_cypher_qa_service.query.return_value = {"question": "q", "result": {"not": "a list"}}

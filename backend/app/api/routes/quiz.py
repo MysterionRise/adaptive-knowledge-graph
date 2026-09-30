@@ -69,22 +69,22 @@ def _quiz_generation_errors(operation: str) -> Iterator[None]:
     except ContentNotFoundError:
         raise HTTPException(status_code=404, detail=TOPIC_NOT_FOUND) from None
     except (json.JSONDecodeError, QuizGenerationError) as e:
-        logger.error(f"{operation} failed, the LLM returned an invalid quiz: {e}")
+        logger.exception("{} failed, the LLM returned an invalid quiz: {}", operation, e)
         raise HTTPException(
             status_code=502, detail="Quiz generation returned an invalid response"
         ) from e
     except (LLMConnectionError, LLMGenerationError) as e:
-        logger.error(f"{operation} failed, the LLM service is unavailable: {e}")
+        logger.exception("{} failed, the LLM service is unavailable: {}", operation, e)
         raise HTTPException(
             status_code=503, detail="Quiz generation service temporarily unavailable"
         ) from e
     except ValueError as e:
         if str(e).startswith(_NO_CONTENT_MESSAGE_PREFIX):
             raise HTTPException(status_code=404, detail=TOPIC_NOT_FOUND) from None
-        logger.error(f"{operation} failed: {e}", exc_info=True)
+        logger.exception("{} failed: {}", operation, e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
     except Exception as e:
-        logger.error(f"{operation} failed: {e}", exc_info=True)
+        logger.exception("{} failed: {}", operation, e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -194,7 +194,7 @@ async def get_student_profile(student_id: StudentIdQuery = DEFAULT_STUDENT_ID):
         student_service = get_student_service()
         return student_service.get_profile_response(student_id)
     except Exception as e:
-        logger.error(f"Error getting student profile: {e}", exc_info=True)
+        logger.exception("Error getting student profile: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -231,7 +231,7 @@ async def update_student_mastery(
             student_id=student_id,
         )
     except Exception as e:
-        logger.error(f"Error updating mastery: {e}", exc_info=True)
+        logger.exception("Error updating mastery: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -257,7 +257,7 @@ async def get_target_difficulty(
         student_service = get_student_service()
         return student_service.get_target_difficulty(concept, student_id)
     except Exception as e:
-        logger.error(f"Error getting target difficulty: {e}", exc_info=True)
+        logger.exception("Error getting target difficulty: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -277,7 +277,7 @@ async def reset_student_profile(
         student_service = get_student_service()
         return student_service.reset_profile(student_id)
     except Exception as e:
-        logger.error(f"Error resetting student profile: {e}", exc_info=True)
+        logger.exception("Error resetting student profile: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -312,7 +312,7 @@ async def get_quiz_recommendations(request: Request, body: RecommendationRequest
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating recommendations: {e}", exc_info=True)
+        logger.exception("Error generating recommendations: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
@@ -326,5 +326,5 @@ async def get_all_target_difficulties(
         student_service = get_student_service()
         return student_service.get_all_target_difficulties(student_id)
     except Exception as e:
-        logger.error(f"Error getting all target difficulties: {e}", exc_info=True)
+        logger.exception("Error getting all target difficulties: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
