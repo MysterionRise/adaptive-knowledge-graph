@@ -13,7 +13,7 @@ from enum import Enum
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, FastAPI, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
@@ -33,7 +33,9 @@ from backend.app.core.exceptions import ConfigurationError, request_validation_e
 from backend.app.core.logging import setup_logging
 from backend.app.core.middleware import RequestIDMiddleware
 from backend.app.core.rate_limit import (
-    RateLimitMiddleware,
+    DefaultRateLimitExceeded,
+    default_rate_limit_exceeded_handler,
+    enforce_default_rate_limit,
     limiter,
     parse_rate_limit,
     rate_limit_exceeded_handler,
@@ -201,7 +203,7 @@ async def root(request: Request):
 
 
 @router.get("/health", tags=["Health"])
-@limiter.exempt  # probes must never be rate limited (see RateLimitMiddleware)
+@limiter.exempt  # probes must never be rate limited (see enforce_default_rate_limit)
 async def health():
     """Basic health check endpoint (always returns healthy if API is up)."""
     return {
@@ -445,6 +447,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         docs_url="/docs" if show_docs else None,
         redoc_url="/redoc" if show_docs else None,
         openapi_url="/openapi.json" if show_docs else None,
+        # Runs before every route's own dependencies (verify_api_key included), so
+        # requests that go on to fail authentication are still counted.
+        dependencies=[Depends(enforce_default_rate_limit)],
     )
     app.state.settings = app_settings
 
@@ -453,13 +458,12 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     # app_settings pick the default limit and the client key (see core/rate_limit.py).
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(DefaultRateLimitExceeded, default_rate_limit_exceeded_handler)
     app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 
-    # The middleware added last runs first: request ID -> CORS -> rate limit -> routing.
-    # CORS sits outside the limiter so that preflight requests are answered without being
-    # counted and 429 responses still carry CORS headers. The limiter runs before FastAPI
-    # resolves dependencies such as verify_api_key, so unauthenticated floods are counted.
-    app.add_middleware(RateLimitMiddleware)
+    # The middleware added last runs first: request ID -> CORS -> routing. CORS answers
+    # preflight requests before routing (so they are not rate limited), and 429 responses
+    # pass back through it, so they carry CORS headers.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_csv(app_settings.cors_origins),

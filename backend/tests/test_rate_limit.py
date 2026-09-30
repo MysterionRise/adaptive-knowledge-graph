@@ -12,7 +12,9 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
 from backend.app.core.rate_limit import (
-    RateLimitMiddleware,
+    DefaultRateLimitExceeded,
+    default_rate_limit_exceeded_handler,
+    enforce_default_rate_limit,
     get_rate_limit_key,
     limiter,
     parse_rate_limit,
@@ -83,13 +85,13 @@ def test_trust_proxy_headers_comes_from_the_app_settings(monkeypatch):
 def _limited_app(default_limit: str = "2/minute", **settings_overrides) -> tuple[FastAPI, Limiter]:
     """A small app wired like the real one, with its own limiter and a low default limit."""
     test_limiter = Limiter(key_func=get_rate_limit_key, key_style="endpoint")
-    app = FastAPI()
+    app = FastAPI(dependencies=[Depends(enforce_default_rate_limit)])
     app.state.limiter = test_limiter
     app.state.settings = Settings(
         _env_file=None, rate_limit_default=default_limit, **settings_overrides
     )
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
-    app.add_middleware(RateLimitMiddleware)
+    app.add_exception_handler(DefaultRateLimitExceeded, default_rate_limit_exceeded_handler)
 
     def require_api_key():
         raise HTTPException(status_code=401, detail="Missing API key")
@@ -115,7 +117,7 @@ def _limited_app(default_limit: str = "2/minute", **settings_overrides) -> tuple
     return app, test_limiter
 
 
-class TestRateLimitMiddleware:
+class TestDefaultRateLimit:
     def test_unauthenticated_requests_are_counted(self):
         client = TestClient(_limited_app()[0])
 
@@ -135,7 +137,7 @@ class TestRateLimitMiddleware:
         assert response.headers["Retry-After"] == "60"
 
     def test_default_limit_applies_to_decorated_routes_before_dependencies(self):
-        """slowapi's own middleware skips decorated routes; ours counts them too."""
+        """slowapi's own middleware skips decorated routes; the app-wide dependency does not."""
         client = TestClient(_limited_app()[0])
 
         codes = [client.get("/decorated").status_code for _ in range(3)]
