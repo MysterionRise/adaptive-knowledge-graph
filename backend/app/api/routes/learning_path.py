@@ -2,13 +2,28 @@
 Learning path and prerequisite chain endpoints.
 """
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Path, Query
 from loguru import logger
 from pydantic import BaseModel
 
+from backend.app.api.validators import ConceptStr, SubjectParam, error_responses
 from backend.app.core.exceptions import Neo4jConnectionError
 
 router = APIRouter(tags=["Learning Paths"])
+
+MAX_TRAVERSAL_DEPTH = 10
+
+ConceptPath = Annotated[ConceptStr, Path(description="Concept name")]
+DepthQuery = Annotated[
+    int,
+    Query(
+        ge=1,
+        le=MAX_TRAVERSAL_DEPTH,
+        description=f"Maximum depth to traverse (1-{MAX_TRAVERSAL_DEPTH})",
+    ),
+]
 
 
 class ConceptNode(BaseModel):
@@ -37,8 +52,16 @@ class PrerequisiteResponse(BaseModel):
     depth: int
 
 
-@router.get("/learning-path/{concept_name}", response_model=LearningPathResponse)
-async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str | None = None):
+@router.get(
+    "/learning-path/{concept_name}",
+    response_model=LearningPathResponse,
+    responses=error_responses(404, 503),
+)
+async def get_learning_path(
+    concept_name: ConceptPath,
+    subject: SubjectParam,
+    max_depth: DepthQuery = 3,
+):
     """
     Get the prerequisite chain for a concept.
 
@@ -46,8 +69,8 @@ async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str 
 
     Args:
         concept_name: Name of the target concept
-        max_depth: Maximum depth to traverse (default 3)
-        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+        max_depth: Maximum depth to traverse (1-10, default 3)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
     """
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
@@ -56,11 +79,11 @@ async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str 
         concept_label = adapter._get_label("Concept")
 
         with adapter._get_session() as session:
-            # Find prerequisites recursively using variable-length path
+            # Variable-length paths bounded by the validated depth (Cypher cannot
+            # parameterize the bound, so the integer is interpolated)
             result = session.run(
                 f"""
-                MATCH path = (prereq:{concept_label})-[:PREREQ*1..]->(target:{concept_label} {{name: $name}})
-                WHERE length(path) <= $max_depth
+                MATCH path = (prereq:{concept_label})-[:PREREQ*1..{max_depth:d}]->(target:{concept_label} {{name: $name}})
                 WITH prereq, length(path) as depth
                 RETURN DISTINCT
                     elementId(prereq) as id,
@@ -71,7 +94,6 @@ async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str 
                 ORDER BY depth DESC, importance DESC
                 """,
                 name=concept_name,
-                max_depth=max_depth,
             )
 
             prerequisites = [
@@ -92,22 +114,30 @@ async def get_learning_path(concept_name: str, max_depth: int = 3, subject: str 
         )
 
     except Neo4jConnectionError as e:
-        logger.error(f"Neo4j connection failed: {e}")
+        logger.exception("Neo4j connection failed: {}", e)
         raise HTTPException(status_code=503, detail="Database connection failed") from e
     except Exception as e:
-        logger.error(f"Error getting learning path: {e}", exc_info=True)
+        logger.exception("Error getting learning path: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
-@router.get("/concepts/{concept_name}/prerequisites", response_model=PrerequisiteResponse)
-async def get_prerequisites(concept_name: str, depth: int = 2, subject: str | None = None):
+@router.get(
+    "/concepts/{concept_name}/prerequisites",
+    response_model=PrerequisiteResponse,
+    responses=error_responses(404),
+)
+async def get_prerequisites(
+    concept_name: ConceptPath,
+    subject: SubjectParam,
+    depth: DepthQuery = 2,
+):
     """
     Get prerequisites for a concept up to N levels deep.
 
     Args:
         concept_name: Name of the concept
-        depth: Maximum depth to traverse (default 2)
-        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+        depth: Maximum depth to traverse (1-10, default 2)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
     """
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
@@ -120,8 +150,7 @@ async def get_prerequisites(concept_name: str, depth: int = 2, subject: str | No
             result = session.run(
                 f"""
                 MATCH (target:{concept_label} {{name: $name}})
-                OPTIONAL MATCH path = (prereq:{concept_label})-[:PREREQ*1..]->(target)
-                WHERE length(path) <= $depth
+                OPTIONAL MATCH path = (prereq:{concept_label})-[:PREREQ*1..{depth:d}]->(target)
                 WITH prereq, length(path) as level
                 WHERE prereq IS NOT NULL
                 RETURN DISTINCT
@@ -132,7 +161,6 @@ async def get_prerequisites(concept_name: str, depth: int = 2, subject: str | No
                 ORDER BY level ASC, importance DESC
                 """,
                 name=concept_name,
-                depth=depth,
             )
 
             prerequisites = [
@@ -152,19 +180,23 @@ async def get_prerequisites(concept_name: str, depth: int = 2, subject: str | No
         )
 
     except Exception as e:
-        logger.error(f"Error getting prerequisites: {e}", exc_info=True)
+        logger.exception("Error getting prerequisites: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
 
 
-@router.get("/concepts/{concept_name}/dependents")
-async def get_dependents(concept_name: str, depth: int = 2, subject: str | None = None):
+@router.get("/concepts/{concept_name}/dependents", responses=error_responses(404))
+async def get_dependents(
+    concept_name: ConceptPath,
+    subject: SubjectParam,
+    depth: DepthQuery = 2,
+):
     """
     Get concepts that depend on this concept (reverse prerequisites).
 
     Args:
         concept_name: Name of the concept
-        depth: Maximum depth to traverse (default 2)
-        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to us_history.
+        depth: Maximum depth to traverse (1-10, default 2)
+        subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
     """
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
@@ -177,8 +209,7 @@ async def get_dependents(concept_name: str, depth: int = 2, subject: str | None 
             result = session.run(
                 f"""
                 MATCH (source:{concept_label} {{name: $name}})
-                OPTIONAL MATCH path = (source)-[:PREREQ*1..]->(dependent:{concept_label})
-                WHERE length(path) <= $depth
+                OPTIONAL MATCH path = (source)-[:PREREQ*1..{depth:d}]->(dependent:{concept_label})
                 WITH dependent, length(path) as level
                 WHERE dependent IS NOT NULL
                 RETURN DISTINCT
@@ -189,7 +220,6 @@ async def get_dependents(concept_name: str, depth: int = 2, subject: str | None 
                 ORDER BY level ASC, importance DESC
                 """,
                 name=concept_name,
-                depth=depth,
             )
 
             dependents = [
@@ -209,5 +239,5 @@ async def get_dependents(concept_name: str, depth: int = 2, subject: str | None 
         }
 
     except Exception as e:
-        logger.error(f"Error getting dependents: {e}", exc_info=True)
+        logger.exception("Error getting dependents: {}", e)
         raise HTTPException(status_code=500, detail="An internal error occurred") from e
