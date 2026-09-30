@@ -45,10 +45,13 @@ docs/
 logs/
 *.log
 
-# Environment
+# Environment (at any depth: an untracked frontend/.env*.local would otherwise be copied by
+# frontend.Dockerfile and its NEXT_PUBLIC_* values baked into the image)
 .env
 .env.local
 .env.*.local
+**/.env*
+!**/.env.example
 
 # Data (will be mounted as volumes)
 data/raw/*
