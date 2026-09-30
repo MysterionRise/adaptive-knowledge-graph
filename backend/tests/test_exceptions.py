@@ -90,6 +90,10 @@ def test_safe_error_message_redacts(message, leaks):
         ("OPENSEARCH_PASSWORD = s3cret", "OPENSEARCH_PASSWORD = [REDACTED]"),
         ("client_secret=abc123", "client_secret=[REDACTED]"),
         ("csrftoken: t0k", "csrftoken: [REDACTED]"),
+        # Concatenated names too, e.g. PostgreSQL's standard variable: an anchor such as
+        # (?<![A-Za-z0-9]) would leak these
+        ("PGPASSWORD=secret", "PGPASSWORD=[REDACTED]"),
+        ("dbpassword: secret", "dbpassword: [REDACTED]"),
         # Secrets containing separator characters are redacted up to the next whitespace
         ("password=p;ss,w)rd", "password=[REDACTED]"),
         ("password: s3cret,more", "password: [REDACTED]"),

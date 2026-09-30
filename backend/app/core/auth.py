@@ -70,7 +70,8 @@ def verify_api_key(
             production when no key is configured
     """
     app_settings = get_request_settings(request)
-    expected = app_settings.api_key
+    # A whitespace-only key counts as no key (create_app() refuses to start with one).
+    expected = app_settings.api_key.strip()
 
     if not expected and app_settings.app_env == "development":
         logger.debug("No API key configured (development mode), allowing request")
@@ -112,7 +113,7 @@ def get_optional_api_key(
         return None
 
     app_settings = get_request_settings(request)
-    expected = app_settings.api_key
+    expected = app_settings.api_key.strip()
     if not expected and app_settings.app_env == "development":
         return api_key
 

@@ -5,7 +5,7 @@ Covers the Cypher validator, READ-transaction execution and the real GraphCypher
 wiring, using a fake LLM and a mocked Neo4j driver: no services are needed.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import neo4j
 import pytest
@@ -16,7 +16,9 @@ from backend.app.kg.cypher_qa import (
     MAX_CYPHER_CHARS,
     CypherQAService,
     CypherValidationError,
+    GeneratedCypherError,
     ReadOnlyNeo4jGraph,
+    normalize_generated_cypher,
     validate_cypher_read_only,
 )
 
@@ -181,6 +183,49 @@ class TestValidateCypherReadOnly:
         assert issubclass(CypherValidationError, ValueError)
 
 
+QUERY = "MATCH (c:Concept) RETURN c.name LIMIT 5"
+
+
+class TestNormalizeGeneratedCypher:
+    """LLMs wrap Cypher in Markdown; langchain's extract_cypher keeps the language tag."""
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            f"```cypher\n{QUERY}\n```",
+            f"```Cypher\n{QUERY}\n```",
+            f"```CYPHER \r\n{QUERY}\r\n```",
+            f"```\n{QUERY}\n```",
+            f"cypher\n{QUERY}\n",  # what extract_cypher returns for a tagged block
+            f"Cypher\n{QUERY}",
+            f"\n{QUERY}\n",  # what extract_cypher returns for an untagged block
+            QUERY,
+            f"  {QUERY}  ",
+        ],
+    )
+    def test_strips_fences_and_a_bare_language_tag(self, raw):
+        assert normalize_generated_cypher(raw) == QUERY
+        validate_cypher_read_only(normalize_generated_cypher(raw))
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            f"CYPHER runtime=parallel {QUERY}",
+            f"cypher 5\n{QUERY}",
+            f"```cypher\nCYPHER runtime=slotted {QUERY}\n```",
+            f"cypher\ncypher\n{QUERY}",
+        ],
+    )
+    def test_pre_parser_options_are_not_stripped_and_are_rejected(self, raw):
+        """Only a bare tag line is removed; CYPHER <options> still reaches the validator."""
+        with pytest.raises(CypherValidationError, match="read clause"):
+            validate_cypher_read_only(normalize_generated_cypher(raw))
+
+    def test_other_fence_languages_are_not_stripped(self):
+        with pytest.raises(CypherValidationError):
+            validate_cypher_read_only(normalize_generated_cypher(f"```sql\n{QUERY}\n```"))
+
+
 @pytest.fixture
 def graph_and_driver(make_neo4j_driver):
     """A ReadOnlyNeo4jGraph on a mocked driver returning one record."""
@@ -289,6 +334,21 @@ class TestCypherQAService:
 
     @pytest.mark.parametrize(
         "generated",
+        [f"```cypher\n{QUERY}\n```", f"```Cypher\n{QUERY}\n```", f"```\n{QUERY}\n```", QUERY],
+        ids=["cypher-fence", "Cypher-fence", "untagged-fence", "raw"],
+    )
+    def test_fenced_llm_output_runs_normalized(self, make_cypher_qa_service, generated):
+        """A fenced answer from the real chain executes (it used to be rejected with a 400)."""
+        service, driver = make_cypher_qa_service(generated, "Five concepts.", records=[{"n": 1}])
+
+        result = service.query("Which concepts exist?")
+
+        driver.mock_tx.run.assert_called_once_with(QUERY, {})
+        assert result["cypher"] == QUERY
+        assert result["answer"] == "Five concepts."
+
+    @pytest.mark.parametrize(
+        "generated",
         [
             "MATCH (n) DETACH DELETE n",
             'CALL apoc.periodic.iterate("MATCH (n) RETURN n", "DETACH DELETE n", {})',
@@ -304,11 +364,68 @@ class TestCypherQAService:
 
         driver.session.assert_not_called()
 
-    def test_neo4j_errors_propagate(self, make_cypher_qa_service):
+    @pytest.mark.parametrize(
+        "error",
+        [
+            neo4j.exceptions.ServiceUnavailable("down"),
+            neo4j.exceptions.SessionExpired("gone"),
+            neo4j.exceptions.AuthError("rotated"),
+        ],
+        ids=["service-unavailable", "session-expired", "auth-error"],
+    )
+    def test_neo4j_availability_errors_become_neo4j_connection_error(
+        self, make_cypher_qa_service, error
+    ):
         service, driver = make_cypher_qa_service("MATCH (c:Concept) RETURN c")
-        driver.mock_session.execute_read.side_effect = neo4j.exceptions.ServiceUnavailable("down")
+        driver.mock_session.execute_read.side_effect = error
 
-        with pytest.raises(neo4j.exceptions.ServiceUnavailable):
+        with pytest.raises(Neo4jConnectionError):
+            service.query("Which concepts exist?")
+
+    def test_invalid_generated_cypher_is_a_generated_cypher_error(
+        self, make_cypher_qa_service, captured_logs
+    ):
+        """Neo4j rejecting the model's Cypher is invalid LLM output (502), not a 500."""
+        service, driver = make_cypher_qa_service("MATCH (c:Concept RETURN c")
+        syntax_error = neo4j.exceptions.CypherSyntaxError._hydrate_neo4j(
+            code="Neo.ClientError.Statement.SyntaxError", message="Invalid input 'RETURN'"
+        )
+        driver.mock_session.execute_read.side_effect = syntax_error
+
+        with pytest.raises(GeneratedCypherError) as excinfo:
+            service.query("Which concepts exist?")
+
+        assert isinstance(excinfo.value, LLMGenerationError)
+        assert not isinstance(excinfo.value, ValueError)
+        record = next(m.record for m in captured_logs if "invalid query" in m)
+        assert record["level"].name == "WARNING"
+        assert record["exception"] is None
+
+    def test_write_refused_by_neo4j_is_a_validation_error(self, make_cypher_qa_service):
+        """A write that reached Neo4j fails the READ transaction; that is still a 400."""
+        service, driver = make_cypher_qa_service("MATCH (c:Concept) RETURN c")
+        access_mode = neo4j.exceptions.ClientError._hydrate_neo4j(
+            code="Neo.ClientError.Statement.AccessMode",
+            message="Writing in read access mode not allowed.",
+        )
+        driver.mock_session.execute_read.side_effect = access_mode
+
+        with pytest.raises(CypherValidationError):
+            service.query("Which concepts exist?")
+
+    def test_value_error_while_building_the_chain_is_not_a_validation_error(self):
+        """E.g. remote LLM mode without OPENROUTER_API_KEY: a 5xx, never a 400."""
+        service = CypherQAService()
+        service._graph = MagicMock()
+        with (
+            patch.object(
+                CypherQAService,
+                "chain",
+                new_callable=PropertyMock,
+                side_effect=ValueError("no key"),
+            ),
+            pytest.raises(LLMGenerationError),
+        ):
             service.query("Which concepts exist?")
 
     def test_other_value_errors_are_not_reported_as_validation_errors(self):
@@ -337,16 +454,13 @@ class TestCypherQAService:
 
         assert not issubclass(Neo4jConnectionError, ValueError)
 
-    def test_execute_cypher_validates_before_connecting(self):
-        service = CypherQAService()
+    def test_execute_cypher_validates_before_running_anything(self, make_cypher_qa_service):
+        service, driver = make_cypher_qa_service()
 
-        with (
-            patch("neo4j.GraphDatabase.driver") as driver_factory,
-            pytest.raises(CypherValidationError),
-        ):
+        with pytest.raises(CypherValidationError):
             service.execute_cypher("MATCH (n) DETACH DELETE n")
 
-        driver_factory.assert_not_called()
+        driver.session.assert_not_called()
 
     def test_close_closes_the_driver(self, make_cypher_qa_service):
         service, driver = make_cypher_qa_service()

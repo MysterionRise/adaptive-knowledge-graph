@@ -328,6 +328,7 @@ class TestInjectionAttacks:
             "Cypher injection in concept name causes Cypher syntax errors, "
             "suggesting improper parameterization"
         )
+        assert session.run.called, "The learning-path query never ran, so nothing was checked"
         for call in session.run.call_args_list:
             assert "DETACH DELETE" not in call.args[0], (
                 "Concept name was interpolated into the Cypher text instead of a parameter"

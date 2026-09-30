@@ -5,7 +5,7 @@ Application settings and configuration.
 from importlib.metadata import PackageNotFoundError, version
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,10 +33,16 @@ class Settings(BaseSettings):
     # "production" refuses to start without API_KEY and hides the API docs by default;
     # "development" allows the keyless local quickstart (with a startup warning).
     app_env: Literal["development", "production"] = "development"
-    # /docs, /redoc and /openapi.json. Unset: on in development, off in production.
+    # /docs, /redoc and /openapi.json. Unset or empty: on in development, off in production.
     api_docs_enabled: bool | None = None
     debug: bool = False
     log_level: str = "INFO"
+
+    @field_validator("api_docs_enabled", mode="before")
+    @classmethod
+    def _empty_docs_flag_means_unset(cls, value: object) -> object:
+        """``API_DOCS_ENABLED=`` (empty, as in a copied .env) falls back to the APP_ENV default."""
+        return None if isinstance(value, str) and not value.strip() else value
 
     # API
     api_host: str = "127.0.0.1"
@@ -46,6 +52,8 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     rate_limit_enabled: bool = True
+    # Every endpoint except health checks, per client and endpoint, counted before auth
+    rate_limit_default: str = "100/minute"
     rate_limit_ask: str = "10/minute"  # 10 requests per minute for /ask
     rate_limit_quiz: str = "5/minute"  # 5 requests per minute for /quiz
     rate_limit_graph: str = "30/minute"  # 30 requests per minute for /graph/*

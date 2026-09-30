@@ -57,12 +57,18 @@ class TestVerifyApiKey:
         assert right.status_code == 200
         assert right.json() == {"api_key": "s3cret"}
 
-    def test_production_without_key_fails_closed(self):
+    @pytest.mark.parametrize("api_key", ["", "   ", "\t"])
+    def test_production_without_key_fails_closed(self, api_key):
         """create_app() refuses this configuration; the dependency rejects it anyway."""
-        client = _client(app_env="production", api_key="")
+        client = _client(app_env="production", api_key=api_key)
 
         assert client.get("/protected").status_code == 401
         assert client.get("/protected", headers={"X-API-Key": "anything"}).status_code == 401
+
+    def test_whitespace_only_key_in_development_means_keyless(self):
+        response = _client(app_env="development", api_key="   ").get("/protected")
+
+        assert response.json() == {"api_key": "development"}
 
     @pytest.mark.parametrize("app_env", ["development", "production"])
     def test_non_ascii_key_is_rejected_not_a_server_error(self, app_env):

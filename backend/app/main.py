@@ -29,17 +29,19 @@ from backend.app.api import (
     subjects_router,
 )
 from backend.app.core.auth import get_request_settings
-from backend.app.core.exceptions import (
-    ConfigurationError,
-    request_validation_exception_handler,
-    safe_error_message,
-)
+from backend.app.core.exceptions import ConfigurationError, request_validation_exception_handler
 from backend.app.core.logging import setup_logging
 from backend.app.core.middleware import RequestIDMiddleware
-from backend.app.core.rate_limit import RateLimitMiddleware, limiter, rate_limit_exceeded_handler
+from backend.app.core.rate_limit import (
+    RateLimitMiddleware,
+    limiter,
+    parse_rate_limit,
+    rate_limit_exceeded_handler,
+)
 from backend.app.core.settings import Settings, settings
 
 PROJECT_URL = "https://github.com/MysterionRise/adaptive-knowledge-graph"
+MIN_PRODUCTION_API_KEY_LENGTH = 16
 
 _KEYLESS_WARNING = "\n".join(
     [
@@ -65,30 +67,45 @@ def docs_enabled(app_settings: Settings) -> bool:
     return app_settings.app_env == "development"
 
 
-def validate_security_settings(app_settings: Settings) -> None:
-    """Refuse to build a production app from an insecure configuration.
+def validate_settings(app_settings: Settings) -> None:
+    """Refuse to build an app from a broken or, in production, insecure configuration.
 
     Raises:
-        ConfigurationError: ``APP_ENV=production`` without ``API_KEY``, or with a ``*``
-            wildcard in the CORS origins, methods or headers.
+        ConfigurationError: an ``API_KEY`` no client could ever send (not printable
+            ASCII, or with surrounding whitespace), an invalid ``RATE_LIMIT_DEFAULT``, or
+            ``APP_ENV=production`` without ``API_KEY`` or with a ``*`` in the CORS lists.
     """
-    if app_settings.app_env != "production":
-        return
-
     problems = []
-    if not app_settings.api_key:
-        problems.append("API_KEY must be set")
-    for name, value in (
-        ("CORS_ORIGINS", app_settings.cors_origins),
-        ("CORS_ALLOW_METHODS", app_settings.cors_allow_methods),
-        ("CORS_ALLOW_HEADERS", app_settings.cors_allow_headers),
-    ):
-        if "*" in _csv(value):
-            problems.append(f"{name} must list explicit values, not '*'")
+    api_key = app_settings.api_key
+    # Header values arrive as latin-1 with surrounding whitespace stripped, so such a key
+    # could never match; fail at startup instead of rejecting every request.
+    if api_key and not (api_key.isascii() and api_key.isprintable() and api_key == api_key.strip()):
+        problems.append("API_KEY must be printable ASCII without leading or trailing whitespace")
+    try:
+        parse_rate_limit(app_settings.rate_limit_default)
+    except ValueError:
+        problems.append(
+            f"RATE_LIMIT_DEFAULT is not a valid rate limit: {app_settings.rate_limit_default!r}"
+        )
+
+    if app_settings.app_env == "production":
+        if not api_key.strip():
+            problems.append("API_KEY must be set")
+        elif len(api_key) < MIN_PRODUCTION_API_KEY_LENGTH:
+            problems.append(
+                f"API_KEY must be at least {MIN_PRODUCTION_API_KEY_LENGTH} characters long"
+            )
+        for name, value in (
+            ("CORS_ORIGINS", app_settings.cors_origins),
+            ("CORS_ALLOW_METHODS", app_settings.cors_allow_methods),
+            ("CORS_ALLOW_HEADERS", app_settings.cors_allow_headers),
+        ):
+            if "*" in _csv(value):
+                problems.append(f"{name} must list explicit values, not '*'")
 
     if problems:
         raise ConfigurationError(
-            "Refusing to start with APP_ENV=production: " + "; ".join(problems) + "."
+            f"Refusing to start with APP_ENV={app_settings.app_env}: " + "; ".join(problems) + "."
         )
 
 
@@ -184,6 +201,7 @@ async def root(request: Request):
 
 
 @router.get("/health", tags=["Health"])
+@limiter.exempt  # probes must never be rate limited (see RateLimitMiddleware)
 async def health():
     """Basic health check endpoint (always returns healthy if API is up)."""
     return {
@@ -236,11 +254,12 @@ async def check_neo4j_health() -> ServiceHealth:
         return ServiceHealth(status=ServiceStatus.OK, latency_ms=round(latency, 2))
 
     except Exception as e:
-        # Full detail (with the request id) goes to the logs; the unauthenticated
-        # response only gets the redacted message. The error text is a loguru argument,
-        # so braces in it (JSON error bodies) are never parsed as format fields.
+        # Full detail (with the request id) goes to the logs only: the unauthenticated
+        # response gets a fixed message, since no redaction catches every host name
+        # (Docker service names such as "neo4j-core-0"). The error text is a loguru
+        # argument, so braces in it (JSON error bodies) are never parsed as format fields.
         logger.warning("Neo4j health check failed: {}", e)
-        return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
+        return ServiceHealth(status=ServiceStatus.ERROR, message="Neo4j unavailable")
 
 
 async def check_opensearch_health() -> ServiceHealth:
@@ -290,7 +309,7 @@ async def check_opensearch_health() -> ServiceHealth:
 
     except Exception as e:
         logger.warning("OpenSearch health check failed: {}", e)
-        return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
+        return ServiceHealth(status=ServiceStatus.ERROR, message="OpenSearch unavailable")
 
 
 async def check_ollama_health() -> ServiceHealth:
@@ -329,10 +348,11 @@ async def check_ollama_health() -> ServiceHealth:
 
     except Exception as e:
         logger.warning("Ollama health check failed: {}", e)
-        return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
+        return ServiceHealth(status=ServiceStatus.ERROR, message="Ollama unavailable")
 
 
 @router.get("/health/ready", response_model=ReadinessResponse, tags=["Health"])
+@limiter.exempt
 async def health_ready(response: Response):
     """
     Readiness check endpoint with service dependency verification.
@@ -386,6 +406,7 @@ async def health_ready(response: Response):
 
 
 @router.get("/health/live", tags=["Health"])
+@limiter.exempt
 async def health_live():
     """
     Liveness check endpoint.
@@ -406,10 +427,11 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
             limit key, CORS and the API docs.
 
     Raises:
-        ConfigurationError: ``APP_ENV=production`` without ``API_KEY`` or with wildcard CORS.
+        ConfigurationError: the settings fail ``validate_settings`` (e.g.
+            ``APP_ENV=production`` without a usable ``API_KEY`` or with wildcard CORS).
     """
     app_settings = app_settings or settings
-    validate_security_settings(app_settings)
+    validate_settings(app_settings)
     show_docs = docs_enabled(app_settings)
 
     app = FastAPI(
@@ -426,7 +448,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = app_settings
 
-    # Rate limiter state and error handlers
+    # Rate limiter state and error handlers. The limiter is process-wide: RATE_LIMIT_ENABLED
+    # and the @limiter.limit decorators are bound from the process settings at import;
+    # app_settings pick the default limit and the client key (see core/rate_limit.py).
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, request_validation_exception_handler)

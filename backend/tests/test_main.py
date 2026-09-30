@@ -241,6 +241,9 @@ async def test_opensearch_health_respects_verify_certs(monkeypatch):
     assert captured_kwargs["verify"] is True
 
 
+PROD_KEY = "production-test-key-0001"
+
+
 def _settings(**overrides) -> Settings:
     return Settings(_env_file=None, **overrides)
 
@@ -249,14 +252,40 @@ def _settings(**overrides) -> Settings:
 class TestAppEnvironment:
     """APP_ENV=development|production behaviour of create_app()."""
 
-    def test_production_refuses_to_start_without_api_key(self):
-        with pytest.raises(ConfigurationError, match="API_KEY must be set"):
-            create_app(_settings(app_env="production", api_key=""))
+    @pytest.mark.parametrize("api_key", ["", "   ", "\t"])
+    def test_production_refuses_to_start_without_api_key(self, api_key):
+        with pytest.raises(ConfigurationError, match="API_KEY must"):
+            create_app(_settings(app_env="production", api_key=api_key))
+
+    def test_production_refuses_a_short_api_key(self):
+        with pytest.raises(ConfigurationError, match="at least 16 characters"):
+            create_app(_settings(app_env="production", api_key="short-key"))
+
+    @pytest.mark.parametrize("app_env", ["development", "production"])
+    @pytest.mark.parametrize(
+        "api_key", ["clé-production-key-0001", " padded-production-key ", "tab\tinside-the-key-01"]
+    )
+    def test_refuses_an_api_key_no_client_can_send(self, app_env, api_key):
+        """Headers arrive latin-1 decoded and stripped: such a key could never match."""
+        with pytest.raises(ConfigurationError, match="printable ASCII"):
+            create_app(_settings(app_env=app_env, api_key=api_key))
+
+    def test_refuses_an_invalid_default_rate_limit(self):
+        with pytest.raises(ConfigurationError, match="RATE_LIMIT_DEFAULT"):
+            create_app(_settings(rate_limit_default="lots per minute"))
+
+    @pytest.mark.parametrize("value", ["", "  "])
+    def test_empty_api_docs_enabled_means_unset(self, monkeypatch, value):
+        """A copied .env line such as ``API_DOCS_ENABLED=`` must not break startup."""
+        monkeypatch.setenv("API_DOCS_ENABLED", value)
+
+        assert Settings(_env_file=None).api_docs_enabled is None
+        assert _settings(api_docs_enabled=value).api_docs_enabled is None
 
     @pytest.mark.parametrize("field", ["cors_origins", "cors_allow_methods", "cors_allow_headers"])
     def test_production_refuses_wildcard_cors(self, field):
         with pytest.raises(ConfigurationError, match=field.upper()):
-            create_app(_settings(app_env="production", api_key="k", **{field: "*"}))
+            create_app(_settings(app_env="production", api_key=PROD_KEY, **{field: "*"}))
 
     def test_development_allows_keyless_startup(self):
         assert create_app(_settings(app_env="development", api_key="")).state.settings.api_key == ""
@@ -268,7 +297,7 @@ class TestAppEnvironment:
     @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
     def test_production_docs_can_be_enabled(self, path):
         client = TestClient(
-            create_app(_settings(app_env="production", api_key="k", api_docs_enabled=True))
+            create_app(_settings(app_env="production", api_key=PROD_KEY, api_docs_enabled=True))
         )
 
         assert client.get(path).status_code == 200
@@ -306,7 +335,7 @@ class TestAppEnvironment:
         with (
             patch("backend.app.main.setup_logging"),
             patch("backend.app.main.logger") as mock_logger,
-            TestClient(create_app(_settings(app_env="production", api_key="k"))),
+            TestClient(create_app(_settings(app_env="production", api_key=PROD_KEY))),
         ):
             pass
 
@@ -372,10 +401,13 @@ class TestCORS:
 
 
 @pytest.mark.unit
-def test_health_ready_error_messages_are_redacted(client):
-    """Unauthenticated readiness output never includes URIs, credentials, hosts or IPs."""
+def test_health_ready_error_messages_are_generic(client, captured_logs):
+    """Unauthenticated readiness output is a fixed message; the detail only goes to logs.
+
+    Redaction cannot recognise every host name (Docker service names like "neo4j-core-0").
+    """
     failure = RuntimeError(
-        "Couldn't connect to neo4j://neo4j:s3cret@db.internal.example:7687 (10.1.2.3:7687)"
+        "Couldn't connect to neo4j://neo4j:s3cret@db.internal.example:7687 via neo4j-core-0"
     )
     ok = ServiceHealth(status=ServiceStatus.OK)
 
@@ -387,9 +419,37 @@ def test_health_ready_error_messages_are_redacted(client):
         response = client.get("/health/ready")
 
     assert response.status_code == 503
-    message = response.json()["services"]["neo4j"]["message"]
-    for leak in ("neo4j://", "s3cret", "db.internal", "7687", "10.1.2.3"):
-        assert leak not in message
+    assert response.json()["services"]["neo4j"]["message"] == "Neo4j unavailable"
+    assert "neo4j-core-0" not in response.text and "s3cret" not in response.text
+    assert any("neo4j-core-0" in message for message in captured_logs)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_opensearch_and_ollama_errors_are_generic(monkeypatch):
+    from backend.app import main
+
+    class FailingClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            raise RuntimeError("Cannot connect to host internal-ollama:11434 opensearch-0")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", FailingClient)
+    monkeypatch.setattr(main.settings, "llm_mode", "local")
+
+    opensearch = await main.check_opensearch_health()
+    ollama = await main.check_ollama_health()
+
+    assert (opensearch.status, opensearch.message) == (
+        ServiceStatus.ERROR,
+        "OpenSearch unavailable",
+    )
+    assert (ollama.status, ollama.message) == (ServiceStatus.ERROR, "Ollama unavailable")
 
 
 @pytest.mark.unit
@@ -431,7 +491,7 @@ async def test_health_check_error_with_braces_is_logged_not_raised(captured_logs
         health = await main.check_neo4j_health()
 
     assert health.status == ServiceStatus.ERROR
-    assert health.message == 'Neo4j said {"code": "x"}'
+    assert health.message == "Neo4j unavailable"
     assert any('{"code": "x"}' in message for message in captured_logs)
 
 

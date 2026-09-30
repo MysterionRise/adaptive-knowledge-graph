@@ -48,6 +48,34 @@ class CypherValidationError(ValueError):
     """
 
 
+class GeneratedCypherError(LLMGenerationError):
+    """Neo4j rejected the Cypher the model generated (syntax, types, unknown names).
+
+    Invalid LLM output: the API contract for that is HTTP 502.
+    """
+
+
+# LLM output often arrives as a Markdown block. langchain's extract_cypher() drops the
+# fences but keeps the language tag ("cypher\nMATCH ..."), so fences and a tag line that
+# is exactly "cypher" are stripped before validation and execution. Nothing else is:
+# "CYPHER 5 MATCH ..." or "CYPHER runtime=... MATCH ..." still reach the validator,
+# which rejects them.
+_OPENING_FENCE = re.compile(r"\A```[ \t]*(?:cypher)?[ \t]*(?:\r?\n|\Z)", re.IGNORECASE)
+_CLOSING_FENCE = re.compile(r"(?:\r?\n)?[ \t]*```\Z")
+_LANGUAGE_TAG_LINE = re.compile(r"\Acypher[ \t]*\r?\n", re.IGNORECASE)
+
+
+_ACCESS_MODE_ERROR = "Neo.ClientError.Statement.AccessMode"  # a write in a READ transaction
+
+
+def normalize_generated_cypher(cypher: str) -> str:
+    """Strip Markdown code fences and a bare ``cypher`` language-tag line from LLM output."""
+    text = cypher.strip()
+    text = _OPENING_FENCE.sub("", text, count=1)
+    text = _CLOSING_FENCE.sub("", text, count=1).strip()
+    return _LANGUAGE_TAG_LINE.sub("", text, count=1).strip()
+
+
 # Write, data-loading and batching clauses. Matched as whole words anywhere in the raw
 # statement, string literals and comments included: a false positive costs a 400, while
 # stripping literals before matching let
@@ -191,9 +219,14 @@ class ReadOnlyNeo4jGraph(Neo4jGraph):
             _schema_refresh_in_progress.reset(token)
 
     def query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        """Run ``query`` in a READ transaction (validated unless it is schema introspection)."""
+        """Run ``query`` in a READ transaction (validated unless it is schema introspection).
+
+        Untrusted statements are normalised first (Markdown fences, a bare ``cypher`` tag
+        line), and the normalised text is what gets both validated and executed.
+        """
         trusted = _schema_refresh_in_progress.get()
         if not trusted:
+            query = normalize_generated_cypher(query)
             try:
                 validate_cypher_read_only(query)
             except CypherValidationError as e:
@@ -411,30 +444,43 @@ class CypherQAService:
             - answer: Formatted answer
 
         Raises:
-            CypherValidationError: The generated Cypher is not a permitted read-only query
-                (a ValueError: the API answers 400).
-            Neo4jConnectionError: Neo4j is not available.
-            LLMGenerationError: The chain failed with any other ValueError (langchain
-                reports LLM backend errors, such as an Ollama HTTP error, that way).
+            CypherValidationError: The generated Cypher is not a permitted read-only query,
+                or Neo4j refused it as a write (a ValueError: the API answers 400).
+            GeneratedCypherError: Neo4j rejected the generated Cypher as invalid (syntax,
+                types, unknown names): invalid LLM output, answered with 502.
+            Neo4jConnectionError: Neo4j is not available or rejects our credentials.
+            LLMGenerationError: Building or running the chain failed with any other
+                ValueError (langchain reports LLM backend and configuration errors, such as
+                an Ollama HTTP error or a missing OpenRouter key, that way).
         """
         # Untrusted text (questions, Cypher, error messages with JSON or Cypher maps) is
         # passed as loguru arguments, never interpolated into the format string.
         logger.info("CypherQA query: {}", question)
 
-        chain = self.chain
         try:
-            response = chain.invoke({"query": question})
+            response = self.chain.invoke({"query": question})
         except CypherValidationError:
             raise
+        except neo4j.exceptions.AuthError as e:
+            raise Neo4jConnectionError("Neo4j rejected the configured credentials") from e
+        except neo4j.exceptions.ClientError as e:
+            if isinstance(e, neo4j.exceptions.Forbidden) or e.code == _ACCESS_MODE_ERROR:
+                # A write reached Neo4j and the READ transaction refused it.
+                logger.warning("Neo4j refused a generated write ({}): {}", e.code, e.message)
+                raise CypherValidationError("Write operations are not permitted") from e
+            logger.warning("The model generated an invalid query ({}): {}", e.code, e.message)
+            raise GeneratedCypherError("The model generated an invalid query") from e
+        except (neo4j.exceptions.ServiceUnavailable, neo4j.exceptions.SessionExpired) as e:
+            raise Neo4jConnectionError("Neo4j is not available for graph queries") from e
         except ValueError as e:
             logger.opt(exception=True).error("CypherQA chain failed: {}", e)
             raise LLMGenerationError("Cypher QA chain failed") from e
 
         cypher_query = next(
             (
-                step["query"]
+                normalize_generated_cypher(step["query"])
                 for step in response.get("intermediate_steps", [])
-                if isinstance(step, dict) and "query" in step
+                if isinstance(step, dict) and isinstance(step.get("query"), str)
             ),
             None,
         )
@@ -469,14 +515,9 @@ class CypherQAService:
                 question=question,
             )
 
-            # Generate via LLM
+            # Generate via LLM; strip Markdown fences and a bare language tag, as for execution
             response = self.llm.invoke(prompt_text)
-            cypher = str(response.content).strip()
-
-            # Clean up response (remove markdown code blocks if present)
-            if cypher.startswith("```"):
-                lines = cypher.split("\n")
-                cypher = "\n".join(line for line in lines if not line.startswith("```")).strip()
+            cypher = normalize_generated_cypher(str(response.content))
 
             logger.info("Generated Cypher (preview): {}", cypher)
             return cypher
@@ -497,8 +538,8 @@ class CypherQAService:
 
         Raises:
             CypherValidationError: If the query is not a permitted read-only query
+                (checked by ``ReadOnlyNeo4jGraph.query`` before anything is sent)
         """
-        validate_cypher_read_only(cypher)  # before connecting to Neo4j at all
         return self.graph.query(cypher)
 
     def get_schema(self) -> str:
@@ -530,8 +571,3 @@ def get_cypher_qa_service() -> CypherQAService:
         _cypher_qa_service = CypherQAService()
 
     return _cypher_qa_service
-
-
-def is_langchain_available() -> bool:
-    """LangChain is a required dependency, imported by this module; kept for callers."""
-    return True

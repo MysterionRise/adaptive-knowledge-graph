@@ -3,20 +3,28 @@ Rate limiting using slowapi.
 
 Two layers protect the API:
 
-- ``RateLimitMiddleware`` applies the limiter's default limit to every routed request
-  before FastAPI resolves dependencies, so requests that go on to fail authentication
-  are counted as well.
+- ``RateLimitMiddleware`` applies the default limit (``RATE_LIMIT_DEFAULT``, from the
+  app's settings) to every routed request before FastAPI resolves dependencies, so
+  requests that go on to fail authentication are counted as well. Endpoints marked
+  ``@limiter.exempt`` (the health checks) are skipped.
 - ``@limiter.limit(...)`` decorators add stricter per-endpoint limits. They run inside
   the endpoint wrapper, after dependencies.
 
 Clients are identified by IP address (see ``get_rate_limit_key``), and limits are
 counted per endpoint, so varying a path parameter does not open a fresh bucket.
+
+The limiter is process-wide: its on/off switch (``RATE_LIMIT_ENABLED``) and the
+per-route decorators are bound from the process settings when this module is imported.
+Per-app settings (``create_app(settings)``) choose the default limit and how clients are
+identified (``TRUST_PROXY_HEADERS``).
 """
 
 import ipaddress
 from collections.abc import Callable
+from functools import lru_cache
 from typing import Any
 
+from limits import RateLimitItem, parse_many
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -27,8 +35,6 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from backend.app.core.auth import get_request_settings
 from backend.app.core.settings import settings
-
-DEFAULT_RATE_LIMIT = "100/minute"
 
 
 def _normalize_ip(value: str) -> str | None:
@@ -81,20 +87,45 @@ def get_rate_limit_key(request: Request) -> str:
     return get_remote_address(request)
 
 
-# Create the limiter instance
+@lru_cache(maxsize=32)
+def parse_rate_limit(value: str) -> tuple[RateLimitItem, ...]:
+    """Parse a limit string such as ``"100/minute"`` or ``"100/minute;1000/hour"``.
+
+    Raises:
+        ValueError: if ``value`` is not a valid rate limit string.
+    """
+    items = tuple(parse_many(value))
+    if not items:
+        raise ValueError(f"Invalid rate limit: {value!r}")
+    return items
+
+
+# Create the limiter instance. The default limit is applied by RateLimitMiddleware, not
+# through slowapi's default_limits, so that it can follow the app's settings.
 limiter = Limiter(
     key_func=get_rate_limit_key,
     enabled=settings.rate_limit_enabled,
-    default_limits=[DEFAULT_RATE_LIMIT],
     key_style="endpoint",
 )
 
 
+def _too_many_requests(limit: RateLimitItem, description: str | None = None) -> JSONResponse:
+    """The 429 response for a request over ``limit``."""
+    window = str(limit)
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Rate limit exceeded",
+            "error": description or window,
+            "retry_after": window.split("per ")[1] if "per " in window else "1 minute",
+        },
+        headers={"Retry-After": str(limit.get_expiry())},
+    )
+
+
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """
-    Custom handler for rate limit exceeded errors.
-
-    Returns a JSON response with helpful error details.
+    Custom handler for rate limit exceeded errors raised by ``@limiter.limit`` decorators.
 
     Args:
         request: The incoming request
@@ -103,19 +134,16 @@ def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSO
     Returns:
         JSONResponse with 429 status, error details and a Retry-After header
     """
-    detail = str(exc.detail)
-    headers: dict[str, str] = {}
-    if exc.limit is not None:
-        headers["Retry-After"] = str(exc.limit.limit.get_expiry())
-    return JSONResponse(
-        status_code=429,
-        content={
-            "detail": "Rate limit exceeded",
-            "error": detail,
-            "retry_after": detail.split("per ")[1] if "per " in detail else "1 minute",
-        },
-        headers=headers,
-    )
+    if exc.limit is None:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Rate limit exceeded",
+                "error": str(exc.detail),
+                "retry_after": "1 minute",
+            },
+        )
+    return _too_many_requests(exc.limit.limit, str(exc.detail))
 
 
 def _route_endpoint(app: Any, scope: Scope) -> Callable[..., Any] | None:
@@ -128,14 +156,14 @@ def _route_endpoint(app: Any, scope: Scope) -> Callable[..., Any] | None:
 
 
 class RateLimitMiddleware:
-    """Apply the limiter's default limits to every routed HTTP request, before dependencies.
+    """Apply the default limit to every routed HTTP request, before dependencies run.
 
     slowapi's own ``SlowAPIMiddleware`` skips endpoints that carry a ``@limiter.limit``
     decorator and leaves them to the decorator, which only runs once FastAPI has resolved
     dependencies such as ``verify_api_key``: a flood of unauthenticated requests was never
-    counted. This middleware checks the default limits for those endpoints too; their
-    decorators still apply their own limits on top. Requests that match no route (404,
-    405) are not counted.
+    counted. This middleware counts those endpoints too; their decorators still apply their
+    own limits on top. Requests that match no route (404, 405) and endpoints marked
+    ``@limiter.exempt`` are not counted.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -143,20 +171,35 @@ class RateLimitMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http":
-            app = scope["app"]
-            app_limiter: Limiter = app.state.limiter
-            endpoint = _route_endpoint(app, scope) if app_limiter.enabled else None
-            if endpoint is not None:
-                request = Request(scope, receive)
-                try:
-                    # The same check SlowAPIMiddleware runs: with in_middleware=True only
-                    # the application and default limits are evaluated.
-                    app_limiter._check_request_limit(request, endpoint, True)
-                except RateLimitExceeded as exc:
-                    await rate_limit_exceeded_handler(request, exc)(scope, receive, send)
-                    return
+            response = _over_default_limit(scope, receive)
+            if response is not None:
+                await response(scope, receive, send)
+                return
 
         await self.app(scope, receive, send)
+
+
+def _over_default_limit(scope: Scope, receive: Receive) -> JSONResponse | None:
+    """Count the request against the default limit; a 429 response if it is over."""
+    app = scope["app"]
+    app_limiter: Limiter = app.state.limiter
+    if not app_limiter.enabled:
+        return None
+
+    endpoint = _route_endpoint(app, scope)
+    if endpoint is None:
+        return None
+    endpoint_name = f"{endpoint.__module__}.{endpoint.__name__}"
+    # The registry filled by @limiter.exempt, which slowapi's own middleware consults too.
+    if endpoint_name in app_limiter._exempt_routes:
+        return None
+
+    request = Request(scope, receive)
+    client = get_rate_limit_key(request)
+    for limit in parse_rate_limit(get_request_settings(request).rate_limit_default):
+        if not app_limiter.limiter.hit(limit, client, f"default:{endpoint_name}"):
+            return _too_many_requests(limit)
+    return None
 
 
 # Rate limit decorators for different endpoint types

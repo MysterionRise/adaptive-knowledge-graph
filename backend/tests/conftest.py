@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 from backend.app.core.settings import Settings
 from backend.app.main import app, create_app
 
-# API key configured on production-mode test apps.
-TEST_API_KEY = "test-api-key"
+# API key configured on production-mode test apps (production requires 16+ characters).
+TEST_API_KEY = "test-api-key-for-production"
 
 
 @pytest.fixture(autouse=True)

@@ -3,6 +3,7 @@ Tests for rate limiting: client identity and the pre-auth default-limit middlewa
 """
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -11,13 +12,14 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 
 from backend.app.core.rate_limit import (
-    DEFAULT_RATE_LIMIT,
     RateLimitMiddleware,
     get_rate_limit_key,
     limiter,
+    parse_rate_limit,
     rate_limit_exceeded_handler,
 )
 from backend.app.core.settings import Settings, settings
+from backend.app.main import ServiceHealth, ServiceStatus, create_app
 
 
 def _request_with_forwarded_for(*values: bytes, app: object | None = None) -> Request:
@@ -80,12 +82,12 @@ def test_trust_proxy_headers_comes_from_the_app_settings(monkeypatch):
 
 def _limited_app(default_limit: str = "2/minute", **settings_overrides) -> tuple[FastAPI, Limiter]:
     """A small app wired like the real one, with its own limiter and a low default limit."""
-    test_limiter = Limiter(
-        key_func=get_rate_limit_key, default_limits=[default_limit], key_style="endpoint"
-    )
+    test_limiter = Limiter(key_func=get_rate_limit_key, key_style="endpoint")
     app = FastAPI()
     app.state.limiter = test_limiter
-    app.state.settings = Settings(_env_file=None, **settings_overrides)
+    app.state.settings = Settings(
+        _env_file=None, rate_limit_default=default_limit, **settings_overrides
+    )
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
     app.add_middleware(RateLimitMiddleware)
 
@@ -104,6 +106,11 @@ def _limited_app(default_limit: str = "2/minute", **settings_overrides) -> tuple
     @app.get("/items/{item_id}")
     def item(item_id: str):
         return {"item": item_id}
+
+    @app.get("/probe")
+    @test_limiter.exempt
+    def probe():
+        return {"status": "alive"}
 
     return app, test_limiter
 
@@ -168,14 +175,60 @@ class TestRateLimitMiddleware:
         assert codes == [200, 200, 429]
         assert other_client.status_code == 200
 
+    def test_exempt_endpoints_are_never_limited(self):
+        client = TestClient(_limited_app()[0])
 
-def test_real_app_counts_unauthenticated_requests(production_client):
+        assert {client.get("/probe").status_code for _ in range(10)} == {200}
+
+    def test_default_limit_comes_from_the_app_settings(self):
+        client = TestClient(_limited_app(default_limit="4/minute")[0])
+
+        codes = [client.get("/items/x").status_code for _ in range(5)]
+
+        assert codes == [200, 200, 200, 200, 429]
+
+    def test_multiple_default_limits_all_apply(self):
+        client = TestClient(_limited_app(default_limit="10/minute;3/hour")[0])
+
+        codes = [client.get("/items/x").status_code for _ in range(4)]
+
+        assert codes == [200, 200, 200, 429]
+
+
+def test_parse_rate_limit_rejects_garbage():
+    assert [str(item) for item in parse_rate_limit("100/minute")] == ["100 per 1 minute"]
+    with pytest.raises(ValueError):
+        parse_rate_limit("lots per minute")
+
+
+def test_real_app_counts_unauthenticated_requests(production_client, production_settings):
     """The production app rate-limits a key-less flood instead of answering 401 forever."""
     limiter.enabled = True
-    allowed = int(DEFAULT_RATE_LIMIT.split("/")[0])
+    allowed = parse_rate_limit(production_settings.rate_limit_default)[0].amount
 
     codes = [production_client.get("/api/v1/student/profile").status_code for _ in range(allowed)]
     blocked = production_client.get("/api/v1/student/profile")
 
     assert set(codes) == {401}
     assert blocked.status_code == 429
+
+
+def test_real_app_never_rate_limits_health_probes():
+    """Probes (often from one shared IP) must not 429, while other routes are limited."""
+    limiter.enabled = True
+    client = TestClient(create_app(Settings(_env_file=None, rate_limit_default="2/minute")))
+    ok = ServiceHealth(status=ServiceStatus.OK)
+
+    with (
+        patch("backend.app.main.check_neo4j_health", return_value=ok),
+        patch("backend.app.main.check_opensearch_health", return_value=ok),
+        patch("backend.app.main.check_ollama_health", return_value=ok),
+    ):
+        probes = [
+            client.get(path).status_code
+            for path in ["/health", "/health/live", "/health/ready"] * 5
+        ]
+    root = [client.get("/").status_code for _ in range(3)]
+
+    assert set(probes) == {200}
+    assert root == [200, 200, 429]
