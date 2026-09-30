@@ -99,7 +99,7 @@ jobs:
           free-disk-space: "true"
 
       - name: Run fast tests with coverage
-        run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov=backend/app --cov-report=term
+        run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov=backend/app --cov-report=term --cov-fail-under=75
 
   frontend:
     name: Frontend (lint, types, tests, build)

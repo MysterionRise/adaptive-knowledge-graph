@@ -197,9 +197,6 @@ source = ["backend/app"]
 omit = ["*/tests/*", "*/__init__.py"]
 
 [tool.coverage.report]
-# Measured 78.65% on the full `pytest -m "not tribunal"` run (#92); 75 leaves headroom
-# for the other sprint PRs, and the release PR ratchets it to the final floor.
-fail_under = 75
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
