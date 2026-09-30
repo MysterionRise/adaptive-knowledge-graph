@@ -45,7 +45,7 @@ poetry run python scripts/ingest_books.py --list-subjects
 
 ## 2. Ingest the books
 
-Follow the README's development setup first. Make sure the local Neo4j and OpenSearch services are running before the graph-build and indexing steps. The repository's `make docker-up` target starts the local services. Fetch and process the configured book sources:
+Follow the README's development setup first. Make sure the local Neo4j and OpenSearch services are running before the graph-build and indexing steps: `make up` starts both and waits until they are healthy. Fetch and process the configured book sources:
 
 ```bash
 make ingest-books SUBJECT=my_subject
