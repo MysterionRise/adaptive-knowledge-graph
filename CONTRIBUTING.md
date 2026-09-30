@@ -141,6 +141,7 @@ def extract_concepts(text: str, max_concepts: int = 10) -> List[Dict[str, float]
 ### Documentation
 
 - Update README.md for major features
+- Follow [docs/ADDING_A_SUBJECT.md](docs/ADDING_A_SUBJECT.md) for the subject configuration, ingestion, indexing, and attribution workflow.
 - Add docstrings to public APIs
 - Update TESTING.md for new test patterns
 - Update COMPLIANCE.md for privacy/licensing changes
