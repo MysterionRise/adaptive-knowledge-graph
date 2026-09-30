@@ -418,3 +418,26 @@ def test_request_id_header_is_sanitized(client, supplied, echoed):
 
     assert (response.headers["X-Request-ID"] == supplied) is echoed
     assert 0 < len(response.headers["X-Request-ID"]) <= 128
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_health_check_error_with_braces_is_logged_not_raised(captured_logs):
+    """JSON error bodies contain braces; logging them must not break the health check."""
+    from backend.app import main
+
+    error = RuntimeError('Neo4j said {"code": "x"}')
+    with patch("backend.app.kg.neo4j_adapter.Neo4jAdapter", side_effect=error):
+        health = await main.check_neo4j_health()
+
+    assert health.status == ServiceStatus.ERROR
+    assert health.message == 'Neo4j said {"code": "x"}'
+    assert any('{"code": "x"}' in message for message in captured_logs)
+
+
+@pytest.mark.unit
+def test_request_path_with_braces_is_logged(client, captured_logs):
+    response = client.get("/%7B%22code%22%3A%22x%22%7D")
+
+    assert response.status_code == 404
+    assert any('/{"code":"x"}' in message for message in captured_logs)

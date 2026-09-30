@@ -30,7 +30,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         start = perf_counter()
 
         with logger.contextualize(request_id=request_id):
-            logger.info(f"{request.method} {request.url.path}")
+            logger.info("{} {}", request.method, request.url.path)
             response = await call_next(request)
 
             elapsed_ms = round((perf_counter() - start) * 1000, 2)

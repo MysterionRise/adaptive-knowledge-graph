@@ -80,6 +80,11 @@ BLOCKED_QUERIES = [
         "CALL apoc.meta.data() YIELD label CALL apoc.create.node(['X'], {}) YIELD node RETURN node",
         id="second-call-checked",
     ),
+    pytest.param(
+        "MATCH (n) CALL apoc.meta.data() YIELD value WITH 1 AS x "
+        "CALL apoc.load.json('file:///etc/passwd') YIELD value RETURN value",
+        id="allowed-call-then-apoc-load",
+    ),
     # Comment, whitespace, case and quoting tricks
     pytest.param("CALL/**/apoc.schema.assert({}, {}, true)", id="block-comment-separator"),
     pytest.param("CALL apoc . schema . assert({}, {}, true)", id="spaced-namespace"),
@@ -97,7 +102,7 @@ BLOCKED_QUERIES = [
         "MATCH (n) WITH n, '\\'' AS q DETACH DELETE n RETURN '\\'' AS r",
         id="escaped-quote-literal-trick",
     ),
-    pytest.param("CALL​apoc.schema.assert({}, {}, true)", id="zero-width-separator"),
+    pytest.param("CALL\u200bapoc.schema.assert({}, {}, true)", id="zero-width-separator"),
     # Other procedures, subqueries and transactions
     pytest.param("CALL dbms.killQuery('query-1')", id="dbms-procedure"),
     pytest.param("CALL db.createLabel('Secret')", id="db-write-procedure"),
@@ -133,6 +138,30 @@ class TestValidateCypherReadOnly:
     @pytest.mark.parametrize("cypher", BLOCKED_QUERIES)
     def test_rejects_non_read_queries(self, cypher):
         with pytest.raises(CypherValidationError):
+            validate_cypher_read_only(cypher)
+
+    @pytest.mark.parametrize(
+        ("cypher", "offender"),
+        [
+            (
+                "MATCH (n) CALL apoc.meta.data() YIELD label WITH 1 AS x "
+                "CALL dbms.listConfig() YIELD name RETURN name",
+                "dbms.listConfig",
+            ),
+            (
+                "CALL db.labels() YIELD label CALL db.propertyKeys() YIELD propertyKey "
+                "CALL db.createLabel('X') RETURN label",
+                "db.createLabel",
+            ),
+        ],
+    )
+    def test_checks_every_call_not_just_the_first(self, cypher, offender):
+        """Allowed procedures earlier in a statement do not vouch for later CALLs.
+
+        Only the CALL allowlist can reject these statements (no forbidden clause or
+        non-meta APOC namespace appears), so the error names the offending procedure.
+        """
+        with pytest.raises(CypherValidationError, match=f"CALL {offender} is not permitted"):
             validate_cypher_read_only(cypher)
 
     def test_scans_string_literals(self):
@@ -326,3 +355,53 @@ class TestCypherQAService:
 
         driver.close.assert_called_once()
         assert service._graph is None
+
+
+class TestLoggingUntrustedText:
+    """Errors and Cypher often contain braces (JSON bodies, map literals).
+
+    Logging them must neither raise (loguru formats the message when it gets extra
+    arguments, so braces interpolated into the format string raised KeyError) nor drop
+    the traceback.
+    """
+
+    ERROR_TEXT = 'Ollama call failed with status code 500. Details: {"code": "x"}'
+
+    def test_chain_error_with_braces_is_logged_with_traceback(self, captured_logs):
+        service = CypherQAService()
+        service._chain = MagicMock()
+        service._chain.invoke.side_effect = ValueError(self.ERROR_TEXT)
+
+        with pytest.raises(LLMGenerationError):
+            service.query("Which concepts exist?")
+
+        record = next(m.record for m in captured_logs if "CypherQA chain failed" in m)
+        assert '{"code": "x"}' in record["message"]
+        assert record["exception"] is not None
+
+    def test_preview_error_with_braces_is_logged_with_traceback(self, captured_logs):
+        service = CypherQAService()
+        service._graph = MagicMock(schema="")
+        service._llm = MagicMock()
+        service._llm.invoke.side_effect = RuntimeError(self.ERROR_TEXT)
+
+        assert service.generate_cypher_only("Which concepts exist?") is None
+
+        record = next(m.record for m in captured_logs if "Cypher generation error" in m)
+        assert '{"code": "x"}' in record["message"]
+        assert record["exception"] is not None
+
+    def test_rejected_cypher_with_map_literal_is_logged(self, graph_and_driver, captured_logs):
+        graph, _ = graph_and_driver
+
+        with pytest.raises(CypherValidationError):
+            graph.query('MATCH (c:Concept {name: "x"}) DETACH DELETE c')
+
+        assert any('{name: "x"}' in message for message in captured_logs)
+
+    def test_question_with_braces_is_logged(self, make_cypher_qa_service, captured_logs):
+        service, _ = make_cypher_qa_service("MATCH (c:Concept) RETURN c.name AS name", "ok")
+
+        service.query('Which concepts match {"code": "x"}?')
+
+        assert any('{"code": "x"}' in message for message in captured_logs)

@@ -65,6 +65,20 @@ def development_client():
     return TestClient(create_app(Settings(_env_file=None, app_env="development", api_key="")))
 
 
+@pytest.fixture
+def captured_logs():
+    """Loguru messages emitted during the test; each item's ``.record`` has the details."""
+    from loguru import logger
+
+    messages: list = []
+    handler_id = logger.add(messages.append, level="DEBUG", format="{message}")
+    yield messages
+    try:
+        logger.remove(handler_id)
+    except ValueError:  # the test reconfigured logging and already removed it
+        pass
+
+
 @pytest.fixture(autouse=True)
 def setup_test_env(monkeypatch):
     """Set up test environment variables and clear caches."""

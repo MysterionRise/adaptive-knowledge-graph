@@ -80,6 +80,26 @@ def test_safe_error_message_redacts(message, leaks):
     assert "[REDACTED]" in safe
 
 
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        # Prefixed secret names (redacted on main; a word-boundary anchor had broken them)
+        ("NEO4J_PASSWORD=hunter2", "NEO4J_PASSWORD=[REDACTED]"),
+        ("OPENROUTER_API_KEY=abc", "OPENROUTER_API_KEY=[REDACTED]"),
+        ("db_password: x", "db_password: [REDACTED]"),
+        ("OPENSEARCH_PASSWORD = s3cret", "OPENSEARCH_PASSWORD = [REDACTED]"),
+        ("client_secret=abc123", "client_secret=[REDACTED]"),
+        ("csrftoken: t0k", "csrftoken: [REDACTED]"),
+        # Secrets containing separator characters are redacted up to the next whitespace
+        ("password=p;ss,w)rd", "password=[REDACTED]"),
+        ("password: s3cret,more", "password: [REDACTED]"),
+        ("key_sk-abc123 rejected", "key_[REDACTED] rejected"),
+    ],
+)
+def test_safe_error_message_redacts_prefixed_and_punctuated_secrets(message, expected):
+    assert safe_error_message(message) == expected
+
+
 def test_safe_error_message_keeps_harmless_text():
     assert safe_error_message("All connection attempts failed") == "All connection attempts failed"
     assert safe_error_message(ValueError("Expecting value: line 1 column 1 (char 0)")) == (

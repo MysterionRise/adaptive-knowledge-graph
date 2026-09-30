@@ -4,16 +4,18 @@ Natural language to Cypher query generation using LangChain.
 Implements GraphCypherQAChain for text-to-Cypher translation,
 allowing users to query the knowledge graph in plain English.
 
-LLM-generated Cypher is untrusted input. Three layers keep it read-only:
+LLM-generated Cypher is untrusted input. This module enforces two controls:
 
 1. ``validate_cypher_read_only`` rejects write and admin clauses, subqueries, multiple
    statements and any procedure call or APOC use outside a small read-only allowlist,
-   before anything reaches Neo4j.
+   before anything reaches Neo4j. Every ``CALL`` in the statement is checked.
 2. ``ReadOnlyNeo4jGraph`` runs every statement in a READ transaction
    (``session.execute_read``) with a timeout and a row cap; Neo4j rejects writes in
    READ transactions.
-3. The database loads no APOC procedures besides ``apoc.meta.*``
-   (``dbms.security.procedures.allowlist`` in ``infra/compose``).
+
+Defence in depth outside this code: the bundled compose stack restricts Neo4j to the
+``apoc.meta.*`` procedures (``dbms.security.procedures.allowlist``, see #102). Other
+deployments should set the same allowlist; the two controls above do not depend on it.
 """
 
 from __future__ import annotations
@@ -195,7 +197,7 @@ class ReadOnlyNeo4jGraph(Neo4jGraph):
             try:
                 validate_cypher_read_only(query)
             except CypherValidationError as e:
-                logger.warning(f"Rejected generated Cypher ({e}): {query[:500]!r}")
+                logger.warning("Rejected generated Cypher ({}): {!r}", e, query[:500])
                 raise
 
         self._check_driver_state()
@@ -384,11 +386,12 @@ class CypherQAService:
                 return_intermediate_steps=True,
                 validate_cypher=True,  # Correct relationship directions against the schema
                 # langchain-neo4j refuses to build the chain without this acknowledgement
-                # that LLM-generated Cypher runs with our database credentials. Mitigations:
-                # validate_cypher_read_only() rejects writes, subqueries and non-allowlisted
-                # procedures before execution; ReadOnlyNeo4jGraph runs every statement in a
-                # READ transaction with a timeout and a row cap; and Neo4j only loads the
-                # apoc.meta.* procedures (dbms.security.procedures.allowlist, infra/compose).
+                # that LLM-generated Cypher runs with our database credentials. Controls
+                # enforced by this code: validate_cypher_read_only() rejects writes,
+                # subqueries and non-allowlisted procedures (every CALL) before execution,
+                # and ReadOnlyNeo4jGraph runs every statement in a READ transaction with a
+                # timeout and a row cap. Defence in depth provided by the bundled compose
+                # stack (see #102): Neo4j loads only the apoc.meta.* procedures.
                 allow_dangerous_requests=True,
             )
         return self._chain
@@ -414,7 +417,9 @@ class CypherQAService:
             LLMGenerationError: The chain failed with any other ValueError (langchain
                 reports LLM backend errors, such as an Ollama HTTP error, that way).
         """
-        logger.info(f"CypherQA query: {question}")
+        # Untrusted text (questions, Cypher, error messages with JSON or Cypher maps) is
+        # passed as loguru arguments, never interpolated into the format string.
+        logger.info("CypherQA query: {}", question)
 
         chain = self.chain
         try:
@@ -422,7 +427,7 @@ class CypherQAService:
         except CypherValidationError:
             raise
         except ValueError as e:
-            logger.error(f"CypherQA chain failed: {e}")
+            logger.opt(exception=True).error("CypherQA chain failed: {}", e)
             raise LLMGenerationError("Cypher QA chain failed") from e
 
         cypher_query = next(
@@ -433,7 +438,7 @@ class CypherQAService:
             ),
             None,
         )
-        logger.info(f"Generated Cypher: {cypher_query}")
+        logger.info("Generated Cypher: {}", cypher_query)
 
         return {
             "question": question,
@@ -473,11 +478,11 @@ class CypherQAService:
                 lines = cypher.split("\n")
                 cypher = "\n".join(line for line in lines if not line.startswith("```")).strip()
 
-            logger.info(f"Generated Cypher (preview): {cypher}")
+            logger.info("Generated Cypher (preview): {}", cypher)
             return cypher
 
         except Exception as e:
-            logger.error(f"Cypher generation error: {e}")
+            logger.opt(exception=True).error("Cypher generation error: {}", e)
             return None
 
     def execute_cypher(self, cypher: str) -> list[dict[str, Any]]:

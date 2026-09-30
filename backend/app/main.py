@@ -237,8 +237,9 @@ async def check_neo4j_health() -> ServiceHealth:
 
     except Exception as e:
         # Full detail (with the request id) goes to the logs; the unauthenticated
-        # response only gets the redacted message.
-        logger.warning(f"Neo4j health check failed: {e}")
+        # response only gets the redacted message. The error text is a loguru argument,
+        # so braces in it (JSON error bodies) are never parsed as format fields.
+        logger.warning("Neo4j health check failed: {}", e)
         return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
 
 
@@ -288,7 +289,7 @@ async def check_opensearch_health() -> ServiceHealth:
             )
 
     except Exception as e:
-        logger.warning(f"OpenSearch health check failed: {e}")
+        logger.warning("OpenSearch health check failed: {}", e)
         return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
 
 
@@ -327,7 +328,7 @@ async def check_ollama_health() -> ServiceHealth:
             )
 
     except Exception as e:
-        logger.warning(f"Ollama health check failed: {e}")
+        logger.warning("Ollama health check failed: {}", e)
         return ServiceHealth(status=ServiceStatus.ERROR, message=safe_error_message(e))
 
 

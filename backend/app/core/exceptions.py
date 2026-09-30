@@ -24,17 +24,19 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\b[a-z][a-z0-9+.\-]*://[^\s'\"<>]*", re.IGNORECASE), _REDACTED),
     # user:password@host without a scheme
     (re.compile(r"[^\s'\"<>@/:()]+:[^\s'\"<>@]*@[^\s'\"<>,;()]+"), _REDACTED),
-    # key=value / key: value secrets, including auth=(user, password) tuples
+    # key=value / key: value secrets, including auth=(user, password) tuples. Not anchored
+    # to a word start, so prefixed names (NEO4J_PASSWORD=, OPENROUTER_API_KEY=,
+    # db_password:) match too, and the value runs to the next whitespace.
     (
         re.compile(
-            r"\b(api[_-]?key|token|password|passwd|pwd|secret|user(?:name)?|auth)"
-            r"([\"']?\s*[=:]\s*[\"']?)(\([^)]*\)|[^\s,;&)\"']+)",
+            r"(api[_-]?key|token|password|passwd|pwd|secret|user(?:name)?|auth)"
+            r"([\"']?\s*[=:]\s*[\"']?)(\([^)]*\)|\S+)",
             re.IGNORECASE,
         ),
         r"\1\2" + _REDACTED,
     ),
-    (re.compile(r"\b(bearer\s+)[a-z0-9._~+/\-]+=*", re.IGNORECASE), r"\1" + _REDACTED),
-    (re.compile(r"\bsk-[a-z0-9._\-]+", re.IGNORECASE), _REDACTED),
+    (re.compile(r"(bearer\s+)[a-z0-9._~+/\-]+=*", re.IGNORECASE), r"\1" + _REDACTED),
+    (re.compile(r"sk-[a-z0-9._\-]+", re.IGNORECASE), _REDACTED),
     # Absolute file-system paths (POSIX and Windows)
     (re.compile(r"(?<![\w.:/])/(?:[\w.\-]+/)+[\w.\-]*"), _REDACTED),
     (re.compile(r"\b[a-z]:\\[^\s'\"<>]*", re.IGNORECASE), _REDACTED),
