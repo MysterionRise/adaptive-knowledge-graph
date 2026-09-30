@@ -604,6 +604,31 @@ class TestPersistKnowledgeGraph:
         assert concept_call[1]["frequency"] == 10
         assert concept_call[1]["importance_score"] == 0.95
         assert concept_call[1]["source_modules"] == ["m2"]
+        # Optional fields default to None / []
+        assert concept_call[1]["definition"] is None
+        assert concept_call[1]["aliases"] == []
+
+    def test_concept_definition_and_aliases_are_persisted(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        kg = KnowledgeGraph(
+            concepts={
+                "GDP": ConceptNode(
+                    name="GDP",
+                    definition="The value of all final goods and services produced.",
+                    aliases=["Gross Domestic Product"],
+                ),
+            },
+            modules={},
+            relationships=[],
+        )
+
+        adapter.persist_knowledge_graph(kg)
+
+        query, kwargs = mock_session.run.call_args_list[0][0][0], mock_session.run.call_args[1]
+        assert "c.definition = $definition" in query
+        assert "c.aliases = $aliases" in query
+        assert kwargs["definition"] == "The value of all final goods and services produced."
+        assert kwargs["aliases"] == ["Gross Domestic Product"]
 
     def test_module_node_properties_are_passed(self):
         adapter, mock_session = _make_adapter(label_prefix=None)
@@ -653,6 +678,47 @@ class TestPersistKnowledgeGraph:
         assert rel_call[1]["target"] == "B"
         assert rel_call[1]["weight"] == 0.75
         assert rel_call[1]["confidence"] == 0.8
+        assert rel_call[1]["properties"] == {}
+        assert "r += $properties" in rel_call[0][0]
+
+    def test_relationship_evidence_is_persisted(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        kg = KnowledgeGraph(
+            concepts={"A": ConceptNode(name="A"), "B": ConceptNode(name="B")},
+            modules={},
+            relationships=[
+                Relationship(
+                    source="A",
+                    target="B",
+                    type=RelationshipType.PREREQ,
+                    evidence="B is defined in terms of A.",
+                ),
+            ],
+        )
+
+        adapter.persist_knowledge_graph(kg)
+
+        rel_call = mock_session.run.call_args_list[2]
+        assert rel_call[1]["properties"] == {"evidence": "B is defined in terms of A."}
+
+    def test_relationship_provenance_is_flattened(self):
+        """Neo4j cannot store maps, so provenance keys become provenance_* properties."""
+        from types import SimpleNamespace
+
+        from backend.app.kg.neo4j_adapter import _relationship_properties
+
+        rel = SimpleNamespace(
+            evidence=None,
+            provenance={"source": "glossary", "module_id": "m48590", "page": 3, "note": None},
+        )
+
+        assert _relationship_properties(rel) == {
+            "provenance_source": "glossary",
+            "provenance_module_id": "m48590",
+            "provenance_page": 3,
+        }
+        nested = SimpleNamespace(evidence="e", provenance={"spans": [1, 2]})
+        assert _relationship_properties(nested) == {"evidence": "e", "provenance_spans": "[1, 2]"}
 
     def test_unknown_relationship_type_is_skipped(self):
         """Relationships with an unrecognized type should be silently skipped."""
@@ -1308,6 +1374,7 @@ class TestConceptLookup:
         query = mock_session.run.call_args[0][0]
         assert "us_history_Concept" in query
         assert "toLower(c.name) IN $names" in query
+        assert "coalesce(c.aliases, [])" in query  # aliases match too
         assert mock_session.run.call_args[1]["names"] == ["the civil war", "civil war"]
 
     def test_concept_exists_false_when_not_found(self):

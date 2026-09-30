@@ -26,6 +26,26 @@ def _concept_name_candidates(name: str) -> list[str]:
     return candidates
 
 
+def _relationship_properties(rel: Any) -> dict[str, Any]:
+    """
+    Optional relationship properties to persist: evidence and flattened provenance.
+
+    Neo4j cannot store map properties, so a provenance dict such as
+    {"source": "glossary", "module_id": "m1"} becomes provenance_source / provenance_module_id.
+    """
+    properties: dict[str, Any] = {}
+    if rel.evidence is not None:
+        properties["evidence"] = rel.evidence
+    provenance = getattr(rel, "provenance", None) or {}
+    for key, value in provenance.items():
+        if value is None:
+            continue
+        if not isinstance(value, str | int | float | bool):
+            value = str(value)
+        properties[f"provenance_{key}"] = value
+    return properties
+
+
 class Neo4jAdapter:
     """
     Adapter for Neo4j graph database operations.
@@ -144,7 +164,9 @@ class Neo4jAdapter:
             SET c.key_term = $key_term,
                 c.frequency = $frequency,
                 c.importance_score = $importance_score,
-                c.source_modules = $source_modules
+                c.source_modules = $source_modules,
+                c.definition = $definition,
+                c.aliases = $aliases
             """
             session.run(
                 query,
@@ -153,6 +175,8 @@ class Neo4jAdapter:
                 frequency=concept.frequency,
                 importance_score=concept.importance_score,
                 source_modules=concept.source_modules,
+                definition=concept.definition,
+                aliases=concept.aliases,
             )
         logger.info(f"Created {len(kg.concepts)} concept nodes")
 
@@ -186,7 +210,8 @@ class Neo4jAdapter:
                 MATCH (c:{concept_label} {{name: $target}})
                 MERGE (m)-[r:COVERS]->(c)
                 SET r.weight = $weight,
-                    r.confidence = $confidence
+                    r.confidence = $confidence,
+                    r += $properties
                 """
             elif rel.type == RelationshipType.RELATED:
                 # Concept -> Concept
@@ -195,7 +220,8 @@ class Neo4jAdapter:
                 MATCH (c2:{concept_label} {{name: $target}})
                 MERGE (c1)-[r:RELATED]-(c2)
                 SET r.weight = $weight,
-                    r.confidence = $confidence
+                    r.confidence = $confidence,
+                    r += $properties
                 """
             elif rel.type == RelationshipType.PREREQ:
                 # Concept -> Concept (prerequisite)
@@ -204,7 +230,8 @@ class Neo4jAdapter:
                 MATCH (c2:{concept_label} {{name: $target}})
                 MERGE (c1)-[r:PREREQ]->(c2)
                 SET r.weight = $weight,
-                    r.confidence = $confidence
+                    r.confidence = $confidence,
+                    r += $properties
                 """
             else:
                 continue
@@ -215,6 +242,7 @@ class Neo4jAdapter:
                 target=rel.target,
                 weight=rel.weight,
                 confidence=rel.confidence,
+                properties=_relationship_properties(rel),
             )
 
         logger.info(f"Created {len(kg.relationships)} relationships")
@@ -256,8 +284,8 @@ class Neo4jAdapter:
         """
         Check whether a concept exists in this adapter's (subject's) graph.
 
-        Matching ignores case, surrounding whitespace and a leading "The",
-        so "The Civil War" matches the concept "Civil War".
+        Matching ignores case, surrounding whitespace and a leading "The", so
+        "The Civil War" matches the concept "Civil War"; concept aliases match too.
         """
         candidates = _concept_name_candidates(name)
         if not candidates:
@@ -266,7 +294,9 @@ class Neo4jAdapter:
         concept_label = self._get_label("Concept")
         with self._get_session() as session:
             record = session.run(
-                f"MATCH (c:{concept_label}) WHERE toLower(c.name) IN $names "
+                f"MATCH (c:{concept_label}) "
+                "WHERE toLower(c.name) IN $names "
+                "OR any(alias IN coalesce(c.aliases, []) WHERE toLower(alias) IN $names) "
                 "RETURN count(c) > 0 AS found",
                 names=candidates,
             ).single()
