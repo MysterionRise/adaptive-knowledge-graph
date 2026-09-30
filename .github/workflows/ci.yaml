@@ -300,7 +300,7 @@ jobs:
           test -f .env.example
 
       - name: Lint markdown files
-        uses: DavidAnson/markdownlint-cli2-action@v22
+        uses: DavidAnson/markdownlint-cli2-action@v24
         with:
           globs: |
             *.md
