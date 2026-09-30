@@ -4,16 +4,18 @@ How the test suites are organised, how to run them, and what CI checks.
 
 ## Backend (pytest)
 
-Backend tests live in [`backend/tests/`](../backend/tests/): 21 test modules
-plus shared fixtures in `conftest.py`. The fixtures provide a FastAPI
-`TestClient` and mocks for Neo4j, OpenSearch, the LLM client, the KG expander,
-the quiz generator and the Cypher QA service, so the suite runs without the
-Docker stack, Ollama or model downloads.
+Backend tests live in [`backend/tests/`](../backend/tests/): 24 test modules
+plus shared fixtures in `conftest.py`. The fixtures provide FastAPI test
+clients (`client`, plus `production_client` and `development_client` for the
+two `APP_ENV` modes), captured logs, and mocks for the Neo4j adapter and
+driver, the OpenSearch retriever, the LLM client, the KG expander, the quiz
+generator and the Cypher QA service. The suite runs without the Docker stack,
+Ollama or model downloads.
 
 | Area | Modules |
 | --- | --- |
-| API routes | `test_api_ask.py`, `test_api_graph.py`, `test_api_quiz.py`, `test_streaming.py`, `test_demo_status.py`, `test_main.py`, `test_rate_limit.py` |
-| Retrieval and graph | `test_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_neo4j_adapter.py` |
+| API routes and security | `test_api_ask.py`, `test_api_graph.py`, `test_api_quiz.py`, `test_streaming.py`, `test_demo_status.py`, `test_main.py`, `test_rate_limit.py`, `test_auth.py`, `test_exceptions.py` |
+| Retrieval and graph | `test_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_neo4j_adapter.py`, `test_cypher_qa.py` |
 | LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_recommendation_service.py` |
 | Configuration and tooling | `test_settings.py`, `test_logging.py`, `test_docker.py`, `test_makefile.py`, `test_poetry.py` |
 | Adversarial review | `test_tribunal_prosecution.py` |
