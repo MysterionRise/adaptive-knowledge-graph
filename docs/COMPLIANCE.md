@@ -58,7 +58,8 @@ LLM_MODE=local            # default, and required while PRIVACY_LOCAL_ONLY=true
 ```
 
 - The API refuses to start if `PRIVACY_LOCAL_ONLY=true` is combined with
-  `LLM_MODE=remote` or `LLM_MODE=hybrid`.
+  `LLM_MODE=remote` or `LLM_MODE=hybrid`, and while the flag is on no code
+  path calls OpenRouter, including the hybrid fallback.
 - Every LLM call (answers, quizzes, recommendations and natural-language graph
   queries) goes to the Ollama server at `LLM_OLLAMA_HOST`.
 - Neo4j, OpenSearch and the SQLite learner store run on your machine.
@@ -98,7 +99,7 @@ not leave the deployment boundary.
 
 | Data | Where | Notes |
 | --- | --- | --- |
-| Learner profiles | SQLite file `data/processed/student_profiles.sqlite3` | Per-concept mastery level, BKT probability, attempt and correct counts, last-assessed timestamps, keyed by `student_id` (default `default`). No names, email addresses or other identifiers are collected. |
+| Learner profiles | SQLite file `data/processed/student_profiles.sqlite3` (set with `STUDENT_PROFILES_DB`) | Per-concept mastery level, BKT probability, attempt and correct counts, last-assessed timestamps, keyed by `student_id` (default `default`). No names, email addresses or other identifiers are collected. |
 | Textbook chunks and embeddings | OpenSearch Docker volume | OpenStax text only |
 | Knowledge graph | Neo4j Docker volume | Concepts, modules and their relationships (plus chunk nodes if window retrieval is set up) |
 | Evaluation reports | `docs/evals/latest.json` and `latest.md` | Per-case metrics and a summary for the golden-set questions |

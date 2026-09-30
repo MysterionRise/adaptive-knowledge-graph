@@ -110,8 +110,10 @@ boundaries, security model and trade-offs in more detail.
 `POST /api/v1/ask` and the streaming `POST /api/v1/ask/stream` share one
 pipeline:
 
-1. **Resolve the subject** from `config/subjects.yaml` (`us_history` by
-   default). An unknown subject returns `404`.
+1. **Validate and resolve the subject.** Questions with HTML markup or outside
+   the length limits are rejected with `422` (the error does not echo the
+   input). The subject comes from `config/subjects.yaml` (`us_history` by
+   default); an unknown subject returns `404`.
 2. **Expand the question with the knowledge graph.** spaCy named-entity
    recognition and YAKE keyword extraction find concepts in the question. They
    are matched against the subject's concepts in Neo4j, and neighbours within
@@ -243,8 +245,9 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
 - **Answers say no relevant content was found, or the graph is empty.** Seeding
   did not finish. Run `make seed` again and watch for errors.
 - **`/health/ready` returns `503`.** Neo4j or OpenSearch is down. Run `make up`.
-- **The API refuses to start because of `PRIVACY_LOCAL_ONLY`.** Remote LLM
-  modes need `PRIVACY_LOCAL_ONLY=false`. See [Configuration](#configuration).
+- **The API refuses to start with "PRIVACY_LOCAL_ONLY=true requires
+  LLM_MODE=local".** Remote LLM modes need `PRIVACY_LOCAL_ONLY=false`. See
+  [Configuration](#configuration).
 - **`npm ci` fails with an engine error.** Switch to Node 24, for example with
   `fnm use` (it reads `.node-version`) or `nvm install 24`.
 - **A port is already in use.** The stack uses 3000 (frontend), 8000 (API),
@@ -267,8 +270,11 @@ need:
 | `LLM_LOCAL_MODEL` | `llama3.1:8b-instruct-q4_K_M` | Ollama model tag. |
 | `LLM_OLLAMA_HOST` | `http://localhost:11434` | Ollama URL. |
 | `RETRIEVAL_MODE` | `hybrid` | `hybrid` (BM25 + kNN with RRF) or `knn`. |
-| `RERANKER_ENABLED` | `false` | Enables the cross-encoder reranker. The model downloads on first use. |
+| `RERANKER_ENABLED` | `false` | Enables the cross-encoder reranker. The model downloads on first use; `RERANKER_DEVICE` accepts `auto`, `cuda`, `mps` or `cpu`. |
 | `STUDENT_BKT_ENABLED` | `true` | BKT mastery updates; `false` switches to a simple linear update. |
+| `STUDENT_PROFILES_DB` | `data/processed/student_profiles.sqlite3` | SQLite file for learner profiles. |
+| `STUDENT_VALIDATE_CONCEPTS` | `false` | Rejects mastery updates for concepts that are not in the subject's knowledge graph. |
+| `RATE_LIMIT_*` | see below | Per-client limits: `RATE_LIMIT_ASK` (`10/minute`), `RATE_LIMIT_QUIZ` (`5/minute`), `RATE_LIMIT_GRAPH` (`30/minute`), `RATE_LIMIT_GRAPH_QUERY` (`10/minute`), `RATE_LIMIT_STUDENT_WRITE` (`30/minute`) and `RATE_LIMIT_RECOMMENDATIONS` (`10/minute`). |
 
 Every setting is defined in
 [`backend/app/core/settings.py`](backend/app/core/settings.py). The frontend

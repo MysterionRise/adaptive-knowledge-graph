@@ -39,9 +39,11 @@ Data and model services
 Both `POST /api/v1/ask` and `POST /api/v1/ask/stream` use the same retrieval
 helper, so blocking and streaming answers cannot drift apart.
 
-1. Validate the question, subject, `top_k` and retrieval options.
-2. Resolve the subject from `config/subjects.yaml`. An unknown subject returns
-   `404`.
+1. Validate the question, subject, `top_k` and retrieval options. Invalid
+   input, including questions with HTML markup, returns `422` without echoing
+   the input.
+2. Resolve the subject from `config/subjects.yaml`, falling back to
+   `default_subject` when none is given. An unknown subject returns `404`.
 3. Extract concepts from the question (spaCy NER and YAKE) and expand them with
    their Neo4j neighbours, up to `RAG_KG_EXPANSION_HOPS`. If Neo4j fails, the
    request continues without expansion.
@@ -102,6 +104,10 @@ Subjects are isolated by configuration:
 - Neo4j labels carry a subject prefix, such as `us_history_Concept`.
 - Each subject has its own OpenSearch index.
 - Prompts, theme colours, attribution and books are defined per subject.
+- Requests without a subject use `default_subject` from the same file.
+- `GET /api/v1/subjects` marks each subject `available` only when its
+  knowledge graph has data, so the UI can disable configured but unseeded
+  subjects.
 
 This works on Neo4j Community Edition, which has a single database. A
 multi-tenant deployment would need tenant IDs, per-learner identity
@@ -128,6 +134,9 @@ Other hardening in place:
 - TLS verification for external calls is on by default; the local OpenSearch
   uses plain HTTP instead of pretending to use TLS.
 - Container images are pinned to specific versions.
+- Per-client rate limits cover Q&A, quiz generation, graph reads,
+  `/graph/query`, learner-profile writes and `/quiz/recommendations`; each
+  limit is set with a `RATE_LIMIT_*` setting.
 - `X-Forwarded-For` is ignored for rate limiting unless trusted proxy headers
   are explicitly enabled.
 

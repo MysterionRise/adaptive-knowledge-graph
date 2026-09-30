@@ -63,12 +63,12 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 
 **Key flow for Q&A (`POST /api/v1/ask`, streaming `POST /api/v1/ask/stream`):**
 
-1. Resolve the subject from `config/subjects.yaml` (unknown subject: 404).
+1. Validate input (markup in questions or invalid fields: 422, without echoing input) and resolve the subject from `config/subjects.yaml` (no subject: `default_subject`; unknown subject: 404).
 2. KG expansion: extract concepts (spaCy NER + YAKE), match them in Neo4j, add neighbours within `RAG_KG_EXPANSION_HOPS`.
 3. OpenSearch retrieval: hybrid BM25 + kNN fused with reciprocal rank fusion (`RETRIEVAL_MODE=hybrid`, default) or kNN only.
 4. Optional window retrieval: opt-in, needs `VECTOR_BACKEND=neo4j` or `hybrid` and NEXT edges between chunks (built by `make build-windows`, not by the standard seed).
 5. Optional reranking: `backend/app/rag/reranker.py` (cross-encoder `BAAI/bge-reranker-v2-m3`), opt-in via `RERANKER_ENABLED=true`; retrieves `RAG_RETRIEVAL_TOP_K` candidates and keeps `top_k`.
-6. LLM answer with citations and the subject's attribution. LLM unavailable: 503; empty or invalid LLM output: 502.
+6. LLM answer with citations and the subject's attribution. LLM unavailable: 503; empty or invalid LLM output: 502 (the quiz endpoints use the same contract).
 
 ## Key Modules
 
@@ -94,8 +94,12 @@ Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key v
 - `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY`; `/docs` off unless `API_DOCS_ENABLED=true`; restricted CORS methods)
 - `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`; startup fails otherwise
 - `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
-- `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3
+- `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values)
 - `RERANKER_ENABLED=false` - set `true` to enable the cross-encoder reranker
+- `STUDENT_PROFILES_DB` - SQLite learner store (the only backend); `STUDENT_VALIDATE_CONCEPTS=true` rejects mastery updates for concepts not in the subject's graph
+- `RATE_LIMIT_ASK`, `RATE_LIMIT_QUIZ`, `RATE_LIMIT_GRAPH`, `RATE_LIMIT_GRAPH_QUERY`, `RATE_LIMIT_STUDENT_WRITE`, `RATE_LIMIT_RECOMMENDATIONS` - per-route limits
+
+Removed settings (ignored if still present in an old `.env`): `API_HOST`, `API_PORT`, `LLM_LOCAL_BACKEND`, `LLM_MAX_CONTEXT`, `RERANKER_TOP_K`, `RAG_FINAL_TOP_K`, `STUDENT_IRT_ENABLED`, `STUDENT_STORAGE_BACKEND`, `PRIVACY_NO_TRACKING`, `GRAPH_COMPUTE_CENTRALITY`, `GRAPH_COMPUTE_COMMUNITIES`.
 
 ## Test Configuration
 
