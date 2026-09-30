@@ -175,6 +175,58 @@ class TestRetrieveMode:
 
 
 @pytest.mark.unit
+class TestCreateCollection:
+    """Index creation body: kNN mapping and replica count."""
+
+    def _make_retriever(self):
+        with patch("backend.app.rag.retriever.get_embedding_model"):
+            from backend.app.rag.retriever import OpenSearchRetriever
+
+            retriever = OpenSearchRetriever(index_name="textbook_chunks_test")
+        retriever.client = MagicMock()
+        retriever.client.indices.exists.return_value = False
+        return retriever
+
+    def _created_body(self, retriever) -> dict:
+        create_call = retriever.client.indices.create.call_args
+        assert create_call.kwargs["index"] == "textbook_chunks_test"
+        return create_call.kwargs["body"]
+
+    def test_new_index_has_no_replicas_by_default(self, monkeypatch):
+        """0 replicas keeps a single-node dev cluster green instead of permanently yellow."""
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "opensearch_number_of_replicas", 0)
+        retriever = self._make_retriever()
+
+        retriever.create_collection(embedding_dim=1024)
+
+        body = self._created_body(retriever)
+        assert body["settings"]["index"]["number_of_replicas"] == 0
+        assert body["settings"]["index"]["knn"] is True
+        assert body["mappings"]["properties"]["embedding"]["dimension"] == 1024
+
+    def test_replicas_follow_setting(self, monkeypatch):
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "opensearch_number_of_replicas", 2)
+        retriever = self._make_retriever()
+
+        retriever.create_collection(embedding_dim=8)
+
+        assert self._created_body(retriever)["settings"]["index"]["number_of_replicas"] == 2
+
+    def test_existing_index_is_left_alone(self):
+        retriever = self._make_retriever()
+        retriever.client.indices.exists.return_value = True
+
+        retriever.create_collection(embedding_dim=1024)
+
+        retriever.client.indices.create.assert_not_called()
+        retriever.client.indices.delete.assert_not_called()
+
+
+@pytest.mark.unit
 class TestCollectionInfo:
     """Tests for get_collection_info."""
 

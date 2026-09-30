@@ -77,12 +77,14 @@ class OpenSearchRetriever:
             client.indices.delete(index=self.index_name)
 
         if not client.indices.exists(index=self.index_name):
-            # Create index with kNN settings
+            # Create index with kNN settings. Replicas default to 0 so a single-node
+            # cluster stays green (a replica can never be allocated on one node).
             index_body = {
                 "settings": {
                     "index": {
                         "knn": True,
                         "knn.algo_param.ef_search": 100,
+                        "number_of_replicas": settings.opensearch_number_of_replicas,
                     }
                 },
                 "mappings": {

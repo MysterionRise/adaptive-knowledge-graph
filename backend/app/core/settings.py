@@ -55,6 +55,14 @@ class Settings(BaseSettings):
             "The API uses the per-subject indices from config/subjects.yaml."
         ),
     )
+    opensearch_number_of_replicas: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Replicas for newly created chunk indices. 0 keeps a single-node cluster green; "
+            "raise it on multi-node clusters."
+        ),
+    )
     opensearch_use_ssl: bool = False
     opensearch_verify_certs: bool = True
     opensearch_user: str = "admin"

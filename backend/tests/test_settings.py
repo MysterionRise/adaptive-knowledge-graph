@@ -129,6 +129,17 @@ def test_window_size_cannot_be_negative():
         Settings(_env_file=None, rag_window_size=-1)
 
 
+def test_opensearch_replicas_default_to_zero(monkeypatch):
+    monkeypatch.delenv("OPENSEARCH_NUMBER_OF_REPLICAS", raising=False)
+    assert Settings(_env_file=None).opensearch_number_of_replicas == 0
+
+    monkeypatch.setenv("OPENSEARCH_NUMBER_OF_REPLICAS", "1")
+    assert Settings(_env_file=None).opensearch_number_of_replicas == 1
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, opensearch_number_of_replicas=-1)
+
+
 def test_concept_validation_is_opt_in(monkeypatch):
     monkeypatch.delenv("STUDENT_VALIDATE_CONCEPTS", raising=False)
     assert Settings(_env_file=None).student_validate_concepts is False
