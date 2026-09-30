@@ -43,7 +43,7 @@ slowapi = "^0.1.10"
 transformers = ">=4.57.6,<5"  # 5.x together with sentence-transformers 6: #71
 sentence-transformers = "^2.7.0"
 torch = ">=2.10.0,<2.11"  # 2.11+ switches the Linux wheels to CUDA 13; upgrade deliberately (#79)
-yake = "^0.4.8"
+yake = ">=0.4.8,<0.8.0"
 spacy = "^3.7.2"
 
 # Knowledge Graph
@@ -60,7 +60,7 @@ openai = "^2.0.0"  # required by langchain_community ChatOpenAI (LLM_MODE=remote
 langchain = ">=0.3.30,<0.4"
 langchain-core = ">=0.3.86,<1.0"
 langchain-community = ">=0.3.31,<0.4"
-langchain-neo4j = ">=0.2,<0.3"
+langchain-neo4j = ">=0.2,<0.5"
 langsmith = ">=0.8.18,<1.0"  # security floor for the langchain-core dependency
 
 # Numerics
