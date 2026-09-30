@@ -16,6 +16,7 @@ from backend.app.kg.builder import (
     PREREQ_PATTERNS,
     STOP_CONCEPTS,
     KGBuilder,
+    _CaseStats,
     is_stop_concept,
 )
 from backend.app.kg.markup import (
@@ -280,10 +281,43 @@ class TestStopConcepts:
 
     def test_valid_concepts_and_limits(self):
         assert is_valid_concept("Tax") and is_valid_concept("GDP") and is_valid_concept("401(k)")
+        assert is_valid_concept("M1", min_length=2) and not is_valid_concept("M1")
         assert is_valid_concept("Tea Act of 1773")
         assert not is_valid_concept("Tax", min_length=4)
         assert is_valid_concept("Temporary Assistance for Needy Families")
         assert not is_valid_concept("Temporary Assistance for Needy Families", max_words=4)
+
+
+@pytest.mark.unit
+class TestProperNouns:
+    STATS = _CaseStats.from_prose(
+        [
+            "Delegates signed the Constitution. Critics of the Constitution wanted "
+            "amendments. The Constitution's preamble is short.",
+            "Merchants in New York traded. Ships reached New York. They sailed to New York.",
+            "British soldiers marched. The British army retreated.",
+            "white settlers arrived. The white population grew.",
+            "Historians admire Lincoln. Lincoln's speeches are famous. They quoted Lincoln often.",
+            "The chapter covers the Stamp Act, the Tea Act and the Townshend Act.",
+        ]
+    )
+
+    @pytest.mark.parametrize("word", ["constitution", "lincoln"])
+    def test_names_written_on_their_own(self, word):
+        assert self.STATS.is_proper_noun(word)
+
+    @pytest.mark.parametrize(
+        ("word", "why"),
+        [
+            ("york", "part of the longer name New York"),
+            ("act", "the head of several names: Stamp Act, Tea Act"),
+            ("british", "a proper adjective, always followed by its noun"),
+            ("white", "mostly lower-case"),
+            ("unknown", "never mentioned"),
+        ],
+    )
+    def test_other_words_are_not_proper_nouns(self, word, why):
+        assert not self.STATS.is_proper_noun(word), why
 
 
 @pytest.mark.unit
@@ -354,7 +388,7 @@ class TestExtractConceptsFromText:
         builder = make_builder()
 
         concepts = builder.extract_concepts_from_text(
-            "Plain prose.", ["Summary", "Review Questions", "Ab", "1776", "Liberty"]
+            "Plain prose.", ["Summary", "Review Questions", "X", "1776", "Liberty"]
         )
 
         assert concepts == ["Liberty"]
@@ -613,7 +647,78 @@ class TestBuildFromRecords:
         _, large = self.build(records, vocabulary=["War", "Civil War"], always=[], max_concepts=5)
 
         assert set(small.concepts) == {"Slavery", "Civil War"}
-        assert "War" in large.concepts  # single words only fill leftover slots
+        # "war" is a lower-case common noun, not a proper noun, so it gets no quota slot
+        # and only fills a slot that nothing else wants
+        assert "War" in large.concepts
+
+    def test_proper_noun_single_words_get_a_bounded_quota(self):
+        """ "Constitution" survives next to author key terms; "York", "white", "war" do not."""
+        records = [
+            record(
+                "m1",
+                "\n\n".join(
+                    [
+                        'The **Articles of Confederation**{: data-type="term"} gave Congress '
+                        "little power.",
+                        "Delegates in Philadelphia replaced them with the Constitution, which "
+                        "created a stronger national government.",
+                        "Merchants in New York wanted the Constitution ratified quickly.",
+                        "Settlers kept moving west while the war with Britain ended.",
+                    ]
+                ),
+            ),
+            record(
+                "m2",
+                "\n\n".join(
+                    [
+                        'The **Bill of Rights**{: data-type="term"} amended the Constitution in 1791.',
+                        "Supporters in New York defended the Constitution.",
+                        "After the war, white farmers protested new taxes.",
+                    ]
+                ),
+            ),
+            record(
+                "m3",
+                "\n\n".join(
+                    [
+                        'The **Federalists**{: data-type="term"} and the '
+                        '**Anti-Federalists**{: data-type="term"} argued over the Constitution.',
+                        'The **Great Compromise**{: data-type="term"} and the '
+                        '**Three-Fifths Compromise**{: data-type="term"} shaped representation.',
+                        "Historians compare Lincoln to the founders.",
+                        "New York ratified after a long debate about the war debt.",
+                    ]
+                ),
+            ),
+        ]
+        vocabulary = ["Constitution", "Lincoln", "York", "White", "War", "Congress"]
+        key_terms = {
+            "Articles of Confederation",
+            "Bill of Rights",
+            "Federalists",
+            "Anti-Federalists",
+            "Great Compromise",
+            "Three-Fifths Compromise",
+        }
+
+        # max_concepts=7 -> int(7 * 0.15) = 1 proper-noun slot, won by the most widely
+        # mentioned proper noun
+        _, one_slot = self.build(records, vocabulary=vocabulary, always=[], max_concepts=7)
+        # max_concepts=14 -> 2 slots; the remaining slots are filled by the other words
+        _, two_slots = self.build(records, vocabulary=vocabulary, always=[], max_concepts=14)
+
+        assert set(one_slot.concepts) == key_terms | {"Constitution"}
+        assert {"Constitution", "Lincoln"} <= set(two_slots.concepts)
+
+    def test_two_character_key_terms_are_kept(self):
+        text = (
+            '**M1**{: data-type="term"} counts currency and checking deposits. '
+            "M2 adds savings deposits to M1."
+        )
+        _, kg = self.build([record("m1", text)], vocabulary=["M2"], always=[])
+
+        assert "M1" in kg.concepts  # an author key term
+        assert "M2" not in kg.concepts  # a two-character keyword is too short
 
     def test_keywords_must_recur_across_modules_in_large_corpora(self):
         # 70 modules -> a YAKE-only phrase needs int(70 * 0.03) = 2 modules

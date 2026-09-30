@@ -48,7 +48,12 @@ from backend.app.kg.schema import (
     Relationship,
     RelationshipType,
 )
-from backend.app.kg.stopwords import STOP_CONCEPTS, is_stop_concept, is_valid_concept
+from backend.app.kg.stopwords import (
+    FUNCTION_WORDS,
+    STOP_CONCEPTS,
+    is_stop_concept,
+    is_valid_concept,
+)
 
 __all__ = [
     "DEFAULT_COOCCURRENCE_THRESHOLD",
@@ -65,6 +70,9 @@ DEFAULT_COOCCURRENCE_THRESHOLD = 5
 MAX_KEYWORD_WORDS = 4
 """Longest YAKE phrase kept; author-marked key terms are not limited."""
 
+MIN_KEY_TERM_LENGTH = 2
+"""Shortest author-marked key term ("M1" in Economics); keywords use ``min_concept_length``."""
+
 MIN_KEYWORD_MODULE_RATIO = 0.03
 """A YAKE-only phrase must be a top keyword of at least this share of modules (minimum 1)."""
 
@@ -76,6 +84,20 @@ MIN_MODULES_FOR_DOCUMENT_RATIO = 10
 
 FRAGMENT_DOMINANCE = 0.5
 """Drop a YAKE-only phrase when this share of its occurrences lie inside longer concepts."""
+
+SINGLE_WORD_QUOTA = 0.15
+"""Share of ``max_concepts`` kept for proper-noun single words ("Constitution", "Lincoln")."""
+
+MIN_CAPITALISED_RATIO = 0.5
+"""A proper noun is written with a capital in at least this share of mid-sentence mentions."""
+
+MAX_NAME_PART_RATIO = 0.5
+"""...and fewer than this share of its capitalised mentions sit next to another capitalised
+word, which would make it part of a longer name ("New York", "Stamp Act", "John Adams")."""
+
+MIN_PHRASE_END_RATIO = 1 / 3
+"""...and at least this share of them end a phrase (punctuation, "of", "was", …). Proper
+adjectives almost never do, because they precede a noun ("British soldiers")."""
 
 _WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['.\-][A-Za-z0-9]+)*")
 _PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
@@ -246,6 +268,69 @@ def _words(text: str) -> tuple[list[str], list[str]]:
     return words, [word.lower() for word in words]
 
 
+def _is_name_word(word: str) -> bool:
+    """A capitalised word that could belong to a multi-word name ("New", "Stamp", "Adams")."""
+    return word[:1].isupper() and word.lower() not in FUNCTION_WORDS
+
+
+@dataclass
+class _CaseStats:
+    """How single words are capitalised in running text, keyed by singular lower-case word."""
+
+    mentions: Counter[str] = field(default_factory=Counter)
+    capitalised: Counter[str] = field(default_factory=Counter)
+    after_name_word: Counter[str] = field(default_factory=Counter)
+    before_name_word: Counter[str] = field(default_factory=Counter)
+    phrase_end: Counter[str] = field(default_factory=Counter)
+
+    @classmethod
+    def from_prose(cls, texts: Iterable[str]) -> "_CaseStats":
+        """Count mid-sentence mentions only, so a capital at the start of a sentence is ignored."""
+        stats = cls()
+        for text in texts:
+            for sentence in _SENTENCE_SPLIT_RE.split(text.replace("’", "'")):
+                matches = list(_WORD_RE.finditer(sentence))
+                for i in range(1, len(matches)):
+                    word = matches[i].group()
+                    possessive = word.lower().endswith("'s")
+                    key = singularize((word[:-2] if possessive else word).lower())
+                    stats.mentions[key] += 1
+                    if not word[:1].isupper():
+                        continue
+                    stats.capitalised[key] += 1
+                    if _is_name_word(matches[i - 1].group()):
+                        stats.after_name_word[key] += 1
+                    following = sentence[matches[i].end() :].lstrip()[:1]
+                    if i + 1 < len(matches) and following.isalnum():
+                        next_word = matches[i + 1].group()
+                        if _is_name_word(next_word):
+                            stats.before_name_word[key] += 1
+                        if possessive or next_word.lower() in FUNCTION_WORDS:
+                            stats.phrase_end[key] += 1
+                    else:  # end of sentence or punctuation follows
+                        stats.phrase_end[key] += 1
+        return stats
+
+    def is_proper_noun(self, key: str) -> bool:
+        """
+        True for a word written as a name on its own: "Constitution", "Congress", "Lincoln".
+
+        It must be capitalised in most mid-sentence mentions (unlike "white" or "total");
+        mostly not next to another capitalised word, so parts of longer names ("York" in
+        "New York", "Act" in "Stamp Act", "John" in "John Adams") are excluded; and often
+        end a phrase, which proper adjectives ("British soldiers") rarely do.
+        """
+        mentions, capitalised = self.mentions[key], self.capitalised[key]
+        if mentions == 0 or capitalised < MIN_CAPITALISED_RATIO * mentions:
+            return False
+        limit = MAX_NAME_PART_RATIO * capitalised
+        return (
+            self.after_name_word[key] < limit
+            and self.before_name_word[key] < limit
+            and self.phrase_end[key] >= MIN_PHRASE_END_RATIO * capitalised
+        )
+
+
 class _PhraseIndex:
     """Finds concept phrases (with simple plural variants) in tokenised text."""
 
@@ -339,7 +424,8 @@ class KGBuilder:
                 ("builds on", "requires an understanding of", "paved the way for", …).
                 Off by default: on the OpenStax books most matches are causal narration
                 ("a higher price leads to …") rather than prerequisites.
-            min_concept_length: Shortest concept name, in characters.
+            min_concept_length: Shortest keyword concept name, in characters. Author key
+                terms may be as short as ``MIN_KEY_TERM_LENGTH`` ("M1").
         """
         if max_concepts < 1:
             raise ValueError("max_concepts must be at least 1")
@@ -377,8 +463,10 @@ class KGBuilder:
     def _add_candidate(self, found: dict[str, _Candidate], raw: str, *, key_term: bool) -> None:
         name, aliases = split_abbreviations(normalize_concept(raw))
         name = normalize_concept(name)
+        # Author key terms may be short ("M1", "M2"); keywords keep min_concept_length.
+        min_length = MIN_KEY_TERM_LENGTH if key_term else self.min_concept_length
         max_words = None if key_term else MAX_KEYWORD_WORDS
-        if not is_valid_concept(name, min_length=self.min_concept_length, max_words=max_words):
+        if not is_valid_concept(name, min_length=min_length, max_words=max_words):
             return
         if not key_term and _MODIFIER_PREFIX_RE.match(name):
             return
@@ -505,7 +593,8 @@ class KGBuilder:
             for module_id, prose in prose_by_module.items()
             for paragraph in _PARAGRAPH_SPLIT_RE.split(prose)
         ]
-        top = self._select_concepts(candidates, paragraphs, len(modules))
+        case_stats = _CaseStats.from_prose(prose_by_module.values())
+        top = self._select_concepts(candidates, paragraphs, len(modules), case_stats)
         names = {candidate.key: candidate.name for candidate in top}
         logger.info(
             f"Selected {len(top)} concepts from {len(candidates)} candidates "
@@ -613,6 +702,7 @@ class KGBuilder:
         candidates: dict[str, _Candidate],
         paragraphs: list[_Paragraph],
         module_count: int,
+        case_stats: _CaseStats,
     ) -> list[_Candidate]:
         """
         Pick the ``max_concepts`` best candidates.
@@ -622,9 +712,12 @@ class KGBuilder:
         least ``MIN_MODULES_FOR_DOCUMENT_RATIO`` modules, be mentioned in at most
         ``MAX_KEYWORD_DOCUMENT_RATIO`` of them; fragments of longer concepts are
         dropped. Candidates are ranked by the number of modules mentioning them.
-        Single-word keywords (mostly generic words such as "War" or "Government")
-        rank below key terms and multi-word phrases, so they only fill slots those
-        leave empty.
+
+        Single-word keywords are mostly generic ("War", "Government", "White"), so they
+        rank below key terms and multi-word phrases, with one exception: up to
+        ``SINGLE_WORD_QUOTA`` of the slots go to single words that the text writes as
+        proper nouns ("Constitution", "Congress", "Union", "Lincoln"), most widely
+        mentioned first. Other single words only fill slots nothing else wants.
         """
         min_modules = max(1, int(module_count * MIN_KEYWORD_MODULE_RATIO))
         eligible = {
@@ -647,15 +740,26 @@ class KGBuilder:
             }
         eligible = self._drop_fragments(eligible, occurrences)
 
-        def rank(candidate: _Candidate) -> tuple[bool, int, int, str]:
+        def rank(candidate: _Candidate) -> tuple[bool, int, int, int, str]:
             return (
                 candidate.key_term or not candidate.is_single_word,
                 len(mentioned_in[candidate.key]),
                 len(candidate.modules),
+                occurrences[candidate.key],
                 candidate.key,
             )
 
-        return sorted(eligible.values(), key=rank, reverse=True)[: self.max_concepts]
+        ranked = sorted(eligible.values(), key=rank, reverse=True)
+        preferred = [c for c in ranked if c.key_term or not c.is_single_word]
+        single_words = [c for c in ranked if not c.key_term and c.is_single_word]
+        proper_nouns = [c for c in single_words if case_stats.is_proper_noun(c.key)]
+        proper_nouns = proper_nouns[: int(self.max_concepts * SINGLE_WORD_QUOTA)]
+        chosen = {c.key for c in proper_nouns}
+
+        selected = preferred[: self.max_concepts - len(proper_nouns)] + proper_nouns
+        leftovers = [c for c in single_words if c.key not in chosen]
+        selected += leftovers[: self.max_concepts - len(selected)]
+        return sorted(selected, key=rank, reverse=True)
 
     def _mine_concept_relationships(
         self, present_by_paragraph: list[set[str]], names: dict[str, str]
