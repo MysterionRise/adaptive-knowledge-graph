@@ -38,7 +38,7 @@ jest.mock('@/lib/store', () => ({
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href }: any) => {
+  return function MockLink({ children, href }: any) {
     return <a href={href}>{children}</a>;
   };
 });
