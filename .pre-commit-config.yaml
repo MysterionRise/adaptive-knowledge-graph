@@ -2,39 +2,44 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      # data/ (pipeline output, raw source text) and docs/evals/ (written by
-      # scripts/evaluate_rag.py) are generated; rewriting them would be undone on regeneration.
+      # Raw source text and pipeline output (data/raw, data/processed) and the
+      # eval reports written by scripts/evaluate_rag.py are generated; rewriting
+      # them would be undone on regeneration. Hand-written files stay checked.
       - id: trailing-whitespace
-        exclude: ^(data|docs/evals)/
+        exclude: ^(data/(raw|processed)/|docs/evals/latest\.(json|md)$)
       - id: end-of-file-fixer
-        exclude: ^(data|docs/evals)/
+        exclude: ^(data/(raw|processed)/|docs/evals/latest\.(json|md)$)
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=1000']
-        exclude: ^data/
       - id: check-json
       - id: check-toml
       - id: check-merge-conflict
       - id: detect-private-key
 
-  # Keep rev in sync with the ruff version locked in poetry.lock.
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.9
-    hooks:
-      - id: ruff-check
-        args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
-        # Python only, like CI; the upstream hook also formats code blocks in Markdown.
-        types_or: [python, pyi, jupyter]
-
-  # Runs exactly what CI runs, using the project's Poetry environment and type stubs.
+  # Ruff and mypy run from the project's Poetry environment, so the hooks use
+  # exactly the versions locked in poetry.lock and check what CI checks.
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: poetry run ruff check --fix --exit-non-zero-on-fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: poetry run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: mypy
         name: mypy
-        entry: poetry run mypy backend/app scripts/
+        # Paths come from [tool.mypy] files in pyproject.toml.
+        entry: poetry run mypy
         language: system
         types: [python]
+        files: ^(backend/app|scripts)/
         pass_filenames: false
 
   # Frontend hooks
