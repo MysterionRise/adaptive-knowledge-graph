@@ -2,11 +2,11 @@
 # FastAPI backend, CUDA inference (NVIDIA GPU + NVIDIA Container Toolkit).
 #   docker compose -f infra/compose/compose.yaml --profile gpu up -d --wait
 #
-# Ubuntu 24.04 ships Python 3.12 as its system Python. The locked torch wheel from PyPI
-# (torch 2.9.1 on linux/amd64) already bundles the CUDA 12.8 user-space libraries through the
-# nvidia-*-cu12 wheels, so no extra PyTorch index is needed and the CUDA "base" image is
-# enough: the "runtime" variant would duplicate ~2 GB of the same libraries. The host needs an
-# NVIDIA driver that supports CUDA 12.8. Single stage for the same reason as api.cpu.Dockerfile.
+# Ubuntu 24.04 ships Python 3.12 as its system Python. The locked torch wheel from PyPI (2.10.x
+# on linux/amd64, pinned <2.11 in pyproject.toml) already bundles the CUDA 12.8 user-space
+# libraries through the nvidia-*-cu12 wheels, so no extra PyTorch index is needed and the CUDA
+# "base" image is enough: the "runtime" variant would duplicate ~2 GB of the same libraries. The
+# host needs an NVIDIA driver that supports CUDA 12.8. Single stage, like api.cpu.Dockerfile.
 
 ARG CUDA_IMAGE=nvidia/cuda:12.8.1-base-ubuntu24.04
 FROM ${CUDA_IMAGE}

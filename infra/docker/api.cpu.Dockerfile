@@ -34,7 +34,7 @@ COPY pyproject.toml poetry.lock README.md ./
 
 # Locked runtime dependencies into /opt/venv (Poetry runs from its own throwaway venv), plus the
 # spaCy model the concept extractor loads. Compilers are only needed for packages without a
-# wheel on this platform (e.g. hdbscan on arm64) and are purged again.
+# wheel on this platform and are purged again.
 RUN --mount=type=cache,target=/root/.cache \
     apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
