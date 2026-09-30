@@ -7,9 +7,9 @@ assessment over synthetic learner state, and a demo readiness page.
 ## Prerequisites
 
 - Node.js 24 LTS, pinned in the repository's [`.node-version`](../.node-version).
-  `npm ci` enforces the `engines` range in `package.json`
-  (`engine-strict=true` in `.npmrc`), so an unsupported Node version fails
-  early.
+  `package.json` accepts Node `^22.13.0 || >=24`, and `npm ci` enforces that
+  range (`engine-strict=true` in `.npmrc`), so an unsupported Node version
+  fails early.
 - npm
 - The FastAPI backend running on `http://localhost:8000`. See the
   [README quickstart](../README.md#quickstart).
@@ -74,9 +74,12 @@ npm run lint              # ESLint (eslint .)
 npm run type-check        # TypeScript checks (tsc --noEmit)
 npm test                  # Jest unit tests
 npm run test:coverage     # Jest with coverage
-npm run test:e2e          # Playwright end-to-end tests
+npm run test:e2e          # Playwright end-to-end tests (Chromium, API stubbed, no backend needed)
 npm run test:integration  # Playwright tests against a live, seeded stack
 ```
+
+`npm run test:e2e` builds and starts the app itself (or reuses a server that is
+already running outside CI) on port 3000; set `E2E_PORT` to use another port.
 
 The checks CI runs:
 
@@ -100,7 +103,7 @@ frontend/
 ├── tests/
 │   ├── unit/         # Jest + React Testing Library
 │   ├── integration/  # Playwright against live services
-│   └── e2e/          # Playwright
+│   └── e2e/          # Playwright with a stubbed API
 └── types/          # type declarations for Cytoscape plugins
 ```
 

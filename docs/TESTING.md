@@ -100,8 +100,8 @@ npm run build           # production build
 | Suite | Location | Needs |
 | --- | --- | --- |
 | Unit (Jest, React Testing Library) | `frontend/tests/unit/` | Nothing; the API client is mocked |
+| End-to-end (Playwright, Chromium) | `frontend/tests/e2e/` | Nothing; the API is stubbed and Playwright builds and starts the app. Run with `npm run test:e2e`; `E2E_PORT` overrides port 3000 |
 | Integration (Playwright) | `frontend/tests/integration/` | A running, seeded stack; run with `make test-integration` |
-| End-to-end (Playwright) | `frontend/tests/e2e/` | The frontend dev server; run with `npm run test:e2e` |
 
 Before a release or demo, walk through the manual
 [testing checklist](../frontend/TESTING_CHECKLIST.md).
@@ -134,9 +134,10 @@ required):
   documentation check.
 - **npm audit:** part of the frontend job.
 
+The Playwright end-to-end job runs only on manual dispatch for now, and the
+live-stack integration suite runs locally with `make test-integration`.
 Separate workflows run CodeQL analysis, build the Docker images when their
-inputs change, and publish a GitHub Release for `v*` tags. Playwright tests
-against a live stack are manual only; run `make test-integration` locally.
+inputs change, and publish a GitHub Release for `v*` tags.
 
 ## Evaluation
 
