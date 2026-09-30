@@ -101,6 +101,8 @@ for candidate in python3.13 python3.12 python3.11 python3; do
 done
 if [ -n "$py_found" ]; then
     check_pass "Python for the backend: $py_found"
+elif poetry_env_ready; then
+    check_warn "No Python 3.11-3.13 on PATH (the existing Poetry environment still works)"
 else
     check_fail "No Python 3.11-3.13 on PATH (python3.13/3.12/3.11); Poetry needs one for the backend"
 fi
