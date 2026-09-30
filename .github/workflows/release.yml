@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          : > notes.md
+          if [ -f CHANGELOG.md ]; then
+            # Print the body of the "## [x.y.z]" section up to the next level-2
+            # heading, without Keep a Changelog link reference definitions.
+            awk -v heading="## [${version}]" '
+              /^## / {
+                if (found) exit
+                if (index($0, heading) == 1) { found = 1; next }
+              }
+              found && !/^\[.*\]: / { print }
+            ' CHANGELOG.md > notes.md
+          fi
+          if grep -q '[^[:space:]]' notes.md; then
+            echo "Using the [${version}] section of CHANGELOG.md"
+            echo "source=changelog" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No [${version}] section in CHANGELOG.md; using generated notes"
+            echo "source=generated" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          NOTES_SOURCE: ${{ steps.notes.outputs.source }}
+        run: |
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "::notice::Release ${TAG} already exists; leaving it unchanged"
+            exit 0
+          fi
+          args=(--title "${TAG}" --verify-tag)
+          if [ "${NOTES_SOURCE}" = "changelog" ]; then
+            args+=(--notes-file notes.md)
+          else
+            args+=(--generate-notes)
+          fi
+          # Tags such as v0.3.0-rc.1 are published as pre-releases.
+          case "${TAG}" in
+            *-*) args+=(--prerelease) ;;
+          esac
+          gh release create "${TAG}" "${args[@]}"
