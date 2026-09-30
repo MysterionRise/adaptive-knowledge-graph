@@ -181,3 +181,37 @@ def test_validation_handler_hides_ctx_and_input_for_every_error():
     assert response.status_code == 422
     for error in response.json()["detail"]:
         assert set(error) == {"loc", "msg", "type"}
+
+
+def test_validation_handler_accepts_errors_raised_by_route_code():
+    """Routes may raise RequestValidationError themselves (e.g. a markup check)."""
+    app = FastAPI()
+    app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
+
+    @app.post("/check")
+    def check():
+        raise RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("body", "question"),
+                    "msg": "Value error, markup is not allowed",
+                    "input": "<script>secret</script>",
+                    "ctx": {"error": "markup"},
+                },
+                "a bare string entry",
+            ]
+        )
+
+    response = TestClient(app).post("/check")
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {
+            "loc": ["body", "question"],
+            "msg": "Value error, markup is not allowed",
+            "type": "value_error",
+        },
+        {"loc": [], "msg": "a bare string entry", "type": "value_error"},
+    ]
+    assert "secret" not in response.text

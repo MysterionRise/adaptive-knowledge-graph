@@ -3,7 +3,7 @@ Custom exceptions and error-response helpers for the Adaptive Knowledge Graph ap
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from fastapi.exceptions import RequestValidationError
@@ -97,6 +97,9 @@ def public_validation_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:
     """
     public: list[dict[str, Any]] = []
     for error in errors:
+        # Route code may raise RequestValidationError itself, with hand-built entries.
+        if not isinstance(error, Mapping):
+            error = {"msg": str(error), "type": "value_error"}
         loc = [part if isinstance(part, str | int) else str(part) for part in error.get("loc", ())]
         public.append(
             {

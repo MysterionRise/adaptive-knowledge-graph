@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # "production" refuses to start without API_KEY and hides the API docs by default;
     # "development" allows the keyless local quickstart (with a startup warning).
     app_env: Literal["development", "production"] = "development"
+    # /docs, /redoc and /openapi.json. Unset: on in development, off in production.
+    api_docs_enabled: bool | None = None
     debug: bool = False
     log_level: str = "INFO"
 
@@ -41,8 +43,6 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_prefix: str = "/api/v1"
     api_key: str = ""  # Set via API_KEY env var for authentication
-    # /docs, /redoc and /openapi.json. Unset: on in development, off in production.
-    api_docs_enabled: bool | None = None
 
     # Rate Limiting
     rate_limit_enabled: bool = True
