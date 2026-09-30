@@ -371,16 +371,18 @@ jobs:
           shellcheck scripts/*.sh
 
   # ---------------------------------------------------------------------------
-  # Manual only: needs a running demo environment (WS-D is making the specs
-  # hermetic; the release PR may promote it). Drop the `if:` before adding it
-  # to `All Checks Passed`, or the gate would see it as skipped.
+  # Advisory, on every PR, push and manual dispatch: `npm run test:e2e` runs
+  # the hermetic chromium project (API calls stubbed in tests/e2e/fixtures.ts,
+  # no backend needed). The release PR promotes it by adding it to
+  # `All Checks Passed` and dropping `continue-on-error`.
   # ---------------------------------------------------------------------------
   e2e-tests:
-    name: E2E Tests (Playwright, manual demo env)
+    name: E2E Tests (Playwright, advisory)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [frontend]
-    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
     defaults:
       run:
         working-directory: frontend
@@ -392,11 +394,11 @@ jobs:
       - name: Set up Node.js and install dependencies
         uses: ./.github/actions/setup-frontend
 
-      - name: Install Playwright browsers
+      - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright tests
-        run: npm run test:e2e -- --project=chromium
+      - name: Run Playwright tests (hermetic chromium project)
+        run: npm run test:e2e
 
       - name: Upload Playwright report
         # always(): also keep the report when the job times out or is cancelled.
@@ -406,6 +408,7 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
+          overwrite: true # a re-run replaces the previous attempt's report
 
   # ---------------------------------------------------------------------------
   # The required status check on `main`. Keep the name unchanged.
