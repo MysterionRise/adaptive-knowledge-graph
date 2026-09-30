@@ -29,7 +29,7 @@ services:
 
   # OpenSearch Vector Database
   opensearch:
-    image: opensearchproject/opensearch:2.19.3
+    image: opensearchproject/opensearch:3.8.0
     container_name: opensearch
     environment:
       - cluster.name=opensearch-cluster
