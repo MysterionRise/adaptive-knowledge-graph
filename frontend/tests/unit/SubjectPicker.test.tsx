@@ -1,11 +1,13 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import SubjectPicker from '@/components/SubjectPicker';
+import { ApiError } from '@/lib/api-errors';
 import { useAppStore } from '@/lib/store';
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
   ChevronDown: ({ className }: any) => <span data-testid="chevron-down" className={className} />,
   BookOpen: ({ className }: any) => <span data-testid="book-open" className={className} />,
+  RefreshCw: ({ className }: any) => <span data-testid="refresh" className={className} />,
 }));
 
 // Mock api-client
@@ -17,236 +19,284 @@ jest.mock('@/lib/api-client', () => ({
 
 import { apiClient } from '@/lib/api-client';
 
+const mockGetSubjects = apiClient.getSubjects as jest.Mock;
+
 const mockSubjects = {
   subjects: [
-    { id: 'us_history', name: 'US History', description: 'American history', is_default: true },
+    { id: 'us_history', name: 'US History', description: 'American history', is_default: true, available: true },
+    // Older backends do not send `available`
     { id: 'economics', name: 'Economics', description: 'Economic principles', is_default: false },
-    { id: 'biology', name: 'Biology', description: 'Life sciences', is_default: false },
+    { id: 'biology', name: 'Biology', description: 'Life sciences', is_default: false, available: false },
+    { id: 'world_history', name: 'World History', description: 'World history', is_default: false, available: true },
   ],
   default_subject: 'us_history',
 };
 
 // Reset store between tests
 const initialStoreState = useAppStore.getState();
-const originalFetch = global.fetch;
+
+const trigger = () => screen.getByRole('button', { name: /Subject:/ });
+const option = (name: RegExp) => screen.getByRole('option', { name });
+
+/** Render the picker and wait for the subjects. */
+async function renderPicker() {
+  render(<SubjectPicker />);
+  await screen.findByRole('button', { name: /Subject:/ });
+}
 
 describe('SubjectPicker Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAppStore.setState(initialStoreState);
-    (apiClient.getSubjects as jest.Mock).mockResolvedValue(mockSubjects);
-  });
-
-  afterEach(() => {
-    global.fetch = originalFetch;
+    mockGetSubjects.mockResolvedValue(mockSubjects);
   });
 
   describe('Loading State', () => {
     it('shows loading skeleton while fetching subjects', () => {
-      (apiClient.getSubjects as jest.Mock).mockImplementation(
-        () => new Promise(() => {}) // Never resolves
-      );
+      mockGetSubjects.mockImplementation(() => new Promise(() => {}));
 
       render(<SubjectPicker />);
 
-      expect(screen.getByText('', { selector: '.animate-pulse' })).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Loading subjects');
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
     });
   });
 
   describe('Rendered State', () => {
-    it('renders subject picker button after loading', async () => {
-      render(<SubjectPicker />);
+    it('shows the current subject in the button', async () => {
+      useAppStore.setState({ currentSubject: 'economics' });
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Select Subject|US History/i })).toBeInTheDocument();
-      });
+      await renderPicker();
+
+      expect(trigger()).toHaveAccessibleName('Subject: Economics');
+      expect(trigger()).toHaveAttribute('aria-haspopup', 'listbox');
+      expect(trigger()).toHaveAttribute('aria-expanded', 'false');
     });
 
-    it('shows current subject name in button', async () => {
-      useAppStore.setState({ currentSubject: 'us_history' });
-
-      render(<SubjectPicker />);
-
-      await waitFor(() => {
-        expect(screen.getByText('US History')).toBeInTheDocument();
-      });
-    });
-
-    it('shows "Select Subject" when no match found', async () => {
+    it('switches to the default subject when the remembered one no longer exists', async () => {
       useAppStore.setState({ currentSubject: 'nonexistent' });
 
-      render(<SubjectPicker />);
+      await renderPicker();
 
-      await waitFor(() => {
-        expect(screen.getByText('Select Subject')).toBeInTheDocument();
+      await waitFor(() => expect(useAppStore.getState().currentSubject).toBe('us_history'));
+      expect(trigger()).toHaveAccessibleName('Subject: US History');
+    });
+
+    it('switches to the default subject when the remembered one has no data', async () => {
+      useAppStore.setState({ currentSubject: 'biology' });
+
+      await renderPicker();
+
+      await waitFor(() => expect(useAppStore.getState().currentSubject).toBe('us_history'));
+    });
+
+    it('keeps the subject when no subject has data (e.g. the database is down)', async () => {
+      mockGetSubjects.mockResolvedValue({
+        ...mockSubjects,
+        subjects: mockSubjects.subjects.map((subject) => ({ ...subject, available: false })),
       });
+      useAppStore.setState({ currentSubject: 'economics' });
+
+      await renderPicker();
+
+      expect(useAppStore.getState().currentSubject).toBe('economics');
+    });
+
+    it('uses the theme colour of the current subject', async () => {
+      useAppStore.setState({
+        subjectTheme: {
+          subject_id: 'us_history',
+          primary_color: '#dc2626',
+          secondary_color: '#fca5a5',
+          accent_color: '#b91c1c',
+          chapter_colors: {},
+        },
+      });
+
+      await renderPicker();
+
+      expect(trigger().firstElementChild).toHaveStyle({ backgroundColor: '#dc2626' });
+    });
+
+    it('uses a neutral colour until the theme of the subject is loaded', async () => {
+      await renderPicker();
+
+      expect(trigger().firstElementChild).toHaveStyle({ backgroundColor: '#9ca3af' });
     });
   });
 
   describe('Dropdown Interaction', () => {
-    it('opens dropdown when button is clicked', async () => {
-      render(<SubjectPicker />);
+    it('opens a listbox with all subjects', async () => {
+      await renderPicker();
 
-      await waitFor(() => {
-        expect(screen.getByText('US History')).toBeInTheDocument();
-      });
+      fireEvent.click(trigger());
 
-      const button = screen.getByRole('button', { name: /US History/i });
-      fireEvent.click(button);
-
-      // All subjects should be visible in dropdown
-      expect(screen.getByText('Economics')).toBeInTheDocument();
-      expect(screen.getByText('Biology')).toBeInTheDocument();
+      expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+      const listbox = screen.getByRole('listbox', { name: 'Subjects' });
+      expect(trigger()).toHaveAttribute('aria-controls', listbox.id);
+      expect(screen.getAllByRole('option')).toHaveLength(4);
+      expect(option(/US History/)).toHaveAttribute('aria-selected', 'true');
+      expect(option(/Economics/)).toHaveAttribute('aria-selected', 'false');
     });
 
-    it('shows default badge on default subject', async () => {
-      render(<SubjectPicker />);
+    it('marks the default subject', async () => {
+      await renderPicker();
+      fireEvent.click(trigger());
 
-      await waitFor(() => {
-        expect(screen.getByText('US History')).toBeInTheDocument();
-      });
-
-      const button = screen.getByRole('button', { name: /US History/i });
-      fireEvent.click(button);
-
-      expect(screen.getByText('Default')).toBeInTheDocument();
+      expect(option(/US History/)).toHaveTextContent('Default');
     });
 
-    it('closes dropdown when backdrop is clicked', async () => {
-      render(<SubjectPicker />);
+    it('shows subjects without data as disabled "coming soon" options', async () => {
+      await renderPicker();
+      fireEvent.click(trigger());
 
-      await waitFor(() => {
-        expect(screen.getByText('US History')).toBeInTheDocument();
-      });
+      expect(option(/Biology/)).toHaveAttribute('aria-disabled', 'true');
+      expect(option(/Biology/)).toHaveTextContent('Coming soon');
+      // A missing `available` field means the subject can be selected
+      expect(option(/Economics/)).not.toHaveAttribute('aria-disabled');
+      expect(option(/Economics/)).not.toHaveTextContent('Coming soon');
 
-      const button = screen.getByRole('button', { name: /US History/i });
-      fireEvent.click(button);
+      fireEvent.click(option(/Biology/));
 
-      // Economics should be visible
-      expect(screen.getByText('Economics')).toBeInTheDocument();
-
-      // Click backdrop (fixed inset-0 div)
-      const backdrop = document.querySelector('.fixed.inset-0');
-      if (backdrop) {
-        fireEvent.click(backdrop);
-      }
-
-      // Dropdown should close — Economics should no longer be an option
-      await waitFor(() => {
-        // The button text "US History" should still be there but dropdown options gone
-        const options = screen.queryAllByRole('option');
-        expect(options.length).toBe(0);
-      });
+      expect(useAppStore.getState().currentSubject).toBe('us_history');
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
-    it('changes subject when option is clicked', async () => {
-      // Mock the theme fetch
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          subject_id: 'economics',
-          primary_color: '#d97706',
-          secondary_color: '#fbbf24',
-          accent_color: '#f59e0b',
-          chapter_colors: {},
-        }),
-      });
+    it('changes the subject when an option is clicked', async () => {
+      await renderPicker();
+      fireEvent.click(trigger());
 
-      render(<SubjectPicker />);
+      fireEvent.click(option(/Economics/));
 
-      await waitFor(() => {
-        expect(screen.getByText('US History')).toBeInTheDocument();
-      });
-
-      const button = screen.getByRole('button', { name: /US History/i });
-      fireEvent.click(button);
-
-      // Click Economics
-      const economicsOption = screen.getByRole('option', { name: /Economics/i });
-      fireEvent.click(economicsOption);
-
-      // Store should be updated
       expect(useAppStore.getState().currentSubject).toBe('economics');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger()).toHaveAccessibleName('Subject: Economics');
+      expect(trigger()).toHaveFocus();
+    });
 
-      // The new subject's theme is loaded, the dropdown closes and the picker shows Economics
-      await waitFor(() => {
-        expect(useAppStore.getState().subjectTheme?.subject_id).toBe('economics');
-      });
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/subjects/economics/theme')
-      );
-      expect(await screen.findByRole('button', { name: /Economics/i })).toBeInTheDocument();
-      expect(screen.queryAllByRole('option')).toHaveLength(0);
+    it('closes the dropdown when the backdrop is clicked', async () => {
+      await renderPicker();
+      fireEvent.click(trigger());
+
+      fireEvent.click(document.querySelector('.fixed.inset-0') as Element);
+
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it('closes the dropdown when the button is clicked again', async () => {
+      await renderPicker();
+      fireEvent.click(trigger());
+
+      fireEvent.click(trigger());
+
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
   });
 
-  describe('Accessibility', () => {
-    it('has aria-haspopup on trigger button', async () => {
-      render(<SubjectPicker />);
+  describe('Keyboard', () => {
+    it('opens with ArrowDown and focuses the selected subject', async () => {
+      useAppStore.setState({ currentSubject: 'economics' });
+      await renderPicker();
 
-      await waitFor(() => {
-        const button = screen.getByRole('button', { name: /US History/i });
-        expect(button).toHaveAttribute('aria-haspopup', 'listbox');
-      });
+      fireEvent.keyDown(trigger(), { key: 'ArrowDown' });
+
+      expect(option(/Economics/)).toHaveFocus();
     });
 
-    it('has aria-expanded reflecting open state', async () => {
-      render(<SubjectPicker />);
+    it('opens with ArrowUp and focuses the last available subject', async () => {
+      await renderPicker();
 
-      await waitFor(() => {
-        const button = screen.getByRole('button', { name: /US History/i });
-        expect(button).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.keyDown(trigger(), { key: 'ArrowUp' });
 
-        fireEvent.click(button);
-        expect(button).toHaveAttribute('aria-expanded', 'true');
-      });
+      expect(option(/World History/)).toHaveFocus();
     });
 
-    it('has aria-selected on current subject option', async () => {
-      useAppStore.setState({ currentSubject: 'us_history' });
+    it('moves between available subjects, skipping disabled ones', async () => {
+      await renderPicker();
+      fireEvent.keyDown(trigger(), { key: 'ArrowDown' });
+      const listbox = screen.getByRole('listbox');
 
-      render(<SubjectPicker />);
+      fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+      expect(option(/Economics/)).toHaveFocus();
 
-      await waitFor(() => {
-        expect(screen.getByText('US History')).toBeInTheDocument();
-      });
+      fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+      expect(option(/World History/)).toHaveFocus();
 
-      const button = screen.getByRole('button', { name: /US History/i });
-      fireEvent.click(button);
+      // Stays on the last option
+      fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+      expect(option(/World History/)).toHaveFocus();
 
-      const options = screen.getAllByRole('option');
-      const selectedOption = options.find(
-        (opt) => opt.getAttribute('aria-selected') === 'true'
-      );
-      expect(selectedOption).toBeTruthy();
+      fireEvent.keyDown(listbox, { key: 'ArrowUp' });
+      expect(option(/Economics/)).toHaveFocus();
+
+      fireEvent.keyDown(listbox, { key: 'Home' });
+      expect(option(/US History/)).toHaveFocus();
+
+      fireEvent.keyDown(listbox, { key: 'End' });
+      expect(option(/World History/)).toHaveFocus();
+    });
+
+    it('selects the focused subject with Enter', async () => {
+      await renderPicker();
+      fireEvent.keyDown(trigger(), { key: 'ArrowDown' });
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'ArrowDown' });
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Enter' });
+
+      expect(useAppStore.getState().currentSubject).toBe('economics');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('selects the focused subject with Space', async () => {
+      await renderPicker();
+      fireEvent.keyDown(trigger(), { key: 'ArrowUp' });
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: ' ' });
+
+      expect(useAppStore.getState().currentSubject).toBe('world_history');
+    });
+
+    it('closes with Escape and returns focus to the button', async () => {
+      await renderPicker();
+      fireEvent.keyDown(trigger(), { key: 'ArrowDown' });
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger()).toHaveFocus();
+      expect(useAppStore.getState().currentSubject).toBe('us_history');
+    });
+
+    it('closes when focus leaves with Tab', async () => {
+      await renderPicker();
+      fireEvent.keyDown(trigger(), { key: 'ArrowDown' });
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Tab' });
+
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
   });
 
   describe('Error Handling', () => {
-    it('handles API failure gracefully', async () => {
-      (apiClient.getSubjects as jest.Mock).mockRejectedValue(new Error('Network error'));
+    it('shows an error with a retry action instead of an empty dropdown', async () => {
+      mockGetSubjects
+        .mockRejectedValueOnce(new ApiError('network', 'Could not reach the API at http://localhost:8000.'))
+        .mockResolvedValueOnce(mockSubjects);
 
       render(<SubjectPicker />);
 
-      // Should eventually render (loading state ends)
-      await waitFor(() => {
-        // Component should still render even if API fails
-        expect(screen.getByRole('button')).toBeInTheDocument();
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent("Couldn't load subjects");
+      expect(alert).toHaveTextContent('Could not reach the API at http://localhost:8000.');
+      expect(screen.queryByRole('button', { name: /Subject:/ })).not.toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
       });
-    });
-  });
 
-  describe('Subject Color', () => {
-    it('uses default color for known subjects', async () => {
-      useAppStore.setState({ currentSubject: 'us_history' });
-
-      render(<SubjectPicker />);
-
-      await waitFor(() => {
-        // The color dot should exist
-        const colorDot = document.querySelector('.rounded-full');
-        expect(colorDot).toBeInTheDocument();
-      });
+      expect(await screen.findByRole('button', { name: /Subject:/ })).toBeInTheDocument();
+      expect(mockGetSubjects).toHaveBeenCalledTimes(2);
     });
   });
 });

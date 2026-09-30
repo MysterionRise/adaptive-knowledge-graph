@@ -1,40 +1,25 @@
 /**
  * Global application state using Zustand.
  *
- * Used for cross-page communication and shared state.
- * Includes backend sync for student mastery tracking.
- * Includes multi-subject support.
+ * Used for cross-page communication and shared state: the current subject (remembered in
+ * localStorage), graph highlights sent from the chat, and the learner's mastery, which is
+ * synced with the backend.
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { buildApiHeaders } from './api-client';
-import type { SubjectTheme } from './types';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { apiClient } from './api-client';
+import { describeError } from './api-errors';
+import { INITIAL_MASTERY, type ConceptMastery } from './mastery';
+import type { MasteryUpdateResponse, SubjectTheme } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_PREFIX = '/api/v1';
+export const DEFAULT_SUBJECT = 'us_history';
 
-interface ConceptMastery {
-  conceptName: string;
-  masteryLevel: number; // 0.0 - 1.0
-  attempts: number;
-  lastAssessed: string | null;
-}
+/** localStorage key of the persisted preferences (the current subject). */
+export const PREFERENCES_STORAGE_KEY = 'akg-preferences';
 
-interface MasteryUpdateResponse {
-  concept: string;
-  previous_mastery: number;
-  new_mastery: number;
-  target_difficulty: 'easy' | 'medium' | 'hard';
-  total_attempts: number;
-}
-
-interface StudentProfileResponse {
-  student_id: string;
-  overall_ability: number;
-  mastery_levels: Record<string, number>;
-  updated_at: string;
-}
+// Same format as the backend's subject IDs; anything else in storage is ignored.
+const SUBJECT_ID_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 
 interface AppState {
   // Subject state (persisted)
@@ -42,16 +27,11 @@ interface AppState {
   setCurrentSubject: (subjectId: string) => void;
   subjectTheme: SubjectTheme | null;
   loadSubjectTheme: (subjectId: string) => Promise<void>;
-  isLoadingTheme: boolean;
 
   // Highlighted concepts (from chat to graph)
   highlightedConcepts: string[];
   setHighlightedConcepts: (concepts: string[]) => void;
   clearHighlightedConcepts: () => void;
-
-  // Last query concepts (for cross-page navigation)
-  lastQueryConcepts: string[];
-  setLastQueryConcepts: (concepts: string[]) => void;
 
   // Last query text (for context)
   lastQuery: string | null;
@@ -60,214 +40,169 @@ interface AppState {
   // Mastery tracking (synced with backend)
   masteryMap: Record<string, ConceptMastery>;
   updateMastery: (conceptName: string, correct: boolean) => void;
-  getMastery: (conceptName: string) => number;
 
   // Backend sync functions
   syncMasteryToBackend: (concept: string, correct: boolean) => Promise<MasteryUpdateResponse | null>;
   loadMasteryFromBackend: () => Promise<void>;
+  /** Reset the learner profile. Rejects with the API error when the backend reset fails. */
   resetMasteryOnBackend: () => Promise<void>;
 
   // Backend sync state
   isSyncing: boolean;
+  /** Message of the last failed profile load or mastery sync (null after a success). */
   lastSyncError: string | null;
-
-  // UI state
-  isGraphLoading: boolean;
-  setGraphLoading: (loading: boolean) => void;
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
-  // Subject state
-  currentSubject: 'us_history', // Default subject
-  setCurrentSubject: (subjectId) => {
-    set({ currentSubject: subjectId });
-    // Save to localStorage for persistence
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('akg_current_subject', subjectId);
-    }
-  },
-  subjectTheme: null,
-  isLoadingTheme: false,
-  loadSubjectTheme: async (subjectId: string) => {
-    set({ isLoadingTheme: true });
-    try {
-      const response = await fetch(`${API_BASE}${API_PREFIX}/subjects/${subjectId}/theme`);
-      if (response.ok) {
-        const theme: SubjectTheme = await response.json();
-        set({ subjectTheme: theme, isLoadingTheme: false });
-      } else {
-        console.error('Failed to load subject theme:', response.status);
-        set({ isLoadingTheme: false });
-      }
-    } catch (error) {
-      console.error('Failed to load subject theme:', error);
-      set({ isLoadingTheme: false });
-    }
-  },
+type PersistedState = Pick<AppState, 'currentSubject'>;
 
-  // Highlighted concepts
-  highlightedConcepts: [],
-  setHighlightedConcepts: (concepts) => set({ highlightedConcepts: concepts }),
-  clearHighlightedConcepts: () => set({ highlightedConcepts: [] }),
-
-  // Last query concepts
-  lastQueryConcepts: [],
-  setLastQueryConcepts: (concepts) => set({ lastQueryConcepts: concepts }),
-
-  // Last query
-  lastQuery: null,
-  setLastQuery: (query) => set({ lastQuery: query }),
-
-  // Mastery tracking
-  masteryMap: {},
-
-  updateMastery: (conceptName, correct) => {
-    const current = get().masteryMap[conceptName] || {
-      conceptName,
-      masteryLevel: 0.3, // Initial mastery
-      attempts: 0,
-      lastAssessed: null,
-    };
-
-    // Simple Bayesian-like update (local optimistic update)
-    const delta = correct ? 0.15 : -0.1;
-    const newLevel = Math.max(0.1, Math.min(1, current.masteryLevel + delta));
-
-    set({
-      masteryMap: {
-        ...get().masteryMap,
-        [conceptName]: {
-          ...current,
-          masteryLevel: newLevel,
-          attempts: current.attempts + 1,
-          lastAssessed: new Date().toISOString(),
-        },
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      // Subject state
+      currentSubject: DEFAULT_SUBJECT,
+      setCurrentSubject: (subjectId) => {
+        if (subjectId === get().currentSubject) return;
+        // Highlights and the last query belong to the previous subject's graph.
+        set({ currentSubject: subjectId, highlightedConcepts: [], lastQuery: null });
       },
-    });
+      subjectTheme: null,
+      loadSubjectTheme: async (subjectId) => {
+        try {
+          const theme = await apiClient.getSubjectTheme(subjectId);
+          // Ignore a late response for a subject that is no longer selected.
+          if (get().currentSubject === subjectId) set({ subjectTheme: theme });
+        } catch (error) {
+          // The default colours are used; nothing to show to the user.
+          console.warn(`Could not load the theme of subject "${subjectId}": ${describeError(error)}`);
+        }
+      },
 
-    // Also sync to backend (fire and forget)
-    get().syncMasteryToBackend(conceptName, correct);
-  },
+      // Highlighted concepts
+      highlightedConcepts: [],
+      setHighlightedConcepts: (concepts) => set({ highlightedConcepts: concepts }),
+      clearHighlightedConcepts: () => set({ highlightedConcepts: [] }),
 
-  getMastery: (conceptName) => {
-    return get().masteryMap[conceptName]?.masteryLevel ?? 0.3;
-  },
+      // Last query
+      lastQuery: null,
+      setLastQuery: (query) => set({ lastQuery: query }),
 
-  // Backend sync functions
-  syncMasteryToBackend: async (concept: string, correct: boolean): Promise<MasteryUpdateResponse | null> => {
-    set({ isSyncing: true, lastSyncError: null });
+      // Mastery tracking
+      masteryMap: {},
 
-    try {
-      const response = await fetch(`${API_BASE}${API_PREFIX}/student/mastery`, {
-        method: 'POST',
-        headers: buildApiHeaders({
-          'Content-Type': 'application/json',
-        }),
-        body: JSON.stringify({ concept, correct }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to sync mastery: ${response.status}`);
-      }
-
-      const data: MasteryUpdateResponse = await response.json();
-
-      // Update local state with backend response
-      const current = get().masteryMap[concept] || {
-        conceptName: concept,
-        masteryLevel: 0.3,
-        attempts: 0,
-        lastAssessed: null,
-      };
-
-      set({
-        masteryMap: {
-          ...get().masteryMap,
-          [concept]: {
-            ...current,
-            masteryLevel: data.new_mastery,
-            attempts: data.total_attempts,
-            lastAssessed: new Date().toISOString(),
-          },
-        },
-        isSyncing: false,
-      });
-
-      return data;
-    } catch (error) {
-      console.error('Failed to sync mastery to backend:', error);
-      set({
-        isSyncing: false,
-        lastSyncError: error instanceof Error ? error.message : 'Unknown error'
-      });
-      return null;
-    }
-  },
-
-  loadMasteryFromBackend: async (): Promise<void> => {
-    set({ isSyncing: true, lastSyncError: null });
-
-    try {
-      const response = await fetch(`${API_BASE}${API_PREFIX}/student/profile`, {
-        headers: buildApiHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to load profile: ${response.status}`);
-      }
-
-      const data: StudentProfileResponse = await response.json();
-
-      // Convert backend format to local format
-      const masteryMap: Record<string, ConceptMastery> = {};
-      for (const [concept, level] of Object.entries(data.mastery_levels)) {
-        masteryMap[concept] = {
-          conceptName: concept,
-          masteryLevel: level,
-          attempts: 0, // Backend doesn't return this in profile summary
-          lastAssessed: data.updated_at,
+      updateMastery: (conceptName, correct) => {
+        const current = get().masteryMap[conceptName] || {
+          conceptName,
+          masteryLevel: INITIAL_MASTERY,
+          attempts: 0,
+          lastAssessed: null,
         };
-      }
 
-      set({ masteryMap, isSyncing: false });
-    } catch (error) {
-      console.error('Failed to load mastery from backend:', error);
-      set({
-        isSyncing: false,
-        lastSyncError: error instanceof Error ? error.message : 'Unknown error'
-      });
+        // Simple Bayesian-like update (local optimistic update)
+        const delta = correct ? 0.15 : -0.1;
+        const newLevel = Math.max(0.1, Math.min(1, current.masteryLevel + delta));
+
+        set({
+          masteryMap: {
+            ...get().masteryMap,
+            [conceptName]: {
+              ...current,
+              masteryLevel: newLevel,
+              attempts: current.attempts + 1,
+              lastAssessed: new Date().toISOString(),
+            },
+          },
+        });
+
+        // Also sync to backend (fire and forget; failures end up in lastSyncError)
+        void get().syncMasteryToBackend(conceptName, correct);
+      },
+
+      // Backend sync functions
+      syncMasteryToBackend: async (concept, correct) => {
+        set({ isSyncing: true, lastSyncError: null });
+
+        try {
+          const data = await apiClient.updateStudentMastery(concept, correct);
+
+          // Update local state with backend response
+          const current = get().masteryMap[concept] || {
+            conceptName: concept,
+            masteryLevel: INITIAL_MASTERY,
+            attempts: 0,
+            lastAssessed: null,
+          };
+
+          set({
+            masteryMap: {
+              ...get().masteryMap,
+              [concept]: {
+                ...current,
+                masteryLevel: data.new_mastery,
+                attempts: data.total_attempts,
+                lastAssessed: new Date().toISOString(),
+              },
+            },
+            isSyncing: false,
+          });
+
+          return data;
+        } catch (error) {
+          set({ isSyncing: false, lastSyncError: describeError(error) });
+          return null;
+        }
+      },
+
+      loadMasteryFromBackend: async () => {
+        set({ isSyncing: true, lastSyncError: null });
+
+        try {
+          const data = await apiClient.getStudentProfile();
+
+          // Convert backend format to local format
+          const masteryMap: Record<string, ConceptMastery> = {};
+          for (const [concept, level] of Object.entries(data.mastery_levels)) {
+            masteryMap[concept] = {
+              conceptName: concept,
+              masteryLevel: level,
+              attempts: 0, // Backend doesn't return this in profile summary
+              lastAssessed: data.updated_at,
+            };
+          }
+
+          set({ masteryMap, isSyncing: false });
+        } catch (error) {
+          set({ isSyncing: false, lastSyncError: describeError(error) });
+        }
+      },
+
+      resetMasteryOnBackend: async () => {
+        set({ isSyncing: true });
+
+        try {
+          await apiClient.resetStudentProfile();
+          // Clear local state only once the backend profile is reset
+          set({ masteryMap: {}, isSyncing: false, lastSyncError: null });
+        } catch (error) {
+          set({ isSyncing: false });
+          throw error;
+        }
+      },
+
+      // Backend sync state
+      isSyncing: false,
+      lastSyncError: null,
+    }),
+    {
+      name: PREFERENCES_STORAGE_KEY,
+      // `window` is undefined during server rendering, which disables persistence there.
+      storage: createJSONStorage(() => window.localStorage),
+      partialize: (state): PersistedState => ({ currentSubject: state.currentSubject }),
+      merge: (persisted, current) => {
+        const subject = (persisted as Partial<PersistedState> | undefined)?.currentSubject;
+        return typeof subject === 'string' && SUBJECT_ID_PATTERN.test(subject)
+          ? { ...current, currentSubject: subject }
+          : current;
+      },
     }
-  },
-
-  resetMasteryOnBackend: async (): Promise<void> => {
-    set({ isSyncing: true, lastSyncError: null });
-
-    try {
-      const response = await fetch(`${API_BASE}${API_PREFIX}/student/reset`, {
-        method: 'POST',
-        headers: buildApiHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to reset profile: ${response.status}`);
-      }
-
-      // Clear local state
-      set({ masteryMap: {}, isSyncing: false });
-    } catch (error) {
-      console.error('Failed to reset mastery on backend:', error);
-      set({
-        isSyncing: false,
-        lastSyncError: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  },
-
-  // Backend sync state
-  isSyncing: false,
-  lastSyncError: null,
-
-  // UI state
-  isGraphLoading: false,
-  setGraphLoading: (loading) => set({ isGraphLoading: loading }),
-}));
+  )
+);

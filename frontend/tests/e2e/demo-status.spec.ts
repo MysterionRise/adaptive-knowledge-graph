@@ -4,7 +4,8 @@ test.describe('Demo Status Page', () => {
   test('shows the readiness report', async ({ page }) => {
     await page.goto('/demo-status');
 
-    await expect(page.getByRole('heading', { name: 'Client Demo Status' })).toBeVisible();
+    await expect(page).toHaveTitle('Demo Status | Adaptive Knowledge Graph');
+    await expect(page.getByRole('heading', { level: 1, name: 'Demo Status' })).toBeVisible();
     await expect(page.getByText('Demo ready')).toBeVisible();
     await expect(page.getByRole('heading', { name: demoStatus.positioning })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'OpenStax Subject Data' })).toBeVisible();
@@ -16,6 +17,13 @@ test.describe('Demo Status Page', () => {
 
     await page.goto('/demo-status');
 
-    await expect(page.getByText(/Unable to load demo readiness/)).toBeVisible();
+    const alert = page.getByRole('main').getByRole('alert');
+    await expect(alert).toContainText('Unable to load demo readiness.');
+    await expect(alert).toContainText('Bad gateway');
+
+    api.on('GET /demo/status', { json: demoStatus });
+    await alert.getByRole('button', { name: 'Retry' }).click();
+
+    await expect(page.getByText('Demo ready')).toBeVisible();
   });
 });

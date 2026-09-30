@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
+
 
 def _make_generator():
     """Create a QuizGenerator with mocked dependencies."""
@@ -144,7 +146,9 @@ class TestBuildPrompts:
     def test_system_prompt_no_target(self):
         gen = self._generator()
         prompt = gen._build_system_prompt()
-        assert "expert exam creator" in prompt
+        assert "educator" in prompt
+        assert "students learn" in prompt
+        assert "certification" not in prompt.lower()
         assert "difficulty_score" in prompt
 
     def test_system_prompt_easy(self):
@@ -245,12 +249,13 @@ class TestGenerateFromTopic:
         assert quiz.questions[0].difficulty_score == 0.75
 
     @pytest.mark.asyncio
-    async def test_no_content_raises_value_error(self):
-        gen, _, mock_retriever = _make_generator()
+    async def test_no_content_raises_content_not_found(self):
+        gen, mock_llm, mock_retriever = _make_generator()
         mock_retriever.retrieve.return_value = []
 
-        with pytest.raises(ValueError, match="No content found"):
+        with pytest.raises(ContentNotFoundError, match="No content found"):
             await gen.generate_from_topic("Unknown Topic")
+        mock_llm.generate.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_llm_returns_invalid_json(self):
@@ -260,8 +265,12 @@ class TestGenerateFromTopic:
         ]
         mock_llm.generate.return_value = "This is not JSON at all"
 
-        with pytest.raises(json.JSONDecodeError):
+        with pytest.raises(QuizGenerationError, match="invalid JSON") as exc_info:
             await gen.generate_from_topic("Test Topic")
+
+        # Not a ValueError: routes must not turn an LLM failure into "topic not found"
+        assert not isinstance(exc_info.value, ValueError)
+        assert isinstance(exc_info.value.__cause__, json.JSONDecodeError)
 
     @pytest.mark.asyncio
     async def test_markdown_wrapped_json(self):
@@ -351,3 +360,152 @@ class TestGenerateFromTopic:
 
         quiz = await gen.generate_from_topic("Test", num_questions=2)
         assert quiz.average_difficulty == 0.5  # (0.2 + 0.8) / 2
+
+
+def _question(**overrides):
+    """A valid LLM question dict, with optional overrides (None removes a key)."""
+    question = {
+        "text": "Q?",
+        "options": [
+            {"id": "a", "text": "A"},
+            {"id": "b", "text": "B"},
+            {"id": "c", "text": "C"},
+            {"id": "d", "text": "D"},
+        ],
+        "correct_option_id": "a",
+        "explanation": "Because.",
+        "difficulty": "medium",
+    }
+    for key, value in overrides.items():
+        if value is None:
+            question.pop(key)
+        else:
+            question[key] = value
+    return question
+
+
+@pytest.mark.unit
+class TestInvalidLLMOutput:
+    """Anything that is not valid quiz JSON raises QuizGenerationError."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "llm_response",
+        [
+            pytest.param("[1, 2, 3]", id="not-an-object"),
+            pytest.param('{"items": []}', id="no-questions-key"),
+            pytest.param('{"questions": "Q1, Q2"}', id="questions-not-a-list"),
+            pytest.param('{"questions": []}', id="empty-questions"),
+            pytest.param(json.dumps({"questions": ["What is X?"]}), id="question-not-an-object"),
+            pytest.param(
+                json.dumps({"questions": [_question(options=None)]}), id="missing-options"
+            ),
+            pytest.param(json.dumps({"questions": [_question(text=None)]}), id="missing-text"),
+            pytest.param(
+                json.dumps({"questions": [_question(options=["a", "b"])]}), id="options-not-objects"
+            ),
+            pytest.param(
+                json.dumps({"questions": [_question(options=[{"id": "a"}])]}),
+                id="option-missing-text",
+            ),
+            pytest.param(
+                json.dumps({"questions": [_question(correct_option_id="z")]}),
+                id="correct-option-not-offered",
+            ),
+            pytest.param(
+                json.dumps({"questions": [_question(difficulty_score="very hard")]}),
+                id="difficulty-score-not-a-number",
+            ),
+            pytest.param(json.dumps({"questions": [_question(text=42)]}), id="text-not-a-string"),
+        ],
+    )
+    async def test_malformed_reply_raises_quiz_generation_error(self, llm_response):
+        gen, mock_llm, mock_retriever = _make_generator()
+        mock_retriever.retrieve.return_value = [{"text": "Some text.", "id": "chunk_1"}]
+        mock_llm.generate.return_value = llm_response
+
+        with pytest.raises(QuizGenerationError):
+            await gen.generate_from_topic("Test Topic")
+
+    @pytest.mark.asyncio
+    async def test_error_names_the_malformed_question(self):
+        gen, mock_llm, mock_retriever = _make_generator()
+        mock_retriever.retrieve.return_value = [{"text": "Some text.", "id": "chunk_1"}]
+        mock_llm.generate.return_value = json.dumps(
+            {"questions": [_question(), _question(explanation=None)]}
+        )
+
+        with pytest.raises(QuizGenerationError, match="#2"):
+            await gen.generate_from_topic("Test Topic")
+
+    @pytest.mark.asyncio
+    async def test_llm_errors_propagate_unchanged(self):
+        from backend.app.core.exceptions import LLMConnectionError
+
+        gen, mock_llm, mock_retriever = _make_generator()
+        mock_retriever.retrieve.return_value = [{"text": "Some text.", "id": "chunk_1"}]
+        mock_llm.generate.side_effect = LLMConnectionError("Ollama down")
+
+        with pytest.raises(LLMConnectionError):
+            await gen.generate_from_topic("Test Topic")
+
+    @pytest.mark.asyncio
+    async def test_difficulty_score_is_clamped(self):
+        gen, mock_llm, mock_retriever = _make_generator()
+        mock_retriever.retrieve.return_value = [{"text": "Some text.", "id": "chunk_1"}]
+        mock_llm.generate.return_value = json.dumps(
+            {"questions": [_question(difficulty_score=1.7), _question(difficulty_score=-0.4)]}
+        )
+
+        quiz = await gen.generate_from_topic("Test Topic", num_questions=2)
+
+        assert [q.difficulty_score for q in quiz.questions] == [1.0, 0.0]
+        assert [q.difficulty for q in quiz.questions] == ["hard", "easy"]
+        assert quiz.average_difficulty == 0.5
+
+
+@pytest.mark.unit
+class TestGetQuizGenerator:
+    """get_quiz_generator(None) uses default_subject and its prefixed index."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_registry(self):
+        from backend.app.student.quiz_generator import clear_quiz_generators
+
+        clear_quiz_generators()
+        yield
+        clear_quiz_generators()
+
+    def test_none_resolves_default_subject(self):
+        from backend.app.core.subjects import get_default_subject_id
+        from backend.app.student.quiz_generator import get_quiz_generator
+
+        default_id = get_default_subject_id()
+        with (
+            patch("backend.app.student.quiz_generator.get_llm_client"),
+            patch("backend.app.student.quiz_generator.get_retriever") as mock_get_retriever,
+        ):
+            generator = get_quiz_generator()
+            assert generator.subject_id == default_id
+            assert get_quiz_generator(default_id) is generator
+
+        mock_get_retriever.assert_called_once_with(default_id)
+
+    def test_generators_are_cached_per_subject(self):
+        from backend.app.student.quiz_generator import get_quiz_generator
+
+        with (
+            patch("backend.app.student.quiz_generator.get_llm_client"),
+            patch("backend.app.student.quiz_generator.get_retriever"),
+        ):
+            economics = get_quiz_generator("economics")
+            history = get_quiz_generator("us_history")
+
+        assert economics is not history
+        assert economics.subject_id == "economics"
+
+    def test_unknown_subject_raises_key_error(self):
+        from backend.app.student.quiz_generator import get_quiz_generator
+
+        with pytest.raises(KeyError):
+            get_quiz_generator("no_such_subject")

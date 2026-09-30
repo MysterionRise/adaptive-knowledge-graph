@@ -1,52 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, TrendingUp, BookOpen, MessageSquare, ChevronDown, ChevronUp, Sparkles, Target } from 'lucide-react';
-
-interface ReadingMaterial {
-  text: string;
-  section?: string;
-  module_title?: string;
-  relevance_score?: number;
-}
-
-interface ConceptRecommendation {
-  name: string;
-  importance?: number;
-  mastery?: number;
-  relationship_type?: string;
-}
-
-interface RemediationBlock {
-  concept: string;
-  prerequisites: ConceptRecommendation[];
-  reading_materials: ReadingMaterial[];
-}
-
-interface AdvancementBlock {
-  concept: string;
-  advanced_topics: ConceptRecommendation[];
-  deep_dive_content?: string;
-}
-
-interface RecommendationResponse {
-  path_type: string;
-  score_pct: number;
-  remediation: RemediationBlock[];
-  advancement: AdvancementBlock[];
-  summary: string;
-}
+import { AlertCircle, TrendingUp, BookOpen, MessageSquare, ChevronDown, ChevronUp, Sparkles, Target, RefreshCw } from 'lucide-react';
+import { INITIAL_MASTERY } from '@/lib/mastery';
+import type { ReadingMaterial, RecommendationResponse } from '@/lib/types';
 
 interface PostQuizRecommendationsProps {
   recommendations: RecommendationResponse | null;
   isLoading: boolean;
   error: string | null;
+  /** Shows a Retry button next to the error. */
+  onRetry?: () => void;
   onPractice: (concept: string) => void;
   onAskTutor: (concept: string) => void;
 }
 
-function MasteryBar({ mastery }: { mastery?: number }) {
-  const value = mastery ?? 0.3;
+function MasteryBar({ mastery }: { mastery?: number | null }) {
+  const value = mastery ?? INITIAL_MASTERY;
   const pct = Math.round(value * 100);
   const color = value >= 0.7 ? 'bg-emerald-500' : value >= 0.4 ? 'bg-blue-500' : 'bg-gray-300';
 
@@ -80,10 +50,12 @@ function ReadingCard({ material }: { material: ReadingMaterial }) {
       </p>
       {material.text.length > 200 && (
         <button
+          type="button"
           onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
           className="flex items-center gap-1 mt-1 text-xs text-blue-600 hover:text-blue-700"
         >
-          {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          {expanded ? <ChevronUp className="w-3 h-3" aria-hidden="true" /> : <ChevronDown className="w-3 h-3" aria-hidden="true" />}
           {expanded ? 'Show less' : 'Read more'}
         </button>
       )}
@@ -95,12 +67,14 @@ export default function PostQuizRecommendations({
   recommendations,
   isLoading,
   error,
+  onRetry,
   onPractice,
   onAskTutor,
 }: PostQuizRecommendationsProps) {
   if (isLoading) {
     return (
-      <div className="mt-6 p-6 bg-gray-50 rounded-xl border border-gray-200 animate-pulse">
+      <div className="mt-6 p-6 bg-gray-50 rounded-xl border border-gray-200 animate-pulse" role="status">
+        <span className="sr-only">Loading recommendations</span>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-5 h-5 bg-gray-300 rounded" />
           <div className="h-5 w-48 bg-gray-300 rounded" />
@@ -116,10 +90,22 @@ export default function PostQuizRecommendations({
 
   if (error) {
     return (
-      <div className="mt-6 p-4 bg-red-50 rounded-xl border border-red-200">
-        <div className="flex items-center gap-2 text-red-700">
-          <AlertCircle className="w-4 h-4" />
-          <span className="text-sm">{error}</span>
+      <div className="mt-6 p-4 bg-red-50 rounded-xl border border-red-200" role="alert">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-red-700">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+            <span className="text-sm">{error}</span>
+          </div>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+            >
+              <RefreshCw className="w-3 h-3" aria-hidden="true" />
+              Retry
+            </button>
+          )}
         </div>
       </div>
     );
@@ -168,17 +154,21 @@ export default function PostQuizRecommendations({
                           <MasteryBar mastery={prereq.mastery} />
                           <div className="flex gap-2 mt-2">
                             <button
+                              type="button"
                               onClick={() => onPractice(prereq.name)}
+                              aria-label={`Practice This: ${prereq.name}`}
                               className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-purple-700 bg-purple-100 rounded-md hover:bg-purple-200 transition-colors"
                             >
-                              <Target className="w-3 h-3" />
+                              <Target className="w-3 h-3" aria-hidden="true" />
                               Practice This
                             </button>
                             <button
+                              type="button"
                               onClick={() => onAskTutor(prereq.name)}
+                              aria-label={`Ask Tutor about ${prereq.name}`}
                               className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
                             >
-                              <MessageSquare className="w-3 h-3" />
+                              <MessageSquare className="w-3 h-3" aria-hidden="true" />
                               Ask Tutor
                             </button>
                           </div>
@@ -235,11 +225,12 @@ export default function PostQuizRecommendations({
                       {block.advanced_topics.map((adv) => (
                         <button
                           key={adv.name}
+                          type="button"
                           onClick={() => onPractice(adv.name)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-800 bg-green-100 rounded-full border border-green-200 hover:bg-green-200 transition-colors"
                         >
                           {adv.name}
-                          {adv.mastery !== undefined && adv.mastery !== null && (
+                          {adv.mastery != null && (
                             <span className="text-xs text-green-600">
                               ({Math.round(adv.mastery * 100)}%)
                             </span>
