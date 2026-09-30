@@ -131,13 +131,15 @@ Other hardening in place:
 
 - The local Compose stack binds service ports to `127.0.0.1`.
 - `/health/ready` returns `503` when Neo4j or OpenSearch is unavailable.
-- Error and health details are redacted before they are returned, and
-  validation errors do not echo the request input.
+- Error details stay in the logs: `/health/ready` reports fixed per-service
+  messages such as "Neo4j unavailable", other errors are redacted before they
+  are returned, and validation errors do not echo the request input.
 - TLS verification for external calls is on by default; the local OpenSearch
   uses plain HTTP instead of pretending to use TLS.
 - Container images are pinned to specific versions.
-- Every endpoint has a default limit of 100 requests per minute per client,
-  counted before authentication. Stricter, configurable limits
+- `RATE_LIMIT_DEFAULT` (100 requests per minute by default) applies per
+  client and endpoint to every route, counted before authentication. The
+  health checks are exempt, so probes never get `429`. Stricter limits
   (`RATE_LIMIT_*` settings) cover Q&A, quiz generation, graph reads,
   `/graph/query`, learner-profile writes and `/quiz/recommendations`.
 - `X-Forwarded-For` is ignored for rate limiting unless

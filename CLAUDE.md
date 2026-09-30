@@ -91,16 +91,16 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 
 Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key variables:
 
-- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`) need `X-API-Key` when a key is set. Leave `API_DOCS_ENABLED` unset or `true`/`false` (an empty value fails at startup)
+- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`) need `X-API-Key` when a key is set. `API_KEY` must be printable ASCII without surrounding whitespace (and at least 16 characters in production), or startup fails; a whitespace-only key counts as no key. `API_DOCS_ENABLED` unset or empty follows the `APP_ENV` default; `true`/`false` force it
 - `TRUST_PROXY_HEADERS=true` keys rate limits on the right-most `X-Forwarded-For` hop; only behind a proxy that appends the client IP
 - `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`; startup fails otherwise
 - `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
 - `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values)
 - `RERANKER_ENABLED=false` - set `true` to enable the cross-encoder reranker
 - `STUDENT_PROFILES_DB` - SQLite learner store (the only backend); `STUDENT_VALIDATE_CONCEPTS=true` rejects mastery updates for concepts not in the subject's graph
-- `RATE_LIMIT_ASK`, `RATE_LIMIT_QUIZ`, `RATE_LIMIT_GRAPH`, `RATE_LIMIT_GRAPH_QUERY`, `RATE_LIMIT_STUDENT_WRITE`, `RATE_LIMIT_RECOMMENDATIONS` - per-route limits
+- `RATE_LIMIT_DEFAULT` (`100/minute`, `;`-separated for several) - every route except the health checks, per client and endpoint, counted before auth; `RATE_LIMIT_ASK`, `RATE_LIMIT_QUIZ`, `RATE_LIMIT_GRAPH`, `RATE_LIMIT_GRAPH_QUERY`, `RATE_LIMIT_STUDENT_WRITE`, `RATE_LIMIT_RECOMMENDATIONS` - stricter per-route limits
 
-Removed settings (ignored if still present in an old `.env`): `API_HOST`, `API_PORT`, `LLM_LOCAL_BACKEND`, `LLM_MAX_CONTEXT`, `RERANKER_TOP_K`, `RAG_FINAL_TOP_K`, `STUDENT_IRT_ENABLED`, `STUDENT_STORAGE_BACKEND`, `PRIVACY_NO_TRACKING`, `GRAPH_COMPUTE_CENTRALITY`, `GRAPH_COMPUTE_COMMUNITIES`.
+Removed backend settings (ignored if still present in an old `.env`): `API_HOST`, `API_PORT`, `LLM_LOCAL_BACKEND`, `LLM_MAX_CONTEXT`, `RERANKER_TOP_K`, `RAG_FINAL_TOP_K`, `STUDENT_IRT_ENABLED`, `STUDENT_STORAGE_BACKEND`, `PRIVACY_NO_TRACKING`, `GRAPH_COMPUTE_CENTRALITY`, `GRAPH_COMPUTE_COMMUNITIES`. (`API_HOST`/`API_PORT` are still read by `make run-api` and Compose, not by the app.)
 
 ## Test Configuration
 

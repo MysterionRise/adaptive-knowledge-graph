@@ -64,9 +64,10 @@ If anyone other than you can reach the API, run it in production mode:
 
 1. Set `APP_ENV=production` and a long random `API_KEY`, for example from
    `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`. In
-   production mode the API refuses to start without `API_KEY`, and the
-   protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`)
-   require it in the `X-API-Key` header.
+   production mode the API refuses to start without a key of at least 16
+   printable ASCII characters (no surrounding whitespace), and the protected
+   routes (`/student/*`, `/quiz/recommendations`, `/graph/query`) require it
+   in the `X-API-Key` header.
 2. Keep the interactive API docs off. In production mode `/docs`, `/redoc` and
    `/openapi.json` are disabled unless you set `API_DOCS_ENABLED=true`.
 3. Set `CORS_ORIGINS` to your frontend origin. `CORS_ALLOW_METHODS` and
@@ -79,7 +80,9 @@ If anyone other than you can reach the API, run it in production mode:
 6. Terminate TLS in a reverse proxy in front of the API, and run the API
    without auto-reload. Set `TRUST_PROXY_HEADERS=true` only if that proxy
    appends the client IP to `X-Forwarded-For` and is the only way to reach the
-   API: rate limits are then keyed on the right-most hop.
+   API: rate limits are then keyed on the right-most hop. Without it, every
+   client behind the proxy shares one rate-limit bucket per endpoint; raise
+   `RATE_LIMIT_DEFAULT` if that is too tight.
 7. Only load models you trust through `EMBEDDING_MODEL` and `RERANKER_MODEL`.
 
 ## Accepted risks
