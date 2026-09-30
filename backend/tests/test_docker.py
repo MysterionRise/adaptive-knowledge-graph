@@ -171,7 +171,14 @@ def test_cpu_dockerfile():
     assert "spacy download en_core_web_sm" in content
     assert "USER app" in content
     assert "EXPOSE 8000" in content
-    assert "AS builder" in content and "AS runtime" in content
+    _assert_dependency_layer_is_cleaned(content)
+
+
+def _assert_dependency_layer_is_cleaned(content: str) -> None:
+    # Caches live in a BuildKit cache mount, and compilers/Poetry go away in the same layer
+    assert "--mount=type=cache,target=/root/.cache" in content
+    assert "rm -rf /opt/poetry" in content
+    assert "apt-get purge -y --auto-remove" in content
 
 
 def test_gpu_dockerfile():
@@ -185,6 +192,7 @@ def test_gpu_dockerfile():
     assert "USER app" in content
     assert "CUDA_VISIBLE_DEVICES" in content
     assert "EXPOSE 8000" in content
+    _assert_dependency_layer_is_cleaned(content)
 
 
 def test_frontend_dockerfile():

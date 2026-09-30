@@ -6,48 +6,21 @@
 # (torch 2.9.1 on linux/amd64) already bundles the CUDA 12.8 user-space libraries through the
 # nvidia-*-cu12 wheels, so no extra PyTorch index is needed and the CUDA "base" image is
 # enough: the "runtime" variant would duplicate ~2 GB of the same libraries. The host needs an
-# NVIDIA driver that supports CUDA 12.8.
+# NVIDIA driver that supports CUDA 12.8. Single stage for the same reason as api.cpu.Dockerfile.
 
 ARG CUDA_IMAGE=nvidia/cuda:12.8.1-base-ubuntu24.04
+FROM ${CUDA_IMAGE}
+
 ARG POETRY_VERSION=2.4.1
-
-# --- build stage: resolve the locked dependencies into /opt/venv -------------------------
-FROM ${CUDA_IMAGE} AS builder
-ARG POETRY_VERSION
-ENV DEBIAN_FRONTEND=noninteractive \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false \
-    VIRTUAL_ENV=/opt/venv \
-    PATH=/opt/venv/bin:$PATH
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        python3 \
-        python3-dev \
-        python3-venv \
-    && rm -rf /var/lib/apt/lists/*
-
-# Poetry gets its own virtualenv; the app dependencies go into the active /opt/venv
-RUN python3 -m venv /opt/poetry \
-    && /opt/poetry/bin/pip install "poetry==${POETRY_VERSION}" \
-    && python3 -m venv /opt/venv
-
-WORKDIR /app
-COPY pyproject.toml poetry.lock README.md ./
-RUN /opt/poetry/bin/poetry install --only main --no-root --no-ansi \
-    && python -m spacy download en_core_web_sm
-
-# --- runtime stage ------------------------------------------------------------------------
-FROM ${CUDA_IMAGE} AS runtime
 ARG APP_UID=1000
 ARG APP_GID=1000
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
     VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
     HF_HOME=/home/app/.cache/huggingface \
@@ -55,18 +28,28 @@ ENV DEBIAN_FRONTEND=noninteractive \
     EMBEDDING_DEVICE=cuda \
     RERANKER_DEVICE=cuda
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 \
-    && rm -rf /var/lib/apt/lists/*
-
 # Ubuntu 24.04 images come with an "ubuntu" user on uid/gid 1000; replace it with "app"
 RUN if id -u ubuntu > /dev/null 2>&1; then userdel --remove ubuntu; fi \
     && groupadd --gid "${APP_GID}" app \
     && useradd --uid "${APP_UID}" --gid app --create-home --shell /usr/sbin/nologin app
 
-COPY --from=builder /opt/venv /opt/venv
-
 WORKDIR /app
+COPY pyproject.toml poetry.lock README.md ./
+
+# Locked runtime dependencies into /opt/venv (Poetry runs from its own throwaway venv), plus the
+# spaCy model; the compilers and headers are purged again in the same layer.
+RUN --mount=type=cache,target=/root/.cache \
+    apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv python3-dev build-essential \
+    && python3 -m venv /opt/poetry \
+    && /opt/poetry/bin/pip install "poetry==${POETRY_VERSION}" \
+    && python3 -m venv /opt/venv \
+    && /opt/poetry/bin/poetry install --only main --no-root --no-ansi \
+    && python -m spacy download en_core_web_sm \
+    && rm -rf /opt/poetry \
+    && apt-get purge -y --auto-remove python3-dev build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --chown=app:app backend/ ./backend/
 COPY --chown=app:app config/ ./config/
 COPY --chown=app:app scripts/ ./scripts/
