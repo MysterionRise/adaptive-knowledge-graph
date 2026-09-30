@@ -28,12 +28,17 @@ const mockSubjects = {
 
 // Reset store between tests
 const initialStoreState = useAppStore.getState();
+const originalFetch = global.fetch;
 
 describe('SubjectPicker Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAppStore.setState(initialStoreState);
     (apiClient.getSubjects as jest.Mock).mockResolvedValue(mockSubjects);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   describe('Loading State', () => {
@@ -162,6 +167,16 @@ describe('SubjectPicker Component', () => {
 
       // Store should be updated
       expect(useAppStore.getState().currentSubject).toBe('economics');
+
+      // The new subject's theme is loaded, the dropdown closes and the picker shows Economics
+      await waitFor(() => {
+        expect(useAppStore.getState().subjectTheme?.subject_id).toBe('economics');
+      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/subjects/economics/theme')
+      );
+      expect(await screen.findByRole('button', { name: /Economics/i })).toBeInTheDocument();
+      expect(screen.queryAllByRole('option')).toHaveLength(0);
     });
   });
 

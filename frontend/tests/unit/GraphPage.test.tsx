@@ -76,23 +76,33 @@ const mockGraphData = {
   ],
 };
 
+/** Render the page and wait until the graph request has settled (skeleton gone). */
+async function renderGraphPage() {
+  render(<GraphPage />);
+  await waitFor(() => {
+    expect(screen.queryByTestId('graph-skeleton')).not.toBeInTheDocument();
+  });
+}
+
 describe('GraphPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAppStore.setState(initialStoreState);
+    // mockReset drops queued *Once responses that a previous test did not consume
+    (apiClient.getGraphData as jest.Mock).mockReset();
     (apiClient.getGraphData as jest.Mock).mockResolvedValue(mockGraphData);
   });
 
   describe('Initial Rendering', () => {
     it('renders the page header', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       expect(screen.getByText('Knowledge Graph Visualization')).toBeInTheDocument();
       expect(screen.getByText(/Explore concepts and their relationships/i)).toBeInTheDocument();
     });
 
     it('renders back button', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       expect(screen.getByRole('button', { name: /back to home/i })).toBeInTheDocument();
     });
@@ -108,7 +118,7 @@ describe('GraphPage', () => {
     });
 
     it('renders how to use instructions', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText('How to Use')).toBeInTheDocument();
@@ -123,7 +133,7 @@ describe('GraphPage', () => {
 
   describe('Graph Loading', () => {
     it('fetches graph data on mount', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(apiClient.getGraphData).toHaveBeenCalledTimes(1);
@@ -131,7 +141,7 @@ describe('GraphPage', () => {
     });
 
     it('displays graph after loading', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByTestId('knowledge-graph')).toBeInTheDocument();
@@ -139,7 +149,7 @@ describe('GraphPage', () => {
     });
 
     it('displays graph stats after loading', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText('Graph Stats')).toBeInTheDocument();
@@ -153,33 +163,29 @@ describe('GraphPage', () => {
 
   describe('Error Handling', () => {
     it('displays error message when API fails', async () => {
-      (apiClient.getGraphData as jest.Mock)
-        .mockRejectedValueOnce(new Error('Server error'))
-        .mockResolvedValueOnce(mockGraphData); // For fallback
+      (apiClient.getGraphData as jest.Mock).mockRejectedValueOnce(new Error('Server error'));
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText(/Failed to load graph data/i)).toBeInTheDocument();
       });
     });
 
-    it('shows demo data when API fails', async () => {
-      (apiClient.getGraphData as jest.Mock)
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValueOnce(mockGraphData);
+    it('shows the empty state instead of a graph when API fails', async () => {
+      (apiClient.getGraphData as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
-      await waitFor(() => {
-        expect(screen.getByTestId('knowledge-graph')).toBeInTheDocument();
-      });
+      expect(screen.getByText('No graph data available')).toBeInTheDocument();
+      expect(screen.queryByTestId('knowledge-graph')).not.toBeInTheDocument();
+      expect(apiClient.getGraphData).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('Navigation', () => {
     it('navigates back to home when back button is clicked', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       const backButton = screen.getByRole('button', { name: /back to home/i });
       fireEvent.click(backButton);
@@ -190,7 +196,7 @@ describe('GraphPage', () => {
 
   describe('Node Selection', () => {
     it('shows selected concept details when node is clicked', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByTestId('knowledge-graph')).toBeInTheDocument();
@@ -206,7 +212,7 @@ describe('GraphPage', () => {
     });
 
     it('shows Ask AI Tutor button when concept is selected', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByTestId('knowledge-graph')).toBeInTheDocument();
@@ -220,7 +226,7 @@ describe('GraphPage', () => {
     });
 
     it('navigates to chat with question when Ask AI Tutor is clicked', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByTestId('knowledge-graph')).toBeInTheDocument();
@@ -246,7 +252,7 @@ describe('GraphPage', () => {
         lastQuery: 'What is Concept A?',
       });
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText(/Highlighting 2 concepts/i)).toBeInTheDocument();
@@ -260,7 +266,7 @@ describe('GraphPage', () => {
         lastQuery: 'What is the American Revolution?',
       });
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText(/from query:/i)).toBeInTheDocument();
@@ -274,7 +280,7 @@ describe('GraphPage', () => {
         lastQuery: 'Test query',
       });
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /clear highlights/i })).toBeInTheDocument();
@@ -288,7 +294,7 @@ describe('GraphPage', () => {
         lastQuery: 'Test query',
       });
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText(/Highlighting 2 concepts/i)).toBeInTheDocument();
@@ -311,7 +317,7 @@ describe('GraphPage', () => {
         highlightedConcepts: ['Concept X', 'Concept Y'],
       });
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByTestId('highlighted-concepts')).toHaveTextContent('Concept X, Concept Y');
@@ -323,7 +329,7 @@ describe('GraphPage', () => {
     it('shows no data message when graph data is null', async () => {
       (apiClient.getGraphData as jest.Mock).mockResolvedValueOnce(null);
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText('No graph data available')).toBeInTheDocument();
@@ -354,7 +360,7 @@ describe('GraphPage', () => {
 
       (apiClient.getGraphData as jest.Mock).mockResolvedValueOnce(largerGraphData);
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.getByText('10')).toBeInTheDocument(); // Nodes
@@ -365,7 +371,7 @@ describe('GraphPage', () => {
 
   describe('Accessibility', () => {
     it('has accessible back button', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       const backButton = screen.getByRole('button', { name: /back to home/i });
       expect(backButton).toHaveAttribute('aria-label', 'Back to home');
@@ -377,7 +383,7 @@ describe('GraphPage', () => {
         highlightedConcepts: ['Test'],
       });
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         const clearButton = screen.getByRole('button', { name: /clear highlights/i });
@@ -398,7 +404,7 @@ describe('GraphPage', () => {
     });
 
     it('hides skeleton after loading completes', async () => {
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.queryByTestId('graph-skeleton')).not.toBeInTheDocument();
@@ -406,11 +412,9 @@ describe('GraphPage', () => {
     });
 
     it('hides skeleton even when error occurs', async () => {
-      (apiClient.getGraphData as jest.Mock)
-        .mockRejectedValueOnce(new Error('Error'))
-        .mockResolvedValueOnce(mockGraphData);
+      (apiClient.getGraphData as jest.Mock).mockRejectedValueOnce(new Error('Error'));
 
-      render(<GraphPage />);
+      await renderGraphPage();
 
       await waitFor(() => {
         expect(screen.queryByTestId('graph-skeleton')).not.toBeInTheDocument();
