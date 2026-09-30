@@ -171,6 +171,11 @@ def test_subject_is_forwarded():
     assert "--reset economics" in run_make("pipeline-all", "SUBJECT=economics").stdout
 
 
+def test_tribunal_run_skips_the_coverage_gate():
+    # A tribunal-only run covers far less than the global fail_under threshold
+    assert "pytest -m tribunal --no-cov" in run_make("test-tribunal").stdout
+
+
 def test_run_api_binds_loopback_by_default():
     result = run_make("run-api")
     assert "--host 127.0.0.1" in result.stdout
