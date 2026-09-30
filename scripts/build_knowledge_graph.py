@@ -12,15 +12,26 @@ Usage:
     poetry run python scripts/build_knowledge_graph.py
     poetry run python scripts/build_knowledge_graph.py --subject economics --clear
     poetry run python scripts/build_knowledge_graph.py --subject us_history --max-concepts 300
+    poetry run python scripts/build_knowledge_graph.py --subject us_history --cooccurrence-threshold 3
 
 Without --clear the script asks whether to clear the subject's existing nodes when it runs in a
 terminal, and keeps them (MERGE on top) when it does not. Exits non-zero on failure.
+
+Builder tuning (passed only when the installed KGBuilder supports it):
+    --cooccurrence-threshold N   paragraphs two concepts must share for a RELATED edge; defaults to
+                                 KG_COOCCURRENCE_THRESHOLD_<SUBJECT>, then KG_COOCCURRENCE_THRESHOLD,
+                                 then the builder default (so `make seed` can be tuned per subject:
+                                 KG_COOCCURRENCE_THRESHOLD_US_HISTORY=3 make seed)
+    --prereq-patterns            also derive PREREQ edges from cue phrases (KG_PREREQ_PATTERNS=1)
 """
 
 import argparse
+import inspect
 import json
+import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -54,6 +65,41 @@ def _should_clear(subject_id: str, clear_flag: bool) -> bool:
     return response.strip().lower() == "yes"
 
 
+def _env_threshold(subject_id: str) -> int | None:
+    """KG_COOCCURRENCE_THRESHOLD_<SUBJECT>, then KG_COOCCURRENCE_THRESHOLD."""
+    for name in (f"KG_COOCCURRENCE_THRESHOLD_{subject_id.upper()}", "KG_COOCCURRENCE_THRESHOLD"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            try:
+                return int(value)
+            except ValueError:
+                raise SystemExit(f"{name} must be an integer, got {value!r}") from None
+    return None
+
+
+def builder_options(
+    subject_id: str, cooccurrence_threshold: int | None, prereq_patterns: bool
+) -> dict[str, Any]:
+    """KGBuilder keyword options the caller asked for, limited to what this builder accepts."""
+    requested: dict[str, Any] = {}
+    threshold = (
+        cooccurrence_threshold if cooccurrence_threshold is not None else _env_threshold(subject_id)
+    )
+    if threshold is not None:
+        requested["cooccurrence_threshold"] = threshold
+    if prereq_patterns or os.environ.get("KG_PREREQ_PATTERNS", "").strip() == "1":
+        requested["prereq_patterns"] = True
+
+    supported = inspect.signature(KGBuilder.__init__).parameters
+    options: dict[str, Any] = {}
+    for name, value in requested.items():
+        if name in supported:
+            options[name] = value
+        else:
+            logger.warning(f"This KGBuilder has no '{name}' option; ignoring it")
+    return options
+
+
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Build knowledge graph from textbook data")
@@ -73,6 +119,18 @@ def main() -> None:
         "--clear",
         action="store_true",
         help="Clear existing Neo4j data before building (skips interactive prompt)",
+    )
+    parser.add_argument(
+        "--cooccurrence-threshold",
+        type=int,
+        default=None,
+        help="Paragraphs two concepts must share for a RELATED edge "
+        "(default: KG_COOCCURRENCE_THRESHOLD[_<SUBJECT>] or the builder default)",
+    )
+    parser.add_argument(
+        "--prereq-patterns",
+        action="store_true",
+        help="Also create PREREQ edges from cue phrases (or KG_PREREQ_PATTERNS=1)",
     )
     args = parser.parse_args()
 
@@ -95,7 +153,10 @@ def main() -> None:
     logger.info(f"Loaded {len(records)} text records from {jsonl_path}")
 
     # Build knowledge graph
-    builder = KGBuilder(max_concepts=args.max_concepts)
+    options = builder_options(subject_id, args.cooccurrence_threshold, args.prereq_patterns)
+    if options:
+        logger.info(f"KGBuilder options: {options}")
+    builder = KGBuilder(max_concepts=args.max_concepts, **options)
     kg = builder.build_from_records(records)
 
     # Print statistics

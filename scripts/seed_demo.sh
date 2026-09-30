@@ -12,7 +12,8 @@
 # they accept requests (a running container is not necessarily a ready one).
 #
 # Environment: NEO4J_BOLT_PORT / OPENSEARCH_PORT (host ports, see infra/compose/compose.yaml),
-# DATA_PROCESSED_DIR, STUDENT_PROFILES_DB (backend settings).
+# DATA_PROCESSED_DIR, STUDENT_PROFILES_DB (backend settings), KG_COOCCURRENCE_THRESHOLD[_<SUBJECT>]
+# and KG_PREREQ_PATTERNS=1 (graph tuning, see scripts/build_knowledge_graph.py).
 # ============================================================
 
 set -euo pipefail
@@ -22,7 +23,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 cd "$AKG_ROOT"
 
 usage() {
-    sed -n '3,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    # The header comment, up to its closing "# ====" line
+    awk 'NR > 2 && /^# ====/ { exit } NR > 2 { sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
 }
 
 RESET=false

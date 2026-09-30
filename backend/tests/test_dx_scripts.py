@@ -280,6 +280,46 @@ def test_build_knowledge_graph_does_not_prompt_without_a_terminal(monkeypatch):
     assert build_knowledge_graph._should_clear("us_history", clear_flag=True) is True
 
 
+class _TunableBuilder:
+    def __init__(self, max_concepts=200, *, cooccurrence_threshold=5, prereq_patterns=False):
+        pass
+
+
+class _PlainBuilder:
+    def __init__(self, max_concepts=200):
+        pass
+
+
+def test_builder_options_follow_flags_then_env(monkeypatch):
+    from scripts import build_knowledge_graph as bkg
+
+    monkeypatch.setattr(bkg, "KGBuilder", _TunableBuilder)
+    monkeypatch.delenv("KG_COOCCURRENCE_THRESHOLD", raising=False)
+    monkeypatch.delenv("KG_COOCCURRENCE_THRESHOLD_US_HISTORY", raising=False)
+    monkeypatch.delenv("KG_PREREQ_PATTERNS", raising=False)
+    assert bkg.builder_options("us_history", None, False) == {}
+
+    monkeypatch.setenv("KG_COOCCURRENCE_THRESHOLD", "4")
+    assert bkg.builder_options("economics", None, False) == {"cooccurrence_threshold": 4}
+    monkeypatch.setenv("KG_COOCCURRENCE_THRESHOLD_US_HISTORY", "3")
+    assert bkg.builder_options("us_history", None, False) == {"cooccurrence_threshold": 3}
+    # the flag wins over the environment
+    assert bkg.builder_options("us_history", 7, True) == {
+        "cooccurrence_threshold": 7,
+        "prereq_patterns": True,
+    }
+    monkeypatch.setenv("KG_COOCCURRENCE_THRESHOLD", "many")
+    with pytest.raises(SystemExit, match="must be an integer"):
+        bkg.builder_options("economics", None, False)
+
+
+def test_builder_options_skip_what_the_builder_does_not_support(monkeypatch):
+    from scripts import build_knowledge_graph as bkg
+
+    monkeypatch.setattr(bkg, "KGBuilder", _PlainBuilder)
+    assert bkg.builder_options("us_history", 3, True) == {}
+
+
 def test_seed_student_profile_writes_sqlite_only(tmp_path, monkeypatch):
     from scripts import seed_student_profile
 

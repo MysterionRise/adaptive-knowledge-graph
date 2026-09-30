@@ -25,7 +25,7 @@ from backend.app.core.settings import settings
 from backend.app.core.subjects import get_all_subjects, get_subject
 from backend.app.nlp.embeddings import get_embedding_model
 from backend.app.rag.chunker import chunk_for_rag
-from backend.app.rag.retriever import get_retriever
+from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
 
 
 def load_records(jsonl_path: Path) -> list:
@@ -36,6 +36,55 @@ def load_records(jsonl_path: Path) -> list:
             if line.strip():
                 records.append(json.loads(line))
     return records
+
+
+def index_records(
+    subject_id: str, records: list[dict], recreate: bool = False
+) -> OpenSearchRetriever:
+    """Chunk, embed and index a subject's records; the one indexing path for every script.
+
+    Uses backend.app.rag.chunker.chunk_for_rag (the chunker the KG and window builders share), so
+    `ingest_books.py --index-rag` and this script produce identical documents. Exits non-zero when
+    the index ends up empty.
+    """
+    # chunk_for_rag returns (chunks, first_chunk_per_module) with sequential linking
+    logger.info("Chunking text...")
+    chunked = chunk_for_rag(records)
+    chunks = chunked[0] if isinstance(chunked, tuple) else chunked
+    logger.info(f"Created {len(chunks)} chunks")
+
+    # Save a small sample for inspection under build/, so seeding leaves the tracked files alone
+    build_dir = Path(settings.data_processed_dir) / "build"
+    build_dir.mkdir(parents=True, exist_ok=True)
+    chunks_path = build_dir / f"chunks_{subject_id}.json"
+    chunks_path.write_text(json.dumps(chunks[:10], indent=2), encoding="utf-8")
+    logger.info(f"Sample chunks saved to {chunks_path}")
+
+    # Initialize embedding model
+    logger.info("Loading embedding model...")
+    embedding_model = get_embedding_model()
+    embedding_dim = embedding_model.get_embedding_dimension()
+    logger.info(f"Embedding dimension: {embedding_dim}")
+
+    # Initialize subject-specific OpenSearch retriever (uses settings for credentials)
+    logger.info("Connecting to OpenSearch...")
+    retriever = get_retriever(subject_id)
+
+    # Create index
+    retriever.create_collection(embedding_dim, recreate=recreate)
+    logger.info(f"Index '{retriever.index_name}' ready (recreate={recreate})")
+
+    # Index chunks
+    logger.info("Indexing chunks to OpenSearch...")
+    retriever.index_chunks(chunks, show_progress=True)
+
+    # Verify
+    info = retriever.get_collection_info()
+    logger.info(f"Index info: {info}")
+    if not info.get("exists") or not info.get("doc_count"):
+        logger.error(f"Index '{retriever.index_name}' has no documents after indexing")
+        sys.exit(1)
+    return retriever
 
 
 def main():
@@ -88,43 +137,7 @@ def main():
     records = load_records(jsonl_path)
     logger.info(f"Loaded {len(records)} text records from {jsonl_path}")
 
-    # Chunk text (chunk_for_rag returns (chunks, first_chunk_per_module) with sequential linking)
-    logger.info("Chunking text...")
-    chunked = chunk_for_rag(records)
-    chunks = chunked[0] if isinstance(chunked, tuple) else chunked
-    logger.info(f"Created {len(chunks)} chunks")
-
-    # Save a small sample for inspection under build/, so seeding leaves the tracked files alone
-    build_dir = Path(settings.data_processed_dir) / "build"
-    build_dir.mkdir(parents=True, exist_ok=True)
-    chunks_path = build_dir / f"chunks_{subject_id}.json"
-    chunks_path.write_text(json.dumps(chunks[:10], indent=2), encoding="utf-8")
-    logger.info(f"Sample chunks saved to {chunks_path}")
-
-    # Initialize embedding model
-    logger.info("Loading embedding model...")
-    embedding_model = get_embedding_model()
-    embedding_dim = embedding_model.get_embedding_dimension()
-    logger.info(f"Embedding dimension: {embedding_dim}")
-
-    # Initialize subject-specific OpenSearch retriever (uses settings for credentials)
-    logger.info("Connecting to OpenSearch...")
-    retriever = get_retriever(subject_id)
-
-    # Create index
-    retriever.create_collection(embedding_dim, recreate=args.recreate)
-    logger.info(f"Index '{retriever.index_name}' ready (recreate={args.recreate})")
-
-    # Index chunks
-    logger.info("Indexing chunks to OpenSearch...")
-    retriever.index_chunks(chunks, show_progress=True)
-
-    # Verify
-    info = retriever.get_collection_info()
-    logger.info(f"Index info: {info}")
-    if not info.get("exists") or not info.get("doc_count"):
-        logger.error(f"Index '{retriever.index_name}' has no documents after indexing")
-        sys.exit(1)
+    retriever = index_records(subject_id, records, recreate=args.recreate)
 
     # Test retrieval
     if not args.skip_tests:
