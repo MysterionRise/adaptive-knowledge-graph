@@ -73,12 +73,12 @@ class SubjectsConfig(BaseModel):
 
 
 def _find_config_path() -> Path:
-    """Find the subjects.yaml config file."""
-    # Try multiple possible locations
+    """Find config/subjects.yaml: first under the working directory, then the repo root."""
+    # backend/app/core/subjects.py -> parents[3] is the repository root
+    repo_root = Path(__file__).resolve().parents[3]
     possible_paths = [
-        Path("config/subjects.yaml"),
-        Path(__file__).parent.parent.parent.parent.parent / "config" / "subjects.yaml",
         Path.cwd() / "config" / "subjects.yaml",
+        repo_root / "config" / "subjects.yaml",
     ]
 
     for path in possible_paths:
