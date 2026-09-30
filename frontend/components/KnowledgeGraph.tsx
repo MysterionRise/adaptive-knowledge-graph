@@ -356,16 +356,18 @@ export default function KnowledgeGraph({
             <div className="w-4 h-0.5 bg-red-500"></div>
             <span className="text-gray-700">Prerequisite</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-0.5 bg-blue-500"></div>
-            <span className="text-gray-700">Covers</span>
-          </div>
+          {data.edges.some((edge) => edge.data.type === 'COVERS') && (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-0.5 bg-blue-500"></div>
+              <span className="text-gray-700">Covers</span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-purple-500"></div>
             <span className="text-gray-700">Related</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-orange-500"></div>
+            <div className="w-4 h-4 rounded-full bg-amber-500"></div>
             <span className="text-gray-700">Highlighted</span>
           </div>
         </div>
