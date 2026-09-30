@@ -134,7 +134,6 @@ class TestInputValidation:
         resp = client.post("/api/v1/ask", json={"question": ""})
         assert resp.status_code == 422, "Empty question should be rejected with 422"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_whitespace_only_question(self, client, mock_services):
         """Charge: /ask accepts a whitespace-only question (passes min_length check)."""
         resp = client.post("/api/v1/ask", json={"question": "   "})
@@ -230,26 +229,22 @@ class TestInputValidation:
         )
         assert resp.status_code == 422, "Empty search query should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_graph_data_negative_limit(self, client):
         """Charge: /graph/data accepts a negative limit."""
         resp = client.get("/api/v1/graph/data", params={"limit": -10})
         assert resp.status_code == 422, "Negative limit should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_graph_data_huge_limit(self, client):
         """Charge: /graph/data accepts enormous limit values with no upper bound."""
         resp = client.get("/api/v1/graph/data", params={"limit": 1000000})
         # Without an upper bound, this could return the entire graph.
         assert resp.status_code == 422, "limit=1000000 should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_top_concepts_negative_limit(self, client):
         """Charge: /concepts/top accepts a negative limit."""
         resp = client.get("/api/v1/concepts/top", params={"limit": -5})
         assert resp.status_code == 422, "Negative limit for top concepts should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_learning_path_negative_depth(self, client):
         """Charge: /learning-path/{name} accepts negative max_depth."""
         resp = client.get(
@@ -258,7 +253,6 @@ class TestInputValidation:
         )
         assert resp.status_code == 422, "Negative max_depth should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_learning_path_huge_depth(self, client):
         """Charge: /learning-path/{name} accepts unbounded max_depth."""
         resp = client.get(
@@ -277,7 +271,6 @@ class TestInputValidation:
 class TestInjectionAttacks:
     """Charge: API endpoints are vulnerable to injection via user-controlled fields."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_xss_in_question(self, client, mock_services):
         """Charge: XSS payload in question is echoed back in response."""
         xss_payload = '<script>alert("XSS")</script>What is biology?'
@@ -292,7 +285,6 @@ class TestInjectionAttacks:
                 "XSS payload is reflected back unescaped in the response"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_nosql_injection_in_subject(self, client, mock_services):
         """Charge: NoSQL injection payload in subject field is not validated."""
         resp = client.post(
@@ -395,7 +387,6 @@ class TestInjectionAttacks:
             body = resp.json()
             assert body.get("title") != "", "Prompt injection in topic produced an empty quiz title"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_concept_search_wildcard_injection(self, client):
         """Charge: Lucene wildcard injection in concept search."""
         with patch("backend.app.kg.neo4j_adapter.get_neo4j_adapter") as mock:
@@ -541,45 +532,78 @@ class TestAuthenticationGaps:
 class TestStudentModelManipulation:
     """Charge: Student mastery can be freely manipulated via API."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_mastery_spam_to_max(self, client, tmp_path):
-        """Charge: Rapidly spamming correct answers maxes out mastery instantly."""
+    def test_mastery_spam_to_max(self, tmp_path):
+        """Charge: Rapidly spamming correct answers maxes out mastery instantly.
+
+        Rewritten to assert the intended BKT behaviour: mastery is bounded (never
+        above 0.99), rises on correct answers and falls on incorrect ones. The rate
+        of submissions is limited by the API rate limits, not by the learner model.
+        """
+        from backend.app.core.settings import settings
         from backend.app.student.student_service import StudentService
 
-        service = StudentService(storage_path=str(tmp_path / "spam_test.json"))
+        service = StudentService(storage_path=str(tmp_path / "spam_test.sqlite3"))
 
-        # Spam 100 correct answers
-        for _ in range(100):
-            service.update_mastery("test_concept", correct=True, student_id="cheater")
+        with patch.object(settings, "student_bkt_enabled", True):
+            # Spam 100 correct answers, then answer 5 incorrectly
+            rising = [
+                service.update_mastery("test_concept", correct=True, student_id="cheater")
+                for _ in range(100)
+            ]
+            falling = [
+                service.update_mastery("test_concept", correct=False, student_id="cheater")
+                for _ in range(5)
+            ]
 
-        profile = service.get_profile("cheater")
-        mastery = profile.get_mastery("test_concept")
+        rising_levels = [r.new_mastery for r in rising]
+        falling_levels = [r.new_mastery for r in falling]
 
-        # At +0.15 per correct, it takes only ~5 correct answers to reach 1.0
-        # from 0.3. There's no cooldown, time-decay, or diminishing returns.
-        assert mastery <= 0.95, (
-            f"Mastery reached {mastery} from spamming — "
-            "no diminishing returns or cooldown mechanism"
+        assert max(rising_levels) <= 0.99, f"BKT mastery exceeded 0.99: {max(rising_levels)}"
+        assert max(r.bkt_p_known or 0.0 for r in rising) <= 0.99
+        assert rising_levels[0] > 0.3, "A correct answer should raise mastery"
+        assert all(b >= a for a, b in zip(rising_levels, rising_levels[1:], strict=False)), (
+            "A correct answer must never lower mastery"
         )
+        assert rising_levels[-1] == pytest.approx(0.99), "Repeated correct answers saturate at 0.99"
+        assert falling_levels[0] < rising_levels[-1], "An incorrect answer should lower mastery"
+        assert all(b < a for a, b in zip(falling_levels, falling_levels[1:], strict=False)), (
+            "Each incorrect answer should lower mastery further"
+        )
+        assert min(falling_levels) >= StudentService.MIN_MASTERY
+        assert service.get_profile("cheater").get_mastery("test_concept") <= 0.99
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_mastery_manipulation_via_arbitrary_concept(self, client, tmp_path):
+    def test_mastery_manipulation_via_arbitrary_concept(self, tmp_path):
         """Charge: Can create mastery entries for arbitrary concept names."""
-        from backend.app.student.student_service import StudentService
+        from backend.app.student.student_service import StudentService, UnknownConceptError
 
-        service = StudentService(storage_path=str(tmp_path / "arb_test.json"))
+        # Stands in for the default knowledge-graph validator (kg_concept_exists)
+        concepts_in_graph = {"Photosynthesis"}
+
+        def concept_in_graph(concept: str, subject_id: str | None) -> bool:
+            return concept in concepts_in_graph
+
+        service = StudentService(
+            storage_path=str(tmp_path / "arb_test.sqlite3"),
+            concept_validator=concept_in_graph,
+        )
 
         # Submit mastery for a concept that doesn't exist in the KG
-        result = service.update_mastery(
-            "TOTALLY_FAKE_CONCEPT_12345",
-            correct=True,
-            student_id="test",
-        )
+        with pytest.raises(UnknownConceptError):
+            service.update_mastery(
+                "TOTALLY_FAKE_CONCEPT_12345",
+                correct=True,
+                student_id="test",
+            )
 
         # The service should validate that the concept exists in the KG
-        assert result is None or result.new_mastery == 0.3, (
+        assert "TOTALLY_FAKE_CONCEPT_12345" not in service.get_profile("test").mastery_map, (
             "Can create mastery records for non-existent concepts — "
             "no validation against knowledge graph"
+        )
+        # Concepts that are in the graph are still tracked
+        assert (
+            service.update_mastery("Photosynthesis", correct=True, student_id="test").new_mastery
+            > 0.3
         )
 
     # Runs keyless (development mode) on purpose: a production 401 would pass it vacuously.
@@ -652,7 +676,9 @@ class TestStudentModelManipulation:
 class TestQuizEdgeCases:
     """Charge: Quiz generation has unhandled edge cases."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
+    @pytest.mark.xfail(
+        strict=True, reason="Server-side grading not implemented yet — tracked in #74"
+    )
     def test_quiz_correct_answer_leaked_in_response(self, client, mock_quiz_gen):
         """Charge: Quiz response includes correct_option_id, enabling cheating."""
         resp = client.post(
@@ -682,7 +708,9 @@ class TestQuizEdgeCases:
             # The fact that mastery updates are decoupled from quiz completion
             # means a student can update mastery without ever taking a quiz
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
+    @pytest.mark.xfail(
+        strict=True, reason="Server-side grading not implemented yet — tracked in #74"
+    )
     def test_quiz_no_answer_submission_endpoint(self, client):
         """Charge: No endpoint exists to submit quiz answers atomically."""
         # Check that a proper answer submission endpoint exists
@@ -750,7 +778,6 @@ class TestRateLimitingGaps:
         finally:
             limiter.enabled = False
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_student_endpoints_no_rate_limit(self, rate_limited_client):
         """Charge: Student mastery endpoints have no rate limiting."""
         with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
@@ -761,6 +788,7 @@ class TestRateLimitingGaps:
                 new_mastery=0.45,
                 target_difficulty="medium",
                 total_attempts=1,
+                bkt_p_known=None,
             )
             mock_svc.return_value = mock_service
 
@@ -779,7 +807,6 @@ class TestRateLimitingGaps:
                 "allows unlimited mastery manipulation"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_graph_query_rate_limit(self, rate_limited_client):
         """Charge: /graph/query (Cypher execution) has no rate limiting."""
         with patch("backend.app.kg.cypher_qa.get_cypher_qa_service") as mock:
@@ -983,45 +1010,57 @@ class TestConcurrencyIssues:
             "race condition caused duplicate or lost updates"
         )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_file_based_storage_concurrent_writes(self, tmp_path):
-        """Charge: JSON file storage has no file locking for concurrent writes."""
+        """Charge: Concurrent writers sharing one storage file lose data.
+
+        Rewritten for the SQLite-only store: two service instances (like two API
+        workers) write to one database file at the same time, both to separate
+        profiles and to the same profile, and no update may be lost.
+        """
         import threading
 
         from backend.app.student.student_service import StudentService
 
-        # Two service instances writing to same file
-        path = str(tmp_path / "concurrent_test.json")
+        # Two service instances writing to same database file
+        path = str(tmp_path / "concurrent_test.sqlite3")
         service_a = StudentService(storage_path=path)
         service_b = StudentService(storage_path=path)
+        errors: list[str] = []
 
-        def update_a():
-            for i in range(10):
-                service_a.update_mastery(f"concept_a_{i}", correct=True, student_id="student_a")
+        def update(service, student_id, prefix):
+            try:
+                for i in range(10):
+                    service.update_mastery(f"{prefix}_{i}", correct=True, student_id=student_id)
+                    service.update_mastery("shared_concept", correct=True, student_id="shared")
+            except Exception as e:
+                errors.append(repr(e))
 
-        def update_b():
-            for i in range(10):
-                service_b.update_mastery(f"concept_b_{i}", correct=True, student_id="student_b")
-
-        t1 = threading.Thread(target=update_a)
-        t2 = threading.Thread(target=update_b)
+        t1 = threading.Thread(target=update, args=(service_a, "student_a", "concept_a"))
+        t2 = threading.Thread(target=update, args=(service_b, "student_b", "concept_b"))
         t1.start()
         t2.start()
         t1.join()
         t2.join()
 
+        assert not errors, f"Concurrent writes failed: {errors}"
+
         # Reload and check both students' data survived
         service_check = StudentService(storage_path=path)
         profile_a = service_check.get_profile("student_a")
         profile_b = service_check.get_profile("student_b")
+        shared = service_check.get_profile("shared").mastery_map["shared_concept"]
 
         assert len(profile_a.mastery_map) == 10, (
             f"Student A lost concepts: {len(profile_a.mastery_map)}/10 — "
-            "concurrent file writes caused data loss"
+            "concurrent writes caused data loss"
         )
         assert len(profile_b.mastery_map) == 10, (
             f"Student B lost concepts: {len(profile_b.mastery_map)}/10 — "
-            "concurrent file writes caused data loss"
+            "concurrent writes caused data loss"
+        )
+        assert shared.attempts == 20, (
+            f"Interleaved updates to one profile recorded {shared.attempts}/20 attempts — "
+            "lost update"
         )
 
 
@@ -1050,7 +1089,6 @@ class TestServiceFailureHandling:
             # Should return 404 (no content), not 500 (NoneType error)
             assert resp.status_code != 500, "Retriever returning None causes 500 instead of 404"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_when_llm_returns_empty(self, client):
         """Charge: /ask doesn't handle empty LLM response."""
         with (
@@ -1117,7 +1155,6 @@ class TestServiceFailureHandling:
 class TestSubjectValidation:
     """Charge: Subject parameter is not validated consistently across endpoints."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_with_nonexistent_subject(self, client, mock_services):
         """Charge: /ask with a non-existent subject produces unclear error."""
         resp = client.post(
@@ -1137,7 +1174,6 @@ class TestSubjectValidation:
                 "Error message doesn't mention that the subject was not found"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_quiz_with_nonexistent_subject(self, client, mock_quiz_gen):
         """Charge: /quiz/generate with non-existent subject produces unclear error."""
         resp = client.post(

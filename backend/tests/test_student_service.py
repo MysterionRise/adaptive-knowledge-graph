@@ -6,17 +6,23 @@ Tests cover:
 - Mastery updates (correct/incorrect, clamping, attempt tracking, overall_ability)
 - Target difficulty computation (easy/medium/hard ranges, unknown concepts)
 - Profile reset
-- JSON persistence round-trip
-- Loading edge cases (missing file, corrupt JSON, legacy float format)
+- SQLite persistence: round-trips, read-through across instances, atomic updates
+- Storage failures raise StudentStorageError
+- Concept validation (injectable validator, knowledge-graph default, opt-in wiring)
 - Batch target difficulties (get_all_target_difficulties)
 """
 
 import json
+import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from backend.app.core.exceptions import Neo4jConnectionError
+from backend.app.student import student_service as student_service_module
 from backend.app.student.models import (
     ConceptMastery,
     MasteryUpdateResponse,
@@ -24,16 +30,27 @@ from backend.app.student.models import (
     StudentProfileResponse,
     TargetDifficultyResponse,
 )
-from backend.app.student.student_service import StudentService
+from backend.app.student.student_service import (
+    StudentService,
+    StudentStorageError,
+    UnknownConceptError,
+    get_student_service,
+    kg_concept_exists,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_service(tmp_path: Path) -> StudentService:
-    """Create a StudentService backed by a temporary JSON file."""
-    return StudentService(storage_path=str(tmp_path / "profiles.json"))
+def _make_service(tmp_path: Path, **kwargs) -> StudentService:
+    """Create a StudentService backed by a temporary SQLite file."""
+    return StudentService(storage_path=str(tmp_path / "profiles.sqlite3"), **kwargs)
+
+
+def _row_count(path: Path) -> int:
+    with sqlite3.connect(path) as conn:
+        return conn.execute("SELECT COUNT(*) FROM student_profiles").fetchone()[0]
 
 
 @pytest.fixture(autouse=True)
@@ -62,12 +79,21 @@ class TestGetProfile:
         assert profile.overall_ability == pytest.approx(0.3)
         assert profile.mastery_map == {}
 
-    def test_returns_same_profile_on_second_call(self, tmp_path):
+    def test_reading_an_unknown_student_does_not_write(self, tmp_path):
         svc = _make_service(tmp_path)
+        svc.get_profile("ghost")
+        svc.get_profile_response("ghost")
+
+        assert _row_count(tmp_path / "profiles.sqlite3") == 0
+
+    def test_repeated_reads_return_the_stored_profile(self, tmp_path):
+        svc = _make_service(tmp_path)
+        svc.update_mastery("topic", correct=True, student_id="bob")
+
         first = svc.get_profile("bob")
         second = svc.get_profile("bob")
 
-        assert first is second
+        assert first.model_dump() == second.model_dump()
 
     def test_default_student_id(self, tmp_path):
         svc = _make_service(tmp_path)
@@ -221,6 +247,16 @@ class TestUpdateMastery:
         assert last is not None
         assert before <= last <= after
 
+    def test_initial_mastery_follows_settings(self, tmp_path, monkeypatch):
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "student_initial_mastery", 0.5)
+        svc = _make_service(tmp_path)
+
+        assert svc.get_target_difficulty("unseen").mastery_level == pytest.approx(0.5)
+        resp = svc.update_mastery("topic", correct=True)
+        assert resp.previous_mastery == pytest.approx(0.5)
+
 
 # ===========================================================================
 # TestGetTargetDifficulty
@@ -230,6 +266,11 @@ class TestUpdateMastery:
 @pytest.mark.unit
 class TestGetTargetDifficulty:
     """Tests for get_target_difficulty method."""
+
+    def _save_mastery(self, svc: StudentService, concept: str, level: float) -> None:
+        profile = svc.get_profile("default")
+        profile.mastery_map[concept] = ConceptMastery(concept_name=concept, mastery_level=level)
+        svc.save_profile(profile)
 
     def test_easy_range(self, tmp_path):
         """Mastery < 0.4 -> easy."""
@@ -267,7 +308,7 @@ class TestGetTargetDifficulty:
     def test_unknown_concept_defaults_to_initial_mastery(self, tmp_path):
         """A concept with no history returns the initial mastery level."""
         svc = _make_service(tmp_path)
-        svc.get_profile("default")  # ensure profile exists
+        svc.update_mastery("other_concept", correct=True)  # ensure profile exists
         resp = svc.get_target_difficulty("never_seen_concept")
 
         assert resp.mastery_level == pytest.approx(0.3)
@@ -276,19 +317,14 @@ class TestGetTargetDifficulty:
     def test_boundary_at_0_4(self, tmp_path):
         """Mastery exactly 0.4 should be medium (<=0.7 boundary)."""
         svc = _make_service(tmp_path)
-        # Push to 0.3 + 0.15 = 0.45, then -0.10 = 0.35, then +0.15 = 0.50
-        # We need exactly 0.4: start 0.3, wrong => 0.2, correct => 0.35, correct => 0.50
-        # Actually, let's manipulate directly
-        profile = svc.get_profile("default")
-        profile.mastery_map["topic"] = ConceptMastery(concept_name="topic", mastery_level=0.4)
+        self._save_mastery(svc, "topic", 0.4)
         resp = svc.get_target_difficulty("topic")
         assert resp.target_difficulty == "medium"
 
     def test_boundary_at_0_7(self, tmp_path):
         """Mastery exactly 0.7 should be medium (<=0.7)."""
         svc = _make_service(tmp_path)
-        profile = svc.get_profile("default")
-        profile.mastery_map["topic"] = ConceptMastery(concept_name="topic", mastery_level=0.7)
+        self._save_mastery(svc, "topic", 0.7)
         resp = svc.get_target_difficulty("topic")
         assert resp.target_difficulty == "medium"
 
@@ -329,13 +365,12 @@ class TestResetProfile:
         assert resp.mastery_levels == {}
 
     def test_reset_persists(self, tmp_path):
-        """After reset, reloading from disk also shows a clean profile."""
-        storage = str(tmp_path / "profiles.json")
+        """After reset, a new service instance also sees a clean profile."""
+        storage = str(tmp_path / "profiles.sqlite3")
         svc = StudentService(storage_path=storage)
         svc.update_mastery("topic", correct=True)
         svc.reset_profile("default")
 
-        # Reload from file
         svc2 = StudentService(storage_path=storage)
         profile = svc2.get_profile("default")
 
@@ -364,16 +399,15 @@ class TestResetProfile:
 
 @pytest.mark.unit
 class TestProfilePersistence:
-    """Tests for JSON file round-trip persistence."""
+    """Tests for SQLite round-trip persistence."""
 
     def test_save_and_reload(self, tmp_path):
-        storage = str(tmp_path / "profiles.json")
+        storage = str(tmp_path / "profiles.sqlite3")
         svc = StudentService(storage_path=storage)
 
         svc.update_mastery("topic_a", correct=True, student_id="student1")
         svc.update_mastery("topic_b", correct=False, student_id="student1")
 
-        # Reload from file
         svc2 = StudentService(storage_path=storage)
         profile = svc2.get_profile("student1")
 
@@ -382,35 +416,44 @@ class TestProfilePersistence:
         assert profile.mastery_map["topic_a"].mastery_level == pytest.approx(0.45)
         assert profile.mastery_map["topic_b"].mastery_level == pytest.approx(0.2)
 
-    def test_file_created_on_first_save(self, tmp_path):
-        storage = tmp_path / "profiles.json"
+    def test_database_created_on_init(self, tmp_path):
+        storage = tmp_path / "profiles.sqlite3"
         assert not storage.exists()
 
-        svc = StudentService(storage_path=str(storage))
-        svc.get_profile("default")  # triggers save
+        StudentService(storage_path=str(storage))
 
         assert storage.exists()
+        assert _row_count(storage) == 0
 
     def test_parent_directories_created(self, tmp_path):
-        storage = tmp_path / "deep" / "nested" / "dir" / "profiles.json"
+        storage = tmp_path / "deep" / "nested" / "dir" / "profiles.sqlite3"
         svc = StudentService(storage_path=str(storage))
-        svc.get_profile("default")
+        svc.update_mastery("topic", correct=True)
 
         assert storage.exists()
 
+    def test_any_file_name_is_a_sqlite_database(self, tmp_path):
+        """The JSON backend is gone: a .json path is just a SQLite file name."""
+        storage = tmp_path / "profiles.json"
+        svc = StudentService(storage_path=str(storage))
+        svc.update_mastery("topic", correct=True)
+
+        assert _row_count(storage) == 1
+
     def test_multiple_students_persisted(self, tmp_path):
-        storage = str(tmp_path / "profiles.json")
+        storage = str(tmp_path / "profiles.sqlite3")
         svc = StudentService(storage_path=storage)
 
         svc.update_mastery("topic", correct=True, student_id="alice")
         svc.update_mastery("topic", correct=False, student_id="bob")
 
         svc2 = StudentService(storage_path=storage)
-        assert "alice" in svc2._profiles
-        assert "bob" in svc2._profiles
+        assert "topic" in svc2.get_profile("alice").mastery_map
+        assert "topic" in svc2.get_profile("bob").mastery_map
+        assert _row_count(Path(storage)) == 2
 
     def test_timestamps_survive_round_trip(self, tmp_path):
-        storage = str(tmp_path / "profiles.json")
+        storage = str(tmp_path / "profiles.sqlite3")
         svc = StudentService(storage_path=storage)
 
         svc.update_mastery("topic", correct=True)
@@ -420,12 +463,11 @@ class TestProfilePersistence:
         svc2 = StudentService(storage_path=storage)
         reloaded = svc2.get_profile("default")
 
-        # Datetimes should be very close (only ISO serialisation precision loss)
         delta = abs((reloaded.updated_at - original_updated).total_seconds())
         assert delta < 1.0
 
     def test_attempt_counts_survive_round_trip(self, tmp_path):
-        storage = str(tmp_path / "profiles.json")
+        storage = str(tmp_path / "profiles.sqlite3")
         svc = StudentService(storage_path=storage)
 
         svc.update_mastery("topic", correct=True)
@@ -438,139 +480,281 @@ class TestProfilePersistence:
         assert mastery.attempts == 2
         assert mastery.correct_attempts == 1
 
+    def test_loads_rows_written_by_seed_script(self, tmp_path):
+        """Rows written like scripts/seed_student_profile.py (json.dumps) load correctly."""
+        storage = tmp_path / "profiles.sqlite3"
+        svc = StudentService(storage_path=str(storage))
+        seeded = {
+            "student_id": "demo",
+            "mastery_map": {
+                "Cold War": {
+                    "concept_name": "Cold War",
+                    "mastery_level": 0.42,
+                    "attempts": 5,
+                    "correct_attempts": 2,
+                    "last_assessed": "2025-06-01T10:00:00",
+                }
+            },
+            "overall_ability": 0.42,
+            "created_at": "2025-01-01T12:00:00",
+            "updated_at": "2025-06-01T10:00:00",
+        }
+        with sqlite3.connect(storage) as conn:
+            conn.execute(
+                "INSERT INTO student_profiles (student_id, profile_json, updated_at) "
+                "VALUES (?, ?, ?)",
+                ("demo", json.dumps(seeded), seeded["updated_at"]),
+            )
+
+        profile = svc.get_profile("demo")
+
+        assert profile.mastery_map["Cold War"].mastery_level == pytest.approx(0.42)
+        assert profile.mastery_map["Cold War"].attempts == 5
+        assert profile.created_at.year == 2025
+
 
 # ===========================================================================
-# TestLoadProfiles
+# TestReadThroughAndAtomicity
 # ===========================================================================
 
 
 @pytest.mark.unit
-class TestLoadProfiles:
-    """Tests for _load_profiles edge cases."""
+class TestReadThroughAndAtomicity:
+    """Instances sharing one database see each other's writes and never lose updates."""
 
-    def test_missing_file_starts_fresh(self, tmp_path):
-        storage = str(tmp_path / "nonexistent.json")
-        svc = StudentService(storage_path=storage)
+    def test_instances_see_each_others_writes(self, tmp_path):
+        storage = str(tmp_path / "profiles.sqlite3")
+        worker_a = StudentService(storage_path=storage)
+        worker_b = StudentService(storage_path=storage)
 
-        assert svc._profiles == {}
+        # worker_b reads first, as a long-running worker would
+        assert worker_b.get_profile("alice").mastery_map == {}
 
-    def test_corrupt_json_starts_fresh(self, tmp_path):
-        storage = tmp_path / "profiles.json"
-        storage.write_text("this is not valid json {{{")
+        worker_a.update_mastery("topic", correct=True, student_id="alice")
 
+        assert worker_b.get_profile("alice").mastery_map["topic"].attempts == 1
+
+    def test_updates_from_two_instances_accumulate(self, tmp_path):
+        storage = str(tmp_path / "profiles.sqlite3")
+        worker_a = StudentService(storage_path=storage)
+        worker_b = StudentService(storage_path=storage)
+
+        worker_a.update_mastery("topic", correct=True, student_id="alice")
+        worker_b.update_mastery("topic", correct=False, student_id="alice")
+        worker_a.update_mastery("topic", correct=True, student_id="alice")
+
+        mastery = worker_b.get_profile("alice").mastery_map["topic"]
+        assert mastery.attempts == 3
+        assert mastery.correct_attempts == 2
+
+    def test_concurrent_updates_from_two_instances_are_not_lost(self, tmp_path):
+        storage = str(tmp_path / "profiles.sqlite3")
+        services = [StudentService(storage_path=storage) for _ in range(2)]
+        errors: list[str] = []
+
+        def answer(service: StudentService) -> None:
+            try:
+                for _ in range(10):
+                    service.update_mastery("topic", correct=True, student_id="shared")
+            except Exception as e:  # pragma: no cover - reported by the assertion below
+                errors.append(repr(e))
+
+        threads = [
+            threading.Thread(target=answer, args=(svc,)) for svc in services for _ in range(2)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert not errors
+        assert services[0].get_profile("shared").mastery_map["topic"].attempts == 40
+
+    def test_schema_created_once_and_updates_use_one_transaction(self, tmp_path, monkeypatch):
+        svc = _make_service(tmp_path)
+        statements: list[str] = []
+        open_connection = svc._open_connection
+
+        def traced_connection() -> sqlite3.Connection:
+            conn = open_connection()
+            conn.set_trace_callback(statements.append)
+            return conn
+
+        monkeypatch.setattr(svc, "_open_connection", traced_connection)
+
+        svc.update_mastery("topic", correct=True)
+        svc.update_mastery("topic", correct=False)
+        svc.reset_profile("default")
+
+        assert not any("CREATE TABLE" in s or "journal_mode" in s for s in statements)
+        assert sum(s.startswith("BEGIN IMMEDIATE") for s in statements) == 3
+        assert all(
+            "ON CONFLICT(student_id) DO UPDATE" in s
+            for s in statements
+            if s.lstrip().startswith("INSERT")
+        )
+
+
+# ===========================================================================
+# TestStorageErrors
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestStorageErrors:
+    """Storage failures raise StudentStorageError instead of being swallowed."""
+
+    def test_non_sqlite_file_raises(self, tmp_path):
+        storage = tmp_path / "profiles.sqlite3"
+        storage.write_text('{"legacy": "json profiles"}')
+
+        with pytest.raises(StudentStorageError):
+            StudentService(storage_path=str(storage))
+
+    def test_corrupt_profile_row_raises(self, tmp_path):
+        storage = tmp_path / "profiles.sqlite3"
         svc = StudentService(storage_path=str(storage))
-        assert svc._profiles == {}
+        with sqlite3.connect(storage) as conn:
+            conn.execute(
+                "INSERT INTO student_profiles (student_id, profile_json, updated_at) "
+                "VALUES ('broken', 'not json', '2025-01-01T00:00:00')"
+            )
 
-    def test_empty_file_starts_fresh(self, tmp_path):
-        storage = tmp_path / "profiles.json"
-        storage.write_text("")
+        with pytest.raises(StudentStorageError, match="broken"):
+            svc.get_profile("broken")
+        with pytest.raises(StudentStorageError):
+            svc.update_mastery("topic", correct=True, student_id="broken")
 
-        svc = StudentService(storage_path=str(storage))
-        assert svc._profiles == {}
+    def test_unavailable_database_raises_on_update(self, tmp_path, monkeypatch):
+        svc = _make_service(tmp_path)
 
-    def test_legacy_float_format(self, tmp_path):
-        """Legacy files stored mastery as plain float values instead of dicts."""
-        storage = tmp_path / "profiles.json"
-        legacy_data = {
-            "student1": {
-                "student_id": "student1",
-                "mastery_map": {
-                    "photosynthesis": 0.65,
-                    "mitosis": 0.4,
-                },
-                "overall_ability": 0.525,
-                "created_at": "2025-01-01T12:00:00",
-                "updated_at": "2025-01-15T09:30:00",
-            }
-        }
-        storage.write_text(json.dumps(legacy_data))
+        def fail_to_connect() -> sqlite3.Connection:
+            raise sqlite3.OperationalError("unable to open database file")
 
-        svc = StudentService(storage_path=str(storage))
-        profile = svc.get_profile("student1")
+        monkeypatch.setattr(svc, "_open_connection", fail_to_connect)
 
-        assert isinstance(profile.mastery_map["photosynthesis"], ConceptMastery)
-        assert profile.mastery_map["photosynthesis"].mastery_level == pytest.approx(0.65)
-        assert profile.mastery_map["photosynthesis"].concept_name == "photosynthesis"
+        with pytest.raises(StudentStorageError, match="unable to open database file"):
+            svc.update_mastery("topic", correct=True)
+        with pytest.raises(StudentStorageError):
+            svc.get_profile("default")
 
-        assert isinstance(profile.mastery_map["mitosis"], ConceptMastery)
-        assert profile.mastery_map["mitosis"].mastery_level == pytest.approx(0.4)
+    def test_failed_save_raises_and_rolls_back(self, tmp_path, monkeypatch):
+        svc = _make_service(tmp_path)
+        svc.update_mastery("topic", correct=True)
 
-    def test_legacy_float_format_defaults(self, tmp_path):
-        """Legacy float entries should have zero attempts/correct_attempts."""
-        storage = tmp_path / "profiles.json"
-        legacy_data = {
-            "default": {
-                "student_id": "default",
-                "mastery_map": {
-                    "topic": 0.5,
-                },
-                "overall_ability": 0.5,
-                "created_at": "2025-01-01T12:00:00",
-                "updated_at": "2025-01-01T12:00:00",
-            }
-        }
-        storage.write_text(json.dumps(legacy_data))
+        def fail_to_write(conn, profile) -> None:
+            raise sqlite3.OperationalError("disk I/O error")
 
-        svc = StudentService(storage_path=str(storage))
+        monkeypatch.setattr(svc, "_write_profile", fail_to_write)
+
+        with pytest.raises(StudentStorageError, match="disk I/O error"):
+            svc.update_mastery("topic", correct=True)
+
+        monkeypatch.undo()
         mastery = svc.get_profile("default").mastery_map["topic"]
+        assert mastery.attempts == 1  # the failed update left no partial write
 
-        assert mastery.attempts == 0
-        assert mastery.correct_attempts == 0
-        assert mastery.last_assessed is None
+    def test_storage_error_is_not_a_value_error(self):
+        # Routes map ValueError to 404; a storage failure must surface as a server error
+        assert not issubclass(StudentStorageError, ValueError)
 
-    def test_dict_format_loads_correctly(self, tmp_path):
-        """Modern dict-format mastery entries should load with all fields."""
-        storage = tmp_path / "profiles.json"
-        data = {
-            "default": {
-                "student_id": "default",
-                "mastery_map": {
-                    "evolution": {
-                        "concept_name": "evolution",
-                        "mastery_level": 0.7,
-                        "attempts": 5,
-                        "correct_attempts": 4,
-                        "last_assessed": "2025-06-01T10:00:00",
-                    }
-                },
-                "overall_ability": 0.7,
-                "created_at": "2025-01-01T12:00:00",
-                "updated_at": "2025-06-01T10:00:00",
-            }
-        }
-        storage.write_text(json.dumps(data))
 
-        svc = StudentService(storage_path=str(storage))
-        mastery = svc.get_profile("default").mastery_map["evolution"]
+# ===========================================================================
+# TestConceptValidation
+# ===========================================================================
 
-        assert mastery.concept_name == "evolution"
-        assert mastery.mastery_level == pytest.approx(0.7)
-        assert mastery.attempts == 5
-        assert mastery.correct_attempts == 4
-        assert mastery.last_assessed is not None
 
-    def test_datetime_parsing(self, tmp_path):
-        """ISO datetime strings in created_at/updated_at should be parsed."""
-        storage = tmp_path / "profiles.json"
-        data = {
-            "default": {
-                "student_id": "default",
-                "mastery_map": {},
-                "overall_ability": 0.3,
-                "created_at": "2025-03-15T14:30:00",
-                "updated_at": "2025-06-20T09:15:00",
-            }
-        }
-        storage.write_text(json.dumps(data))
+@pytest.mark.unit
+class TestConceptValidation:
+    """Concept validation with an injectable validator."""
 
-        svc = StudentService(storage_path=str(storage))
-        profile = svc.get_profile("default")
+    def test_no_validator_accepts_any_concept(self, tmp_path):
+        svc = _make_service(tmp_path)
 
-        assert isinstance(profile.created_at, datetime)
-        assert profile.created_at.year == 2025
-        assert profile.created_at.month == 3
-        assert isinstance(profile.updated_at, datetime)
-        assert profile.updated_at.month == 6
+        resp = svc.update_mastery("anything at all", correct=True)
+
+        assert resp.total_attempts == 1
+
+    def test_validator_rejects_unknown_concept(self, tmp_path):
+        svc = _make_service(tmp_path, concept_validator=lambda concept, subject_id: False)
+
+        with pytest.raises(UnknownConceptError, match="NOT_A_CONCEPT"):
+            svc.update_mastery("NOT_A_CONCEPT", correct=True, student_id="eve")
+
+        assert "NOT_A_CONCEPT" not in svc.get_profile("eve").mastery_map
+        assert _row_count(tmp_path / "profiles.sqlite3") == 0
+
+    def test_validator_receives_concept_and_subject(self, tmp_path):
+        calls: list[tuple[str, str | None]] = []
+
+        def validator(concept: str, subject_id: str | None) -> bool:
+            calls.append((concept, subject_id))
+            return True
+
+        svc = _make_service(tmp_path, concept_validator=validator)
+        svc.update_mastery("Supply", correct=True, subject_id="economics")
+        svc.update_mastery("Civil War", correct=False)
+
+        assert calls == [("Supply", "economics"), ("Civil War", None)]
+
+    def test_validator_errors_propagate_without_writing(self, tmp_path):
+        def unavailable(concept: str, subject_id: str | None) -> bool:
+            raise Neo4jConnectionError("graph down")
+
+        svc = _make_service(tmp_path, concept_validator=unavailable)
+
+        with pytest.raises(Neo4jConnectionError):
+            svc.update_mastery("topic", correct=True)
+        assert _row_count(tmp_path / "profiles.sqlite3") == 0
+
+    def test_kg_validator_checks_the_subject_graph(self):
+        adapter = MagicMock()
+        adapter.concept_exists.return_value = True
+
+        with patch.object(
+            student_service_module, "get_neo4j_adapter", return_value=adapter
+        ) as factory:
+            assert kg_concept_exists("The Civil War", "us_history") is True
+            assert kg_concept_exists("Supply", None) is True
+
+        assert [c.args for c in factory.call_args_list] == [("us_history",), (None,)]
+        adapter.concept_exists.assert_any_call("The Civil War")
+
+    def test_kg_validator_reports_missing_concepts(self):
+        adapter = MagicMock()
+        adapter.concept_exists.return_value = False
+
+        with patch.object(student_service_module, "get_neo4j_adapter", return_value=adapter):
+            assert kg_concept_exists("TOTALLY_FAKE", "us_history") is False
+
+    def test_kg_validator_wraps_graph_errors(self):
+        adapter = MagicMock()
+        adapter.concept_exists.side_effect = RuntimeError("ServiceUnavailable")
+
+        with patch.object(student_service_module, "get_neo4j_adapter", return_value=adapter):
+            with pytest.raises(Neo4jConnectionError, match="ServiceUnavailable"):
+                kg_concept_exists("Civil War", "us_history")
+
+    def test_kg_validator_rejects_unknown_subject(self):
+        with pytest.raises(KeyError):
+            kg_concept_exists("Civil War", "no_such_subject")
+
+    @pytest.mark.parametrize("enabled", [False, True])
+    def test_get_student_service_validation_is_opt_in(self, tmp_path, monkeypatch, enabled):
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "student_profiles_db", str(tmp_path / "app.sqlite3"))
+        monkeypatch.setattr(settings, "student_validate_concepts", enabled)
+        monkeypatch.setattr(student_service_module, "_student_service", None)
+
+        service = get_student_service()
+
+        assert service is get_student_service()
+        assert service.storage_path == tmp_path / "app.sqlite3"
+        if enabled:
+            assert service.concept_validator is kg_concept_exists
+        else:
+            assert service.concept_validator is None
 
 
 # ===========================================================================
@@ -756,6 +940,7 @@ class TestBKTUpdate:
             concept_name="topic",
             mastery_level=0.6,
         )
+        svc.save_profile(profile)
         # bkt_p_known is None, should bootstrap from 0.6
         resp = svc.update_mastery("topic", correct=True)
 
@@ -781,9 +966,9 @@ class TestBKTUpdate:
         assert resp2.bkt_p_known is not None
         assert resp2.bkt_p_known <= 0.99
 
-    def test_json_round_trip_preserves_bkt(self, tmp_path):
-        """BKT fields survive JSON serialization and reload."""
-        storage = str(tmp_path / "profiles.json")
+    def test_round_trip_preserves_bkt(self, tmp_path):
+        """BKT fields survive SQLite serialization and reload."""
+        storage = str(tmp_path / "profiles.sqlite3")
         svc = StudentService(storage_path=storage)
         svc.update_mastery("topic", correct=True)
 

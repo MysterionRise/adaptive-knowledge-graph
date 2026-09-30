@@ -174,3 +174,42 @@ class TestRerankerLoad:
             reranker.load()
 
         mock_ce_cls.assert_called_once()
+
+    def test_load_uses_shared_device_resolution(self, monkeypatch):
+        """RERANKER_DEVICE goes through the same resolver as embeddings (auto/cuda/mps/cpu)."""
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "reranker_device", "auto")
+        reranker = Reranker()
+        mock_ce_cls = MagicMock(return_value=MagicMock())
+
+        with (
+            patch("sentence_transformers.CrossEncoder", mock_ce_cls),
+            patch("backend.app.rag.reranker.resolve_device", return_value="mps") as resolver,
+        ):
+            reranker.load()
+
+        resolver.assert_called_once_with("auto")
+        assert mock_ce_cls.call_args.kwargs["device"] == "mps"
+
+    def test_concurrent_loads_create_one_model(self):
+        import threading
+        import time
+
+        reranker = Reranker()
+
+        def slow_cross_encoder(*args, **kwargs):
+            time.sleep(0.05)  # widen the race window
+            return MagicMock()
+
+        mock_ce_cls = MagicMock(side_effect=slow_cross_encoder)
+
+        with patch("sentence_transformers.CrossEncoder", mock_ce_cls):
+            threads = [threading.Thread(target=reranker.load) for _ in range(6)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+        mock_ce_cls.assert_called_once()
+        assert reranker.is_loaded

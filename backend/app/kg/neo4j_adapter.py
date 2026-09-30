@@ -5,6 +5,7 @@ Handles connection to Neo4j and CRUD operations for graph data.
 Supports multi-subject isolation via database parameter or label prefixes.
 """
 
+import threading
 from typing import Any
 
 from loguru import logger
@@ -14,8 +15,45 @@ from backend.app.core.settings import settings
 from backend.app.kg.schema import ChunkNode, KnowledgeGraph, RelationshipType
 
 
+def _concept_name_candidates(name: str) -> list[str]:
+    """Lower-cased spellings of a concept name to match (with and without a leading "the")."""
+    normalized = " ".join(name.split()).lower()
+    if not normalized:
+        return []
+    candidates = [normalized]
+    if normalized.startswith("the ") and len(normalized) > len("the "):
+        candidates.append(normalized[len("the ") :])
+    return candidates
+
+
+def _relationship_properties(rel: Any) -> dict[str, Any]:
+    """
+    Optional relationship properties to persist: evidence and flattened provenance.
+
+    Neo4j cannot store map properties, so a provenance dict such as
+    {"source": "glossary", "module_id": "m1"} becomes provenance_source / provenance_module_id.
+    """
+    properties: dict[str, Any] = {}
+    if rel.evidence is not None:
+        properties["evidence"] = rel.evidence
+    provenance = getattr(rel, "provenance", None) or {}
+    for key, value in provenance.items():
+        if value is None:
+            continue
+        if not isinstance(value, str | int | float | bool):
+            value = str(value)
+        properties[f"provenance_{key}"] = value
+    return properties
+
+
 class Neo4jAdapter:
-    """Adapter for Neo4j graph database operations."""
+    """
+    Adapter for Neo4j graph database operations.
+
+    Application code should use get_neo4j_adapter(subject_id), which applies the
+    subject's label prefix (e.g. ``us_history_Concept``). An adapter created
+    without a label_prefix queries the legacy unprefixed labels.
+    """
 
     def __init__(
         self,
@@ -71,9 +109,10 @@ class Neo4jAdapter:
             raise
 
     def close(self):
-        """Close Neo4j connection."""
+        """Close Neo4j connection (get_neo4j_adapter reconnects a closed adapter)."""
         if self.driver is not None:
             self.driver.close()
+            self.driver = None
             logger.info("Closed Neo4j connection")
 
     def clear_database(self):
@@ -125,7 +164,9 @@ class Neo4jAdapter:
             SET c.key_term = $key_term,
                 c.frequency = $frequency,
                 c.importance_score = $importance_score,
-                c.source_modules = $source_modules
+                c.source_modules = $source_modules,
+                c.definition = $definition,
+                c.aliases = $aliases
             """
             session.run(
                 query,
@@ -134,6 +175,8 @@ class Neo4jAdapter:
                 frequency=concept.frequency,
                 importance_score=concept.importance_score,
                 source_modules=concept.source_modules,
+                definition=concept.definition,
+                aliases=concept.aliases,
             )
         logger.info(f"Created {len(kg.concepts)} concept nodes")
 
@@ -167,7 +210,8 @@ class Neo4jAdapter:
                 MATCH (c:{concept_label} {{name: $target}})
                 MERGE (m)-[r:COVERS]->(c)
                 SET r.weight = $weight,
-                    r.confidence = $confidence
+                    r.confidence = $confidence,
+                    r += $properties
                 """
             elif rel.type == RelationshipType.RELATED:
                 # Concept -> Concept
@@ -176,7 +220,8 @@ class Neo4jAdapter:
                 MATCH (c2:{concept_label} {{name: $target}})
                 MERGE (c1)-[r:RELATED]-(c2)
                 SET r.weight = $weight,
-                    r.confidence = $confidence
+                    r.confidence = $confidence,
+                    r += $properties
                 """
             elif rel.type == RelationshipType.PREREQ:
                 # Concept -> Concept (prerequisite)
@@ -185,7 +230,8 @@ class Neo4jAdapter:
                 MATCH (c2:{concept_label} {{name: $target}})
                 MERGE (c1)-[r:PREREQ]->(c2)
                 SET r.weight = $weight,
-                    r.confidence = $confidence
+                    r.confidence = $confidence,
+                    r += $properties
                 """
             else:
                 continue
@@ -196,6 +242,7 @@ class Neo4jAdapter:
                 target=rel.target,
                 weight=rel.weight,
                 confidence=rel.confidence,
+                properties=_relationship_properties(rel),
             )
 
         logger.info(f"Created {len(kg.relationships)} relationships")
@@ -212,9 +259,10 @@ class Neo4jAdapter:
             List of neighbor concept dicts
         """
         concept_label = self._get_label("Concept")
+        hops = max(1, int(max_hops))  # interpolated into the query, so force an int
         with self._get_session() as session:
             query = f"""
-            MATCH (c:{concept_label} {{name: $name}})-[r*1..{max_hops}]-(neighbor:{concept_label})
+            MATCH (c:{concept_label} {{name: $name}})-[r*1..{hops}]-(neighbor:{concept_label})
             RETURN DISTINCT neighbor.name as name,
                    neighbor.importance_score as importance_score,
                    neighbor.key_term as key_term
@@ -224,6 +272,35 @@ class Neo4jAdapter:
             result = session.run(query, name=concept_name)
             neighbors = [dict(record) for record in result]
             return neighbors
+
+    def get_all_concept_names(self) -> set[str]:
+        """Return the names of all concepts in this adapter's (subject's) graph."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            result = session.run(f"MATCH (c:{concept_label}) RETURN c.name AS name")
+            return {record["name"] for record in result if record["name"]}
+
+    def concept_exists(self, name: str) -> bool:
+        """
+        Check whether a concept exists in this adapter's (subject's) graph.
+
+        Matching ignores case, surrounding whitespace and a leading "The", so
+        "The Civil War" matches the concept "Civil War"; concept aliases match too.
+        """
+        candidates = _concept_name_candidates(name)
+        if not candidates:
+            return False
+
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            record = session.run(
+                f"MATCH (c:{concept_label}) "
+                "WHERE toLower(c.name) IN $names "
+                "OR any(alias IN coalesce(c.aliases, []) WHERE toLower(alias) IN $names) "
+                "RETURN count(c) > 0 AS found",
+                names=candidates,
+            ).single()
+        return bool(record and record["found"])
 
     def get_graph_stats(self) -> dict:
         """Get graph statistics from Neo4j."""
@@ -573,35 +650,51 @@ class Neo4jAdapter:
 
         Args:
             chunk_id: ID of the central chunk
-            window_before: Number of preceding chunks to include
-            window_after: Number of following chunks to include
+            window_before: Number of preceding chunks to include (0 = none)
+            window_after: Number of following chunks to include (0 = none)
 
         Returns:
-            List of chunk dicts in sequential order
+            List of chunk dicts in sequential order, each with its module's title
+
+        Raises:
+            ValueError: If a window size is negative
         """
+        # Window sizes are interpolated into the query, so force non-negative ints
+        before = int(window_before)
+        after = int(window_after)
+        if before < 0 or after < 0:
+            raise ValueError("window sizes must be >= 0")
+
         chunk_label = self._get_label("Chunk")
-        with self._get_session() as session:
-            # Get preceding chunks (traverse NEXT backwards)
-            # Get following chunks (traverse NEXT forwards)
-            # Combine and order by chunk_index
-            query = f"""
-            MATCH (center:{chunk_label} {{chunkId: $chunk_id}})
-            OPTIONAL MATCH path_before = (prev:{chunk_label})-[:NEXT*1..{window_before}]->(center)
-            OPTIONAL MATCH path_after = (center)-[:NEXT*1..{window_after}]->(next:{chunk_label})
-            WITH center,
-                 collect(DISTINCT prev) AS before_chunks,
-                 collect(DISTINCT next) AS after_chunks
-            WITH before_chunks + [center] + after_chunks AS all_chunks
-            UNWIND all_chunks AS chunk
+        module_label = self._get_label("Module")
+
+        # Preceding chunks traverse NEXT backwards, following chunks forwards;
+        # a zero-sized side is skipped entirely.
+        clauses = [f"MATCH (center:{chunk_label} {{chunkId: $chunk_id}})"]
+        if before:
+            clauses.append(f"OPTIONAL MATCH (prev:{chunk_label})-[:NEXT*1..{before}]->(center)")
+        if after:
+            clauses.append(f"OPTIONAL MATCH (center)-[:NEXT*1..{after}]->(next:{chunk_label})")
+        before_chunks = "collect(DISTINCT prev)" if before else "[]"
+        after_chunks = "collect(DISTINCT next)" if after else "[]"
+        clauses.append(
+            f"""
+            WITH center, {before_chunks} AS before_chunks, {after_chunks} AS after_chunks
+            UNWIND before_chunks + [center] + after_chunks AS chunk
             WITH DISTINCT chunk
+            OPTIONAL MATCH (module:{module_label} {{module_id: chunk.moduleId}})
             RETURN chunk.chunkId AS chunk_id,
                    chunk.text AS text,
                    chunk.moduleId AS module_id,
+                   module.title AS module_title,
                    chunk.section AS section,
                    chunk.chunkIndex AS chunk_index
-            ORDER BY chunk.chunkIndex
+            ORDER BY chunk_index
             """
+        )
+        query = "\n".join(clauses)
 
+        with self._get_session() as session:
             result = session.run(query, chunk_id=chunk_id)
             return [dict(record) for record in result]
 
@@ -653,13 +746,14 @@ class Neo4jAdapter:
 
 # Registry of adapters per subject
 _neo4j_adapters: dict[str, Neo4jAdapter] = {}
+_neo4j_adapters_lock = threading.Lock()
 
 
 def get_neo4j_adapter(subject_id: str | None = None) -> Neo4jAdapter:
     """
     Get or create a Neo4j adapter for a specific subject.
 
-    Uses a registry pattern to reuse adapters per subject.
+    Uses a thread-safe registry to reuse adapters per subject.
 
     Args:
         subject_id: Subject identifier (e.g., "us_history", "biology").
@@ -674,33 +768,32 @@ def get_neo4j_adapter(subject_id: str | None = None) -> Neo4jAdapter:
     if subject_id is None:
         subject_id = get_default_subject_id()
 
-    # Return cached adapter if available
-    if subject_id in _neo4j_adapters:
-        adapter = _neo4j_adapters[subject_id]
-        # Reconnect if driver is None
-        if adapter.driver is None:
-            adapter.connect()
+    # Fast path: cached and connected
+    adapter = _neo4j_adapters.get(subject_id)
+    if adapter is not None and adapter.driver is not None:
         return adapter
 
-    # Get subject configuration
-    subject_config = get_subject(subject_id)
-
-    # Create new adapter with subject-specific configuration
-    adapter = Neo4jAdapter(
-        database=subject_config.database.neo4j_database,
-        label_prefix=subject_config.database.label_prefix,
-    )
-    adapter.connect()
-
-    # Cache the adapter
-    _neo4j_adapters[subject_id] = adapter
-
-    return adapter
+    with _neo4j_adapters_lock:
+        adapter = _neo4j_adapters.get(subject_id)
+        if adapter is None:
+            # Create new adapter with subject-specific configuration
+            subject_config = get_subject(subject_id)
+            adapter = Neo4jAdapter(
+                database=subject_config.database.neo4j_database,
+                label_prefix=subject_config.database.label_prefix,
+            )
+            adapter.connect()
+            _neo4j_adapters[subject_id] = adapter
+        elif adapter.driver is None:
+            # Reconnect a cached adapter that was closed
+            adapter.connect()
+        return adapter
 
 
 def clear_neo4j_adapters() -> None:
     """Close and clear all cached Neo4j adapters."""
-    for adapter in _neo4j_adapters.values():
-        adapter.close()
-    _neo4j_adapters.clear()
+    with _neo4j_adapters_lock:
+        for adapter in _neo4j_adapters.values():
+            adapter.close()
+        _neo4j_adapters.clear()
     logger.info("Cleared all cached Neo4j adapters")

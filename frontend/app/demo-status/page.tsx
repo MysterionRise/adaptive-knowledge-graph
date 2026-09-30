@@ -1,10 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import {
   AlertTriangle,
-  ArrowLeft,
   CheckCircle2,
   Database,
   FileCheck2,
@@ -15,7 +12,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { describeError } from '@/lib/api-errors';
 import type { DemoReadinessStatus, DemoStatusResponse } from '@/lib/types';
+import { useApiQuery } from '@/lib/useApiQuery';
+import ErrorMessage from '@/components/ErrorMessage';
 
 const statusLabels: Record<DemoReadinessStatus, string> = {
   ok: 'Ready',
@@ -32,9 +32,9 @@ const statusClasses: Record<DemoReadinessStatus, string> = {
 };
 
 function StatusIcon({ status }: { status: DemoReadinessStatus }) {
-  if (status === 'ok') return <CheckCircle2 className="h-5 w-5" />;
-  if (status === 'degraded') return <AlertTriangle className="h-5 w-5" />;
-  return <XCircle className="h-5 w-5" />;
+  if (status === 'ok') return <CheckCircle2 className="h-5 w-5" aria-hidden="true" />;
+  if (status === 'degraded') return <AlertTriangle className="h-5 w-5" aria-hidden="true" />;
+  return <XCircle className="h-5 w-5" aria-hidden="true" />;
 }
 
 function StatusBadge({ status }: { status: DemoReadinessStatus }) {
@@ -60,67 +60,52 @@ function OverallBadge({ status }: { status: DemoStatusResponse['status'] }) {
 }
 
 export default function DemoStatusPage() {
-  const [status, setStatus] = useState<DemoStatusResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadStatus = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      setStatus(await apiClient.getDemoStatus());
-    } catch (err) {
-      console.error('Failed to load demo status:', err);
-      setError('Unable to load demo readiness. Confirm the API is running on the configured backend URL.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadStatus();
-  }, []);
+  const demoStatus = useApiQuery('demo-status', (signal) => apiClient.getDemoStatus({ signal }));
+  const { isLoading, error } = demoStatus;
+  // The previous report stays visible while it is being refreshed
+  const status = error ? undefined : demoStatus.data;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-              aria-label="Back to home"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Client Demo Status</h1>
-              <p className="text-sm text-gray-600">
-                Local OpenStax demo readiness for the 30-minute client walkthrough.
-              </p>
-            </div>
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Demo Status</h1>
+            <p className="text-sm text-gray-600">
+              Checks that the local services, the seeded subject data and the latest evaluation
+              are ready.
+            </p>
           </div>
           <button
-            onClick={loadStatus}
+            type="button"
+            onClick={demoStatus.retry}
             disabled={isLoading}
             className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            )}
             Refresh
           </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main id="main-content" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {isLoading && !status ? (
-          <div className="flex min-h-[360px] items-center justify-center">
+          <div className="flex min-h-[360px] items-center justify-center" role="status">
             <div className="flex items-center gap-3 text-gray-600">
-              <Loader2 className="h-6 w-6 animate-spin" />
+              <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
               Loading demo readiness...
             </div>
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-red-800">{error}</div>
+          <ErrorMessage
+            title="Unable to load demo readiness."
+            message={describeError(error)}
+            onRetry={demoStatus.retry}
+          />
         ) : status ? (
           <div className="space-y-8">
             <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
