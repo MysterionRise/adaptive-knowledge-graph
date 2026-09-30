@@ -36,6 +36,11 @@ is compiled in the release pull request
 
 ### Removed
 
+- Unused Python dependencies
+  ([#93](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/93)).
+  Recreate an existing virtual environment after upgrading
+  (`poetry env remove --all && poetry install`); syncing it in place can break
+  `import spacy`. See CONTRIBUTING.md, "Upgrading an existing checkout".
 - `.env.demo` is no longer tracked. Copy `.env.demo.example` instead
   ([#99](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/99)).
 

@@ -62,19 +62,24 @@ configure yourself, and the known limitations listed below.
 
 If anyone other than you can reach the API, run it in production mode:
 
-1. Set `APP_ENV=production` and a long random `API_KEY`. In production mode the
-   API refuses to start without `API_KEY`.
+1. Set `APP_ENV=production` and a long random `API_KEY`, for example from
+   `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`. In
+   production mode the API refuses to start without `API_KEY`, and the
+   protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`)
+   require it in the `X-API-Key` header.
 2. Keep the interactive API docs off. In production mode `/docs`, `/redoc` and
    `/openapi.json` are disabled unless you set `API_DOCS_ENABLED=true`.
-3. Set `CORS_ORIGINS` to your frontend origin. Production mode also restricts
-   the allowed CORS methods.
+3. Set `CORS_ORIGINS` to your frontend origin. `CORS_ALLOW_METHODS` and
+   `CORS_ALLOW_HEADERS` default to short allow-lists, and production mode
+   refuses to start if any of the three contains `*`.
 4. Keep `PRIVACY_LOCAL_ONLY=true` and `LLM_MODE=local` unless you have approved
    sending questions and textbook excerpts to a remote provider.
 5. Change the Neo4j and OpenSearch credentials, and keep both databases on
    `127.0.0.1` or a private network.
-6. Terminate TLS in a reverse proxy in front of the API. Set
-   `TRUST_PROXY_HEADERS=true` only if that proxy is the only way to reach the
-   API, because it changes how clients are identified for rate limiting.
+6. Terminate TLS in a reverse proxy in front of the API, and run the API
+   without auto-reload. Set `TRUST_PROXY_HEADERS=true` only if that proxy
+   appends the client IP to `X-Forwarded-For` and is the only way to reach the
+   API: rate limits are then keyed on the right-most hop.
 7. Only load models you trust through `EMBEDDING_MODEL` and `RERANKER_MODEL`.
 
 ## Accepted risks
@@ -94,6 +99,8 @@ If anyone other than you can reach the API, run it in production mode:
     ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
     This project does not use the affected APIs, such as the legacy prompt
     loader.
+  - `torch`, for two advisories that need local access to exploit
+    ([#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79)).
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
   read that key. An API key therefore only gates non-browser clients such as

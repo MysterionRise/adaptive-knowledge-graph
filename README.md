@@ -262,8 +262,11 @@ need:
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `APP_ENV` | `development` | `development` runs without an API key and logs a warning at startup. `production` refuses to start without `API_KEY`, turns off `/docs`, `/redoc` and `/openapi.json` unless `API_DOCS_ENABLED=true`, and restricts the allowed CORS methods. |
-| `API_KEY` | empty | Required in production. Clients send it in the `X-API-Key` header. |
+| `APP_ENV` | `development` | `development` runs without an API key and logs a warning at startup. `production` refuses to start without `API_KEY` or with a `*` in any CORS setting, and turns off `/docs`, `/redoc` and `/openapi.json` unless `API_DOCS_ENABLED=true`. |
+| `API_KEY` | empty | Required in production. Clients send it in the `X-API-Key` header to reach the protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`). |
+| `API_DOCS_ENABLED` | unset | Unset means on in development and off in production; `true` or `false` forces either. Do not set it to an empty value, which fails at startup. |
+| `CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS` | `http://localhost:3000,http://localhost:3001`; `GET,POST,OPTIONS`; `Content-Type,X-API-Key,X-Request-ID` | Comma-separated CORS allow-lists. |
+| `TRUST_PROXY_HEADERS` | `false` | Keys rate limits on the right-most `X-Forwarded-For` hop. Enable it only behind a proxy that appends the client IP. |
 | `PRIVACY_LOCAL_ONLY` | `true` | Keeps every LLM call on the local Ollama. While it is `true` the API refuses to start unless `LLM_MODE=local`. |
 | `LLM_MODE` | `local` | `local` uses Ollama. `remote` uses OpenRouter (`OPENROUTER_API_KEY`). `hybrid` tries Ollama and falls back to OpenRouter. Both remote modes send questions and retrieved excerpts to the provider and require `PRIVACY_LOCAL_ONLY=false`. |
 | `EMBEDDING_DEVICE` | `auto` | `auto` picks `cuda`, then `mps`, then `cpu`. Set a device to override. |
@@ -275,6 +278,15 @@ need:
 | `STUDENT_PROFILES_DB` | `data/processed/student_profiles.sqlite3` | SQLite file for learner profiles. |
 | `STUDENT_VALIDATE_CONCEPTS` | `false` | Rejects mastery updates for concepts that are not in the subject's knowledge graph. |
 | `RATE_LIMIT_*` | see below | Per-client limits: `RATE_LIMIT_ASK` (`10/minute`), `RATE_LIMIT_QUIZ` (`5/minute`), `RATE_LIMIT_GRAPH` (`30/minute`), `RATE_LIMIT_GRAPH_QUERY` (`10/minute`), `RATE_LIMIT_STUDENT_WRITE` (`30/minute`) and `RATE_LIMIT_RECOMMENDATIONS` (`10/minute`). |
+
+To run in production mode, generate a key and start the API without auto-reload,
+behind a TLS-terminating reverse proxy (see [SECURITY.md](SECURITY.md)):
+
+```bash
+export APP_ENV=production
+export API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+poetry run uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
 
 Every setting is defined in
 [`backend/app/core/settings.py`](backend/app/core/settings.py). The frontend

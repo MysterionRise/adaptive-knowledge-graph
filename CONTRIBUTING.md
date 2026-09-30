@@ -44,6 +44,25 @@ Most backend work does not need the full stack: the test suite mocks Neo4j,
 OpenSearch and the LLM. You need the running stack only to try changes end to
 end (`make run-api` and `npm run dev`).
 
+### Upgrading an existing checkout
+
+The v0.3.0 release removes many unused Python dependencies. Syncing an
+existing virtual environment in place can leave it broken (for example
+`import spacy` fails because removing `typer` deletes files that `typer-slim`
+shares), so recreate it after pulling:
+
+```bash
+poetry env remove --all
+poetry install
+```
+
+If you would rather keep the environment, reinstall the affected package
+instead: `poetry run pip install --force-reinstall --no-deps typer-slim`.
+
+The local Docker stack also changed (new Compose project name and images); see
+[infra/compose/README.md](infra/compose/README.md#upgrading-from-an-older-checkout)
+to keep your existing data.
+
 ## Project layout
 
 ```text

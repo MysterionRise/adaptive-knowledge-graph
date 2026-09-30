@@ -91,7 +91,8 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 
 Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key variables:
 
-- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY`; `/docs` off unless `API_DOCS_ENABLED=true`; restricted CORS methods)
+- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`) need `X-API-Key` when a key is set. Leave `API_DOCS_ENABLED` unset or `true`/`false` (an empty value fails at startup)
+- `TRUST_PROXY_HEADERS=true` keys rate limits on the right-most `X-Forwarded-For` hop; only behind a proxy that appends the client IP
 - `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`; startup fails otherwise
 - `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
 - `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values)
