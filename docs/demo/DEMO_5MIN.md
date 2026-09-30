@@ -1,11 +1,9 @@
 # 5-Minute Demo Script
 
-Purpose: executive cutdown of the local OpenStax client demo. This is a
-controlled pilot prototype, not a production certification product.
+A short version of the local OpenStax demo. It shows a pilot prototype, not a
+production certification product.
 
-## Pre-Demo Commands
-
-Run before the meeting:
+## Before the demo
 
 ```bash
 make demo-client-prep
@@ -26,31 +24,31 @@ make demo-eval
 make demo-client-check
 ```
 
-## 0:00-0:45 - Positioning
+## 0:00–0:45: What it is
 
 Open `http://localhost:3000` and `/demo-status`.
 
 Say:
 
-> This is a controlled local demo for AI over approved course content:
-> citations, graph-aware retrieval, adaptive practice, and measurable quality
-> checks over OpenStax material.
+> This is a local demo of AI over approved course content: citations,
+> graph-aware retrieval, adaptive practice and measurable quality checks over
+> OpenStax material.
 
-## 0:45-1:35 - Knowledge Graph
+## 0:45–1:35: Knowledge graph
 
 Open `/graph`.
 
 Show:
 
-- US History concept graph
-- selected concept details
+- the US History concept graph
+- the details of a selected concept
 - prerequisite and related-concept edges
 
 Say:
 
 > The graph drives query expansion and remediation. It is not just a visual.
 
-## 1:35-2:45 - KG-RAG Chat
+## 1:35–2:45: KG-RAG chat
 
 Open `/chat`.
 
@@ -64,34 +62,34 @@ Show:
 
 - citations
 - expanded concepts
-- KG expansion state
+- the KG expansion toggle
 
 Say:
 
-> The system exposes what it retrieved and why, then evals compare the KG path
-> against plain retrieval.
+> The system shows what it retrieved and why, and the evaluation compares the
+> KG path with plain retrieval.
 
-## 2:45-3:50 - Adaptive Practice
+## 2:45–3:50: Adaptive practice
 
 Open `/assessment`.
 
 Generate a quiz for `The American Revolution` and show:
 
-- question and explanation
-- mastery update
-- recommendation direction
+- a question and its explanation
+- the mastery update
+- the direction of the recommendations
 
 Say:
 
-> This is adaptive practice infrastructure. A production pilot would add
-> reviewed question banks and learner-response calibration.
+> This is adaptive-practice infrastructure. A production pilot would add
+> reviewed question banks and calibration on learner responses.
 
-## 3:50-5:00 - Evidence And Pilot Path
+## 3:50–5:00: Evidence and next steps
 
 Show `/demo-status` and `docs/evals/latest.md`.
 
 Say:
 
-> The next step is a 4-6 week pilot over one approved content slice, with
+> A sensible next step is a 4–6 week pilot on one approved content slice, with
 > success metrics for citation quality, learner usefulness, author review
-> effort, refusal behavior, and latency.
+> effort, refusal behaviour and latency.

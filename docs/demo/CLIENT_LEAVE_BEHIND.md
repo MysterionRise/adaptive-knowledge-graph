@@ -1,69 +1,71 @@
-# Adaptive Knowledge Graph: Client Demo Brief
+# Adaptive Knowledge Graph: Project Brief
 
-## What It Demonstrates
+A one-page summary to hand out after a demo.
 
-Adaptive Knowledge Graph is a controlled local demo for education clients who
-need AI over approved learning content. It combines KG-aware retrieval,
-traceable citations, graph exploration, adaptive practice, and live evaluation
-signals.
+## What it is
 
-## Why It Matters
+Adaptive Knowledge Graph is a local prototype for AI over approved learning
+content. It combines KG-aware retrieval, traceable citations, graph
+exploration, adaptive practice and live evaluation signals. The demo runs on
+OpenStax textbooks and synthetic learners.
 
-Generic AI tutors can answer fluently without giving publishers, institutions,
-or authors enough control. This prototype focuses on reviewability:
+## Why it matters
+
+Generic AI tutors can answer fluently without giving content owners,
+institutions or authors enough control. This prototype focuses on
+reviewability:
 
 - answers cite approved source material
-- concepts and prerequisites are inspectable
-- learner practice adapts to mastery state
-- unsupported and adversarial questions are measured in evals
-- the local-first demo avoids real student PII
+- concepts and prerequisites can be inspected
+- practice adapts to each learner's mastery
+- unsupported and adversarial questions are measured in the evaluation
+- the local-first setup avoids real student data
 
-## Demo Modules
+## What the demo covers
 
 - Grounded Q&A with citations.
 - Knowledge graph exploration.
-- KG-RAG vs plain retrieval comparison.
-- Adaptive quiz and mastery update.
-- Client demo status dashboard.
-- Golden-set evaluation report.
+- KG-RAG versus plain retrieval comparison.
+- Adaptive quiz and mastery updates.
+- A demo readiness dashboard.
+- A golden-set evaluation report.
 
-## Architecture Snapshot
+## Architecture snapshot
 
 ```mermaid
 flowchart LR
-    A["Next.js demo UI"] --> B["FastAPI API"]
+    A["Next.js UI"] --> B["FastAPI API"]
     B --> C["Neo4j knowledge graph"]
     B --> D["OpenSearch hybrid retrieval"]
     B --> E["Ollama local LLM"]
-    B --> F["SQLite synthetic learner profile"]
-    C --> B
-    D --> B
-    E --> B
-    F --> B
+    B --> F["SQLite synthetic learner profiles"]
 ```
 
-## Pilot Path
+## A possible pilot
 
-Recommended first pilot:
-
-- 4-6 weeks
-- one course/module
+- 4–6 weeks
+- one course or module
 - approved content only
 - synthetic or consented users
 - human review of generated questions
-- evaluation report covering groundedness, refusal behavior, and latency
+- an evaluation report on groundedness, refusal behaviour and latency
 
-## Current Boundaries
+See the [pilot outline](CLIENT_PILOT_PROPOSAL.md) for details.
+
+## Current boundaries
 
 This is not yet:
 
 - production certification infrastructure
-- FERPA/COPPA/GDPR certified
-- LMS/LTI integrated
+- FERPA, COPPA or GDPR certified
+- integrated with an LMS or LTI
 - psychometrically calibrated
 - a proctoring or credentialing product
 
-## Next Conversation
+## Next steps
 
-The next client discussion should choose one content slice, define acceptable
-source-use policy, select reviewer roles, and agree on pilot success metrics.
+A follow-up conversation would pick one content slice, agree on a source-use
+policy, choose reviewer roles and set pilot success metrics.
+
+The code is open source under the MIT License:
+<https://github.com/MysterionRise/adaptive-knowledge-graph>

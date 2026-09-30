@@ -1,16 +1,18 @@
-# Client Demo Script: 30 Minutes
+# Demo Script: 30 Minutes
 
-Audience: publisher executives, institutional leaders, and technical buyers.
+Audience: education publishers, institutional leaders and technical
+evaluators.
 
-Positioning: controlled local OpenStax demo and pilot prototype. Do not present
-this as production certification infrastructure.
+Scope: a local OpenStax demo of a pilot prototype. It is not production
+certification infrastructure, and the script says so.
 
-## Pre-Demo
+## Before the demo
 
-Run 30-45 minutes before the meeting:
+Run these 30–45 minutes before the session (see [README.md](README.md) for the
+full workflow):
 
 ```bash
-node --version  # should be v20.x
+node --version  # should match .node-version (24)
 make demo-client-prep
 make run-api
 cd frontend && npm run dev
@@ -23,8 +25,8 @@ make demo-eval
 make demo-client-check
 ```
 
-After the check passes, capture screenshots and a short recording using
-`docs/DEMO_ASSET_CAPTURE.md`.
+After the check passes, capture screenshots and a short recording with the
+[asset capture checklist](DEMO_ASSET_CAPTURE.md).
 
 Open:
 
@@ -37,29 +39,31 @@ Open:
 
 ## Script
 
-### 0-3 min: Buyer Problem
+### 0–3 min: The problem
 
 Say:
 
-> Publishers and institutions do not need another generic chatbot. They need AI
-> over approved learning content: traceable citations, inspectable concept
+> Education teams do not need another generic chatbot. They need AI over
+> approved learning content: traceable citations, inspectable concept
 > relationships, adaptive practice, and quality metrics they can review.
 
 Show the home page and `/demo-status`.
 
-### 3-8 min: Architecture
+### 3–8 min: Architecture
 
-Show `docs/ARCHITECTURE.md` and API docs.
+Show [ARCHITECTURE.md](../ARCHITECTURE.md) and the API docs.
 
 Talking points:
 
-- Neo4j models concepts, prerequisites, related ideas, and chunk windows.
+- Neo4j models concepts, prerequisites, related ideas and the textbook
+  modules that cover them.
 - OpenSearch provides hybrid lexical and vector retrieval.
-- Ollama keeps the main demo local-only.
+- Ollama keeps inference local; with `PRIVACY_LOCAL_ONLY=true` the API cannot
+  call a remote model.
 - SQLite stores synthetic learner mastery for the demo.
-- Eval reports separate evidence from marketing claims.
+- Evaluation reports separate evidence from claims.
 
-### 8-14 min: Publisher Track
+### 8–14 min: Content and citations
 
 Open `/chat`.
 
@@ -77,11 +81,11 @@ Show:
 
 Say:
 
-> For a publisher, the important control point is approved source content. The
-> answer can be traced back to licensed material, and the graph makes the
-> retrieval path inspectable.
+> For anyone who owns content, the important control point is approved source
+> material. Each answer can be traced back to licensed text, and the graph
+> makes the retrieval path inspectable.
 
-### 14-19 min: Knowledge Graph Differentiator
+### 14–19 min: The knowledge graph
 
 Open `/graph`.
 
@@ -90,14 +94,15 @@ Actions:
 1. Select US History.
 2. Click a high-importance concept.
 3. Show connected concepts and relationship types.
-4. Explain how prerequisite and related edges support remediation and query expansion.
+4. Explain how prerequisite and related edges support remediation and query
+   expansion.
 
 Say:
 
-> The graph is not a visualization garnish. It supports query expansion,
-> prerequisite explanation, and post-assessment recommendations.
+> The graph is not decoration. It drives query expansion, prerequisite
+> explanations and post-assessment recommendations.
 
-### 19-24 min: Institution Track
+### 19–24 min: Adaptive practice
 
 Open `/assessment`.
 
@@ -106,48 +111,55 @@ Actions:
 1. Use `The American Revolution` or `The Constitution`.
 2. Generate an adaptive quiz.
 3. Answer one question correctly and one incorrectly.
-4. Show mastery and recommendation changes.
+4. Show how mastery and recommendations change.
 
 Say:
 
 > This is not a validated certification engine. It is adaptive-learning
-> infrastructure. A real pilot would add reviewed question banks and learner
-> response calibration before high-stakes use.
+> infrastructure. A real pilot would add reviewed question banks and
+> calibration on learner responses before any high-stakes use.
 
-### 24-28 min: Technical Track
+### 24–28 min: Engineering evidence
 
-Show `/demo-status`, `docs/evals/latest.md`, and CI/test summary.
+Show `/demo-status`, `docs/evals/latest.md` and the CI and test summary.
 
 Talking points:
 
 - local-only LLM mode
 - readiness checks
-- KG vs plain retrieval eval
-- unsupported-question refusal metric
+- KG versus plain retrieval evaluation
+- refusal rate on unsupported questions
 - clear limitations
 
-### 28-30 min: Pilot Close
+### 28–30 min: Pilot options
 
-Offer a constrained pilot:
+Describe what a constrained pilot would look like (see the
+[pilot outline](CLIENT_PILOT_PROPOSAL.md)):
 
 - one course or module
 - approved content only
 - synthetic or consented users
 - human review of generated questions
-- success metrics: citation hit rate, learner satisfaction, author-review effort, and remediation quality
+- success metrics: citation hit rate, learner satisfaction, author review
+  effort and remediation quality
 
 ## Fallbacks
 
-- Neo4j unavailable: show architecture, API docs, and eval design.
-- OpenSearch unavailable: show graph and explain retrieval dependency.
-- Ollama unavailable: show `/demo-status`, cached docs, and API contracts; do not switch to remote mode for this client demo unless explicitly approved.
-- Frontend unavailable: use `/docs` and `curl` examples from `docs/DEMO_PLAYBOOK.md`.
+- **Neo4j unavailable:** show the architecture, API docs and evaluation design.
+- **OpenSearch unavailable:** show the graph and explain the retrieval
+  dependency.
+- **Ollama unavailable:** show `/demo-status`, the docs and the API contracts.
+  Do not switch to a remote model unless the audience has explicitly approved
+  it.
+- **Frontend unavailable:** use `/docs` and the `curl` examples in the
+  [technical playbook](DEMO_PLAYBOOK.md).
 
-## Claims To Avoid
+## Claims to avoid
 
 - Production-ready
-- FERPA/COPPA/GDPR compliant
+- FERPA, COPPA or GDPR compliant
 - Psychometrically validated
 - Certification-grade
 - Hallucination-free
-- Pearson integration-ready without a pilot discovery phase
+- Ready to integrate with an existing content platform without a discovery
+  phase

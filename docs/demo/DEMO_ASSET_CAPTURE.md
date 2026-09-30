@@ -4,30 +4,32 @@ Use this after `make demo-client-check` passes on a live local stack.
 
 ## Destination
 
-Save client-demo assets under:
+Save screenshots and recordings under:
 
 ```text
 docs/assets/demo/
 ```
 
-## Required Screenshots
+## Screenshots
 
-- `01-home.png`: home page showing approved-content positioning.
-- `02-demo-status.png`: `/demo-status` with overall status ready.
-- `03-chat-citations.png`: KG-RAG answer with citations and expanded concepts.
-- `04-graph-us-history.png`: US History graph with a selected concept.
-- `05-assessment-mastery.png`: adaptive quiz or mastery update state.
-- `06-eval-report.png`: latest eval report or summary view.
+- `01-home.png`: the home page.
+- `02-demo-status.png`: `/demo-status` with the overall status ready.
+- `03-chat-citations.png`: a KG-RAG answer with citations and expanded
+  concepts.
+- `04-graph-us-history.png`: the US History graph with a selected concept.
+- `05-assessment-mastery.png`: an adaptive quiz or a mastery update.
+- `06-eval-report.png`: the latest evaluation report or its summary.
 
-## Required Recording
+## Recording
 
-- `client-demo-local.mp4`: 3-5 minute silent walkthrough covering status,
-  chat, graph, assessment, and eval report.
+- `demo-walkthrough.mp4`: a 3–5 minute silent walkthrough covering status,
+  chat, graph, assessment and the evaluation report.
 
-## Acceptance Criteria
+## Acceptance criteria
 
-- No real learner PII is visible.
+- No real learner data is visible.
 - `/demo-status` shows `ready`.
-- Chat response includes citations.
-- Eval report shown was generated after the current seeded run.
-- Browser tabs and terminal output do not show secrets.
+- The chat response includes citations.
+- The evaluation report shown was generated after the current seeded run.
+- Browser tabs and terminal output show no secrets, API keys or personal
+  information.

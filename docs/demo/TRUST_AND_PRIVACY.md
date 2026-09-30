@@ -1,57 +1,64 @@
-# Trust And Privacy Notes
+# Trust and Privacy Notes for the Demo
 
-This document supports a controlled local client demo. It is not a legal
-compliance certification.
+This page supports a local demo. It is not a legal compliance certification.
+The full data-handling description is in
+[docs/COMPLIANCE.md](../COMPLIANCE.md), and the threat model is in
+[SECURITY.md](../../SECURITY.md).
 
-## Demo Data Posture
+## Demo data posture
 
-- The first client demo uses OpenStax content only.
+- The demo uses OpenStax content only.
 - Demo learner profiles are synthetic.
-- No real student PII is required.
-- Local-only LLM mode is the default.
-- Remote LLM fallback is not part of the main client demo.
+- No real student data is needed.
+- Local-only LLM mode is the default: with `PRIVACY_LOCAL_ONLY=true` the API
+  refuses to start in a remote LLM mode.
+- Remote LLM providers are not part of the demo.
 
-## Data Flow
+## Data flow
 
 ```text
 Browser
   -> FastAPI
-      -> Neo4j for concept graph and prerequisite traversal
-      -> OpenSearch for lexical/vector retrieval
+      -> Neo4j for the concept graph and prerequisite traversal
+      -> OpenSearch for lexical and vector retrieval
       -> Ollama for local answer and quiz generation
       -> SQLite for synthetic learner mastery
 ```
 
-## Education Privacy Caveats
+## Education privacy caveats
 
-- FERPA/COPPA/GDPR readiness requires client-specific legal and security review.
-- A production pilot needs role boundaries, tenant isolation, retention policy,
-  deletion workflow, audit logs, and subprocessors documented.
+- FERPA, COPPA or GDPR readiness requires a legal and security review for the
+  specific deployment.
+- A production pilot needs role boundaries, tenant isolation, a retention
+  policy, a deletion workflow, audit logs and a documented list of
+  subprocessors.
 - Student data should not be sent to remote model providers without explicit
-  approval and contractual review.
+  approval and a contractual review.
 
-## AI Safety Controls In Demo
+## AI safety controls in the demo
 
-- Answers are instructed to use only retrieved source context.
-- Citations are returned with each answer.
-- The golden eval set includes unsupported claims and prompt-injection attempts.
-- `/demo-status` reports whether the latest eval is valid before rehearsal.
+- The prompt instructs the model to use only the retrieved source context.
+- Every answer returns its citations.
+- The golden evaluation set includes unsupported claims and prompt-injection
+  attempts.
+- `/demo-status` reports whether the latest evaluation is valid before a
+  rehearsal.
 
-## Accessibility Target
+## Accessibility target
 
-The client-facing target is WCAG 2.2 AA. The current demo UI should be treated
-as a prototype until keyboard navigation, contrast, screen-reader behavior, and
-responsive layouts are formally audited.
+The target is WCAG 2.2 AA. Treat the current UI as a prototype until keyboard
+navigation, contrast, screen-reader behaviour and responsive layouts have been
+formally audited.
 
-## Claims To Use
+## Claims that are accurate
 
-- Controlled local demo.
+- Local demo.
 - OpenStax-based prototype.
 - Synthetic learner data.
 - Local-first architecture.
 - Evaluation-backed KG-RAG experiment.
 
-## Claims To Avoid
+## Claims to avoid
 
 - FERPA compliant.
 - COPPA compliant.

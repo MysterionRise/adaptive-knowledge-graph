@@ -1,121 +1,114 @@
-# Portfolio Case Study: Adaptive Knowledge Graph
+# Case Study: Adaptive Knowledge Graph
 
 ## Problem
 
-Publishers and institutions do not need another generic chatbot over course
-material. They need AI experiences over approved learning content: answers that
-cite licensed sources, concept relationships that authors can inspect, adaptive
-practice that educators can review, and quality metrics that technical teams can
-regress.
+Education teams do not need another generic chatbot over course material. They
+need AI over approved learning content: answers that cite licensed sources,
+concept relationships that authors can inspect, adaptive practice that
+educators can review, and quality metrics that engineers can track for
+regressions.
 
-This project demonstrates that shape as a controlled local OpenStax demo:
-KG-aware RAG plus adaptive assessment over open textbook content. It is a
-client-demo and pilot prototype, not production certification infrastructure.
+This project builds that shape as a local OpenStax prototype: KG-aware RAG plus
+adaptive assessment over open textbooks. It is a pilot prototype, not
+production certification infrastructure.
 
-## Product Thesis
+## Product thesis
 
-For adult retraining and certification prep, a useful AI learning system needs:
+For retraining and exam preparation, a useful AI learning system needs:
 
 - grounded answers with citations
 - concept relationships, not just vector similarity
 - adaptive practice based on mastery
-- local-first deployment options for privacy
+- local-first deployment for privacy
 - measurable retrieval and answer quality
-- human-review paths before high-stakes assessment use
+- human review before any high-stakes assessment use
 
 ## Architecture
 
 ```text
-Next.js UX -> FastAPI orchestration -> Neo4j + OpenSearch + LLM -> SQLite mastery store
+Next.js UI -> FastAPI -> Neo4j + OpenSearch + local LLM (Ollama) -> SQLite mastery store
 ```
 
 Key capabilities:
 
 - KG expansion before retrieval
-- hybrid BM25 + vector search
+- hybrid BM25 + vector search with reciprocal rank fusion
+- an optional cross-encoder reranker
 - streaming answers
 - multi-subject configuration
 - graph visualization
 - LLM-generated quizzes
-- BKT-inspired mastery updates
-- golden-set RAG evaluation harness
+- Bayesian Knowledge Tracing mastery updates
+- a golden-set RAG evaluation harness
 
-## Hard Decisions
+## Hard decisions
 
-### Neo4j instead of only vectors
+### Neo4j instead of vectors alone
 
-Vectors retrieve similarity; the graph models prerequisite and related-concept
-structure. This makes learning paths and remediation explainable.
+Vectors retrieve similar text; the graph models prerequisite and
+related-concept structure. That makes learning paths and remediation
+explainable.
 
 ### OpenSearch instead of a small local vector library
 
-The project uses OpenSearch because BM25 + dense retrieval is the more
-production-relevant shape, even though it adds operational weight.
+BM25 plus dense retrieval in one service is the more realistic production
+shape, even though it adds operational weight.
 
-### Local-first LLM support
+### Local-first LLMs
 
-Education data has privacy constraints. Ollama mode shows that the architecture
-can run locally, while OpenRouter fallback is available for demo reliability.
+Education data has privacy constraints. The default Ollama mode shows that the
+whole architecture runs locally, and `PRIVACY_LOCAL_ONLY=true` blocks remote
+models unless someone deliberately turns it off.
 
 ### Honest adaptive learning
 
-The system implements practical mastery updates and BKT-style probability
-updates. It does not claim calibrated IRT without learner response data.
+The system implements Bayesian Knowledge Tracing with fixed parameters and
+LLM-estimated question difficulty. It makes no claims of calibrated IRT
+without learner response data.
 
 ## Evidence
 
 Implemented:
 
 - FastAPI service with OpenAPI docs
-- Next.js UI with graph/chat/assessment workflows
+- Next.js UI for graph, chat, comparison and assessment workflows
 - Neo4j graph adapter and schema
 - OpenSearch hybrid retriever
-- LLM client with local, remote, and hybrid modes
-- SQLite student profile persistence
+- LLM client for local, remote and hybrid modes, with local-only enforcement
+- SQLite learner profile storage
 - request IDs and response-time headers
-- API-key protection for sensitive endpoints when configured
-- golden-set evaluator for KG vs plain retrieval
-- client demo status dashboard
-- local-only OpenStax client demo scripts
+- a production mode that requires an API key
+- a golden-set evaluator for KG versus plain retrieval
+- a demo readiness dashboard
+- scripted local demo commands
 
-Current validation commands:
+Validation commands:
 
 ```bash
 make demo-client-prep
 make demo-eval
 make demo-client-check
 make test-fast
-cd frontend && npm run type-check
-cd frontend && npm test -- --ci --runInBand --forceExit
+cd frontend && npm run type-check && npm test -- --ci
 ```
 
-## Known Gaps
+## Known gaps
 
-- no full identity or tenant model
+- no per-learner identity or tenant model
+- quizzes are graded in the browser
 - no calibrated psychometric question bank
 - no production deployment manifests
-- browser E2E is manual until a demo backend exists in CI
-- graph/search clients still use synchronous calls in async routes
+- browser tests against a live stack are manual
 - evaluation metrics are heuristic and need human review before production use
-- no LMS/LTI integration yet
+- no LMS or LTI integration yet
 
-## Next 30/60/90 Days
+## What comes next
 
-30 days:
+See the project [roadmap](../../ROADMAP.md). The main themes are:
 
-- keep golden QA set at 50+ cases and add client-specific cases per pilot
-- require eval report in PRs touching retrieval/prompting
-- finish CI split between unit, tribunal, and browser suites
-- capture client-demo screenshots and a short local walkthrough recording
-
-60 days:
-
-- add tenant-aware auth model
-- add OpenTelemetry spans for graph, retrieval, reranking, and LLM calls
-- move blocking graph/search calls behind executors or async clients
-
-90 days:
-
-- provision staging environment for automated E2E
-- add assessment attempt ledger and question bank
-- add deployment runbook with backups and disaster recovery notes
+- evaluation deltas for every retrieval or prompt change
+- per-learner identity, server-side grading and tenant boundaries
+- tracing for graph, retrieval, reranking and LLM calls
+- async graph and search clients
+- a reviewed question bank and an assessment attempt ledger
+- a deployment runbook with backups and recovery notes

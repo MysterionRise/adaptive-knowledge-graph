@@ -21,7 +21,7 @@ follow the [Quickstart](../../README.md#quickstart).
 | Area | Current state |
 | --- | --- |
 | Grounded tutoring | KG-aware answers with citations, source snippets, expanded concepts and streaming |
-| Knowledge graph | Neo4j concept, module and chunk schema with prerequisite and related-concept edges |
+| Knowledge graph | Neo4j concepts and modules with prerequisite, related-concept and coverage edges |
 | Retrieval | OpenSearch hybrid BM25 + vector retrieval with an optional reranker |
 | Local-first LLM | Ollama by default; with `PRIVACY_LOCAL_ONLY=true` remote providers cannot be used |
 | Adaptive practice | LLM-generated quizzes, synthetic mastery state, target difficulty and recommendations |
