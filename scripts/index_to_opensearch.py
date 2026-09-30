@@ -133,8 +133,7 @@ def main():
             logger.info(f"\nQuery: {query}")
             for i, result in enumerate(results, 1):
                 logger.info(
-                    f"  {i}. [{result['score']:.3f}] "
-                    f"{result['section']}: {result['text'][:100]}..."
+                    f"  {i}. [{result['score']:.3f}] {result['section']}: {result['text'][:100]}..."
                 )
 
     logger.success(f"\n✓ RAG indexing complete for {subject_id}!")

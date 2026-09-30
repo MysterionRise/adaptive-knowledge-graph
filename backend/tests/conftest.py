@@ -287,7 +287,7 @@ def mock_cypher_qa_service():
         "MATCH (p:Concept)-[:PREREQ]->(c:Concept {name: 'Photosynthesis'}) RETURN p"
     )
     service.get_schema.return_value = (
-        "Node types: Concept, Module, Chunk. " "Relationships: CONTAINS, RELATED_TO, PREREQ, NEXT."
+        "Node types: Concept, Module, Chunk. Relationships: CONTAINS, RELATED_TO, PREREQ, NEXT."
     )
     return service
 
@@ -323,12 +323,15 @@ def patch_llm_client(mock_llm_client):
 @pytest.fixture
 def patch_kg_expander(mock_kg_expander):
     """Patch KG expander functions."""
-    with patch(
-        "backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander
-    ) as mock_expander, patch(
-        "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
-        return_value=["photosynthesis", "chloroplast", "chlorophyll", "ATP"],
-    ) as mock_concepts:
+    with (
+        patch(
+            "backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander
+        ) as mock_expander,
+        patch(
+            "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+            return_value=["photosynthesis", "chloroplast", "chlorophyll", "ATP"],
+        ) as mock_concepts,
+    ):
         yield mock_expander, mock_concepts
 
 

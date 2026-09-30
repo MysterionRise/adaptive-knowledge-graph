@@ -59,9 +59,11 @@ class TestHealthReadyEndpoint:
         mock_opensearch = ServiceHealth(status=ServiceStatus.OK, latency_ms=10.0)
         mock_ollama = ServiceHealth(status=ServiceStatus.OK, latency_ms=20.0)
 
-        with patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j), patch(
-            "backend.app.main.check_opensearch_health", return_value=mock_opensearch
-        ), patch("backend.app.main.check_ollama_health", return_value=mock_ollama):
+        with (
+            patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j),
+            patch("backend.app.main.check_opensearch_health", return_value=mock_opensearch),
+            patch("backend.app.main.check_ollama_health", return_value=mock_ollama),
+        ):
             response = client.get("/health/ready")
 
         assert response.status_code == 200
@@ -79,9 +81,11 @@ class TestHealthReadyEndpoint:
         mock_opensearch = ServiceHealth(status=ServiceStatus.OK, latency_ms=10.0)
         mock_ollama = ServiceHealth(status=ServiceStatus.DEGRADED, message="Model not found")
 
-        with patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j), patch(
-            "backend.app.main.check_opensearch_health", return_value=mock_opensearch
-        ), patch("backend.app.main.check_ollama_health", return_value=mock_ollama):
+        with (
+            patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j),
+            patch("backend.app.main.check_opensearch_health", return_value=mock_opensearch),
+            patch("backend.app.main.check_ollama_health", return_value=mock_ollama),
+        ):
             response = client.get("/health/ready")
 
         assert response.status_code == 200
@@ -97,9 +101,11 @@ class TestHealthReadyEndpoint:
         mock_opensearch = ServiceHealth(status=ServiceStatus.OK, latency_ms=10.0)
         mock_ollama = ServiceHealth(status=ServiceStatus.OK, latency_ms=20.0)
 
-        with patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j), patch(
-            "backend.app.main.check_opensearch_health", return_value=mock_opensearch
-        ), patch("backend.app.main.check_ollama_health", return_value=mock_ollama):
+        with (
+            patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j),
+            patch("backend.app.main.check_opensearch_health", return_value=mock_opensearch),
+            patch("backend.app.main.check_ollama_health", return_value=mock_ollama),
+        ):
             response = client.get("/health/ready")
 
         assert response.status_code == 503
@@ -115,9 +121,11 @@ class TestHealthReadyEndpoint:
         mock_opensearch = ServiceHealth(status=ServiceStatus.ERROR, message="Connection timeout")
         mock_ollama = ServiceHealth(status=ServiceStatus.OK, latency_ms=20.0)
 
-        with patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j), patch(
-            "backend.app.main.check_opensearch_health", return_value=mock_opensearch
-        ), patch("backend.app.main.check_ollama_health", return_value=mock_ollama):
+        with (
+            patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j),
+            patch("backend.app.main.check_opensearch_health", return_value=mock_opensearch),
+            patch("backend.app.main.check_ollama_health", return_value=mock_ollama),
+        ):
             response = client.get("/health/ready")
 
         assert response.status_code == 503
@@ -132,9 +140,11 @@ class TestHealthReadyEndpoint:
         mock_opensearch = ServiceHealth(status=ServiceStatus.OK, latency_ms=10.0)
         mock_ollama = ServiceHealth(status=ServiceStatus.ERROR, message="Ollama not running")
 
-        with patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j), patch(
-            "backend.app.main.check_opensearch_health", return_value=mock_opensearch
-        ), patch("backend.app.main.check_ollama_health", return_value=mock_ollama):
+        with (
+            patch("backend.app.main.check_neo4j_health", return_value=mock_neo4j),
+            patch("backend.app.main.check_opensearch_health", return_value=mock_opensearch),
+            patch("backend.app.main.check_ollama_health", return_value=mock_ollama),
+        ):
             response = client.get("/health/ready")
 
         assert response.status_code == 200
@@ -148,9 +158,11 @@ class TestHealthReadyEndpoint:
 
         mock_health = ServiceHealth(status=ServiceStatus.OK, latency_ms=5.0)
 
-        with patch("backend.app.main.check_neo4j_health", return_value=mock_health), patch(
-            "backend.app.main.check_opensearch_health", return_value=mock_health
-        ), patch("backend.app.main.check_ollama_health", return_value=mock_health):
+        with (
+            patch("backend.app.main.check_neo4j_health", return_value=mock_health),
+            patch("backend.app.main.check_opensearch_health", return_value=mock_health),
+            patch("backend.app.main.check_ollama_health", return_value=mock_health),
+        ):
             response = client.get("/health/ready")
 
         assert response.status_code == 200

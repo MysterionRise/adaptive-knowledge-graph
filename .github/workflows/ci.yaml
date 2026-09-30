@@ -9,7 +9,7 @@ on:
 
 env:
   PYTHON_VERSION: "3.11"
-  POETRY_VERSION: "1.7.1"
+  POETRY_VERSION: "2.4.1"
 
 jobs:
   # Linting and code quality
@@ -40,6 +40,9 @@ jobs:
 
       - name: Install dependencies (dev only - no ML libraries)
         run: poetry install --no-interaction --only dev
+
+      - name: Check poetry.lock is up to date with pyproject.toml
+        run: poetry check --lock
 
       - name: Run ruff linting
         run: poetry run ruff check backend/ scripts/
@@ -330,7 +333,7 @@ jobs:
           key: venv-security-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies (dev only - no ML libraries)
-        run: poetry install --no-interaction --only dev --sync
+        run: poetry sync --no-interaction --only dev
 
       - name: Run dependency vulnerability audit (advisory)
         continue-on-error: true

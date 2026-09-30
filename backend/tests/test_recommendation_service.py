@@ -10,7 +10,6 @@ Tests cover:
 - Graceful error handling for Neo4j and retriever failures
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -332,7 +331,7 @@ class TestAdvancementBlock:
 
         # Simulate a timeout by making generate raise TimeoutError
         async def slow_generate(**kwargs):
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
 
         mock_llm.generate.side_effect = slow_generate
 

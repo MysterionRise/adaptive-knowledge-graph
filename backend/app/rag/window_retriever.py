@@ -149,8 +149,7 @@ class WindowRetriever:
             merged_results.append(merged)
 
         logger.info(
-            f"Merged window retrieval: {len(chunk_ids)} hits -> "
-            f"{len(merged_results)} module groups"
+            f"Merged window retrieval: {len(chunk_ids)} hits -> {len(merged_results)} module groups"
         )
 
         return merged_results
