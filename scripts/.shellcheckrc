@@ -1,0 +1,3 @@
+# Lets `shellcheck scripts/*.sh` follow `source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"`.
+source-path=SCRIPTDIR
+external-sources=true

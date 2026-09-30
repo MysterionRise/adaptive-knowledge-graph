@@ -10,10 +10,13 @@ This script:
 Usage:
     poetry run python scripts/index_to_opensearch.py --subject us_history
     poetry run python scripts/index_to_opensearch.py --subject economics --recreate
+
+Exits non-zero when the source data is missing or the index ends up empty.
 """
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from loguru import logger
@@ -80,19 +83,21 @@ def main():
         logger.error(
             f"Run 'poetry run python scripts/ingest_books.py --subject {subject_id}' first"
         )
-        return
+        sys.exit(1)
 
     records = load_records(jsonl_path)
     logger.info(f"Loaded {len(records)} text records from {jsonl_path}")
 
-    # Chunk text
+    # Chunk text (chunk_for_rag returns (chunks, first_chunk_per_module) with sequential linking)
     logger.info("Chunking text...")
-    chunks = chunk_for_rag(records)
+    chunked = chunk_for_rag(records)
+    chunks = chunked[0] if isinstance(chunked, tuple) else chunked
     logger.info(f"Created {len(chunks)} chunks")
 
-    # Save chunks for inspection
-    processed_dir = Path(settings.data_processed_dir)
-    chunks_path = processed_dir / f"chunks_{subject_id}.json"
+    # Save a small sample for inspection under build/, so seeding leaves the tracked files alone
+    build_dir = Path(settings.data_processed_dir) / "build"
+    build_dir.mkdir(parents=True, exist_ok=True)
+    chunks_path = build_dir / f"chunks_{subject_id}.json"
     chunks_path.write_text(json.dumps(chunks[:10], indent=2), encoding="utf-8")
     logger.info(f"Sample chunks saved to {chunks_path}")
 
@@ -112,13 +117,14 @@ def main():
 
     # Index chunks
     logger.info("Indexing chunks to OpenSearch...")
-    if isinstance(chunks, tuple):
-        chunks = chunks[0]
     retriever.index_chunks(chunks, show_progress=True)
 
     # Verify
     info = retriever.get_collection_info()
     logger.info(f"Index info: {info}")
+    if not info.get("exists") or not info.get("doc_count"):
+        logger.error(f"Index '{retriever.index_name}' has no documents after indexing")
+        sys.exit(1)
 
     # Test retrieval
     if not args.skip_tests:

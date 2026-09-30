@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Create Neo4j indexes for enterprise RAG patterns.
+Create the Neo4j indexes of one subject (idempotent; `make seed` runs it for every subject).
 
-This script creates:
-1. Vector index on Chunk.textEmbedding for native vector search
-2. Fulltext index on Concept.name for fuzzy search
-3. Standard indexes for performance optimization
+This script creates, with the subject's label prefix (e.g. us_history_Concept):
+1. Fulltext index {prefix}_fullTextConceptNames on Concept.name, used at runtime by
+   /api/v1/concepts/search and the concept extractor's fuzzy matching
+2. Vector index {prefix}_chunk_embeddings on Chunk.textEmbedding (VECTOR_BACKEND=neo4j/hybrid;
+   the Chunk nodes come from scripts/build_chunk_windows.py)
+3. Standard lookup indexes
 
 Usage:
-    poetry run python scripts/create_neo4j_indexes.py [--drop-existing]
+    poetry run python scripts/create_neo4j_indexes.py --subject us_history [--skip-tests]
+    poetry run python scripts/create_neo4j_indexes.py --subject economics --drop-existing
 
 Requirements:
     - Neo4j 5.x with vector index support
@@ -29,17 +32,18 @@ from backend.app.kg.neo4j_adapter import Neo4jAdapter, get_neo4j_adapter
 
 
 def drop_existing_indexes(adapter: Neo4jAdapter):
-    """Drop existing indexes (use with caution)."""
-    logger.warning("Dropping existing indexes...")
+    """Drop this subject's indexes (other subjects share the database and keep theirs)."""
+    prefix = f"{adapter.label_prefix}_" if adapter.label_prefix else ""
+    logger.warning(f"Dropping existing indexes{f' with prefix {prefix}' if prefix else ''}...")
 
     with adapter._get_session() as session:
         # Get all indexes
-        result = session.run("SHOW INDEXES YIELD name, type")
-        indexes = [(r["name"], r["type"]) for r in result]
+        result = session.run("SHOW INDEXES YIELD name, type, owningConstraint")
+        indexes = [(r["name"], r["type"], r["owningConstraint"]) for r in result]
 
-        for name, idx_type in indexes:
-            if name.startswith("index_"):
-                # Skip constraint-backing indexes
+        for name, idx_type, owning_constraint in indexes:
+            if owning_constraint or idx_type == "LOOKUP" or not name.startswith(prefix):
+                # Keep constraint-backing and token lookup indexes, and other subjects' indexes
                 continue
 
             try:
@@ -54,8 +58,10 @@ def create_vector_index(adapter: Neo4jAdapter):
     logger.info("Creating vector index on Chunk.textEmbedding...")
 
     try:
+        # index_name=None: the adapter names it {prefix}_chunk_embeddings, the same default its
+        # vector_search() uses, so each subject gets its own index
         adapter.create_vector_index(
-            index_name=settings.neo4j_vector_index_name,
+            index_name=None,
             dimension=settings.neo4j_vector_dimension,
             similarity_function="cosine",
         )
@@ -159,12 +165,13 @@ def test_vector_search(adapter: Neo4jAdapter):
     """Test vector search functionality."""
     logger.info("Testing vector search...")
 
+    chunk_label = adapter._get_label("Chunk")
     try:
         # Check if there are chunks with embeddings
         with adapter._get_session() as session:
             result = session.run(
-                """
-                MATCH (c:Chunk)
+                f"""
+                MATCH (c:{chunk_label})
                 WHERE c.textEmbedding IS NOT NULL
                 RETURN count(c) as count
                 """
@@ -179,8 +186,8 @@ def test_vector_search(adapter: Neo4jAdapter):
 
             # Get a sample embedding
             result = session.run(
-                """
-                MATCH (c:Chunk)
+                f"""
+                MATCH (c:{chunk_label})
                 WHERE c.textEmbedding IS NOT NULL
                 RETURN c.textEmbedding as embedding
                 LIMIT 1
@@ -188,12 +195,8 @@ def test_vector_search(adapter: Neo4jAdapter):
             )
             sample_embedding = result.single()["embedding"]  # type: ignore[index]
 
-            # Test vector search
-            search_result = adapter.vector_search(
-                query_embedding=sample_embedding,
-                top_k=3,
-                index_name=settings.neo4j_vector_index_name,
-            )
+            # Test vector search (default index name: {prefix}_chunk_embeddings)
+            search_result = adapter.vector_search(query_embedding=sample_embedding, top_k=3)
 
             logger.info(f"Vector search test returned {len(search_result)} results")
             for i, r in enumerate(search_result, 1):
@@ -208,20 +211,24 @@ def test_fulltext_search(adapter: Neo4jAdapter):
     """Test fulltext search functionality."""
     logger.info("Testing fulltext search...")
 
+    concept_label = adapter._get_label("Concept")
     try:
-        # Check if there are concepts
+        # Use the first word of the most important concept as the query
         with adapter._get_session() as session:
-            result = session.run("MATCH (c:Concept) RETURN count(c) as count")
-            count = result.single()["count"]  # type: ignore[index]
+            record = session.run(
+                f"MATCH (c:{concept_label}) RETURN c.name AS name "
+                "ORDER BY c.importance_score DESC LIMIT 1"
+            ).single()
 
-            if count == 0:
-                logger.warning("No concepts found. Fulltext search test skipped.")
-                return
+        if record is None or not record["name"]:
+            logger.warning("No concepts found. Fulltext search test skipped.")
+            return
+        query = str(record["name"]).split()[0]
 
         # Test fulltext search
-        results = adapter.fulltext_concept_search("photo", limit=3)
+        results = adapter.fulltext_concept_search(query, limit=3)
 
-        logger.info(f"Fulltext search for 'photo' returned {len(results)} results")
+        logger.info(f"Fulltext search for '{query}' returned {len(results)} results")
         for r in results:
             logger.info(f"  - {r['name']} (score: {r['score']:.4f})")
 

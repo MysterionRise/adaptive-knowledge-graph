@@ -4,17 +4,22 @@ Build knowledge graph from normalized textbook data.
 This script:
 1. Loads normalized JSONL data
 2. Extracts concepts and relationships using KGBuilder
-3. Persists the graph to Neo4j
-4. Outputs statistics and top concepts
+3. Writes a JSON copy to data/processed/build/ (ignored by git; nothing reads it at runtime)
+4. Persists the graph to Neo4j
+5. Outputs statistics and top concepts
 
 Usage:
     poetry run python scripts/build_knowledge_graph.py
-    poetry run python scripts/build_knowledge_graph.py --subject biology
+    poetry run python scripts/build_knowledge_graph.py --subject economics --clear
     poetry run python scripts/build_knowledge_graph.py --subject us_history --max-concepts 300
+
+Without --clear the script asks whether to clear the subject's existing nodes when it runs in a
+terminal, and keeps them (MERGE on top) when it does not. Exits non-zero on failure.
 """
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from loguru import logger
@@ -35,7 +40,21 @@ def load_records(jsonl_path: Path) -> list:
     return records
 
 
-def main():
+def _should_clear(subject_id: str, clear_flag: bool) -> bool:
+    """--clear wins; otherwise ask in a terminal and keep existing data when non-interactive."""
+    if clear_flag:
+        return True
+    if not sys.stdin.isatty():
+        logger.info("Non-interactive run without --clear: keeping existing Neo4j data")
+        return False
+    try:
+        response = input(f"Clear existing Neo4j data for {subject_id}? (yes/no): ")
+    except EOFError:
+        return False
+    return response.strip().lower() == "yes"
+
+
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Build knowledge graph from textbook data")
     parser.add_argument(
@@ -70,7 +89,7 @@ def main():
         logger.error(
             f"Run 'poetry run python scripts/ingest_books.py --subject {subject_id}' first"
         )
-        return
+        sys.exit(1)
 
     records = load_records(jsonl_path)
     logger.info(f"Loaded {len(records)} text records from {jsonl_path}")
@@ -91,9 +110,10 @@ def main():
     for i, (concept, score) in enumerate(top_concepts, 1):
         logger.info(f"  {i}. {concept} (score: {score:.3f})")
 
-    # Save graph to JSON for backup
-    processed_dir = Path(settings.data_processed_dir)
-    graph_json_path = processed_dir / f"knowledge_graph_{subject_id}.json"
+    # Save a JSON copy for inspection under build/, so seeding leaves the tracked files alone
+    build_dir = Path(settings.data_processed_dir) / "build"
+    build_dir.mkdir(parents=True, exist_ok=True)
+    graph_json_path = build_dir / f"knowledge_graph_{subject_id}.json"
     graph_json_path.write_text(kg.model_dump_json(indent=2), encoding="utf-8")
     logger.success(f"Saved graph to {graph_json_path}")
 
@@ -103,14 +123,8 @@ def main():
 
     try:
         # Clear existing data
-        if args.clear:
+        if _should_clear(subject_id, args.clear):
             adapter.clear_database()
-        else:
-            response = (
-                input(f"Clear existing Neo4j data for {subject_id}? (yes/no): ").strip().lower()
-            )
-            if response == "yes":
-                adapter.clear_database()
 
         # Persist graph
         adapter.persist_knowledge_graph(kg)
@@ -127,7 +141,8 @@ def main():
 
     except Exception as e:
         logger.error(f"Error persisting to Neo4j: {e}")
-        logger.info("Graph saved to JSON file, but not persisted to Neo4j")
+        logger.info(f"Graph saved to {graph_json_path}, but not persisted to Neo4j")
+        sys.exit(1)
 
     finally:
         adapter.close()
