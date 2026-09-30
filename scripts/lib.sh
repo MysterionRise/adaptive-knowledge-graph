@@ -121,6 +121,49 @@ require_docker() {
     fi
 }
 
+# --- host ports from the repository .env --------------------------------------------------
+# compose reads the repository-root .env (--env-file) and the backend reads it too, but a shell
+# does not: a port set only there would leave the scripts on the defaults. Read just these
+# non-secret keys when the environment lacks them. KEY=value lines, optional `export` and
+# quotes, inline `# comments`; the file is never sourced or evaluated.
+AKG_DOTENV_KEYS="NEO4J_URI NEO4J_BOLT_PORT NEO4J_HTTP_PORT OPENSEARCH_PORT API_PORT FRONTEND_PORT OLLAMA_PORT"
+
+# akg_dotenv_value KEY [FILE]: value of the last KEY=... line of FILE (default: repository .env)
+akg_dotenv_value() {
+    local key="$1" file="${2:-$AKG_ROOT/.env}" line value
+    [ -f "$file" ] || return 0
+    line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" "$file" 2> /dev/null | tail -n 1)" || true
+    [ -n "$line" ] || return 0
+    value="${line#*=}"
+    value="${value%$'\r'}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    case "$value" in
+        \"*)
+            value="${value#\"}"
+            value="${value%%\"*}"
+            ;;
+        \'*)
+            value="${value#\'}"
+            value="${value%%\'*}"
+            ;;
+        *)
+            value="${value%%[[:space:]]#*}"
+            value="${value%"${value##*[![:space:]]}"}"
+            ;;
+    esac
+    printf '%s' "$value"
+}
+
+for akg_key in $AKG_DOTENV_KEYS; do
+    if [ -z "${!akg_key:-}" ]; then
+        akg_value="$(akg_dotenv_value "$akg_key")"
+        if [ -n "$akg_value" ]; then
+            export "$akg_key=$akg_value"
+        fi
+    fi
+done
+unset akg_key akg_value
+
 # --- python helpers -----------------------------------------------------------------------
 # The backend reads NEO4J_URI; when only the compose host port is overridden, derive it.
 if [ -n "${NEO4J_BOLT_PORT:-}" ] && [ -z "${NEO4J_URI:-}" ]; then

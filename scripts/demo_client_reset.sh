@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+# lib.sh also picks up API_PORT from the repository .env when the environment lacks it
+# shellcheck source=lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 

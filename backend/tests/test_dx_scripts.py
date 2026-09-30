@@ -3,6 +3,8 @@ Unit tests for the developer-experience scripts (no services needed).
 """
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -333,6 +335,86 @@ def test_seed_student_profile_writes_sqlite_only(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["seed", "--output", str(db)])
     seed_student_profile.main()
     assert db.exists()
+
+
+# ---------------------------------------------------------------------------
+# scripts/lib.sh and the Makefile read host ports from the repository .env
+# ---------------------------------------------------------------------------
+
+DOTENV_FIXTURE = (
+    "# host ports only in .env\n"
+    "NEO4J_BOLT_PORT=17687\n"
+    'API_PORT="18000"\n'
+    "export OPENSEARCH_PORT=19200   # inline comment\n"
+    "FRONTEND_PORT='13000'\r\n"
+    "NEO4J_PASSWORD=not-exported-by-lib\n"
+    "API_PORT=18001\n"  # the last assignment wins
+)
+PROBE = (
+    '. scripts/lib.sh && printf "%s|%s|%s|%s|%s|%s" "${NEO4J_URI:-}" "${NEO4J_BOLT_PORT:-}" '
+    '"${OPENSEARCH_PORT:-}" "${API_PORT:-}" "${FRONTEND_PORT:-}" "${NEO4J_PASSWORD:-unset}"'
+)
+PORT_KEYS = ["NEO4J_URI", "NEO4J_BOLT_PORT", "NEO4J_HTTP_PORT", "OPENSEARCH_PORT", "API_PORT"]
+
+
+def _repo_copy(tmp_path: Path, dotenv: str | None) -> Path:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "lib.sh").write_text(Path("scripts/lib.sh").read_text())
+    (tmp_path / "Makefile").write_text(Path("Makefile").read_text())
+    if dotenv is not None:
+        (tmp_path / ".env").write_text(dotenv)
+    return tmp_path
+
+
+def _clean_env(**extra: str) -> dict[str, str]:
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in PORT_KEYS + ["FRONTEND_PORT", "OLLAMA_PORT", "NEO4J_PASSWORD"]
+    }
+    env.update(extra)
+    return env
+
+
+def test_lib_reads_host_ports_from_dotenv(tmp_path):
+    root = _repo_copy(tmp_path, DOTENV_FIXTURE)
+    out = subprocess.run(
+        ["bash", "-c", PROBE], cwd=root, env=_clean_env(), capture_output=True, text=True
+    )
+    assert out.returncode == 0, out.stderr
+    # NEO4J_URI is derived from the .env bolt port; secrets are never read into the shell
+    assert out.stdout == "bolt://localhost:17687|17687|19200|18001|13000|unset"
+
+
+def test_environment_wins_over_dotenv(tmp_path):
+    root = _repo_copy(tmp_path, DOTENV_FIXTURE + "NEO4J_URI=bolt://db.example:7687\n")
+    env = _clean_env(API_PORT="28000", OPENSEARCH_PORT="29200")
+    out = subprocess.run(["bash", "-c", PROBE], cwd=root, env=env, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == "bolt://db.example:7687|17687|29200|28000|13000|unset"
+
+
+def test_lib_without_dotenv_keeps_defaults(tmp_path):
+    root = _repo_copy(tmp_path, None)
+    out = subprocess.run(
+        ["bash", "-c", PROBE], cwd=root, env=_clean_env(), capture_output=True, text=True
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == "|||||unset"
+
+
+def test_makefile_api_port_follows_dotenv(tmp_path):
+    root = _repo_copy(tmp_path, DOTENV_FIXTURE)
+    env = _clean_env()
+    out = subprocess.run(
+        ["make", "-n", "run-api"], cwd=root, env=env, capture_output=True, text=True
+    )
+    assert "--port 18001" in out.stdout, out.stdout + out.stderr
+    env["API_PORT"] = "8123"
+    out = subprocess.run(
+        ["make", "-n", "run-api"], cwd=root, env=env, capture_output=True, text=True
+    )
+    assert "--port 8123" in out.stdout
 
 
 def test_legacy_scripts_and_data_are_gone():
