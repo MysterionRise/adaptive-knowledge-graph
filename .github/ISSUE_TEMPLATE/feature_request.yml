@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Open-ended ideas are also welcome in [Discussions: Ideas](https://github.com/MysterionRise/adaptive-knowledge-graph/discussions/categories/ideas), and the current direction is described in [ROADMAP.md](https://github.com/MysterionRise/adaptive-knowledge-graph/blob/main/ROADMAP.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should change? API shapes, settings or UI sketches are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Backend API
+        - Knowledge graph or seeding
+        - Retrieval and answers (RAG)
+        - Quizzes and learner model
+        - LLM or Ollama
+        - Frontend
+        - Docker or local stack
+        - Evaluation
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to work on this myself.

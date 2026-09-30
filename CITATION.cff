@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "Adaptive Knowledge Graph"
+abstract: >-
+  A local-first adaptive-learning prototype that combines a Neo4j knowledge
+  graph, hybrid BM25 and vector retrieval in OpenSearch, and a local LLM served
+  by Ollama to answer questions with citations and generate adaptive practice
+  over OpenStax textbooks.
+authors:
+  - family-names: Perikov
+    given-names: Konstantin
+repository-code: "https://github.com/MysterionRise/adaptive-knowledge-graph"
+url: "https://github.com/MysterionRise/adaptive-knowledge-graph"
+license: MIT
+keywords:
+  - knowledge graph
+  - retrieval-augmented generation
+  - adaptive learning
+  - local LLM
+  - Neo4j
+  - OpenSearch
+  - education
