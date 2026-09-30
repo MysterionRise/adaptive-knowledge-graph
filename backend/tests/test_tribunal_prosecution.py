@@ -134,7 +134,6 @@ class TestInputValidation:
         resp = client.post("/api/v1/ask", json={"question": ""})
         assert resp.status_code == 422, "Empty question should be rejected with 422"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_whitespace_only_question(self, client, mock_services):
         """Charge: /ask accepts a whitespace-only question (passes min_length check)."""
         resp = client.post("/api/v1/ask", json={"question": "   "})
@@ -230,26 +229,22 @@ class TestInputValidation:
         )
         assert resp.status_code == 422, "Empty search query should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_graph_data_negative_limit(self, client):
         """Charge: /graph/data accepts a negative limit."""
         resp = client.get("/api/v1/graph/data", params={"limit": -10})
         assert resp.status_code == 422, "Negative limit should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_graph_data_huge_limit(self, client):
         """Charge: /graph/data accepts enormous limit values with no upper bound."""
         resp = client.get("/api/v1/graph/data", params={"limit": 1000000})
         # Without an upper bound, this could return the entire graph.
         assert resp.status_code == 422, "limit=1000000 should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_top_concepts_negative_limit(self, client):
         """Charge: /concepts/top accepts a negative limit."""
         resp = client.get("/api/v1/concepts/top", params={"limit": -5})
         assert resp.status_code == 422, "Negative limit for top concepts should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_learning_path_negative_depth(self, client):
         """Charge: /learning-path/{name} accepts negative max_depth."""
         resp = client.get(
@@ -258,7 +253,6 @@ class TestInputValidation:
         )
         assert resp.status_code == 422, "Negative max_depth should be rejected"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_learning_path_huge_depth(self, client):
         """Charge: /learning-path/{name} accepts unbounded max_depth."""
         resp = client.get(
@@ -277,7 +271,6 @@ class TestInputValidation:
 class TestInjectionAttacks:
     """Charge: API endpoints are vulnerable to injection via user-controlled fields."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_xss_in_question(self, client, mock_services):
         """Charge: XSS payload in question is echoed back in response."""
         xss_payload = '<script>alert("XSS")</script>What is biology?'
@@ -292,7 +285,6 @@ class TestInjectionAttacks:
                 "XSS payload is reflected back unescaped in the response"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_nosql_injection_in_subject(self, client, mock_services):
         """Charge: NoSQL injection payload in subject field is not validated."""
         resp = client.post(
@@ -395,7 +387,6 @@ class TestInjectionAttacks:
             body = resp.json()
             assert body.get("title") != "", "Prompt injection in topic produced an empty quiz title"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_concept_search_wildcard_injection(self, client):
         """Charge: Lucene wildcard injection in concept search."""
         with patch("backend.app.kg.neo4j_adapter.get_neo4j_adapter") as mock:
@@ -652,7 +643,9 @@ class TestStudentModelManipulation:
 class TestQuizEdgeCases:
     """Charge: Quiz generation has unhandled edge cases."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
+    @pytest.mark.xfail(
+        strict=True, reason="Server-side grading not implemented yet — tracked in #74"
+    )
     def test_quiz_correct_answer_leaked_in_response(self, client, mock_quiz_gen):
         """Charge: Quiz response includes correct_option_id, enabling cheating."""
         resp = client.post(
@@ -682,7 +675,9 @@ class TestQuizEdgeCases:
             # The fact that mastery updates are decoupled from quiz completion
             # means a student can update mastery without ever taking a quiz
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
+    @pytest.mark.xfail(
+        strict=True, reason="Server-side grading not implemented yet — tracked in #74"
+    )
     def test_quiz_no_answer_submission_endpoint(self, client):
         """Charge: No endpoint exists to submit quiz answers atomically."""
         # Check that a proper answer submission endpoint exists
@@ -750,7 +745,6 @@ class TestRateLimitingGaps:
         finally:
             limiter.enabled = False
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_student_endpoints_no_rate_limit(self, rate_limited_client):
         """Charge: Student mastery endpoints have no rate limiting."""
         with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
@@ -761,6 +755,7 @@ class TestRateLimitingGaps:
                 new_mastery=0.45,
                 target_difficulty="medium",
                 total_attempts=1,
+                bkt_p_known=None,
             )
             mock_svc.return_value = mock_service
 
@@ -779,7 +774,6 @@ class TestRateLimitingGaps:
                 "allows unlimited mastery manipulation"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_graph_query_rate_limit(self, rate_limited_client):
         """Charge: /graph/query (Cypher execution) has no rate limiting."""
         with patch("backend.app.kg.cypher_qa.get_cypher_qa_service") as mock:
@@ -1050,7 +1044,6 @@ class TestServiceFailureHandling:
             # Should return 404 (no content), not 500 (NoneType error)
             assert resp.status_code != 500, "Retriever returning None causes 500 instead of 404"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_when_llm_returns_empty(self, client):
         """Charge: /ask doesn't handle empty LLM response."""
         with (
@@ -1117,7 +1110,6 @@ class TestServiceFailureHandling:
 class TestSubjectValidation:
     """Charge: Subject parameter is not validated consistently across endpoints."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_ask_with_nonexistent_subject(self, client, mock_services):
         """Charge: /ask with a non-existent subject produces unclear error."""
         resp = client.post(
@@ -1137,7 +1129,6 @@ class TestSubjectValidation:
                 "Error message doesn't mention that the subject was not found"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_quiz_with_nonexistent_subject(self, client, mock_quiz_gen):
         """Charge: /quiz/generate with non-existent subject produces unclear error."""
         resp = client.post(

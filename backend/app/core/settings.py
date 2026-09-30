@@ -50,13 +50,16 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     api_key: str = ""  # Set via API_KEY env var for authentication
 
-    # Rate Limiting
+    # Rate Limiting (per client; per-route limits are read when the route modules are imported)
     rate_limit_enabled: bool = True
     # Every endpoint except health checks, per client and endpoint, counted before auth
     rate_limit_default: str = "100/minute"
-    rate_limit_ask: str = "10/minute"  # 10 requests per minute for /ask
-    rate_limit_quiz: str = "5/minute"  # 5 requests per minute for /quiz
-    rate_limit_graph: str = "30/minute"  # 30 requests per minute for /graph/*
+    rate_limit_ask: str = "10/minute"  # /ask and /ask/stream
+    rate_limit_quiz: str = "5/minute"  # /quiz/generate and /quiz/generate-adaptive
+    rate_limit_graph: str = "30/minute"  # /graph/stats and /graph/data
+    rate_limit_graph_query: str = "10/minute"  # /graph/query (LLM-generated Cypher)
+    rate_limit_student_write: str = "30/minute"  # /student/mastery and /student/reset
+    rate_limit_recommendations: str = "10/minute"  # /quiz/recommendations (KG + LLM calls)
 
     # Neo4j
     neo4j_uri: str = Field(default="bolt://localhost:7687")
