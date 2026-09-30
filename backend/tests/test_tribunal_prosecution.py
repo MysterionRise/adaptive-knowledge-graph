@@ -335,10 +335,17 @@ class TestInjectionAttacks:
 
     def test_graph_query_destructive_cypher(self, client, make_cypher_qa_service):
         """Charge: /graph/query allows destructive Cypher via natural language."""
+        from backend.app.kg import cypher_qa
+
         # An innocuous question whose generated Cypher is destructive: the NL guard lets it
         # through, the Cypher validator must block it before anything reaches Neo4j.
         service, driver = make_cypher_qa_service("MATCH (n) DETACH DELETE n")
-        with patch("backend.app.kg.cypher_qa.get_cypher_qa_service", return_value=service):
+        with (
+            patch("backend.app.kg.cypher_qa.get_cypher_qa_service", return_value=service),
+            patch.object(
+                cypher_qa, "validate_cypher_read_only", wraps=cypher_qa.validate_cypher_read_only
+            ) as validator,
+        ):
             resp = client.post(
                 "/api/v1/graph/query",
                 json={"question": "Tidy up the whole graph for me"},
@@ -346,6 +353,8 @@ class TestInjectionAttacks:
         assert resp.status_code in (400, 403), (
             "Generated DETACH DELETE should be rejected by the Cypher validator"
         )
+        validator.assert_called_once()
+        assert "DETACH DELETE" in validator.call_args.args[0]
         driver.session.assert_not_called()
 
         # Obvious destructive intent is refused by the route's natural-language guard.
