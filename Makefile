@@ -1,33 +1,75 @@
-.PHONY: help install install-dev test test-fast test-tribunal lint format type-check clean docker-build docker-up docker-down fetch-data build-kg index-rag run-api run-frontend demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval eval-rag eval-rag-api test-integration test-integration-ui
+# docker compose on infra/compose/compose.yaml, plus the repository-root .env (ports and
+# passwords set there reach the containers) and, on a native Linux engine, compose.linux.yaml.
+# Choose the profile of the containerised stack with PROFILE=cpu|gpu|full.
+COMPOSE := bash scripts/compose.sh
+PROFILE ?= cpu
+SUBJECT ?=
+API_HOST ?= 127.0.0.1
+# The environment wins, then API_PORT in the repository .env (read by scripts/lib.sh), then 8000
+API_PORT ?= $(or $(shell bash -c '. scripts/lib.sh && printf %s "$${API_PORT:-}"' 2> /dev/null),8000)
+API_URL ?= http://localhost:$(API_PORT)
+EVAL_ARGS ?=
+
+.DEFAULT_GOAL := help
+
+.PHONY: help quickstart doctor up down seed build-windows \
+	install install-dev \
+	test test-fast test-tribunal test-integration test-integration-ui \
+	lint format type-check pre-commit clean \
+	docker-build docker-up docker-down docker-logs docker-ps \
+	ingest-books build-kg index-rag pipeline-all \
+	run-api run-frontend dev-setup \
+	eval-rag eval-rag-api \
+	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval
 
 help: ## Show this help message
-	@echo 'Usage: make [target]'
+	@echo 'Usage: make [target] [SUBJECT=economics] [PROFILE=cpu|gpu|full]'
 	@echo ''
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install production dependencies (excluding optional groups)
-	poetry install --only main --without pyirt,pybkt
+# Getting started
+quickstart: ## Fresh clone to seeded stack: deps, Ollama check, databases, seed US History + Economics
+	bash scripts/quickstart.sh
 
-install-dev: ## Install all dependencies including dev tools (excluding optional groups)
+doctor: ## Check every local dependency (Docker, ports, Ollama generation, spaCy model, Node, disk/RAM)
+	bash scripts/doctor.sh
+
+up: ## Start Neo4j + OpenSearch and wait until both are healthy
+	$(COMPOSE) up -d --wait --wait-timeout 300 neo4j opensearch
+
+down: ## Stop and remove the stack's containers, all profiles (data volumes are kept)
+	$(COMPOSE) --profile '*' down
+
+seed: ## Seed demo data into Neo4j + OpenSearch (all demo subjects, or SUBJECT=...)
+	bash scripts/seed_demo.sh $(SUBJECT)
+
+build-windows: ## Build Neo4j chunk windows (NEXT edges) from the seeded data (SUBJECT=...)
+	poetry run python scripts/build_chunk_windows.py $(if $(SUBJECT),--subject $(SUBJECT))
+
+# Installation
+install: ## Install runtime dependencies (no dev tools)
+	poetry install --only main
+
+install-dev: ## Install all dependencies including dev tools, and the pre-commit hooks
 	poetry install --without pyirt,pybkt
 	poetry run pre-commit install
 
-install-student: ## Install optional student modeling dependencies (requires Python 3.11)
-	@echo "⚠️  Note: pyBKT and py-irt require Python 3.11 specifically"
-	poetry install --with pybkt --with pyirt
-
+# Tests and code quality
 test: ## Run tests with coverage
 	poetry run pytest
 
 test-fast: ## Run non-adversarial backend tests with per-test timeout
 	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal"
 
-test-tribunal: ## Run adversarial/risk-register tests separately
-	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal
+test-tribunal: ## Run adversarial/risk-register tests separately (no coverage gate)
+	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal --no-cov
 
-test-watch: ## Run tests in watch mode
-	poetry run pytest-watch
+test-integration: ## Run Playwright integration tests against live services
+	cd frontend && npx playwright test --project=integration
+
+test-integration-ui: ## Run integration tests with Playwright UI
+	cd frontend && npx playwright test --project=integration --ui
 
 lint: ## Run linting checks
 	poetry run ruff check backend/ scripts/
@@ -39,103 +81,73 @@ format: ## Format code with ruff
 type-check: ## Run type checking with mypy
 	poetry run mypy backend/app scripts/
 
+pre-commit: format lint type-check test ## Run all pre-commit checks
+
 clean: ## Clean up generated files
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-# Docker operations
-docker-build: ## Build Docker images
-	docker compose -f infra/compose/compose.yaml build
+# Containerised stack (the databases alone: make up / make down)
+docker-build: ## Build the images of PROFILE (cpu: API, gpu: CUDA API, full: API + frontend)
+	$(COMPOSE) --profile $(PROFILE) build
 
-docker-up: ## Start all services (neo4j, opensearch, api)
-	docker compose -f infra/compose/compose.yaml up -d
+docker-up: ## Start databases + PROFILE services (default cpu: containerised API) and wait
+	$(COMPOSE) --profile $(PROFILE) up -d --build --wait --wait-timeout 600
 
-docker-down: ## Stop all services
-	docker compose -f infra/compose/compose.yaml down
+docker-down: down ## Alias for down
 
-docker-logs: ## Show Docker logs
-	docker compose -f infra/compose/compose.yaml logs -f
+docker-logs: ## Follow the logs of every running service
+	$(COMPOSE) --profile '*' logs -f
 
-docker-ps: ## Show running containers
-	docker compose -f infra/compose/compose.yaml ps
+docker-ps: ## Show the stack's containers
+	$(COMPOSE) --profile '*' ps
 
-# Subject selection (override with: make build-kg SUBJECT=biology)
-SUBJECT ?=
-
-# Data pipeline operations
-fetch-data: ## Fetch OpenStax Biology 2e from philschatz
-	poetry run python scripts/fetch_openstax.py
-
-parse-data: ## Parse fetched HTML to clean JSON
-	poetry run python scripts/parse_sections.py
-
-normalize-data: ## Normalize to JSONL with attribution
-	poetry run python scripts/normalize_book.py
-
-ingest-books: ## Ingest books for a subject (use SUBJECT=economics)
+# Data pipeline (multi-subject; SUBJECT defaults to us_history)
+ingest-books: ## Fetch and normalise the books of SUBJECT into data/processed/books_<subject>.jsonl
 	poetry run python scripts/ingest_books.py $(if $(SUBJECT),--subject $(SUBJECT))
 
-# KG operations
-build-kg: ## Build knowledge graph (use SUBJECT=biology to override)
+build-kg: ## Build the knowledge graph of SUBJECT in Neo4j (asks before clearing)
 	poetry run python scripts/build_knowledge_graph.py $(if $(SUBJECT),--subject $(SUBJECT))
 
-export-rdf: ## Export KG to RDF/Turtle
-	poetry run python scripts/export_graph_rdf.py
-
-# RAG operations
-index-rag: ## Index textbook content to OpenSearch (use SUBJECT=biology to override)
+index-rag: ## Chunk, embed and index the text of SUBJECT into OpenSearch
 	poetry run python scripts/index_to_opensearch.py $(if $(SUBJECT),--subject $(SUBJECT))
 
-# Run services
-run-api: ## Run FastAPI backend locally
-	poetry run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+pipeline-all: ## Rebuild from scratch: re-ingest, rebuild graph, recreate index (SUBJECT or both demo subjects)
+	bash scripts/seed_demo.sh --reset $(SUBJECT)
 
-run-frontend: ## Run Next.js frontend (cd to frontend first)
+# Run services
+run-api: ## Run the FastAPI backend locally with reload (API_HOST=127.0.0.1, API_PORT=8000)
+	poetry run uvicorn backend.app.main:app --reload --host $(API_HOST) --port $(API_PORT)
+
+run-frontend: ## Run the Next.js dev server (frontend/)
 	cd frontend && npm run dev
 
-# Evaluation
-eval-rag: ## Run lightweight live API KG-RAG evaluation
-	poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
+dev-setup: install-dev up ## Dev environment: install-dev + databases
+	@echo "Development environment ready. Next: make seed, then make run-api and make run-frontend."
 
-eval-rag-api: eval-rag ## Alias for live API KG-RAG evaluation
+# Evaluation (EVAL_ARGS passes options, e.g. EVAL_ARGS="--subject economics --limit 3")
+eval-rag: ## Run the live API KG-RAG evaluation (paced to the /ask rate limit)
+	poetry run python scripts/evaluate_rag.py --api-url $(API_URL) $(EVAL_ARGS)
+
+eval-rag-api: eval-rag ## Alias for eval-rag
 
 # Demo acceptance
-demo-seed: ## Seed local demo data into Neo4j and OpenSearch
-	bash scripts/seed_demo.sh
+demo-seed: ## Seed local demo data into Neo4j and OpenSearch (same as make seed)
+	bash scripts/seed_demo.sh $(SUBJECT)
 
-demo-check: ## Verify local demo services and core workflows
-	bash scripts/validate_setup.sh
+demo-check: ## Check local demo readiness (same as make doctor)
+	bash scripts/doctor.sh
 
-demo-client-prep: ## Prepare local OpenStax client demo data and services
+demo-client-prep: ## Prepare the OpenStax client demo: Ollama and spaCy checks, databases, seed
 	bash scripts/demo_client_prep.sh
 
-demo-client-check: ## Validate local client demo readiness and latest eval gate
+demo-client-check: ## Validate client demo readiness end to end and the latest eval gate
 	bash scripts/demo_client_check.sh
 
 demo-client-reset: ## Reset transient client demo learner state
 	bash scripts/demo_client_reset.sh
 
-demo-eval: ## Run live client-demo eval and validate the latest report
-	poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
+demo-eval: ## Run the full live eval and validate the report
+	poetry run python scripts/evaluate_rag.py --api-url $(API_URL)
 	poetry run python scripts/check_demo_eval.py
-
-# Complete pipeline
-pipeline-all: fetch-data parse-data normalize-data build-kg index-rag ## Run complete data pipeline
-
-# Development workflow
-dev-setup: install-dev docker-up ## Complete dev environment setup
-	@echo "✅ Development environment ready!"
-	@echo "   - Neo4j: http://localhost:7474 (neo4j/password)"
-	@echo "   - OpenSearch: http://localhost:9200"
-	@echo "   - API will run on: http://localhost:8000"
-
-# Integration tests (requires running infrastructure)
-test-integration: ## Run Playwright integration tests against live services
-	cd frontend && npx playwright test --project=integration
-
-test-integration-ui: ## Run integration tests with Playwright UI
-	cd frontend && npx playwright test --project=integration --ui
-
-# Quick checks before commit
-pre-commit: format lint type-check test ## Run all pre-commit checks
