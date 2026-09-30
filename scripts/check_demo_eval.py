@@ -20,16 +20,21 @@ def _load_report(path: Path) -> dict[str, Any]:
         raise SystemExit(f"Invalid eval JSON: {e}") from e
 
 
-def validate_report(path: Path, min_successful_cases: int) -> dict[str, Any]:
+def validate_report(
+    path: Path, min_successful_cases: int, allow_partial: bool = False
+) -> dict[str, Any]:
     """Validate latest eval report and return its summary."""
     report = _load_report(path)
     summary = report.get("summary", {})
+    run_config = report.get("run_config") or {}
 
     environment_valid = bool(report.get("environment_valid"))
     kg_successful = int(summary.get("kg_successful_cases", 0) or 0)
     plain_successful = int(summary.get("plain_successful_cases", 0) or 0)
 
     errors = []
+    if not allow_partial and (run_config.get("subjects") or run_config.get("limit")):
+        errors.append("report comes from a partial run (--subject/--limit)")
     if not environment_valid:
         errors.append("environment_valid is false")
     if kg_successful < min_successful_cases:
@@ -47,9 +52,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check latest eval report readiness")
     parser.add_argument("--report", default="docs/evals/latest.json")
     parser.add_argument("--min-successful-cases", type=int, default=1)
+    parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Accept a report produced with evaluate_rag.py --subject/--limit",
+    )
     args = parser.parse_args()
 
-    summary = validate_report(Path(args.report), args.min_successful_cases)
+    summary = validate_report(Path(args.report), args.min_successful_cases, args.allow_partial)
     print("Eval report is demo-ready")
     print(f"  cases: {summary.get('cases')}")
     print(f"  kg_successful_cases: {summary.get('kg_successful_cases')}")

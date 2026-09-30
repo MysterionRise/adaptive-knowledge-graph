@@ -8,6 +8,7 @@ of adaptive features without needing to complete 10+ quizzes.
 Usage:
     poetry run python scripts/seed_student_profile.py
     poetry run python scripts/seed_student_profile.py --student-id demo_user
+    poetry run python scripts/seed_student_profile.py --output data/processed/other.sqlite3
 """
 
 import argparse
@@ -219,16 +220,7 @@ def write_sqlite_profile(output_path: Path, profiles: dict) -> None:
         conn.commit()
 
 
-def write_json_profile(output_path: Path, profiles: dict) -> None:
-    """Write demo profiles to the legacy JSON store."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    existing = {}
-    if output_path.exists():
-        with open(output_path) as f:
-            existing = json.load(f)
-    existing.update(profiles)
-    with open(output_path, "w") as f:
-        json.dump(existing, f, indent=2, default=str)
+SQLITE_SUFFIXES = {".db", ".sqlite", ".sqlite3"}
 
 
 def main():
@@ -241,18 +233,17 @@ def main():
     parser.add_argument(
         "--output",
         default="data/processed/student_profiles.sqlite3",
-        help="Output path for student profiles (.sqlite3/.db or .json)",
+        help="SQLite database the API reads (STUDENT_PROFILES_DB; .sqlite3, .sqlite or .db)",
     )
     args = parser.parse_args()
 
     # Create demo profile
     output_path = Path(args.output)
+    if output_path.suffix not in SQLITE_SUFFIXES:
+        # The legacy JSON learner store is gone; a JSON file here would never be read.
+        parser.error(f"--output must be a SQLite file ({', '.join(sorted(SQLITE_SUFFIXES))})")
     demo_profile = create_demo_profile(args.student_id)
-
-    if output_path.suffix in {".db", ".sqlite", ".sqlite3"}:
-        write_sqlite_profile(output_path, demo_profile)
-    else:
-        write_json_profile(output_path, demo_profile)
+    write_sqlite_profile(output_path, demo_profile)
 
     print(f"Demo student profile seeded at {output_path}")
     print(f"  Student ID: {args.student_id}")

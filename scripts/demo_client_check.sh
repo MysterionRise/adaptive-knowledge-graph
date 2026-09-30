@@ -4,10 +4,14 @@
 
 set -euo pipefail
 
+# lib.sh also picks up API_PORT from the repository .env when the environment lacks it
+# shellcheck source=lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-API_URL="${API_URL:-http://localhost:8000}"
+API_URL="${API_URL:-http://localhost:${API_PORT:-8000}}"
 API_URL="${API_URL%/}"
 API_KEY="${API_KEY:-}"
 
@@ -37,6 +41,7 @@ require_command() {
 }
 
 json_headers=(-H "Content-Type: application/json")
+# May stay empty: expand it as ${auth_headers[@]+"${auth_headers[@]}"} (bash 3.2 + set -u)
 auth_headers=()
 if [ -n "$API_KEY" ]; then
     json_headers+=(-H "X-API-Key: $API_KEY")
@@ -47,13 +52,11 @@ require_command curl
 require_command poetry
 require_command node
 
-NODE_MAJOR="$(node -p "Number(process.versions.node.split('.')[0])")"
-if [ "$NODE_MAJOR" -lt 20 ]; then
-    fail "Node 20+ is required for the client demo. Current version: $(node --version)"
-fi
+# Node must satisfy frontend/package.json engines.node (npm uses engine-strict)
+poetry run python scripts/stack_check.py node || fail "Node $(node --version) cannot run the frontend"
 pass "Node version is demo-compatible: $(node --version)"
 
-bash scripts/validate_setup.sh
+bash scripts/doctor.sh
 
 echo "Checking API readiness..."
 curl -sf --max-time 30 "$API_URL/health/ready" > "$HEALTH_JSON" \
@@ -92,7 +95,7 @@ PY
 pass "US History graph has concepts and relationships"
 
 echo "Checking protected synthetic student profile..."
-curl -sf --max-time 30 "${auth_headers[@]}" "$API_URL/api/v1/student/profile" > "$PROFILE_JSON" \
+curl -sf --max-time 30 ${auth_headers[@]+"${auth_headers[@]}"} "$API_URL/api/v1/student/profile" > "$PROFILE_JSON" \
     || fail "Student profile endpoint failed. If API_KEY is configured, export API_KEY before running this check."
 poetry run python - "$PROFILE_JSON" <<'PY'
 import json
