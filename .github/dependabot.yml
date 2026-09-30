@@ -1,43 +1,112 @@
 version: 2
+
+# Version updates are grouped per ecosystem: one weekly PR with all minor and patch
+# bumps. Major updates still arrive as individual PRs, and security updates are never
+# grouped. Dependabot's `reviewers` key is retired; use a CODEOWNERS file for review requests.
 updates:
-  # Python dependencies via Poetry
+  # Python (Poetry: pyproject.toml + poetry.lock)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "MysterionRise"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "python"
     commit-message:
-      prefix: "deps"
+      prefix: "chore"
       include: "scope"
+    groups:
+      python-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Deliberate upgrades tracked in issues; keep them out of the weekly group.
+      - dependency-name: "torch" # 2.11+ switches the Linux wheels to CUDA 13 (#79)
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "transformers" # 5.x with sentence-transformers 6 (#71)
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sentence-transformers" # (#71)
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "langchain*" # 1.x migration (#72)
+        update-types: ["version-update:semver-major"]
 
-  # Docker dependencies
+  # Frontend (Next.js, npm)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # API images (infra/docker/*.Dockerfile)
   - package-ecosystem: "docker"
     directory: "/infra/docker"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "docker"
     commit-message:
-      prefix: "deps"
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docker-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
-  # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  # Local stack images (infra/compose/compose.yaml)
+  - package-ecosystem: "docker-compose"
+    directory: "/infra/compose"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      compose-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions (workflows and composite actions)
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
-      prefix: "deps"
+      prefix: "ci"
+      include: "scope"
+    groups:
+      actions-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
