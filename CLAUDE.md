@@ -13,9 +13,9 @@ Adaptive Knowledge Graph is a local-first proof of concept for adaptive learning
 ```bash
 make quickstart             # Install deps, check Ollama + model, start Neo4j/OpenSearch, seed US History + Economics
 make doctor                 # Check the local environment
-make up                     # Start the Docker services
-make down                   # Stop the Docker services
-make seed                   # Seed US History and Economics
+make up                     # Start Neo4j + OpenSearch (waits until healthy)
+make down                   # Stop them (volumes are kept)
+make seed                   # Seed US History and Economics (SUBJECT=<id> for one)
 make install-dev            # Dev dependencies + pre-commit hooks
 make run-api                # FastAPI on port 8000 with reload
 cd frontend && npm ci && npm run dev   # Next.js on port 3000
@@ -42,6 +42,7 @@ cd frontend && npm run lint && npm run type-check && npm test -- --ci && npm run
 make ingest-books SUBJECT=economics   # Fetch and normalize a subject's books
 make build-kg SUBJECT=economics       # Build that subject's knowledge graph in Neo4j
 make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch
+make build-windows                    # Chunk NEXT edges in Neo4j (only for opt-in window retrieval)
 make demo-eval                        # Golden-set evaluation against the running API
 ```
 
@@ -65,7 +66,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 1. Resolve the subject from `config/subjects.yaml` (unknown subject: 404).
 2. KG expansion: extract concepts (spaCy NER + YAKE), match them in Neo4j, add neighbours within `RAG_KG_EXPANSION_HOPS`.
 3. OpenSearch retrieval: hybrid BM25 + kNN fused with reciprocal rank fusion (`RETRIEVAL_MODE=hybrid`, default) or kNN only.
-4. Optional window retrieval: opt-in, needs `VECTOR_BACKEND=neo4j` or `hybrid` and NEXT edges between chunks built by a script.
+4. Optional window retrieval: opt-in, needs `VECTOR_BACKEND=neo4j` or `hybrid` and NEXT edges between chunks (built by `make build-windows`, not by the standard seed).
 5. Optional reranking: `backend/app/rag/reranker.py` (cross-encoder `BAAI/bge-reranker-v2-m3`), opt-in via `RERANKER_ENABLED=true`; retrieves `RAG_RETRIEVAL_TOP_K` candidates and keeps `top_k`.
 6. LLM answer with citations and the subject's attribution. LLM unavailable: 503; empty or invalid LLM output: 502.
 

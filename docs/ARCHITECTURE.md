@@ -70,7 +70,8 @@ more context. It only runs when all of these hold:
 - `RAG_WINDOW_RETRIEVAL` is `true` and the request does not turn off
   `use_window_retrieval`,
 - the chunks exist in Neo4j with `NEXT` relationships between them. The
-  standard seeding does not create these; a separate script builds them.
+  standard seeding does not create these; run `make build-windows` after
+  seeding to build them.
 
 `RAG_WINDOW_SIZE` and the per-request `window_size` control how many
 neighbours are added.

@@ -38,10 +38,12 @@ the issue publicly.
 
 The project is local-first:
 
-- The Docker Compose stack binds Neo4j, OpenSearch and the API to `127.0.0.1`
-  and ships development credentials. Do not expose these ports to other hosts.
-- Learner profiles are synthetic and stored in a local SQLite file. There is no
-  user identity or tenancy model yet ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)).
+- The Docker Compose stack binds every published port (Neo4j, OpenSearch and
+  the optional API and frontend containers) to `127.0.0.1` and ships
+  development credentials. Do not expose these ports to other hosts.
+- Learner profiles are stored in a local SQLite file, and the demo uses
+  synthetic profiles. There is no user identity or tenancy model yet
+  ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)).
 - With `PRIVACY_LOCAL_ONLY=true` (the default) the API refuses to start unless
   `LLM_MODE=local`, so questions, retrieved passages and prompts go only to the
   local Ollama server.

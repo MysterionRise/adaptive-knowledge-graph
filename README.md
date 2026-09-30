@@ -37,8 +37,8 @@ ideas on top of that structure:
   answer so the next quiz targets a suitable difficulty.
 
 Everything runs **local-first**. With the default `PRIVACY_LOCAL_ONLY=true`,
-questions, learner data and textbook excerpts never leave your machine, which
-matters for education data.
+questions and textbook excerpts go only to your own Ollama server, and learner
+data stays in a local SQLite file. That matters for education data.
 
 ## Features
 
@@ -216,8 +216,8 @@ generate a quiz in **Assessment**.
 | Command | What it does |
 | --- | --- |
 | `make doctor` | Check the local environment and report what is missing |
-| `make up` / `make down` | Start or stop the Docker services |
-| `make seed` | Seed US History and Economics into Neo4j and OpenSearch |
+| `make up` / `make down` | Start or stop Neo4j and OpenSearch; `make down` keeps the data |
+| `make seed` | Seed US History and Economics into Neo4j and OpenSearch (`SUBJECT=economics` for one subject) |
 | `make run-api` | Run the API with auto-reload on port 8000 |
 | `make test` | Run the backend test suite with coverage |
 | `make demo-eval` | Run the evaluation against the running API |
