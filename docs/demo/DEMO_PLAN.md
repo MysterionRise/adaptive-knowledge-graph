@@ -8,11 +8,11 @@ live API calls. For the standard workflow and readiness gate, see
 
 | Service | URL | Status command |
 | --- | --- | --- |
-| Neo4j | http://localhost:7474 | `docker compose -f infra/compose/compose.yaml ps neo4j` |
-| OpenSearch | http://localhost:9200 | `curl localhost:9200` |
-| Ollama | http://localhost:11434 | `curl localhost:11434/api/tags` |
-| FastAPI | http://localhost:8000/docs | `curl localhost:8000/health` |
-| Frontend | http://localhost:3000 | `cd frontend && npm run dev` |
+| Neo4j | <http://localhost:7474> | `docker compose -f infra/compose/compose.yaml ps neo4j` |
+| OpenSearch | <http://localhost:9200> | `curl localhost:9200` |
+| Ollama | <http://localhost:11434> | `curl localhost:11434/api/tags` |
+| FastAPI | <http://localhost:8000/docs> | `curl localhost:8000/health` |
+| Frontend | <http://localhost:3000> | `cd frontend && npm run dev` |
 
 ### Quick start
 
@@ -63,7 +63,7 @@ Talking points per slide:
 
 ### Step 1: Ask a question (3 min)
 
-Switch to the live app at http://localhost:3000.
+Switch to the live app at <http://localhost:3000>.
 
 **Recommended question:** "What was the Stamp Act and how did it lead to
 colonial resistance?"

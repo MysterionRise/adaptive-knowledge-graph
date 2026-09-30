@@ -113,8 +113,8 @@ Coverage targets `backend/app`, excluding tests and `__init__.py`; the minimum i
 
 ## Service URLs (Local Dev)
 
-- Neo4j Browser: http://localhost:7474 (neo4j/password)
-- OpenSearch: http://localhost:9200
-- Ollama: http://localhost:11434
-- API: http://localhost:8000 (docs at /docs in development mode only)
-- Frontend: http://localhost:3000
+- Neo4j Browser: <http://localhost:7474> (neo4j/password)
+- OpenSearch: <http://localhost:9200>
+- Ollama: <http://localhost:11434>
+- API: <http://localhost:8000> (docs at `/docs` in development mode only)
+- Frontend: <http://localhost:3000>

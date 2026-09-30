@@ -1,56 +1,36 @@
-# Markdown linting configuration
+# Markdown linting configuration (markdownlint / markdownlint-cli2).
+# Every rule is on by default; each exception below says why it is off.
 default: true
 
-# The repository has long-form architecture, demo, and evaluation docs where
-# wrapping every command, table, and URL creates churn without improving review.
-# Keep markdownlint focused on structural issues instead of legacy style noise.
-
-# MD012: Multiple consecutive blank lines
+# MD012 (multiple blank lines): scripts/evaluate_rag.py writes
+# docs/evals/latest.md with a trailing blank line.
 MD012: false
 
-# MD013: Line length
+# MD013 (line length): tables, commands and URLs are easier to review unwrapped.
 MD013: false
 
-# MD022: Headings should be surrounded by blank lines
-MD022: false
+# MD024 (duplicate headings): allowed when the headings are not siblings,
+# for example a repeated "Commands" section under different parents.
+MD024:
+  siblings_only: true
 
-# MD026: Trailing punctuation in heading
-MD026: false
-
-# MD031: Fenced code blocks should be surrounded by blank lines
-MD031: false
-
-# MD032: Lists should be surrounded by blank lines
-MD032: false
-
-# MD033: Allow inline HTML (for badges, etc.)
+# MD033 (inline HTML): allowed for badges, images and <details> blocks.
 MD033: false
 
-# MD034: Bare URLs
-MD034: false
-
-# MD036: Emphasis used instead of a heading
-MD036: false
-
-# MD038: Spaces inside code span elements
+# MD038 (spaces inside code spans): the generated evaluation report writes
+# empty and padded code spans.
 MD038: false
 
-# MD041: First line in file should be a top-level heading
+# MD041 (first line must be a top-level heading): the pull request template
+# and similar fragments start with a second-level heading.
 MD041: false
 
-# MD040: Fenced code blocks should have a language specified
-MD040: false
-
-# MD046: Code block style
+# MD046 (code block style): always use fenced code blocks.
 MD046:
   style: fenced
 
-# MD058: Tables should be surrounded by blank lines
-MD058: false
-
-# MD060: Table column style
+# MD060 (table column style): tables are not column-aligned.
 MD060: false
 
-# MD024: Multiple headings with the same content
-MD024:
-  siblings_only: true
+# The archived review in docs/archive/tribunal-2026-02/ has its own
+# .markdownlint.yaml that relaxes spacing rules for the transcripts.
