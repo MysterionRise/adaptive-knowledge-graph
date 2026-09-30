@@ -1,4 +1,3 @@
-/* eslint-disable no-var */
 // Polyfill TextEncoder/TextDecoder for jsdom (used by SSE streaming tests)
 import { TextEncoder, TextDecoder } from 'util';
 Object.assign(global, { TextEncoder, TextDecoder });
