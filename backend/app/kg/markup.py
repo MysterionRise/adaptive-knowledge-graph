@@ -25,7 +25,7 @@ This module has no project dependencies, so both ``backend.app.kg`` and
 
 import html
 import re
-from xml.etree import ElementTree
+from xml.etree import ElementTree  # nosec B405  # parses <math> fragments only, which have no DTD
 
 _FRONT_MATTER_RE = re.compile(r"\A\s*---\n[\s\S]*?\n---[ \t]*(?:\n|\Z)")
 _HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
@@ -228,8 +228,9 @@ def _linearize_math(block: str) -> str | None:
         block,
     )
     try:
-        # A fragment that starts at <math> cannot carry a DTD, so no entity expansion.
-        root = ElementTree.fromstring(xml)
+        # The document starts at <math>, so it cannot carry a DTD: no entity definitions,
+        # no entity expansion, no external entities.
+        root = ElementTree.fromstring(xml)  # nosec B314
     except ElementTree.ParseError:
         return None
     lines = (" ".join(line.split()) for line in _render_math(root).split("\n"))
