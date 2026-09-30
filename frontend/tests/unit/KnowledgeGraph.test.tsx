@@ -5,7 +5,6 @@ import type { GraphData } from '@/lib/types';
 // Mock Cytoscape and its layout extension
 // NOTE: jest.mock is hoisted above variable declarations, so mockCyInstance
 // must be assigned inside the factory to avoid temporal dead zone errors.
-// eslint-disable-next-line no-var
 var mockCyInstance: any;
 
 jest.mock('cytoscape', () => {

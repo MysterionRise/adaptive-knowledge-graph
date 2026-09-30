@@ -16,32 +16,42 @@ jest.mock('@/lib/api-client', () => ({
   },
 }));
 
-// Mock the store
-jest.mock('@/lib/store', () => ({
-  useAppStore: Object.assign(
-    jest.fn(() => ({
-      masteryMap: {},
-      getMastery: jest.fn().mockReturnValue(0),
-      currentSubject: 'us_history',
-      setCurrentSubject: jest.fn(),
-      subjectTheme: null,
-      loadSubjectTheme: jest.fn(),
-      isLoadingTheme: false,
-      loadMasteryFromBackend: jest.fn(),
-    })),
-    {
-      getState: jest.fn(() => ({})),
-      setState: jest.fn(),
-    }
-  ),
-}));
+// Mock the store. The state object (and its functions) must be stable across renders:
+// SubjectPicker re-runs its loading effect whenever these functions change identity.
+jest.mock('@/lib/store', () => {
+  const state = {
+    masteryMap: {},
+    getMastery: jest.fn().mockReturnValue(0),
+    currentSubject: 'us_history',
+    setCurrentSubject: jest.fn(),
+    subjectTheme: null,
+    loadSubjectTheme: jest.fn(),
+    isLoadingTheme: false,
+    loadMasteryFromBackend: jest.fn(),
+  };
+  return {
+    useAppStore: Object.assign(
+      jest.fn(() => state),
+      {
+        getState: jest.fn(() => state),
+        setState: jest.fn(),
+      }
+    ),
+  };
+});
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href }: any) => {
+  return function MockLink({ children, href }: any) {
     return <a href={href}>{children}</a>;
   };
 });
+
+/** Render the page and let the SubjectPicker, stats and top-concept requests settle. */
+async function renderHome() {
+  render(<Home />);
+  await screen.findByRole('button', { name: /US History/i });
+}
 
 describe('Home Page', () => {
   beforeEach(() => {
@@ -49,14 +59,14 @@ describe('Home Page', () => {
     (apiClient.getTopConceptsForSubject as jest.Mock).mockResolvedValue([]);
   });
 
-  it('renders the main heading', () => {
+  it('renders the main heading', async () => {
     (apiClient.getGraphStats as jest.Mock).mockResolvedValue({
       concept_count: 150,
       module_count: 42,
       relationship_count: 320,
     });
 
-    render(<Home />);
+    await renderHome();
 
     expect(screen.getByText('Adaptive Knowledge Graph')).toBeInTheDocument();
   });
@@ -68,7 +78,7 @@ describe('Home Page', () => {
       relationship_count: 320,
     });
 
-    render(<Home />);
+    await renderHome();
 
     await waitFor(() => {
       expect(screen.getByText('150')).toBeInTheDocument();
@@ -77,12 +87,12 @@ describe('Home Page', () => {
     });
   });
 
-  it('shows loading skeleton while fetching stats', () => {
+  it('shows loading skeleton while fetching stats', async () => {
     (apiClient.getGraphStats as jest.Mock).mockImplementation(
       () => new Promise(() => {}) // Never resolves
     );
 
-    render(<Home />);
+    await renderHome();
 
     // The StatsSkeleton renders a grid of animated placeholder cards
     // Verify the skeleton is shown by checking for the stats section heading
@@ -96,7 +106,7 @@ describe('Home Page', () => {
       new Error('API Error')
     );
 
-    render(<Home />);
+    await renderHome();
 
     await waitFor(() => {
       expect(
@@ -105,28 +115,28 @@ describe('Home Page', () => {
     });
   });
 
-  it('renders navigation links', () => {
+  it('renders navigation links', async () => {
     (apiClient.getGraphStats as jest.Mock).mockResolvedValue({
       concept_count: 150,
       module_count: 42,
       relationship_count: 320,
     });
 
-    render(<Home />);
+    await renderHome();
 
     expect(screen.getByText('Explore Graph')).toBeInTheDocument();
     expect(screen.getByText('Ask Questions')).toBeInTheDocument();
     expect(screen.getByText('Demo Status')).toBeInTheDocument();
   });
 
-  it('displays feature cards', () => {
+  it('displays feature cards', async () => {
     (apiClient.getGraphStats as jest.Mock).mockResolvedValue({
       concept_count: 150,
       module_count: 42,
       relationship_count: 320,
     });
 
-    render(<Home />);
+    await renderHome();
 
     expect(screen.getByText('Knowledge Map')).toBeInTheDocument();
     expect(screen.getByText('AI Tutor Chat')).toBeInTheDocument();
