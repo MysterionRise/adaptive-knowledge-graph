@@ -3,18 +3,35 @@ Multi-strategy concept extraction for enhanced RAG.
 
 Replaces simple substring matching with semantic/NER-based extraction.
 Supports multiple strategies:
-- ner: spaCy named entity recognition
+- ner: spaCy named entities and noun chunks (skipped when no spaCy model is installed)
 - embedding: similarity to known concepts
 - yake: keyword extraction (original approach)
 - fulltext: Neo4j fulltext search
-- ensemble: combine all strategies
+- ensemble: NER + YAKE with score fusion (the embedding and fulltext strategies
+  are not part of the ensemble; request them explicitly)
+
+Every strategy drops markup/structural stop concepts ("Data-Type", "Review
+Questions", …) using the shared vocabulary in ``backend.app.kg.stopwords``.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
 import yake
 from loguru import logger
+
+from backend.app.kg.stopwords import is_stop_concept
+
+# spaCy entity labels that never name a concept (dates, amounts, ordinals, …).
+_NON_CONCEPT_ENTITY_LABELS = frozenset(
+    {"CARDINAL", "DATE", "MONEY", "ORDINAL", "PERCENT", "QUANTITY", "TIME"}
+)
+
+
+def _contains_phrase(text: str, phrase: str) -> bool:
+    """True when ``phrase`` occurs in ``text`` as whole words."""
+    return re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text) is not None
 
 
 @dataclass
@@ -39,24 +56,41 @@ class ConceptExtractor:
         self,
         known_concepts: set[str] | None = None,
         embedding_model=None,
+        subject_id: str | None = None,
     ):
         """
         Initialize concept extractor.
 
         Args:
-            known_concepts: Set of known concept names for matching
+            known_concepts: Set of known concept names for matching (stop concepts
+                such as "Summary" or "Data-Type" are ignored)
             embedding_model: Embedding model for similarity-based extraction
+            subject_id: Subject whose Neo4j fulltext index the fulltext strategy
+                queries (None = the default subject)
         """
-        self.known_concepts = known_concepts or set()
+        self.known_concepts = self._filter_known(known_concepts or set())
+        self.subject_id = subject_id
         self._embedding_model = embedding_model
         self._spacy_nlp: object | None = None
+        self._spacy_unavailable = False
         self._yake_extractor = None
         self._concept_embeddings: dict[str, list[float]] = {}
 
+    @staticmethod
+    def _filter_known(concepts: set[str]) -> set[str]:
+        """Drop markup/structural stop concepts from a known-concept set."""
+        return {concept for concept in concepts if not is_stop_concept(concept)}
+
     @property
     def spacy_nlp(self):
-        """Lazy-load spaCy model."""
-        if self._spacy_nlp is None:
+        """
+        Lazy-load a spaCy model, or None when spaCy or its models are unavailable.
+
+        Tries ``en_core_sci_sm`` then ``en_core_web_sm``. A failed load is remembered,
+        so the NER strategy degrades to returning no matches without retrying (and
+        warning) on every call.
+        """
+        if self._spacy_nlp is None and not self._spacy_unavailable:
             try:
                 import spacy
 
@@ -67,8 +101,9 @@ class ConceptExtractor:
                     self._spacy_nlp = spacy.load("en_core_web_sm")
                     logger.info("Using en_core_web_sm (install en_core_sci_sm for better results)")
             except Exception as e:
-                logger.warning(f"spaCy not available: {e}")
+                logger.warning(f"spaCy not available, NER concept extraction disabled: {e}")
                 self._spacy_nlp = None
+                self._spacy_unavailable = True
         return self._spacy_nlp
 
     @property
@@ -95,8 +130,8 @@ class ConceptExtractor:
         return self._embedding_model
 
     def set_known_concepts(self, concepts: set[str]):
-        """Update the set of known concepts."""
-        self.known_concepts = concepts
+        """Update the set of known concepts (stop concepts are ignored)."""
+        self.known_concepts = self._filter_known(concepts)
         # Clear cached embeddings
         self._concept_embeddings = {}
 
@@ -133,7 +168,8 @@ class ConceptExtractor:
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
 
-        # Sort by score and limit
+        # Drop stop concepts (e.g. a fulltext hit on "Summary"), then sort and limit
+        matches = [match for match in matches if not is_stop_concept(match.name)]
         matches.sort(key=lambda m: m.score, reverse=True)
         return matches[:top_k]
 
@@ -148,12 +184,15 @@ class ConceptExtractor:
 
         # Extract named entities
         for ent in doc.ents:
-            # Filter to likely educational entities
-            if ent.label_ in ("ORG", "PRODUCT", "EVENT", "WORK_OF_ART", "LAW"):
+            # Dates, amounts and ordinals never name a concept; events ("the Civil
+            # War") and laws ("the Stamp Act") often do.
+            if ent.label_ in _NON_CONCEPT_ENTITY_LABELS:
                 continue
 
             # Check if entity matches a known concept
             ent_text = ent.text.strip()
+            if is_stop_concept(ent_text):
+                continue
             matched_concept = self._match_to_known(ent_text)
 
             if matched_concept:
@@ -169,7 +208,7 @@ class ConceptExtractor:
         # Also extract noun chunks as potential concepts
         for chunk in doc.noun_chunks:
             chunk_text = chunk.text.strip()
-            if len(chunk_text) < 3:
+            if len(chunk_text) < 3 or is_stop_concept(chunk_text):
                 continue
 
             matched_concept = self._match_to_known(chunk_text)
@@ -193,6 +232,8 @@ class ConceptExtractor:
             keywords = self.yake_extractor.extract_keywords(text)
 
             for keyword, yake_score in keywords:
+                if is_stop_concept(keyword):
+                    continue
                 # YAKE scores are lower = better, normalize to 0-1
                 normalized_score = 1.0 / (1.0 + yake_score)
 
@@ -258,14 +299,15 @@ class ConceptExtractor:
         return matches
 
     def _extract_fulltext(self, text: str) -> list[ConceptMatch]:
-        """Extract concepts using Neo4j fulltext search."""
+        """Extract concepts using the subject's Neo4j fulltext index."""
         matches = []
 
         try:
-            from backend.app.kg.neo4j_adapter import Neo4jAdapter
+            from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-            adapter = Neo4jAdapter()
-            adapter.connect()
+            # Shared, subject-prefixed adapter (labels and fulltext index name);
+            # it belongs to the adapter registry, so it is not closed here.
+            adapter = get_neo4j_adapter(self.subject_id)
 
             # Extract potential keywords from text for fulltext search
             keywords = self._get_search_terms(text)
@@ -284,18 +326,21 @@ class ConceptExtractor:
                             )
                         )
 
-            adapter.close()
-
         except Exception as e:
             logger.warning(f"Fulltext extraction failed: {e}")
 
         return self._deduplicate(matches)
 
     def _extract_ensemble(self, text: str) -> list[ConceptMatch]:
-        """Combine all extraction strategies with score fusion."""
+        """
+        Fuse the NER and YAKE strategies.
+
+        A concept found by both gets a 20% score boost. The embedding and fulltext
+        strategies are not included (they need a model or a database).
+        """
         all_matches: dict[str, list[ConceptMatch]] = {}
 
-        # Run all strategies
+        # Run the NER and YAKE strategies
         for strategy_fn in [self._extract_ner, self._extract_yake]:
             try:
                 for match in strategy_fn(text):
@@ -325,16 +370,34 @@ class ConceptExtractor:
         return fused_matches
 
     def _match_to_known(self, text: str) -> str | None:
-        """Match text to a known concept (case-insensitive)."""
-        text_lower = text.lower()
+        """
+        Match a text span to a known concept (case-insensitive, whole words).
 
+        An exact match wins; otherwise the longest known concept contained in the
+        span ("the Stamp Act of 1765" -> "Stamp Act"), then the shortest known
+        concept containing the span. Matching is on word boundaries, so "act" does
+        not match inside "fact", and ties are broken alphabetically so the result
+        does not depend on set iteration order.
+        """
+        text_lower = text.lower().strip()
+        if not text_lower:
+            return None
+
+        contained: list[str] = []
+        containing: list[str] = []
         for concept in self.known_concepts:
-            if concept.lower() == text_lower:
+            concept_lower = concept.lower()
+            if concept_lower == text_lower:
                 return concept
-            # Also check if text contains the concept
-            if concept.lower() in text_lower or text_lower in concept.lower():
-                return concept
+            if _contains_phrase(text_lower, concept_lower):
+                contained.append(concept)
+            elif _contains_phrase(concept_lower, text_lower):
+                containing.append(concept)
 
+        if contained:
+            return min(contained, key=lambda c: (-len(c), c))
+        if containing:
+            return min(containing, key=lambda c: (len(c), c))
         return None
 
     def _ensure_concept_embeddings(self):
