@@ -87,8 +87,8 @@ test.describe('Graph Page — Integration', () => {
     // Click the "Fit to view" button
     await page.getByRole('button', { name: 'Fit to view' }).click();
 
-    // No error banner should appear
-    const errorBanner = page.locator('.bg-yellow-50.border.border-yellow-200');
+    // No error message should appear
+    const errorBanner = page.getByRole('main').getByRole('alert');
     // If present, it means an error happened — we expect it NOT to be visible
     // (or to not exist at all after a successful fit)
     await expect(errorBanner).not.toBeVisible({ timeout: 3_000 });

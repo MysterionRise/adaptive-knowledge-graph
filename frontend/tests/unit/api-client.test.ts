@@ -2,42 +2,42 @@
 import { TextEncoder, TextDecoder } from 'util';
 Object.assign(global, { TextEncoder, TextDecoder });
 
-// Use var to avoid temporal dead zone — jest.mock is hoisted above const/let declarations
-var mockGet: jest.Mock;
-var mockPost: jest.Mock;
-var mockAxiosInstance: any;
+import { AxiosError } from 'axios';
+import ApiClient, {
+  buildApiHeaders,
+  DEFAULT_TIMEOUT_MS,
+  LLM_TIMEOUT_MS,
+  STREAM_IDLE_TIMEOUT_MS,
+} from '@/lib/api-client';
+import { ApiError, isAbortError } from '@/lib/api-errors';
+import { MockApi, json, pending } from './helpers/mockApi';
 
-jest.mock('axios', () => {
-  mockGet = jest.fn();
-  mockPost = jest.fn();
-  mockAxiosInstance = {
-    get: mockGet,
-    post: mockPost,
-    interceptors: {
-      response: { use: jest.fn() },
-      request: { use: jest.fn() },
-    },
-  };
-  return {
-    __esModule: true,
-    default: {
-      create: jest.fn(() => mockAxiosInstance),
-    },
-  };
-});
-
-import axios from 'axios';
-import ApiClient, { buildApiHeaders } from '@/lib/api-client';
+const BASE_URL = 'http://localhost:8000';
 
 describe('ApiClient', () => {
+  const api = new MockApi();
   let client: ApiClient;
 
   beforeEach(() => {
-    jest.clearAllMocks();
     delete process.env.NEXT_PUBLIC_API_KEY;
-    (axios.create as jest.Mock).mockReturnValue(mockAxiosInstance);
-    client = new ApiClient('http://localhost:8000');
+    api.reset();
+    client = new ApiClient(BASE_URL, { adapter: api.adapter });
   });
+
+  afterEach(() => {
+    expect(api.unexpected).toEqual([]);
+  });
+
+  /** The error a promise rejects with. */
+  async function rejection(promise: Promise<unknown>): Promise<ApiError> {
+    try {
+      await promise;
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiError);
+      return error as ApiError;
+    }
+    throw new Error('Expected the request to fail');
+  }
 
   describe('API key headers', () => {
     it('builds headers without API key by default', () => {
@@ -55,632 +55,554 @@ describe('ApiClient', () => {
       });
     });
 
-    it('configures axios with the optional API key header', () => {
+    it('sends the API key with every request', async () => {
       process.env.NEXT_PUBLIC_API_KEY = 'demo-key';
+      const keyedClient = new ApiClient(BASE_URL, { adapter: api.adapter });
+      api.on('GET /api/v1/student/profile', json({ mastery_levels: {} }));
 
-      new ApiClient('http://localhost:8000');
+      await keyedClient.getStudentProfile();
 
-      expect(axios.create).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            'X-API-Key': 'demo-key',
-          }),
-        })
-      );
+      const { headers } = api.calls('GET /api/v1/student/profile')[0].config;
+      expect(headers['X-API-Key']).toBe('demo-key');
+    });
+
+    it('sends no API key header when none is configured', async () => {
+      api.on('GET /api/v1/subjects', json({ subjects: [], default_subject: 'us_history' }));
+
+      await client.getSubjects();
+
+      expect(api.calls('GET /api/v1/subjects')[0].config.headers['X-API-Key']).toBeUndefined();
     });
   });
 
-  describe('getGraphStats', () => {
-    it('should fetch graph statistics successfully', async () => {
-      const mockStats = {
-        concept_count: 150,
-        module_count: 42,
-        relationship_count: 320,
-      };
+  describe('knowledge graph', () => {
+    it('fetches graph statistics for a subject', async () => {
+      const stats = { concept_count: 150, module_count: 42, relationship_count: 320 };
+      api.on('GET /api/v1/graph/stats', json(stats));
 
-      mockGet.mockResolvedValue({ data: mockStats });
+      await expect(client.getGraphStats('economics')).resolves.toEqual(stats);
 
-      const stats = await client.getGraphStats();
-      expect(stats).toEqual(mockStats);
+      const [request] = api.calls('GET /api/v1/graph/stats');
+      expect(request.params.get('subject')).toBe('economics');
+      expect(request.config.timeout).toBe(DEFAULT_TIMEOUT_MS);
     });
 
-    it('should propagate error when API fails', async () => {
-      mockGet.mockRejectedValue(new Error('Network error'));
+    it('omits the subject parameter when no subject is given', async () => {
+      api.on('GET /api/v1/graph/stats', json({}));
 
-      await expect(client.getGraphStats()).rejects.toThrow('Network error');
+      await client.getGraphStats();
+
+      expect(api.calls('GET /api/v1/graph/stats')[0].params.has('subject')).toBe(false);
+    });
+
+    it('fetches graph data with the default limit', async () => {
+      const graph = { nodes: [{ data: { id: 'n1', label: 'A', importance: 0.9 } }], edges: [] };
+      api.on('GET /api/v1/graph/data', json(graph));
+
+      await expect(client.getGraphData()).resolves.toEqual(graph);
+
+      const [request] = api.calls('GET /api/v1/graph/data');
+      expect(request.params.get('limit')).toBe('100');
+      expect(request.params.has('subject')).toBe(false);
+    });
+
+    it('passes the limit and subject for graph data', async () => {
+      api.on('GET /api/v1/graph/data', json({ nodes: [], edges: [] }));
+
+      await client.getGraphData(50, 'us_history');
+
+      const [request] = api.calls('GET /api/v1/graph/data');
+      expect(request.params.get('limit')).toBe('50');
+      expect(request.params.get('subject')).toBe('us_history');
+    });
+
+    it('fetches the top concepts of a subject', async () => {
+      const concepts = [{ name: 'Photosynthesis', score: 0.95 }];
+      api.on('GET /api/v1/concepts/top', json(concepts));
+
+      await expect(client.getTopConceptsForSubject(6, 'biology')).resolves.toEqual(concepts);
+
+      const [request] = api.calls('GET /api/v1/concepts/top');
+      expect(request.params.get('limit')).toBe('6');
+      expect(request.params.get('subject')).toBe('biology');
+    });
+
+    it('reports top-concept failures instead of returning an empty list', async () => {
+      api.on('GET /api/v1/concepts/top', json({ detail: 'Database connection failed' }, 503));
+
+      const error = await rejection(client.getTopConceptsForSubject(6, 'us_history'));
+
+      expect(error.status).toBe(503);
+      expect(error.message).toBe('Database connection failed');
+    });
+
+    it('fetches the learning path of a concept', async () => {
+      const path = { target_concept: 'Civil War', prerequisites: [], total_concepts: 1 };
+      api.on('GET /api/v1/learning-path/Civil%20War%20%2F%20Reconstruction', json(path));
+
+      await expect(
+        client.getLearningPath('Civil War / Reconstruction', 4, 'us_history')
+      ).resolves.toEqual(path);
+
+      const [request] = api.calls('GET /api/v1/learning-path/Civil%20War%20%2F%20Reconstruction');
+      expect(request.params.get('max_depth')).toBe('4');
+      expect(request.params.get('subject')).toBe('us_history');
     });
   });
 
-  describe('askQuestion', () => {
-    it('should send question and receive response', async () => {
-      const mockResponse = {
-        question: 'What is photosynthesis?',
-        answer: 'Photosynthesis is...',
-        sources: [],
-        expanded_concepts: ['Photosynthesis', 'Chloroplast'],
-        retrieved_count: 5,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax Biology 2e',
-      };
+  describe('questions', () => {
+    it('asks a question with default options and the LLM timeout', async () => {
+      const answer = { question: 'What is X?', answer: 'X is...', sources: [] };
+      api.on('POST /api/v1/ask', json(answer));
 
-      mockPost.mockResolvedValue({ data: mockResponse });
+      await expect(client.askQuestion({ question: 'What is X?' }, 'biology')).resolves.toEqual(answer);
 
-      const response = await client.askQuestion({
-        question: 'What is photosynthesis?',
+      const [request] = api.calls('POST /api/v1/ask');
+      expect(request.body).toEqual({
+        question: 'What is X?',
         use_kg_expansion: true,
         top_k: 5,
+        subject: 'biology',
       });
+      expect(request.config.timeout).toBe(LLM_TIMEOUT_MS);
+      expect(LLM_TIMEOUT_MS).toBeGreaterThan(DEFAULT_TIMEOUT_MS);
+    });
 
-      expect(response).toEqual(mockResponse);
-      expect(response.expanded_concepts).toContain('Photosynthesis');
+    it('sends the KG expansion setting and top_k', async () => {
+      api.on('POST /api/v1/ask', json({}));
+
+      await client.askQuestion({ question: 'Why?', use_kg_expansion: false, top_k: 3 });
+
+      expect(api.calls('POST /api/v1/ask')[0].body).toEqual(
+        expect.objectContaining({ use_kg_expansion: false, top_k: 3 })
+      );
     });
   });
 
-  describe('health check', () => {
-    it('should return true when API is healthy', async () => {
-      mockGet.mockResolvedValue({ data: { status: 'ok' } });
+  describe('quizzes and recommendations', () => {
+    const quiz = { id: 'q', title: 'Quiz', questions: [] };
 
-      const isHealthy = await client.healthCheck();
-      expect(isHealthy).toBe(true);
+    it('generates a quiz with the LLM timeout', async () => {
+      api.on('POST /api/v1/quiz/generate', json(quiz));
+
+      await expect(client.generateQuiz('Photosynthesis', 5, 'biology')).resolves.toEqual(quiz);
+
+      const [request] = api.calls('POST /api/v1/quiz/generate');
+      expect(Object.fromEntries(request.params)).toEqual({
+        topic: 'Photosynthesis',
+        num_questions: '5',
+        subject: 'biology',
+      });
+      expect(request.config.timeout).toBe(LLM_TIMEOUT_MS);
     });
 
-    it('should return false when API is down', async () => {
-      mockGet.mockRejectedValue(new Error('Connection refused'));
+    it('generates an adaptive quiz with three questions by default', async () => {
+      api.on('POST /api/v1/quiz/generate-adaptive', json({ ...quiz, adapted: true }));
 
-      const isHealthy = await client.healthCheck();
-      expect(isHealthy).toBe(false);
+      await client.generateAdaptiveQuiz('The Civil War');
+
+      const [request] = api.calls('POST /api/v1/quiz/generate-adaptive');
+      expect(Object.fromEntries(request.params)).toEqual({
+        topic: 'The Civil War',
+        num_questions: '3',
+      });
+      expect(request.config.timeout).toBe(LLM_TIMEOUT_MS);
     });
-  });
 
-  // ==========================================================================
-  // New test groups for previously untested methods
-  // ==========================================================================
-
-  describe('getGraphData', () => {
-    it('should fetch graph data with default params', async () => {
-      const mockData = {
-        nodes: [
-          { data: { id: 'n1', label: 'Photosynthesis', importance: 0.9 } },
-          { data: { id: 'n2', label: 'Chloroplast', importance: 0.7 } },
-        ],
-        edges: [
-          { data: { id: 'e1', source: 'n1', target: 'n2', type: 'RELATES_TO', label: 'occurs in' } },
-        ],
+    it('posts quiz results for recommendations', async () => {
+      const recommendations = { path_type: 'advancement', score_pct: 100, remediation: [], advancement: [], summary: 'Done' };
+      api.on('POST /api/v1/quiz/recommendations', json(recommendations));
+      const body = {
+        topic: 'The Civil War',
+        question_results: [{ question_id: 'q1', related_concept: 'Slavery', correct: true }],
+        student_id: 'default',
+        subject: 'us_history',
       };
 
-      mockGet.mockResolvedValue({ data: mockData });
+      await expect(client.getQuizRecommendations(body)).resolves.toEqual(recommendations);
 
-      const result = await client.getGraphData();
-      expect(result).toEqual(mockData);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/graph/data', {
-        params: { limit: 100 },
-      });
-    });
-
-    it('should pass custom limit and subject params', async () => {
-      const mockData = { nodes: [], edges: [] };
-      mockGet.mockResolvedValue({ data: mockData });
-
-      const result = await client.getGraphData(50, 'us_history');
-      expect(result).toEqual(mockData);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/graph/data', {
-        params: { limit: 50, subject: 'us_history' },
-      });
+      const [request] = api.calls('POST /api/v1/quiz/recommendations');
+      expect(request.body).toEqual(body);
+      expect(request.config.timeout).toBe(LLM_TIMEOUT_MS);
     });
   });
 
-  describe('getTopConcepts', () => {
-    it('should fetch top concepts successfully', async () => {
-      const mockConcepts = [
-        { name: 'Photosynthesis', score: 0.95, is_key_term: true, frequency: 12 },
-        { name: 'Chloroplast', score: 0.8, is_key_term: false, frequency: 7 },
-      ];
+  describe('student profile', () => {
+    it('loads the profile', async () => {
+      const profile = { student_id: 'default', overall_ability: 0.3, mastery_levels: { A: 0.5 }, updated_at: 'now' };
+      api.on('GET /api/v1/student/profile', json(profile));
 
-      mockGet.mockResolvedValue({ data: mockConcepts });
-
-      const result = await client.getTopConcepts(10);
-      expect(result).toEqual(mockConcepts);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/concepts/top', {
-        params: { limit: 10 },
-      });
+      await expect(client.getStudentProfile()).resolves.toEqual(profile);
     });
 
-    it('should return empty array on error (graceful degradation)', async () => {
-      mockGet.mockRejectedValue(new Error('Server error'));
+    it('records an answer', async () => {
+      api.on('POST /api/v1/student/mastery', json({ concept: 'A', new_mastery: 0.45 }));
 
-      const result = await client.getTopConcepts();
-      expect(result).toEqual([]);
+      await client.updateStudentMastery('A', true);
+
+      expect(api.calls('POST /api/v1/student/mastery')[0].body).toEqual({ concept: 'A', correct: true });
     });
-  });
 
-  describe('getBaseURL', () => {
-    it('should return the configured base URL', () => {
-      expect(client.getBaseURL()).toBe('http://localhost:8000');
+    it('resets the profile', async () => {
+      api.on('POST /api/v1/student/reset', json({ student_id: 'default', mastery_levels: {} }));
+
+      await client.resetStudentProfile();
+
+      expect(api.calls('POST /api/v1/student/reset')).toHaveLength(1);
     });
   });
 
-  describe('getDemoStatus', () => {
-    it('fetches demo readiness status', async () => {
-      const mockStatus = {
-        status: 'ready',
-        positioning: 'Controlled local demo',
-        services: {},
-        subjects: [],
-        latest_eval: { status: 'ok', environment_valid: true, cases: 1, kg_successful_cases: 1, plain_successful_cases: 1 },
-        script_readiness: {},
-        next_actions: [],
-      };
-      mockGet.mockResolvedValue({ data: mockStatus });
-
-      const result = await client.getDemoStatus();
-
-      expect(result).toEqual(mockStatus);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/demo/status');
-    });
-  });
-
-  describe('getSubjects', () => {
-    it('should fetch available subjects', async () => {
-      const mockResponse = {
-        subjects: [
-          { id: 'us_history', name: 'US History', description: 'US History course', is_default: true },
-          { id: 'biology', name: 'Biology', description: 'Biology course', is_default: false },
-        ],
+  describe('subjects and demo status', () => {
+    it('fetches the subjects', async () => {
+      const subjects = {
+        subjects: [{ id: 'us_history', name: 'US History', description: '', is_default: true, available: true }],
         default_subject: 'us_history',
       };
+      api.on('GET /api/v1/subjects', json(subjects));
 
-      mockGet.mockResolvedValue({ data: mockResponse });
+      await expect(client.getSubjects()).resolves.toEqual(subjects);
+    });
 
-      const result = await client.getSubjects();
-      expect(result).toEqual(mockResponse);
-      expect(result.subjects).toHaveLength(2);
-      expect(result.default_subject).toBe('us_history');
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/subjects');
+    it('fetches the theme of a subject', async () => {
+      const theme = { subject_id: 'us_history', primary_color: '#1a237e', chapter_colors: {} };
+      api.on('GET /api/v1/subjects/us_history/theme', json(theme));
+
+      await expect(client.getSubjectTheme('us_history')).resolves.toEqual(theme);
+    });
+
+    it('fetches the demo status', async () => {
+      const status = { status: 'ready', services: {} };
+      api.on('GET /api/v1/demo/status', json(status));
+
+      await expect(client.getDemoStatus()).resolves.toEqual(status);
     });
   });
 
-  describe('getSubjectTheme', () => {
-    it('should fetch theme for a specific subject', async () => {
-      const mockTheme = {
-        subject_id: 'us_history',
-        primary_color: '#1a237e',
-        secondary_color: '#283593',
-        accent_color: '#448aff',
-        chapter_colors: { 'Chapter 1': '#e53935', 'Chapter 2': '#43a047' },
-      };
-
-      mockGet.mockResolvedValue({ data: mockTheme });
-
-      const result = await client.getSubjectTheme('us_history');
-      expect(result).toEqual(mockTheme);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/subjects/us_history/theme');
-    });
-  });
-
-  describe('getSubjectDetail', () => {
-    it('should fetch detail for a specific subject', async () => {
-      const mockDetail = {
-        id: 'us_history',
-        name: 'US History',
-        description: 'American History course materials',
-        attribution: 'OpenStax US History',
-        opensearch_index: 'kg_chunks_us_history',
-        book_count: 2,
-        is_default: true,
-      };
-
-      mockGet.mockResolvedValue({ data: mockDetail });
-
-      const result = await client.getSubjectDetail('us_history');
-      expect(result).toEqual(mockDetail);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/subjects/us_history');
-    });
-  });
-
-  describe('generateQuiz', () => {
-    it('should generate quiz with topic, numQuestions, and subject', async () => {
-      const mockQuiz = {
-        topic: 'Photosynthesis',
-        questions: [
-          {
-            question: 'What is the primary pigment in photosynthesis?',
-            options: ['Chlorophyll', 'Carotene', 'Xanthophyll', 'Phycocyanin'],
-            correct_answer: 0,
-          },
-        ],
-      };
-
-      mockPost.mockResolvedValue({ data: mockQuiz });
-
-      const result = await client.generateQuiz('Photosynthesis', 5, 'biology');
-      expect(result).toEqual(mockQuiz);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/quiz/generate', null, {
-        params: { topic: 'Photosynthesis', num_questions: 5, subject: 'biology' },
-      });
-    });
-
-    it('should use default numQuestions when not specified', async () => {
-      const mockQuiz = { topic: 'Civil War', questions: [] };
-      mockPost.mockResolvedValue({ data: mockQuiz });
-
-      await client.generateQuiz('Civil War');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/quiz/generate', null, {
-        params: { topic: 'Civil War', num_questions: 3 },
-      });
-    });
-  });
-
-  describe('askQuestionStream', () => {
-    let originalFetch: typeof global.fetch;
-
-    beforeEach(() => {
-      originalFetch = global.fetch;
-    });
-
-    afterEach(() => {
-      global.fetch = originalFetch;
-    });
-
-    it('should call onMetadata when metadata event is received', async () => {
-      const onMetadata = jest.fn();
-      const onToken = jest.fn();
-      const onDone = jest.fn();
-
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: {"type":"metadata","sources":[],"expanded_concepts":["A"]}\n'),
-          })
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: [DONE]\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
-      });
-
-      await client.askQuestionStream(
-        { question: 'What is X?' },
-        undefined,
-        { onMetadata, onToken, onDone }
-      );
-
-      expect(onMetadata).toHaveBeenCalledWith({
-        type: 'metadata',
-        sources: [],
-        expanded_concepts: ['A'],
-      });
-      expect(onDone).toHaveBeenCalled();
-      expect(onToken).not.toHaveBeenCalled();
-      expect(mockReader.releaseLock).toHaveBeenCalled();
-    });
-
-    it('should call onToken for each token event', async () => {
-      const onToken = jest.fn();
-      const onDone = jest.fn();
-
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: {"type":"token","content":"Hello"}\n'),
-          })
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: {"type":"token","content":" world"}\n'),
-          })
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: [DONE]\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
-      });
-
-      await client.askQuestionStream(
-        { question: 'Hello?' },
-        undefined,
-        { onToken, onDone }
-      );
-
-      expect(onToken).toHaveBeenCalledTimes(2);
-      expect(onToken).toHaveBeenNthCalledWith(1, 'Hello');
-      expect(onToken).toHaveBeenNthCalledWith(2, ' world');
-      expect(onDone).toHaveBeenCalled();
-    });
-
-    it('should call onDone when [DONE] is received', async () => {
-      const onDone = jest.fn();
-
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: [DONE]\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
-      });
-
-      await client.askQuestionStream(
-        { question: 'Test' },
-        undefined,
-        { onDone }
-      );
-
-      expect(onDone).toHaveBeenCalledTimes(1);
-    });
-
-    it('should call onError when response is not ok', async () => {
-      const onError = jest.fn();
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: jest.fn().mockResolvedValue('Internal Server Error'),
-      });
-
-      await client.askQuestionStream(
-        { question: 'Fail?' },
-        undefined,
-        { onError }
-      );
-
-      expect(onError).toHaveBeenCalledWith('Internal Server Error');
-    });
-
-    it('should call onError with HTTP status when error text is empty', async () => {
-      const onError = jest.fn();
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-        text: jest.fn().mockResolvedValue(''),
-      });
-
-      await client.askQuestionStream(
-        { question: 'Fail?' },
-        undefined,
-        { onError }
-      );
-
-      expect(onError).toHaveBeenCalledWith('HTTP 503');
-    });
-
-    it('should call onError when response body is null', async () => {
-      const onError = jest.fn();
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: null,
-      });
-
-      await client.askQuestionStream(
-        { question: 'No body?' },
-        undefined,
-        { onError }
-      );
-
-      expect(onError).toHaveBeenCalledWith('No response body');
-    });
-
-    it('should parse multiple SSE events from a single chunk', async () => {
-      const onMetadata = jest.fn();
-      const onToken = jest.fn();
-      const onDone = jest.fn();
-
-      const multiLineChunk =
-        'data: {"type":"metadata","sources":[]}\n' +
-        'data: {"type":"token","content":"Hi"}\n' +
-        'data: {"type":"token","content":"!"}\n' +
-        'data: [DONE]\n';
-
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode(multiLineChunk),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
-      });
-
-      await client.askQuestionStream(
-        { question: 'Multi?' },
-        undefined,
-        { onMetadata, onToken, onDone }
-      );
-
-      expect(onMetadata).toHaveBeenCalledWith({ type: 'metadata', sources: [] });
-      expect(onToken).toHaveBeenCalledTimes(2);
-      expect(onToken).toHaveBeenNthCalledWith(1, 'Hi');
-      expect(onToken).toHaveBeenNthCalledWith(2, '!');
-      expect(onDone).toHaveBeenCalledTimes(1);
-    });
-
-    it('should send correct payload including subject via fetch', async () => {
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: [DONE]\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
-      });
-
-      await client.askQuestionStream(
-        { question: 'What happened?', use_kg_expansion: false, top_k: 3 },
-        'us_history',
-        { onDone: jest.fn() }
-      );
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/v1/ask/stream',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: 'What happened?',
-            use_kg_expansion: false,
-            top_k: 3,
-            subject: 'us_history',
-          }),
-          signal: undefined,
-        }
-      );
-    });
-
-    it('should include API key header for streaming requests when configured', async () => {
-      process.env.NEXT_PUBLIC_API_KEY = 'stream-key';
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: [DONE]\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
-      });
-
-      await client.askQuestionStream(
-        { question: 'Protected stream?' },
-        undefined,
-        { onDone: jest.fn() }
-      );
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/v1/ask/stream',
-        expect.objectContaining({
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': 'stream-key',
-          },
-        })
-      );
-    });
-
-    it('should pass abort signal to fetch', async () => {
+  describe('cancellation', () => {
+    it('passes the AbortSignal and reports an aborted request', async () => {
+      api.on('GET /api/v1/graph/data', () => pending());
       const controller = new AbortController();
 
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: [DONE]\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
+      const request = client.getGraphData(100, 'us_history', { signal: controller.signal });
+      controller.abort();
+      const error = await rejection(request);
 
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
-      });
+      expect(error.kind).toBe('aborted');
+      expect(isAbortError(error)).toBe(true);
+      expect(api.calls('GET /api/v1/graph/data')[0].config.signal).toBe(controller.signal);
+    });
+  });
 
-      await client.askQuestionStream(
-        { question: 'Abort test' },
-        undefined,
-        { onDone: jest.fn() },
-        controller.signal
+  describe('errors', () => {
+    it.each([
+      [404, { detail: 'Subject not found' }, 'Subject not found'],
+      [503, { detail: 'LLM service temporarily unavailable' }, 'LLM service temporarily unavailable'],
+      [502, { detail: 'The language model returned an invalid quiz' }, 'The language model returned an invalid quiz'],
+      [429, { detail: 'Rate limit exceeded: 30 per 1 minute', error: 'Rate limit exceeded', retry_after: '60' }, 'Rate limit exceeded: 30 per 1 minute'],
+    ])('exposes the backend detail of a %s response', async (status, body, message) => {
+      api.on('POST /api/v1/ask', json(body, status));
+
+      const error = await rejection(client.askQuestion({ question: 'Why?' }));
+
+      expect(error).toMatchObject({ kind: 'http', status, detail: message, message });
+    });
+
+    it('turns validation errors into a readable message', async () => {
+      api.on(
+        'POST /api/v1/ask',
+        json(
+          {
+            detail: [
+              {
+                loc: ['body', 'question'],
+                msg: 'Value error, question must not contain HTML or script markup',
+                type: 'value_error',
+              },
+            ],
+          },
+          422
+        )
       );
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ signal: controller.signal })
+      const error = await rejection(client.askQuestion({ question: '<b>Why?</b>' }));
+
+      expect(error.status).toBe(422);
+      expect(error.message).toBe('question: question must not contain HTML or script markup');
+    });
+
+    it('falls back to a status message when the error has no detail', async () => {
+      api.on('GET /api/v1/graph/stats', { status: 500, data: '<html>Internal Server Error</html>' });
+
+      const error = await rejection(client.getGraphStats());
+
+      expect(error.detail).toBeNull();
+      expect(error.message).toBe('The server could not complete the request (HTTP 500).');
+    });
+
+    it('reports an unreachable backend', async () => {
+      api.on('GET /api/v1/subjects', (request) => {
+        throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, request.config);
+      });
+
+      const error = await rejection(client.getSubjects());
+
+      expect(error.kind).toBe('network');
+      expect(error.status).toBeNull();
+      expect(error.message).toBe(
+        'Could not reach the API at http://localhost:8000. Check that the backend is running.'
       );
     });
 
-    it('should call onDone when reader ends without [DONE] marker', async () => {
-      const onDone = jest.fn();
-      const onToken = jest.fn();
-
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: {"type":"token","content":"partial"}\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
-
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        body: { getReader: () => mockReader },
+    it('reports a timeout with its duration', async () => {
+      api.on('POST /api/v1/ask', (request) => {
+        throw new AxiosError('timeout exceeded', AxiosError.ECONNABORTED, request.config);
       });
 
-      await client.askQuestionStream(
-        { question: 'Incomplete stream' },
-        undefined,
-        { onToken, onDone }
-      );
+      const error = await rejection(client.askQuestion({ question: 'Why?' }));
 
-      expect(onToken).toHaveBeenCalledWith('partial');
-      expect(onDone).toHaveBeenCalledTimes(1);
+      expect(error.kind).toBe('timeout');
+      expect(error.message).toBe(
+        `The server did not respond within ${LLM_TIMEOUT_MS / 1000} seconds.`
+      );
     });
+  });
+});
 
-    it('should skip malformed JSON in SSE data', async () => {
-      const onToken = jest.fn();
-      const onDone = jest.fn();
-      const onError = jest.fn();
+// =============================================================================
+// Streaming answers
+// =============================================================================
 
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: {broken json}\ndata: {"type":"token","content":"ok"}\ndata: [DONE]\n'),
-          })
-          .mockResolvedValueOnce({ done: true, value: undefined }),
-        releaseLock: jest.fn(),
-      };
+interface MockReader {
+  read: jest.Mock;
+  releaseLock: jest.Mock;
+}
 
-      global.fetch = jest.fn().mockResolvedValue({
+/** A reader returning the given SSE chunks, then the end of the stream. */
+function readerFor(...chunks: string[]): MockReader {
+  const read = jest.fn();
+  for (const chunk of chunks) {
+    read.mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(chunk) });
+  }
+  read.mockResolvedValue({ done: true, value: undefined });
+  return { read, releaseLock: jest.fn() };
+}
+
+const sse = (event: unknown) => `data: ${typeof event === 'string' ? event : JSON.stringify(event)}\n\n`;
+
+describe('ApiClient.askQuestionStream', () => {
+  const originalFetch = global.fetch;
+  const fetchMock = jest.fn();
+  let client: ApiClient;
+
+  beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_API_KEY;
+    fetchMock.mockReset();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    client = new ApiClient(BASE_URL);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    global.fetch = originalFetch;
+  });
+
+  const respondWith = (reader: MockReader) =>
+    fetchMock.mockResolvedValue({ ok: true, status: 200, body: { getReader: () => reader } });
+
+  /** A stream that delivers nothing until its request is aborted. */
+  const respondWithSilentStream = () =>
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      Promise.resolve({
         ok: true,
-        body: { getReader: () => mockReader },
-      });
+        status: 200,
+        body: {
+          getReader: () => ({
+            read: () =>
+              new Promise((_resolve, reject) => {
+                const abort = () =>
+                  reject(new DOMException('The operation was aborted.', 'AbortError'));
+                if (init.signal?.aborted) abort();
+                else init.signal?.addEventListener('abort', abort);
+              }),
+            releaseLock: jest.fn(),
+          }),
+        },
+      })
+    );
 
-      await client.askQuestionStream(
-        { question: 'Malformed?' },
-        undefined,
-        { onToken, onDone, onError }
-      );
+  async function streamRejection(promise: Promise<unknown>): Promise<ApiError> {
+    try {
+      await promise;
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiError);
+      return error as ApiError;
+    }
+    throw new Error('Expected the stream to fail');
+  }
 
-      expect(onError).not.toHaveBeenCalled();
-      expect(onToken).toHaveBeenCalledWith('ok');
-      expect(onDone).toHaveBeenCalledTimes(1);
+  it('delivers the metadata and the answer tokens', async () => {
+    const reader = readerFor(
+      sse({ type: 'metadata', sources: [], expanded_concepts: ['A'] }),
+      sse({ type: 'token', content: 'Hello' }) + sse({ type: 'token', content: ' world' }),
+      sse('[DONE]')
+    );
+    respondWith(reader);
+    const onMetadata = jest.fn();
+    const onToken = jest.fn();
+
+    await client.askQuestionStream({ question: 'Hi?' }, 'us_history', { onMetadata, onToken });
+
+    expect(onMetadata).toHaveBeenCalledWith({ type: 'metadata', sources: [], expanded_concepts: ['A'] });
+    expect(onToken.mock.calls).toEqual([['Hello'], [' world']]);
+    expect(reader.releaseLock).toHaveBeenCalled();
+  });
+
+  it('reassembles events split across chunks', async () => {
+    respondWith(readerFor('data: {"type":"tok', 'en","content":"Hi"}\n', sse('[DONE]')));
+    const onToken = jest.fn();
+
+    await client.askQuestionStream({ question: 'Hi?' }, undefined, { onToken });
+
+    expect(onToken).toHaveBeenCalledWith('Hi');
+  });
+
+  it('stops reading at [DONE]', async () => {
+    const reader = readerFor(sse('[DONE]'), sse({ type: 'token', content: 'ignored' }));
+    respondWith(reader);
+    const onToken = jest.fn();
+
+    await client.askQuestionStream({ question: 'Hi?' }, undefined, { onToken });
+
+    expect(onToken).not.toHaveBeenCalled();
+    expect(reader.read).toHaveBeenCalledTimes(1);
+  });
+
+  it('finishes when the stream ends without [DONE]', async () => {
+    respondWith(readerFor(sse({ type: 'token', content: 'partial' })));
+    const onToken = jest.fn();
+
+    await expect(
+      client.askQuestionStream({ question: 'Hi?' }, undefined, { onToken })
+    ).resolves.toBeUndefined();
+    expect(onToken).toHaveBeenCalledWith('partial');
+  });
+
+  it('skips malformed events', async () => {
+    respondWith(readerFor('data: {broken json}\n' + sse({ type: 'token', content: 'ok' }) + sse('[DONE]')));
+    const onToken = jest.fn();
+
+    await client.askQuestionStream({ question: 'Hi?' }, undefined, { onToken });
+
+    expect(onToken).toHaveBeenCalledWith('ok');
+  });
+
+  it('rejects with the error event of the stream', async () => {
+    respondWith(
+      readerFor(
+        sse({ type: 'token', content: 'Part' }),
+        sse({ type: 'error', content: 'The model returned an empty answer' }),
+        sse('[DONE]')
+      )
+    );
+    const onToken = jest.fn();
+
+    const error = await streamRejection(
+      client.askQuestionStream({ question: 'Hi?' }, undefined, { onToken })
+    );
+
+    expect(onToken).toHaveBeenCalledWith('Part');
+    expect(error).toMatchObject({ kind: 'stream', message: 'The model returned an empty answer' });
+  });
+
+  it('sends the question, settings and subject with the API key', async () => {
+    process.env.NEXT_PUBLIC_API_KEY = 'stream-key';
+    respondWith(readerFor(sse('[DONE]')));
+
+    await client.askQuestionStream(
+      { question: 'What happened?', use_kg_expansion: false, top_k: 3 },
+      'us_history'
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v1/ask/stream',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': 'stream-key' },
+        body: JSON.stringify({
+          question: 'What happened?',
+          use_kg_expansion: false,
+          top_k: 3,
+          subject: 'us_history',
+        }),
+        signal: expect.any(AbortSignal),
+      })
+    );
+  });
+
+  it.each([
+    ['a JSON detail', JSON.stringify({ detail: 'LLM service temporarily unavailable' }), 'LLM service temporarily unavailable'],
+    ['plain text', 'LLM service temporarily unavailable', 'LLM service temporarily unavailable'],
+    ['no body', '', 'The server could not complete the request (HTTP 503).'],
+  ])('reports an HTTP error with %s', async (_label, body, message) => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503, text: async () => body });
+
+    const error = await streamRejection(client.askQuestionStream({ question: 'Hi?' }));
+
+    expect(error).toMatchObject({ kind: 'http', status: 503, message });
+  });
+
+  it('reports a response without a body', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, body: null });
+
+    const error = await streamRejection(client.askQuestionStream({ question: 'Hi?' }));
+
+    expect(error).toMatchObject({ kind: 'network', message: 'The server sent an empty response.' });
+  });
+
+  it('reports an unreachable backend', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const error = await streamRejection(client.askQuestionStream({ question: 'Hi?' }));
+
+    expect(error.kind).toBe('network');
+  });
+
+  it('is cancelled by the caller signal', async () => {
+    respondWithSilentStream();
+    const controller = new AbortController();
+
+    const stream = client.askQuestionStream({ question: 'Hi?' }, undefined, {}, controller.signal);
+    await Promise.resolve();
+    controller.abort();
+    const error = await streamRejection(stream);
+
+    expect(isAbortError(error)).toBe(true);
+  });
+
+  it('does not start when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const error = await streamRejection(
+      client.askQuestionStream({ question: 'Hi?' }, undefined, {}, controller.signal)
+    );
+
+    expect(error.kind).toBe('aborted');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('times out when no data arrives', async () => {
+    jest.useFakeTimers();
+    respondWithSilentStream();
+
+    const stream = client.askQuestionStream({ question: 'Hi?' });
+    const failure = streamRejection(stream);
+    await jest.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS);
+    const error = await failure;
+
+    expect(error).toMatchObject({
+      kind: 'timeout',
+      message: `The server did not respond within ${STREAM_IDLE_TIMEOUT_MS / 1000} seconds.`,
     });
   });
 });

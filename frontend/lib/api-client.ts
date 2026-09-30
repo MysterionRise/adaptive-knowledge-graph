@@ -1,30 +1,80 @@
 /**
- * API Client for the Adaptive Knowledge Graph backend.
- * Handles all HTTP requests to the FastAPI backend.
+ * API client for the Adaptive Knowledge Graph backend.
+ *
+ * Every HTTP request the frontend makes goes through this module:
+ * - one base URL (`NEXT_PUBLIC_API_URL`) and the optional `X-API-Key` header,
+ * - a timeout on every request, with a longer one for endpoints that wait for the LLM,
+ * - `AbortSignal` support, so components can cancel requests they no longer need,
+ * - one error type, `ApiError`, whose message is the backend's `detail` when there is one.
+ *
+ * JSON endpoints use axios; the streaming answer endpoint uses `fetch`, which exposes the
+ * response body as a stream.
  */
 
-import axios, { AxiosInstance } from 'axios';
+import axios, { type AxiosAdapter, type AxiosInstance } from 'axios';
+import {
+  ABORTED_MESSAGE,
+  ApiError,
+  extractErrorDetail,
+  messageForStatus,
+  networkErrorMessage,
+  timeoutMessage,
+} from './api-errors';
 import type {
+  AdaptiveQuiz,
   DemoStatusResponse,
+  GraphData,
   GraphStats,
+  LearningPathResponse,
+  MasteryUpdateResponse,
   QuestionRequest,
   QuestionResponse,
-  GraphData,
-  TopConcept,
-  HealthResponse,
+  Quiz,
+  RecommendationRequest,
+  RecommendationResponse,
+  StreamMetadata,
+  StudentProfileResponse,
   SubjectListResponse,
   SubjectTheme,
-  SubjectDetailResponse,
+  TopConcept,
 } from './types';
 
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_PREFIX = '/api/v1';
 const API_KEY_HEADER = 'X-API-Key';
 
+/** Timeout for regular requests. */
+export const DEFAULT_TIMEOUT_MS = 30_000;
 /**
- * Build API headers, including the optional demo API key when configured.
+ * Timeout for endpoints that wait for the LLM (answers, quiz generation, recommendations).
+ * A local model on a CPU can need a minute or more per answer, and Ollama queues concurrent
+ * requests (the comparison page sends two at once), so 30 s is far too short for them.
  */
-export function buildApiHeaders(
-  headers: Record<string, string> = {}
-): Record<string, string> {
+export const LLM_TIMEOUT_MS = 180_000;
+/** An answer stream fails when no data arrives for this long. */
+export const STREAM_IDLE_TIMEOUT_MS = 120_000;
+
+/** Options accepted by every request method. */
+export interface RequestOptions {
+  signal?: AbortSignal;
+}
+
+export interface StreamCallbacks {
+  /** First event: sources, expanded concepts, model and attribution. */
+  onMetadata?: (metadata: StreamMetadata) => void;
+  /** Each generated answer token. */
+  onToken?: (token: string) => void;
+}
+
+export interface ApiClientOptions {
+  /** Replaces the axios transport (tests answer requests without a network). */
+  adapter?: AxiosAdapter;
+}
+
+/**
+ * Build API headers, including the optional API key when `NEXT_PUBLIC_API_KEY` is configured.
+ */
+export function buildApiHeaders(headers: Record<string, string> = {}): Record<string, string> {
   const apiKey = process.env.NEXT_PUBLIC_API_KEY || '';
   if (!apiKey) return headers;
   return {
@@ -33,76 +83,67 @@ export function buildApiHeaders(
   };
 }
 
+const subjectParam = (subject?: string) => (subject ? { subject } : {});
+
+function toApiError(error: unknown, baseURL: string): ApiError {
+  if (error instanceof ApiError) return error;
+  if (axios.isCancel(error)) return new ApiError('aborted', ABORTED_MESSAGE, { cause: error });
+  if (axios.isAxiosError(error)) {
+    if (error.response) {
+      const { status, data } = error.response;
+      const detail = extractErrorDetail(data);
+      return new ApiError('http', detail ?? messageForStatus(status), {
+        status,
+        detail,
+        cause: error,
+      });
+    }
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return new ApiError('timeout', timeoutMessage(error.config?.timeout), { cause: error });
+    }
+  }
+  return new ApiError('network', networkErrorMessage(baseURL), { cause: error });
+}
+
 /**
- * API Client class for interacting with the backend.
+ * API client class for interacting with the backend.
  */
 class ApiClient {
-  private client: AxiosInstance;
-  private baseURL: string;
-  private apiPrefix: string = '/api/v1';
+  private readonly http: AxiosInstance;
 
-  constructor(baseURL?: string) {
-    this.baseURL = baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-    this.client = axios.create({
-      baseURL: this.baseURL,
-      timeout: 30000, // 30 second timeout
-      headers: buildApiHeaders({
-        'Content-Type': 'application/json',
-      }),
+  constructor(
+    private readonly baseURL: string = API_BASE_URL,
+    options: ApiClientOptions = {}
+  ) {
+    this.http = axios.create({
+      baseURL: `${baseURL}${API_PREFIX}`,
+      timeout: DEFAULT_TIMEOUT_MS,
+      headers: buildApiHeaders({ 'Content-Type': 'application/json' }),
+      ...(options.adapter ? { adapter: options.adapter } : {}),
     });
 
-    // Response interceptor for error handling
-    this.client.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response) {
-          // Server responded with error status
-          console.error('API Error:', error.response.status, error.response.data);
-        } else if (error.request) {
-          // Request made but no response
-          console.error('Network Error: No response from server');
-        } else {
-          // Error in request setup
-          console.error('Request Error:', error.message);
-        }
-        return Promise.reject(error);
-      }
+    // Callers get an ApiError for every failure. Nothing is logged here: the caller decides
+    // whether a failure is shown to the user or is worth a console message.
+    this.http.interceptors.response.use(undefined, (error: unknown) =>
+      Promise.reject(toApiError(error, this.baseURL))
     );
   }
+
+  // ==========================================================================
+  // Knowledge graph
+  // ==========================================================================
 
   /**
    * Get graph statistics (concept count, module count, relationship count).
    *
    * @param subject - Subject ID (e.g., 'us_history', 'biology')
    */
-  async getGraphStats(subject?: string): Promise<GraphStats> {
-    const response = await this.client.get<GraphStats>(`${this.apiPrefix}/graph/stats`, {
-      params: subject ? { subject } : undefined,
+  async getGraphStats(subject?: string, { signal }: RequestOptions = {}): Promise<GraphStats> {
+    const { data } = await this.http.get<GraphStats>('/graph/stats', {
+      params: subjectParam(subject),
+      signal,
     });
-    return response.data;
-  }
-
-  /**
-   * Ask a question using KG-aware RAG.
-   *
-   * @param request - Question request with question text and optional parameters
-   * @param subject - Subject ID (e.g., 'us_history', 'biology')
-   * @returns Question response with answer, sources, and metadata
-   */
-  async askQuestion(request: QuestionRequest, subject?: string): Promise<QuestionResponse> {
-    const payload = {
-      question: request.question,
-      use_kg_expansion: request.use_kg_expansion ?? true,
-      top_k: request.top_k ?? 5,
-      subject: subject,
-    };
-
-    const response = await this.client.post<QuestionResponse>(
-      `${this.apiPrefix}/ask`,
-      payload
-    );
-    return response.data;
+    return data;
   }
 
   /**
@@ -110,237 +151,310 @@ class ApiClient {
    *
    * @param limit - Maximum number of concepts to return (default: 100)
    * @param subject - Subject ID (e.g., 'us_history', 'biology')
-   * @returns Graph data with nodes and edges
    */
-  async getGraphData(limit: number = 100, subject?: string): Promise<GraphData> {
-    const response = await this.client.get<GraphData>(`${this.apiPrefix}/graph/data`, {
-      params: { limit, ...(subject && { subject }) },
+  async getGraphData(
+    limit: number = 100,
+    subject?: string,
+    { signal }: RequestOptions = {}
+  ): Promise<GraphData> {
+    const { data } = await this.http.get<GraphData>('/graph/data', {
+      params: { limit, ...subjectParam(subject) },
+      signal,
     });
-    return response.data;
+    return data;
   }
 
   /**
-   * Get top concepts by importance score.
-   *
-   * @param limit - Maximum number of concepts to return (default: 20)
-   * @returns Array of top concepts
-   */
-  async getTopConcepts(limit: number = 20): Promise<TopConcept[]> {
-    return this.getTopConceptsForSubject(limit);
-  }
-
-  /**
-   * Get top concepts by importance score, optionally scoped to a subject.
+   * Get the most important concepts of a subject.
    */
   async getTopConceptsForSubject(
     limit: number = 20,
-    subject?: string
+    subject?: string,
+    { signal }: RequestOptions = {}
   ): Promise<TopConcept[]> {
-    try {
-      const response = await this.client.get<TopConcept[]>(`${this.apiPrefix}/concepts/top`, {
-        params: { limit, ...(subject && { subject }) },
-      });
-      return response.data;
-    } catch (error) {
-      console.warn('Failed to fetch top concepts:', error);
-      return [];
-    }
+    const { data } = await this.http.get<TopConcept[]>('/concepts/top', {
+      params: { limit, ...subjectParam(subject) },
+      signal,
+    });
+    return data;
   }
 
   /**
-   * Health check endpoint to verify backend is available.
-   *
-   * @returns true if backend is healthy, false otherwise
-   */
-  async healthCheck(): Promise<boolean> {
-    try {
-      const response = await this.client.get<HealthResponse>('/health');
-      return response.data.status === 'healthy' || response.data.status === 'ok';
-    } catch (error) {
-      console.warn('Health check failed:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get the base URL of the API.
-   */
-  getBaseURL(): string {
-    return this.baseURL;
-  }
-
-  /**
-   * Get client-demo readiness status.
-   */
-  async getDemoStatus(): Promise<DemoStatusResponse> {
-    const response = await this.client.get<DemoStatusResponse>(
-      `${this.apiPrefix}/demo/status`
-    );
-    return response.data;
-  }
-
-  /**
-   * Get a prerequisite learning path for a concept.
+   * Get the prerequisite chain of a concept.
    */
   async getLearningPath(
     conceptName: string,
     maxDepth: number = 5,
-    subject?: string
-  ): Promise<any> {
-    const response = await this.client.get(
-      `${this.apiPrefix}/learning-path/${encodeURIComponent(conceptName)}`,
-      {
-        params: { max_depth: maxDepth, ...(subject && { subject }) },
-      }
+    subject?: string,
+    { signal }: RequestOptions = {}
+  ): Promise<LearningPathResponse> {
+    const { data } = await this.http.get<LearningPathResponse>(
+      `/learning-path/${encodeURIComponent(conceptName)}`,
+      { params: { max_depth: maxDepth, ...subjectParam(subject) }, signal }
     );
-    return response.data;
+    return data;
   }
 
   // ==========================================================================
-  // Subject Management
+  // Questions and answers
   // ==========================================================================
 
   /**
-   * Get all available subjects.
+   * Ask a question using KG-aware RAG (waits for the complete answer).
    *
-   * @returns List of subjects with default subject indicated
-   */
-  async getSubjects(): Promise<SubjectListResponse> {
-    const response = await this.client.get<SubjectListResponse>(`${this.apiPrefix}/subjects`);
-    return response.data;
-  }
-
-  /**
-   * Get theme for a specific subject.
-   *
-   * @param subjectId - Subject identifier
-   * @returns Theme configuration with colors
-   */
-  async getSubjectTheme(subjectId: string): Promise<SubjectTheme> {
-    const response = await this.client.get<SubjectTheme>(
-      `${this.apiPrefix}/subjects/${subjectId}/theme`
-    );
-    return response.data;
-  }
-
-  /**
-   * Get detailed information about a subject.
-   *
-   * @param subjectId - Subject identifier
-   * @returns Subject detail information
-   */
-  async getSubjectDetail(subjectId: string): Promise<SubjectDetailResponse> {
-    const response = await this.client.get<SubjectDetailResponse>(
-      `${this.apiPrefix}/subjects/${subjectId}`
-    );
-    return response.data;
-  }
-
-  /**
-   * Generate a quiz for a topic.
-   *
-   * @param topic - Topic to generate quiz for
-   * @param numQuestions - Number of questions (default: 3)
+   * @param request - Question request with question text and optional parameters
    * @param subject - Subject ID (e.g., 'us_history', 'biology')
    */
-  async generateQuiz(topic: string, numQuestions: number = 3, subject?: string): Promise<any> {
-    const response = await this.client.post(`${this.apiPrefix}/quiz/generate`, null, {
-      params: { topic, num_questions: numQuestions, ...(subject && { subject }) },
-    });
-    return response.data;
+  async askQuestion(
+    request: QuestionRequest,
+    subject?: string,
+    { signal }: RequestOptions = {}
+  ): Promise<QuestionResponse> {
+    const { data } = await this.http.post<QuestionResponse>(
+      '/ask',
+      this.questionPayload(request, subject),
+      { timeout: LLM_TIMEOUT_MS, signal }
+    );
+    return data;
   }
 
   /**
-   * Ask a question with SSE streaming response.
+   * Ask a question and stream the answer (server-sent events).
    *
-   * Returns an object with metadata and a ReadableStream of tokens.
-   * The first SSE event contains metadata (sources, expanded_concepts),
-   * subsequent events contain answer tokens.
-   *
-   * @param request - Question request
-   * @param subject - Subject ID
-   * @param onToken - Callback for each token
-   * @param onMetadata - Callback for metadata (sources, concepts, etc.)
-   * @param onDone - Callback when streaming is complete
-   * @param onError - Callback on error
+   * The first event carries the metadata (sources, expanded concepts), then answer tokens
+   * follow. The promise resolves when the answer is complete and rejects with an `ApiError`
+   * when the request fails, the stream reports an error, no data arrives for
+   * `STREAM_IDLE_TIMEOUT_MS`, or `signal` aborts.
    */
   async askQuestionStream(
     request: QuestionRequest,
     subject?: string,
-    callbacks?: {
-      onToken?: (token: string) => void;
-      onMetadata?: (metadata: any) => void;
-      onDone?: () => void;
-      onError?: (error: string) => void;
-    },
+    callbacks: StreamCallbacks = {},
     signal?: AbortSignal
   ): Promise<void> {
-    const payload = {
+    if (signal?.aborted) throw new ApiError('aborted', ABORTED_MESSAGE);
+
+    // Aborted by the caller's signal or by the idle timer.
+    const controller = new AbortController();
+    const abortFromCaller = () => controller.abort();
+    signal?.addEventListener('abort', abortFromCaller);
+
+    let timedOut = false;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const restartIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, STREAM_IDLE_TIMEOUT_MS);
+    };
+
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      restartIdleTimer();
+      const response = await fetch(`${this.baseURL}${API_PREFIX}/ask/stream`, {
+        method: 'POST',
+        headers: buildApiHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(this.questionPayload(request, subject)),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const detail = extractErrorDetail(await response.text().catch(() => ''));
+        throw new ApiError('http', detail ?? messageForStatus(response.status), {
+          status: response.status,
+          detail,
+        });
+      }
+
+      reader = response.body?.getReader();
+      if (!reader) throw new ApiError('network', 'The server sent an empty response.');
+
+      const streamError = await this.readAnswerStream(reader, callbacks, restartIdleTimer);
+      if (streamError !== null) {
+        throw new ApiError('stream', streamError, { detail: streamError });
+      }
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (timedOut) throw new ApiError('timeout', timeoutMessage(STREAM_IDLE_TIMEOUT_MS), { cause: error });
+      if (controller.signal.aborted) throw new ApiError('aborted', ABORTED_MESSAGE, { cause: error });
+      throw new ApiError('network', networkErrorMessage(this.baseURL), { cause: error });
+    } finally {
+      clearTimeout(idleTimer);
+      signal?.removeEventListener('abort', abortFromCaller);
+      reader?.releaseLock();
+    }
+  }
+
+  /** Read SSE events until `[DONE]`; returns the stream's error message, if it sent one. */
+  private async readAnswerStream(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    { onMetadata, onToken }: StreamCallbacks,
+    onData: () => void
+  ): Promise<string | null> {
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let streamError: string | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return streamError;
+      onData();
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+
+        const payload = trimmed.slice('data:'.length).trim();
+        if (payload === '[DONE]') return streamError;
+
+        let event: { type?: unknown; content?: unknown };
+        try {
+          event = JSON.parse(payload);
+        } catch {
+          continue; // Skip malformed events
+        }
+        if (event.type === 'metadata') {
+          onMetadata?.(event as StreamMetadata);
+        } else if (event.type === 'token' && typeof event.content === 'string') {
+          onToken?.(event.content);
+        } else if (event.type === 'error') {
+          streamError =
+            typeof event.content === 'string' && event.content.trim()
+              ? event.content
+              : 'The answer could not be generated.';
+        }
+      }
+    }
+  }
+
+  private questionPayload(request: QuestionRequest, subject?: string) {
+    return {
       question: request.question,
       use_kg_expansion: request.use_kg_expansion ?? true,
       top_k: request.top_k ?? 5,
-      subject: subject,
+      subject,
     };
+  }
 
-    const response = await fetch(`${this.baseURL}${this.apiPrefix}/ask/stream`, {
-      method: 'POST',
-      headers: buildApiHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload),
+  // ==========================================================================
+  // Quizzes and recommendations
+  // ==========================================================================
+
+  /**
+   * Generate a quiz with mixed difficulty for a topic.
+   */
+  async generateQuiz(
+    topic: string,
+    numQuestions: number = 3,
+    subject?: string,
+    { signal }: RequestOptions = {}
+  ): Promise<Quiz> {
+    const { data } = await this.http.post<Quiz>('/quiz/generate', null, {
+      params: { topic, num_questions: numQuestions, ...subjectParam(subject) },
+      timeout: LLM_TIMEOUT_MS,
       signal,
     });
+    return data;
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      callbacks?.onError?.(errorText || `HTTP ${response.status}`);
-      return;
-    }
+  /**
+   * Generate a quiz whose difficulty targets the learner's mastery of the topic.
+   */
+  async generateAdaptiveQuiz(
+    topic: string,
+    numQuestions: number = 3,
+    subject?: string,
+    { signal }: RequestOptions = {}
+  ): Promise<AdaptiveQuiz> {
+    const { data } = await this.http.post<AdaptiveQuiz>('/quiz/generate-adaptive', null, {
+      params: { topic, num_questions: numQuestions, ...subjectParam(subject) },
+      timeout: LLM_TIMEOUT_MS,
+      signal,
+    });
+    return data;
+  }
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      callbacks?.onError?.('No response body');
-      return;
-    }
+  /**
+   * Get remediation and advancement recommendations for a finished quiz.
+   */
+  async getQuizRecommendations(
+    request: RecommendationRequest,
+    { signal }: RequestOptions = {}
+  ): Promise<RecommendationResponse> {
+    const { data } = await this.http.post<RecommendationResponse>(
+      '/quiz/recommendations',
+      request,
+      { timeout: LLM_TIMEOUT_MS, signal }
+    );
+    return data;
+  }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
+  // ==========================================================================
+  // Student profile
+  // ==========================================================================
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+  async getStudentProfile({ signal }: RequestOptions = {}): Promise<StudentProfileResponse> {
+    const { data } = await this.http.get<StudentProfileResponse>('/student/profile', { signal });
+    return data;
+  }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+  /**
+   * Record an answer; the backend returns the updated mastery estimate for the concept.
+   */
+  async updateStudentMastery(
+    concept: string,
+    correct: boolean,
+    { signal }: RequestOptions = {}
+  ): Promise<MasteryUpdateResponse> {
+    const { data } = await this.http.post<MasteryUpdateResponse>(
+      '/student/mastery',
+      { concept, correct },
+      { signal }
+    );
+    return data;
+  }
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data: ')) continue;
+  async resetStudentProfile({ signal }: RequestOptions = {}): Promise<StudentProfileResponse> {
+    const { data } = await this.http.post<StudentProfileResponse>('/student/reset', null, {
+      signal,
+    });
+    return data;
+  }
 
-          const dataStr = trimmed.slice(6);
-          if (dataStr === '[DONE]') {
-            callbacks?.onDone?.();
-            return;
-          }
+  // ==========================================================================
+  // Subjects and demo status
+  // ==========================================================================
 
-          try {
-            const data = JSON.parse(dataStr);
-            if (data.type === 'metadata') {
-              callbacks?.onMetadata?.(data);
-            } else if (data.type === 'token') {
-              callbacks?.onToken?.(data.content);
-            } else if (data.type === 'error') {
-              callbacks?.onError?.(data.content);
-            }
-          } catch {
-            // Skip malformed JSON
-          }
-        }
-      }
-      callbacks?.onDone?.();
-    } finally {
-      reader.releaseLock();
-    }
+  /**
+   * Get all configured subjects and the default subject.
+   */
+  async getSubjects({ signal }: RequestOptions = {}): Promise<SubjectListResponse> {
+    const { data } = await this.http.get<SubjectListResponse>('/subjects', { signal });
+    return data;
+  }
+
+  /**
+   * Get the colour theme of a subject.
+   */
+  async getSubjectTheme(subjectId: string, { signal }: RequestOptions = {}): Promise<SubjectTheme> {
+    const { data } = await this.http.get<SubjectTheme>(
+      `/subjects/${encodeURIComponent(subjectId)}/theme`,
+      { signal }
+    );
+    return data;
+  }
+
+  /**
+   * Get the readiness of the local demo stack.
+   */
+  async getDemoStatus({ signal }: RequestOptions = {}): Promise<DemoStatusResponse> {
+    const { data } = await this.http.get<DemoStatusResponse>('/demo/status', { signal });
+    return data;
   }
 }
 

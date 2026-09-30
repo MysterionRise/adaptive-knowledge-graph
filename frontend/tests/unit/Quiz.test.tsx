@@ -1,6 +1,7 @@
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import Quiz from '@/components/Quiz';
 import { useAppStore } from '@/lib/store';
+import { json, mockApi, pending, type MockApiHandler } from './helpers/mockApi';
 
 // Mock the router
 const mockPush = jest.fn();
@@ -12,6 +13,20 @@ jest.mock('next/navigation', () => ({
     back: jest.fn(),
   }),
 }));
+
+// The quiz and the store use the real API client, answered by the routed mock backend
+// ("<METHOD> <path>"), so background requests (profile load on mount, per-answer mastery
+// sync) can never consume a response meant for another request.
+jest.mock('@/lib/api-client', () => {
+  const actual = jest.requireActual('@/lib/api-client');
+  return {
+    ...actual,
+    __esModule: true,
+    apiClient: new actual.default('http://localhost:8000', {
+      adapter: (config: unknown) => require('./helpers/mockApi').mockApi.adapter(config),
+    }),
+  };
+});
 
 // Mock MasteryIndicator component
 jest.mock('@/components/MasteryIndicator', () => {
@@ -28,31 +43,26 @@ jest.mock('@/components/MasteryIndicator', () => {
 
 // Mock PostQuizRecommendations component
 jest.mock('@/components/PostQuizRecommendations', () => {
-  return function MockPostQuizRecommendations() {
-    return <div data-testid="post-quiz-recommendations" />;
+  return function MockPostQuizRecommendations({ recommendations, isLoading, error, onRetry, onPractice }: any) {
+    return (
+      <div data-testid="post-quiz-recommendations">
+        {isLoading && <span>Loading recommendations</span>}
+        {error && <span data-testid="recommendations-error">{error}</span>}
+        {error && onRetry && <button onClick={onRetry}>Retry recommendations</button>}
+        {recommendations && <span>{recommendations.summary}</span>}
+        <button onClick={() => onPractice('colonial america')}>Practice listed topic</button>
+        <button onClick={() => onPractice('Stamp Act')}>Practice unlisted topic</button>
+      </div>
+    );
   };
 });
 
-// The real LearningPath loads its data through the axios API client, which would open a real
-// connection to localhost:8000 (30 s timeout) and keep Jest alive after the suite finishes.
+// The learning path has its own tests
 jest.mock('@/components/LearningPath', () => {
   return function MockLearningPath({ conceptName }: { conceptName: string }) {
     return <div data-testid="learning-path">{conceptName}</div>;
   };
 });
-
-// ---------------------------------------------------------------------------
-// fetch mock, routed by "<METHOD> <pathname>" so that background requests (profile load on
-// mount, per-answer mastery sync) can never consume a response meant for another request.
-// ---------------------------------------------------------------------------
-
-type MockResponse = {
-  ok: boolean;
-  status: number;
-  json: () => Promise<unknown>;
-  text: () => Promise<string>;
-};
-type RouteHandler = (url: URL, init?: RequestInit) => MockResponse | Promise<MockResponse>;
 
 const PROFILE = 'GET /api/v1/student/profile';
 const MASTERY = 'POST /api/v1/student/mastery';
@@ -61,26 +71,19 @@ const GENERATE_ADAPTIVE = 'POST /api/v1/quiz/generate-adaptive';
 const GENERATE = 'POST /api/v1/quiz/generate';
 const RECOMMENDATIONS = 'POST /api/v1/quiz/recommendations';
 
-const jsonResponse = (body: unknown, status = 200): MockResponse => ({
-  ok: status >= 200 && status < 300,
-  status,
-  json: async () => body,
-  text: async () => JSON.stringify(body),
-});
-
-const profileResponse = (masteryLevels: Record<string, number> = {}) =>
-  jsonResponse({
+const profileReply = (masteryLevels: Record<string, number> = {}) =>
+  json({
     student_id: 'default',
     overall_ability: 0.3,
     mastery_levels: masteryLevels,
     updated_at: '2026-01-01T00:00:00Z',
   });
 
-const defaultRoutes: Record<string, RouteHandler> = {
-  [PROFILE]: () => profileResponse(),
-  [MASTERY]: (_url, init) => {
-    const { concept, correct } = JSON.parse(String(init?.body));
-    return jsonResponse({
+const defaultRoutes: Record<string, MockApiHandler> = {
+  [PROFILE]: () => profileReply(),
+  [MASTERY]: ({ body }) => {
+    const { concept, correct } = body as { concept: string; correct: boolean };
+    return json({
       concept,
       previous_mastery: 0.3,
       new_mastery: correct ? 0.45 : 0.2,
@@ -89,7 +92,7 @@ const defaultRoutes: Record<string, RouteHandler> = {
     });
   },
   [RECOMMENDATIONS]: () =>
-    jsonResponse({
+    json({
       path_type: 'advancement',
       score_pct: 100,
       remediation: [],
@@ -98,33 +101,19 @@ const defaultRoutes: Record<string, RouteHandler> = {
     }),
 };
 
-const routeKey = (input: unknown, init?: RequestInit) =>
-  `${init?.method ?? 'GET'} ${new URL(String(input)).pathname}`;
-
-const fetchMock = jest.fn();
-const originalFetch = global.fetch;
-let unexpectedRequests: string[] = [];
-
 /** Serve the default routes plus `routes`; any other request is recorded and rejected. */
-function mockBackend(routes: Record<string, RouteHandler> = {}) {
-  const handlers = { ...defaultRoutes, ...routes };
-  fetchMock.mockImplementation(async (input: unknown, init?: RequestInit) => {
-    const key = routeKey(input, init);
-    const handler = handlers[key];
-    if (!handler) {
-      unexpectedRequests.push(key);
-      throw new Error(`Unexpected request: ${key}`);
-    }
-    return handler(new URL(String(input)), init);
-  });
+function mockBackend(routes: Record<string, MockApiHandler> = {}) {
+  mockApi.reset();
+  for (const [route, handler] of Object.entries({ ...defaultRoutes, ...routes })) {
+    mockApi.on(route, handler);
+  }
 }
 
-const callsTo = (route: string) =>
-  fetchMock.mock.calls.filter(([input, init]) => routeKey(input, init) === route);
+const callsTo = (route: string) => mockApi.calls(route);
 
 /** Render the quiz and let the profile request it fires on mount settle. */
-async function renderQuiz() {
-  const utils = render(<Quiz />);
+async function renderQuiz(ui = <Quiz />) {
+  const utils = render(ui);
   await waitFor(() => expect(callsTo(PROFILE)).toHaveLength(1));
   await waitFor(() => expect(useAppStore.getState().isSyncing).toBe(false));
   return utils;
@@ -134,29 +123,54 @@ async function renderQuiz() {
 const waitForMasterySync = () =>
   waitFor(() => expect(useAppStore.getState().isSyncing).toBe(false));
 
-// The adaptive-mode toggle is an unlabeled <button> next to the "Adaptive Mode" label.
-function getAdaptiveToggle(): HTMLElement {
-  const toggle = screen.getByText('Adaptive Mode').closest('div')?.parentElement?.querySelector('button');
-  if (!toggle) throw new Error('Adaptive mode toggle not found');
-  return toggle;
+const getAdaptiveToggle = () => screen.getByRole('switch', { name: 'Adaptive Mode' });
+const topicSelect = () => screen.getByRole('combobox', { name: 'Topic' });
+
+const singleQuestionQuiz = {
+  id: 'quiz-1',
+  title: 'Test Quiz',
+  questions: [
+    {
+      id: 'q1',
+      text: 'Single question?',
+      options: [
+        { id: 'a', text: 'Correct' },
+        { id: 'b', text: 'Wrong' },
+      ],
+      correct_option_id: 'a',
+      explanation: 'Explanation here.',
+      difficulty: 'easy',
+    },
+  ],
+  student_mastery: 0.3,
+  target_difficulty: 'easy',
+  adapted: true,
+};
+
+/** Start the quiz, answer the single question correctly and open the results. */
+async function completeQuiz(ui = <Quiz />) {
+  await renderQuiz(ui);
+
+  fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+  await screen.findByText('Single question?');
+
+  fireEvent.click(screen.getByText('Correct'));
+  fireEvent.click(screen.getByText('Submit Answer'));
+  await screen.findByText('Finish Quiz');
+  await waitForMasterySync();
+
+  fireEvent.click(screen.getByText('Finish Quiz'));
+  await screen.findByText('Great Job!');
+  // Let the recommendations request settle before interacting with the dialog
+  await waitFor(() => expect(callsTo(RECOMMENDATIONS)).toHaveLength(1));
 }
 
 // Reset store between tests
 const initialStoreState = useAppStore.getState();
 
-beforeAll(() => {
-  global.fetch = fetchMock as unknown as typeof fetch;
-});
-
-afterAll(() => {
-  global.fetch = originalFetch;
-});
-
 describe('Quiz Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    fetchMock.mockReset();
-    unexpectedRequests = [];
     useAppStore.setState(initialStoreState);
     mockBackend();
   });
@@ -164,24 +178,22 @@ describe('Quiz Component', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
-    expect(unexpectedRequests).toEqual([]);
+    expect(mockApi.unexpected).toEqual([]);
   });
 
   describe('Initial State', () => {
     it('renders the start assessment form', async () => {
       await renderQuiz();
 
-      expect(screen.getByText('Start Assessment')).toBeInTheDocument();
-      expect(screen.getByText('Adaptive Mode')).toBeInTheDocument();
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Start Assessment' })).toBeInTheDocument();
+      expect(getAdaptiveToggle()).toBeInTheDocument();
+      expect(topicSelect()).toBeInTheDocument();
     });
 
     it('shows topic dropdown with options', async () => {
       await renderQuiz();
 
-      const select = screen.getByRole('combobox');
-      expect(select).toHaveValue('The American Revolution');
-
+      expect(topicSelect()).toHaveValue('The American Revolution');
       expect(screen.getByText('The Constitution')).toBeInTheDocument();
       expect(screen.getByText('The Civil War')).toBeInTheDocument();
     });
@@ -189,9 +201,10 @@ describe('Quiz Component', () => {
     it('has adaptive mode enabled by default', async () => {
       await renderQuiz();
 
-      expect(
-        screen.getByText('Questions will be tailored to your current proficiency level')
-      ).toBeInTheDocument();
+      expect(getAdaptiveToggle()).toHaveAttribute('aria-checked', 'true');
+      expect(getAdaptiveToggle()).toHaveAccessibleDescription(
+        'Questions will be tailored to your current proficiency level'
+      );
     });
 
     it('shows mastery indicator when adaptive mode is on', async () => {
@@ -205,6 +218,16 @@ describe('Quiz Component', () => {
 
       expect(callsTo(PROFILE)).toHaveLength(1);
     });
+
+    it('shows when the progress cannot be synced with the server', async () => {
+      mockBackend({ [PROFILE]: () => json({ detail: 'Missing or invalid API key' }, 401) });
+
+      await renderQuiz();
+
+      expect(
+        screen.getByText('Your progress could not be synced with the server: Missing or invalid API key')
+      ).toBeInTheDocument();
+    });
   });
 
   describe('Adaptive Mode Toggle', () => {
@@ -212,9 +235,11 @@ describe('Quiz Component', () => {
       await renderQuiz();
 
       fireEvent.click(getAdaptiveToggle());
+      expect(getAdaptiveToggle()).toHaveAttribute('aria-checked', 'false');
       expect(screen.getByText('Questions will have mixed difficulty levels')).toBeInTheDocument();
 
       fireEvent.click(getAdaptiveToggle());
+      expect(getAdaptiveToggle()).toHaveAttribute('aria-checked', 'true');
       expect(
         screen.getByText('Questions will be tailored to your current proficiency level')
       ).toBeInTheDocument();
@@ -228,6 +253,50 @@ describe('Quiz Component', () => {
       fireEvent.click(getAdaptiveToggle());
 
       expect(screen.getByText('Generate Assessment')).toBeInTheDocument();
+    });
+  });
+
+  describe('Mastery Display', () => {
+    it('shows the mastery of the selected topic', async () => {
+      mockBackend({ [PROFILE]: () => profileReply({ 'The Constitution': 0.8 }) });
+      await renderQuiz();
+
+      expect(screen.getByTestId('topic-value')).toHaveTextContent('The American Revolution');
+      expect(screen.getByTestId('mastery-value')).toHaveTextContent('30%');
+
+      fireEvent.change(topicSelect(), { target: { value: 'The Constitution' } });
+
+      expect(screen.getByTestId('topic-value')).toHaveTextContent('The Constitution');
+      expect(screen.getByTestId('mastery-value')).toHaveTextContent('80%');
+      expect(screen.getByTestId('difficulty-value')).toHaveTextContent('hard');
+    });
+
+    it('shows the mastery of a custom topic', async () => {
+      mockBackend({ [PROFILE]: () => profileReply({ 'Manifest Destiny': 0.5 }) });
+      await renderQuiz();
+
+      fireEvent.change(topicSelect(), { target: { value: '__custom__' } });
+      fireEvent.change(screen.getByRole('textbox', { name: 'Custom topic' }), {
+        target: { value: 'Manifest Destiny' },
+      });
+
+      expect(screen.getByTestId('topic-value')).toHaveTextContent('Manifest Destiny');
+      expect(screen.getByTestId('mastery-value')).toHaveTextContent('50%');
+      expect(screen.getByTestId('difficulty-value')).toHaveTextContent('medium');
+    });
+
+    it('shows the selected topic after a quiz on another topic', async () => {
+      mockBackend({
+        [PROFILE]: () => profileReply({ 'The Civil War': 0.9 }),
+        [GENERATE_ADAPTIVE]: () => json(singleQuestionQuiz),
+      });
+      await completeQuiz();
+      fireEvent.click(screen.getByRole('button', { name: 'Close results' }));
+
+      fireEvent.change(topicSelect(), { target: { value: 'The Civil War' } });
+
+      expect(screen.getByTestId('topic-value')).toHaveTextContent('The Civil War');
+      expect(screen.getByTestId('mastery-value')).toHaveTextContent('90%');
     });
   });
 
@@ -270,99 +339,96 @@ describe('Quiz Component', () => {
 
     it('shows loading state when generating quiz', async () => {
       // Quiz generation never resolves, so the loading screen stays up
-      mockBackend({ [GENERATE_ADAPTIVE]: () => new Promise<MockResponse>(() => {}) });
+      mockBackend({ [GENERATE_ADAPTIVE]: () => pending() });
 
       await renderQuiz();
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Crafting Your Personalized Quiz')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Crafting Your Personalized Quiz')).toBeInTheDocument();
+      expect(screen.getByText('Generating easy-level questions...')).toBeInTheDocument();
       expect(callsTo(GENERATE_ADAPTIVE)).toHaveLength(1);
+    });
+
+    it('asks for three questions on the selected topic and subject', async () => {
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(mockQuizResponse) });
+      await renderQuiz();
+
+      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+      await screen.findByText('What year did the American Revolution begin?');
+
+      expect(Object.fromEntries(callsTo(GENERATE_ADAPTIVE)[0].params)).toEqual({
+        topic: 'The American Revolution',
+        num_questions: '3',
+        subject: 'us_history',
+      });
     });
 
     it('displays quiz after successful generation', async () => {
-      mockBackend({ [GENERATE_ADAPTIVE]: () => jsonResponse(mockQuizResponse) });
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(mockQuizResponse) });
 
       await renderQuiz();
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(screen.getByText('What year did the American Revolution begin?')).toBeInTheDocument();
+      const question = await screen.findByRole('heading', {
+        name: 'What year did the American Revolution begin?',
       });
-
       expect(screen.getByText('Question 1 of 2')).toBeInTheDocument();
       expect(screen.getByText('1775')).toBeInTheDocument();
+      // Focus moves to the question
+      expect(question).toHaveFocus();
     });
 
-    it('handles generation error gracefully', async () => {
-      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    it('shows the reason when the backend is unreachable', async () => {
       mockBackend({
-        [GENERATE_ADAPTIVE]: () => Promise.reject(new Error('Network error')),
+        [GENERATE_ADAPTIVE]: () => Promise.reject(new Error('socket hang up')),
       });
 
       await renderQuiz();
-
+      // The unexpected-request guard is not the point of this test
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(
-          screen.getByText('Failed to generate quiz. Please ensure the backend is running.')
-        ).toBeInTheDocument();
-      });
-      expect(callsTo(GENERATE_ADAPTIVE)).toHaveLength(1);
-      expect(consoleError).toHaveBeenCalledWith(
-        'Failed to generate quiz',
-        expect.objectContaining({ message: 'Network error' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Failed to generate quiz: Could not reach the API at http://localhost:8000. Check that the backend is running.'
       );
+      expect(callsTo(GENERATE_ADAPTIVE)).toHaveLength(1);
       // The form is shown again so the user can retry
       expect(screen.getByText('Start Adaptive Assessment')).toBeInTheDocument();
     });
 
-    it('shows an error when the backend responds with an HTTP error', async () => {
-      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    it('shows the backend detail of an HTTP error', async () => {
       mockBackend({
-        [GENERATE_ADAPTIVE]: () => jsonResponse({ detail: 'LLM unavailable' }, 503),
+        [GENERATE_ADAPTIVE]: () => json({ detail: 'Quiz generation service temporarily unavailable' }, 503),
       });
 
       await renderQuiz();
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(
-          screen.getByText('Failed to generate quiz. Please ensure the backend is running.')
-        ).toBeInTheDocument();
-      });
-      expect(consoleError).toHaveBeenCalledWith(
-        'Failed to generate quiz',
-        expect.objectContaining({ message: expect.stringContaining('(503)') })
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Failed to generate quiz: Quiz generation service temporarily unavailable.'
       );
     });
 
     it('shows an error when the generated quiz has no questions', async () => {
-      jest.spyOn(console, 'error').mockImplementation(() => {});
       mockBackend({
-        [GENERATE_ADAPTIVE]: () => jsonResponse({ ...mockQuizResponse, questions: [] }),
+        [GENERATE_ADAPTIVE]: () => json({ ...mockQuizResponse, questions: [] }),
       });
 
       await renderQuiz();
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(
-          screen.getByText('Failed to generate quiz. Please ensure the backend is running.')
-        ).toBeInTheDocument();
-      });
+      expect(
+        await screen.findByText('The generated quiz has no questions. Try a different topic.')
+      ).toBeInTheDocument();
     });
 
     it('requires a topic when the custom topic is empty', async () => {
       await renderQuiz();
 
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: '__custom__' } });
+      fireEvent.change(topicSelect(), { target: { value: '__custom__' } });
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
       expect(screen.getByText('Please enter a topic.')).toBeInTheDocument();
@@ -370,20 +436,30 @@ describe('Quiz Component', () => {
     });
 
     it('uses the custom topic in the API request', async () => {
-      mockBackend({ [GENERATE_ADAPTIVE]: () => jsonResponse(mockQuizResponse) });
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(mockQuizResponse) });
 
       await renderQuiz();
 
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: '__custom__' } });
-      fireEvent.change(screen.getByPlaceholderText(/Enter a topic/i), {
-        target: { value: 'Manifest Destiny' },
-      });
+      fireEvent.change(topicSelect(), { target: { value: '__custom__' } });
+      const customTopic = screen.getByPlaceholderText(/Enter a topic/i);
+      expect(customTopic).toHaveAccessibleName('Custom topic');
+      expect(customTopic).toHaveAttribute('maxLength', '200');
+      fireEvent.change(customTopic, { target: { value: '  Manifest Destiny ' } });
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(callsTo(GENERATE_ADAPTIVE)).toHaveLength(1);
-      });
-      expect(callsTo(GENERATE_ADAPTIVE)[0][0]).toContain('topic=Manifest%20Destiny');
+      await waitFor(() => expect(callsTo(GENERATE_ADAPTIVE)).toHaveLength(1));
+      expect(callsTo(GENERATE_ADAPTIVE)[0].params.get('topic')).toBe('Manifest Destiny');
+    });
+
+    it('cancels quiz generation when the session ends', async () => {
+      mockBackend({ [GENERATE_ADAPTIVE]: () => pending() });
+      const { unmount } = await renderQuiz();
+      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+      await waitFor(() => expect(callsTo(GENERATE_ADAPTIVE)).toHaveLength(1));
+
+      unmount();
+
+      expect(callsTo(GENERATE_ADAPTIVE)[0].config.signal?.aborted).toBe(true);
     });
   });
 
@@ -422,24 +498,26 @@ describe('Quiz Component', () => {
       adapted: true,
     };
 
+    const optionButton = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) });
+
     beforeEach(async () => {
-      mockBackend({ [GENERATE_ADAPTIVE]: () => jsonResponse(mockQuizResponse) });
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(mockQuizResponse) });
 
       await renderQuiz();
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Test question 1?')).toBeInTheDocument();
-      });
+      await screen.findByText('Test question 1?');
     });
 
-    it('allows selecting an answer option', () => {
-      const optionA = screen.getByText('Option A');
-      fireEvent.click(optionA);
+    it('marks the selected answer option without relying on colour alone', () => {
+      expect(optionButton('Option A')).toHaveAttribute('aria-pressed', 'false');
 
-      // The button should show selected state (blue border in actual implementation)
-      expect(optionA.closest('button')).toHaveClass('border-blue-600');
+      fireEvent.click(screen.getByText('Option A'));
+
+      expect(optionButton('Option A')).toHaveClass('border-blue-600');
+      expect(optionButton('Option A')).toHaveAttribute('aria-pressed', 'true');
+      expect(optionButton('Option B')).toHaveAttribute('aria-pressed', 'false');
     });
 
     it('enables submit button when option is selected', () => {
@@ -455,20 +533,22 @@ describe('Quiz Component', () => {
       fireEvent.click(screen.getByText('Option A'));
       fireEvent.click(screen.getByText('Submit Answer'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Correct!')).toBeInTheDocument();
-        expect(screen.getByText('Option A is correct because...')).toBeInTheDocument();
-      });
+      const feedback = await screen.findByRole('heading', { name: 'Correct!' });
+      expect(screen.getByText('Option A is correct because...')).toBeInTheDocument();
+      // Focus moves to the feedback
+      expect(feedback).toHaveFocus();
+      expect(optionButton('Option A')).toHaveAccessibleName('Option A Correct answer');
       await waitForMasterySync();
     });
 
-    it('shows incorrect feedback for wrong answer', async () => {
+    it('labels the correct answer and the learner answer after a wrong answer', async () => {
       fireEvent.click(screen.getByText('Option B'));
       fireEvent.click(screen.getByText('Submit Answer'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Concept Gap Identified')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Concept Gap Identified')).toBeInTheDocument();
+      expect(optionButton('Option A')).toHaveAccessibleName('Option A Correct answer');
+      expect(optionButton('Option B')).toHaveAccessibleName('Option B Your answer');
+      expect(optionButton('Option C')).toHaveAccessibleName('Option C');
       await waitForMasterySync();
     });
 
@@ -479,10 +559,12 @@ describe('Quiz Component', () => {
       await waitForMasterySync();
 
       expect(callsTo(MASTERY)).toHaveLength(1);
-      expect(JSON.parse(String(callsTo(MASTERY)[0][1]?.body))).toEqual({
+      expect(callsTo(MASTERY)[0].body).toEqual({
         concept: 'The American Revolution',
         correct: false,
       });
+      // The backend estimate is shown
+      expect(screen.getAllByTestId('mastery-value')[0]).toHaveTextContent('20%');
     });
 
     it('links to the tutor after a wrong answer', async () => {
@@ -501,9 +583,7 @@ describe('Quiz Component', () => {
       fireEvent.click(screen.getByText('Option A'));
       fireEvent.click(screen.getByText('Submit Answer'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Correct!')).toBeInTheDocument();
-      });
+      await screen.findByText('Correct!');
       await waitForMasterySync();
 
       expect(screen.getByText('Option B').closest('button')).toBeDisabled();
@@ -513,86 +593,50 @@ describe('Quiz Component', () => {
       fireEvent.click(screen.getByText('Option A'));
       fireEvent.click(screen.getByText('Submit Answer'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Next Question')).toBeInTheDocument();
-      });
+      await screen.findByText('Next Question');
       await waitForMasterySync();
 
       fireEvent.click(screen.getByText('Next Question'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Test question 2?')).toBeInTheDocument();
-        expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
-      });
+      expect(await screen.findByRole('heading', { name: 'Test question 2?' })).toHaveFocus();
+      expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
     });
   });
 
   describe('Quiz Results', () => {
-    const mockQuizResponse = {
-      id: 'quiz-1',
-      title: 'Test Quiz',
-      questions: [
-        {
-          id: 'q1',
-          text: 'Single question?',
-          options: [
-            { id: 'a', text: 'Correct' },
-            { id: 'b', text: 'Wrong' },
-          ],
-          correct_option_id: 'a',
-          explanation: 'Explanation here.',
-          difficulty: 'easy',
-        },
-      ],
-      student_mastery: 0.3,
-      target_difficulty: 'easy',
-      adapted: true,
-    };
-
-    /** Answer the single question correctly and open the results modal. */
-    async function completeQuiz() {
-      await renderQuiz();
-
-      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Single question?')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Correct'));
-      fireEvent.click(screen.getByText('Submit Answer'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Finish Quiz')).toBeInTheDocument();
-      });
-      await waitForMasterySync();
-
-      fireEvent.click(screen.getByText('Finish Quiz'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Great Job!')).toBeInTheDocument();
-      });
-      // Let the recommendations request settle before interacting with the modal
-      await waitFor(() => expect(callsTo(RECOMMENDATIONS)).toHaveLength(1));
-    }
-
     beforeEach(() => {
-      mockBackend({ [GENERATE_ADAPTIVE]: () => jsonResponse(mockQuizResponse) });
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(singleQuestionQuiz) });
     });
 
-    it('shows results modal after completing quiz', async () => {
+    it('shows the results in a modal dialog', async () => {
       await completeQuiz();
 
-      expect(screen.getByText('Great Job!')).toBeInTheDocument();
-      expect(screen.getByText(/100%/)).toBeInTheDocument();
-      expect(screen.getByTestId('post-quiz-recommendations')).toBeInTheDocument();
+      const dialog = screen.getByRole('dialog', { name: 'Great Job!' });
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+      expect(within(dialog).getByText('100%')).toBeInTheDocument();
+      expect(within(dialog).getByTestId('post-quiz-recommendations')).toHaveTextContent('Great work!');
+    });
+
+    it('moves focus into the dialog and keeps it there', async () => {
+      await completeQuiz();
+      const dialog = screen.getByRole('dialog');
+      const closeButton = within(dialog).getByRole('button', { name: 'Close results' });
+      const buttons = within(dialog).getAllByRole('button');
+      const lastButton = buttons[buttons.length - 1];
+
+      expect(closeButton).toHaveFocus();
+
+      fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+      expect(lastButton).toHaveFocus();
+
+      fireEvent.keyDown(document, { key: 'Tab' });
+      expect(closeButton).toHaveFocus();
     });
 
     it('requests recommendations for the answered questions', async () => {
       await completeQuiz();
 
-      const body = JSON.parse(String(callsTo(RECOMMENDATIONS)[0][1]?.body));
-      expect(body).toEqual({
+      expect(callsTo(RECOMMENDATIONS)[0].body).toEqual({
         topic: 'The American Revolution',
         question_results: [
           { question_id: 'q1', related_concept: 'The American Revolution', correct: true },
@@ -600,6 +644,27 @@ describe('Quiz Component', () => {
         student_id: 'default',
         subject: 'us_history',
       });
+    });
+
+    it('shows a recommendations error with a retry action', async () => {
+      let attempts = 0;
+      mockBackend({
+        [GENERATE_ADAPTIVE]: () => json(singleQuestionQuiz),
+        [RECOMMENDATIONS]: () =>
+          ++attempts === 1
+            ? json({ detail: 'Rate limit exceeded: 10 per 1 minute' }, 429)
+            : json({ path_type: 'advancement', score_pct: 100, remediation: [], advancement: [], summary: 'Second try' }),
+      });
+      await completeQuiz();
+
+      expect(await screen.findByTestId('recommendations-error')).toHaveTextContent(
+        'Unable to load recommendations: Rate limit exceeded: 10 per 1 minute. Your score and results are still available above.'
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry recommendations' }));
+
+      expect(await screen.findByText('Second try')).toBeInTheDocument();
+      expect(callsTo(RECOMMENDATIONS)).toHaveLength(2);
     });
 
     it('shows the learning path for the quizzed topic', async () => {
@@ -622,19 +687,85 @@ describe('Quiz Component', () => {
 
       fireEvent.click(screen.getByText('Continue Learning (Next Level)'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Start Assessment')).toBeInTheDocument();
-      });
+      expect(await screen.findByRole('heading', { name: 'Start Assessment' })).toHaveFocus();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('closes the results modal with the Escape key', async () => {
+    it('closes the results modal with the Escape key and returns focus to the form', async () => {
       await completeQuiz();
 
       fireEvent.keyDown(document, { key: 'Escape' });
 
-      await waitFor(() => {
-        expect(screen.getByText('Start Assessment')).toBeInTheDocument();
-      });
+      expect(await screen.findByRole('heading', { name: 'Start Assessment' })).toHaveFocus();
+    });
+
+    it('closes the results modal with a click outside the dialog', async () => {
+      await completeQuiz();
+
+      fireEvent.click(screen.getByRole('dialog').parentElement as HTMLElement);
+
+      expect(await screen.findByRole('heading', { name: 'Start Assessment' })).toBeInTheDocument();
+    });
+
+    it('keeps the dialog open for clicks inside it', async () => {
+      await completeQuiz();
+
+      fireEvent.click(screen.getByText('Great Job!'));
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+  });
+
+  describe('Practice From Recommendations', () => {
+    beforeEach(() => {
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(singleQuestionQuiz) });
+    });
+
+    it('selects a listed topic', async () => {
+      await completeQuiz();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Practice listed topic' }));
+
+      expect(await screen.findByRole('heading', { name: 'Start Assessment' })).toBeInTheDocument();
+      expect(topicSelect()).toHaveValue('Colonial America');
+      expect(screen.queryByRole('textbox', { name: 'Custom topic' })).not.toBeInTheDocument();
+    });
+
+    it('selects an unlisted concept as a custom topic', async () => {
+      await completeQuiz();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Practice unlisted topic' }));
+
+      expect(await screen.findByRole('heading', { name: 'Start Assessment' })).toBeInTheDocument();
+      expect(topicSelect()).toHaveValue('__custom__');
+      expect(screen.getByRole('textbox', { name: 'Custom topic' })).toHaveValue('Stamp Act');
+      expect(screen.getByTestId('topic-value')).toHaveTextContent('Stamp Act');
+    });
+  });
+
+  describe('Topic From The URL', () => {
+    it('preselects a listed topic, ignoring case', async () => {
+      await renderQuiz(<Quiz initialTopic="the civil war" />);
+
+      expect(topicSelect()).toHaveValue('The Civil War');
+    });
+
+    it('uses an unlisted topic as a custom topic', async () => {
+      await renderQuiz(<Quiz initialTopic="Manifest Destiny" />);
+
+      expect(topicSelect()).toHaveValue('__custom__');
+      expect(screen.getByRole('textbox', { name: 'Custom topic' })).toHaveValue('Manifest Destiny');
+    });
+
+    it('starts a new session when the requested topic changes', async () => {
+      const { rerender } = await renderQuiz(<Quiz initialTopic="The Civil War" />);
+
+      rerender(<Quiz initialTopic="Cold War" />);
+
+      expect(topicSelect()).toHaveValue('Cold War');
+      // The new session loads the profile again
+      await waitFor(() => expect(callsTo(PROFILE)).toHaveLength(2));
+      await waitFor(() => expect(useAppStore.getState().isSyncing).toBe(false));
     });
   });
 
@@ -672,39 +803,29 @@ describe('Quiz Component', () => {
     };
 
     it('tracks score correctly', async () => {
-      mockBackend({ [GENERATE_ADAPTIVE]: () => jsonResponse(mockQuizResponse) });
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(mockQuizResponse) });
 
       await renderQuiz();
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Question 1?')).toBeInTheDocument();
-      });
+      await screen.findByText('Question 1?');
 
       // Answer Q1 correctly
       fireEvent.click(screen.getByText('Correct'));
       fireEvent.click(screen.getByText('Submit Answer'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Score: 1')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Score: 1')).toBeInTheDocument();
       await waitForMasterySync();
 
       fireEvent.click(screen.getByText('Next Question'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Question 2?')).toBeInTheDocument();
-      });
+      await screen.findByText('Question 2?');
 
       // Answer Q2 incorrectly
       fireEvent.click(screen.getByText('Wrong'));
       fireEvent.click(screen.getByText('Submit Answer'));
 
       // Score should still be 1
-      await waitFor(() => {
-        expect(screen.getByText('Concept Gap Identified')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Concept Gap Identified')).toBeInTheDocument();
       expect(screen.getByText('Score: 1')).toBeInTheDocument();
       await waitForMasterySync();
       expect(callsTo(MASTERY)).toHaveLength(2);
@@ -715,54 +836,36 @@ describe('Quiz Component', () => {
     it('changes topic when dropdown changes', async () => {
       await renderQuiz();
 
-      const select = screen.getByRole('combobox');
-      fireEvent.change(select, { target: { value: 'The Constitution' } });
+      fireEvent.change(topicSelect(), { target: { value: 'The Constitution' } });
 
-      expect(select).toHaveValue('The Constitution');
+      expect(topicSelect()).toHaveValue('The Constitution');
     });
 
     it('uses correct topic in API request', async () => {
       mockBackend({
         [GENERATE_ADAPTIVE]: () =>
-          jsonResponse({
-            id: 'quiz-1',
-            title: 'Constitution Quiz',
-            questions: [
-              {
-                id: 'q1',
-                text: 'What is the Constitution?',
-                options: [{ id: 'a', text: 'A document' }],
-                correct_option_id: 'a',
-                explanation: 'It is a document.',
-                difficulty: 'easy',
-              },
-            ],
-            student_mastery: 0.3,
-            target_difficulty: 'easy',
-            adapted: true,
+          json({
+            ...singleQuestionQuiz,
+            questions: [{ ...singleQuestionQuiz.questions[0], text: 'What is the Constitution?' }],
           }),
       });
 
       await renderQuiz();
 
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'The Constitution' } });
+      fireEvent.change(topicSelect(), { target: { value: 'The Constitution' } });
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(screen.getByText('What is the Constitution?')).toBeInTheDocument();
-      });
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('topic=The%20Constitution'),
-        expect.objectContaining({ method: 'POST' })
-      );
+      await screen.findByText('What is the Constitution?');
+      expect(callsTo(GENERATE_ADAPTIVE)[0].params.get('topic')).toBe('The Constitution');
+      expect(screen.getAllByTestId('topic-value')[0]).toHaveTextContent('The Constitution');
     });
   });
 
   describe('Profile Reset', () => {
     it('calls reset API and shows inline notice', async () => {
       mockBackend({
-        [PROFILE]: () => profileResponse({ 'The American Revolution': 0.8 }),
-        [RESET]: () => jsonResponse({ message: 'Reset successful' }),
+        [PROFILE]: () => profileReply({ 'The American Revolution': 0.8 }),
+        [RESET]: () => profileReply(),
       });
 
       await renderQuiz();
@@ -770,23 +873,61 @@ describe('Quiz Component', () => {
         expect(screen.getByTestId('mastery-value')).toHaveTextContent('80%');
       });
 
+      fireEvent.click(screen.getByText('Reset Profile (Demo)'));
+
+      expect(await screen.findByRole('status')).toHaveTextContent('Profile reset to initial state');
+      expect(callsTo(RESET)).toHaveLength(1);
+      expect(useAppStore.getState().masteryMap).toEqual({});
+      expect(screen.getByTestId('mastery-value')).toHaveTextContent('30%');
+    });
+
+    it('dismisses the notice after three seconds', async () => {
+      mockBackend({ [RESET]: () => profileReply() });
+      await renderQuiz();
+
       // Fake timers only from here on, so the notice's 3 s auto-dismiss can be fast-forwarded
       jest.useFakeTimers();
       fireEvent.click(screen.getByText('Reset Profile (Demo)'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Profile reset to initial state')).toBeInTheDocument();
-      });
-      expect(callsTo(RESET)).toHaveLength(1);
-      expect(useAppStore.getState().masteryMap).toEqual({});
-      expect(useAppStore.getState().lastSyncError).toBeNull();
-      expect(screen.getByTestId('mastery-value')).toHaveTextContent('30%');
-
-      // The notice dismisses itself after three seconds
+      await screen.findByText('Profile reset to initial state');
       act(() => {
-        jest.advanceTimersByTime(3000);
+        jest.advanceTimersByTime(2999);
+      });
+      expect(screen.getByText('Profile reset to initial state')).toBeInTheDocument();
+      act(() => {
+        jest.advanceTimersByTime(1);
       });
       expect(screen.queryByText('Profile reset to initial state')).not.toBeInTheDocument();
+    });
+
+    it('clears the notice timer when the quiz is closed', async () => {
+      mockBackend({ [RESET]: () => profileReply() });
+      const { unmount } = await renderQuiz();
+      jest.useFakeTimers();
+      fireEvent.click(screen.getByText('Reset Profile (Demo)'));
+      await screen.findByText('Profile reset to initial state');
+      expect(jest.getTimerCount()).toBe(1);
+
+      unmount();
+
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('reports a failed reset instead of claiming success', async () => {
+      mockBackend({
+        [PROFILE]: () => profileReply({ 'The American Revolution': 0.8 }),
+        [RESET]: () => json({ detail: 'An internal error occurred' }, 500),
+      });
+      await renderQuiz();
+      await waitFor(() => expect(screen.getByTestId('mastery-value')).toHaveTextContent('80%'));
+
+      fireEvent.click(screen.getByText('Reset Profile (Demo)'));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not reset your profile: An internal error occurred'
+      );
+      expect(screen.queryByText('Profile reset to initial state')).not.toBeInTheDocument();
+      expect(screen.getByTestId('mastery-value')).toHaveTextContent('80%');
+      expect(screen.getByRole('button', { name: /Reset Profile/ })).toBeEnabled();
     });
   });
 
@@ -794,25 +935,9 @@ describe('Quiz Component', () => {
     it('resets quiz state when subject changes', async () => {
       mockBackend({
         [GENERATE_ADAPTIVE]: () =>
-          jsonResponse({
-            id: 'quiz-1',
-            title: 'Test Quiz',
-            questions: [
-              {
-                id: 'q1',
-                text: 'Old subject question?',
-                options: [
-                  { id: 'a', text: 'A' },
-                  { id: 'b', text: 'B' },
-                ],
-                correct_option_id: 'a',
-                explanation: 'Explanation.',
-                difficulty: 'easy',
-              },
-            ],
-            student_mastery: 0.3,
-            target_difficulty: 'easy',
-            adapted: true,
+          json({
+            ...singleQuestionQuiz,
+            questions: [{ ...singleQuestionQuiz.questions[0], text: 'Old subject question?' }],
           }),
       });
 
@@ -820,10 +945,7 @@ describe('Quiz Component', () => {
 
       // Generate a quiz
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Old subject question?')).toBeInTheDocument();
-      });
+      await screen.findByText('Old subject question?');
 
       // Switch subject in store
       act(() => {
@@ -831,10 +953,9 @@ describe('Quiz Component', () => {
       });
 
       // Quiz should be cleared and we should see the start form again
-      await waitFor(() => {
-        expect(screen.getByText('Start Assessment')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Start Assessment')).toBeInTheDocument();
       expect(screen.queryByText('Old subject question?')).not.toBeInTheDocument();
+      await waitFor(() => expect(useAppStore.getState().isSyncing).toBe(false));
     });
 
     it('updates topic dropdown when subject changes', async () => {
@@ -843,7 +964,7 @@ describe('Quiz Component', () => {
       await renderQuiz();
 
       // Should show US History topics in the dropdown
-      expect(screen.getByRole('combobox')).toHaveValue('The American Revolution');
+      expect(topicSelect()).toHaveValue('The American Revolution');
 
       // Switch to economics
       act(() => {
@@ -851,31 +972,19 @@ describe('Quiz Component', () => {
       });
 
       // Dropdown now offers the economics topics
-      expect(screen.getByRole('combobox')).toHaveValue('Supply and Demand');
+      expect(topicSelect()).toHaveValue('Supply and Demand');
       expect(screen.getByText('Market Equilibrium')).toBeInTheDocument();
       expect(screen.queryByText('The Civil War')).not.toBeInTheDocument();
+      await waitFor(() => expect(useAppStore.getState().isSyncing).toBe(false));
     });
 
     it('includes subject in quiz generation API call', async () => {
       useAppStore.setState({ currentSubject: 'economics' });
       mockBackend({
         [GENERATE_ADAPTIVE]: () =>
-          jsonResponse({
-            id: 'quiz-1',
-            title: 'Economics Quiz',
-            questions: [
-              {
-                id: 'q1',
-                text: 'What is GDP?',
-                options: [{ id: 'a', text: 'Answer' }],
-                correct_option_id: 'a',
-                explanation: 'GDP stands for...',
-                difficulty: 'easy',
-              },
-            ],
-            student_mastery: 0.3,
-            target_difficulty: 'easy',
-            adapted: true,
+          json({
+            ...singleQuestionQuiz,
+            questions: [{ ...singleQuestionQuiz.questions[0], text: 'What is GDP?' }],
           }),
       });
 
@@ -883,63 +992,24 @@ describe('Quiz Component', () => {
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(screen.getByText('What is GDP?')).toBeInTheDocument();
-      });
+      await screen.findByText('What is GDP?');
       expect(callsTo(GENERATE_ADAPTIVE)).toHaveLength(1);
-      expect(callsTo(GENERATE_ADAPTIVE)[0][0]).toContain('subject=economics');
+      expect(callsTo(GENERATE_ADAPTIVE)[0].params.get('subject')).toBe('economics');
     });
 
     it('clears results when subject changes during quiz results', async () => {
-      mockBackend({
-        [GENERATE_ADAPTIVE]: () =>
-          jsonResponse({
-            id: 'quiz-1',
-            title: 'Test Quiz',
-            questions: [
-              {
-                id: 'q1',
-                text: 'Single Q?',
-                options: [
-                  { id: 'a', text: 'Right' },
-                  { id: 'b', text: 'Wrong' },
-                ],
-                correct_option_id: 'a',
-                explanation: 'Right is correct.',
-                difficulty: 'easy',
-              },
-            ],
-            student_mastery: 0.3,
-            target_difficulty: 'easy',
-            adapted: true,
-          }),
-      });
+      mockBackend({ [GENERATE_ADAPTIVE]: () => json(singleQuestionQuiz) });
 
-      await renderQuiz();
-
-      // Complete a quiz
-      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
-      await waitFor(() => expect(screen.getByText('Single Q?')).toBeInTheDocument());
-
-      fireEvent.click(screen.getByText('Right'));
-      fireEvent.click(screen.getByText('Submit Answer'));
-
-      await waitFor(() => expect(screen.getByText('Finish Quiz')).toBeInTheDocument());
-      await waitForMasterySync();
-      fireEvent.click(screen.getByText('Finish Quiz'));
-
-      await waitFor(() => expect(screen.getByText('Great Job!')).toBeInTheDocument());
-      await waitFor(() => expect(callsTo(RECOMMENDATIONS)).toHaveLength(1));
+      await completeQuiz();
 
       // Switch subject — should reset everything
       act(() => {
         useAppStore.setState({ currentSubject: 'biology' });
       });
 
-      await waitFor(() => {
-        expect(screen.getByText('Start Assessment')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Start Assessment')).toBeInTheDocument();
       expect(screen.queryByText('Great Job!')).not.toBeInTheDocument();
+      await waitFor(() => expect(useAppStore.getState().isSyncing).toBe(false));
     });
   });
 
@@ -947,7 +1017,7 @@ describe('Quiz Component', () => {
     it('sends standard quiz request when adaptive mode is off', async () => {
       mockBackend({
         [GENERATE]: () =>
-          jsonResponse({
+          json({
             id: 'quiz-1',
             title: 'Standard Quiz',
             average_difficulty: 0.5,
@@ -978,14 +1048,23 @@ describe('Quiz Component', () => {
 
       fireEvent.click(screen.getByText('Generate Assessment'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Standard Q?')).toBeInTheDocument();
-      });
+      await screen.findByText('Standard Q?');
       // Only the standard endpoint is used; the adaptive one would be an unexpected request
       expect(callsTo(GENERATE)).toHaveLength(1);
-      expect(callsTo(GENERATE)[0][0]).toContain('topic=The%20American%20Revolution');
+      expect(callsTo(GENERATE)[0].params.get('topic')).toBe('The American Revolution');
       // Standard quizzes do not show the adaptive mastery banner
       expect(screen.queryByTestId('mastery-indicator')).not.toBeInTheDocument();
+
+      // Finish the quiz: the results show the quiz difficulty
+      fireEvent.click(screen.getByText('A'));
+      fireEvent.click(screen.getByText('Submit Answer'));
+      await waitForMasterySync();
+      fireEvent.click(await screen.findByText('Finish Quiz'));
+
+      expect(await screen.findByText('Quiz Difficulty:')).toBeInTheDocument();
+      expect(screen.getByText('(50%)')).toBeInTheDocument();
+      expect(screen.getByText('Try Another Assessment')).toBeInTheDocument();
+      await waitFor(() => expect(callsTo(RECOMMENDATIONS)).toHaveLength(1));
     });
 
     it('hides mastery indicator when adaptive mode is off', async () => {
@@ -1002,42 +1081,41 @@ describe('Quiz Component', () => {
   });
 
   describe('Difficulty Badge', () => {
-    const mockQuizResponse = {
-      id: 'quiz-1',
-      title: 'Test Quiz',
-      questions: [
-        {
-          id: 'q1',
-          text: 'Hard question?',
-          options: [
-            { id: 'a', text: 'A' },
-            { id: 'b', text: 'B' },
-            { id: 'c', text: 'C' },
-            { id: 'd', text: 'D' },
-          ],
-          correct_option_id: 'a',
-          explanation: 'Explanation.',
-          difficulty: 'hard',
-          difficulty_score: 0.85,
-        },
-      ],
-      student_mastery: 0.7,
-      target_difficulty: 'hard',
-      adapted: true,
-    };
-
     it('shows difficulty badge on question', async () => {
-      mockBackend({ [GENERATE_ADAPTIVE]: () => jsonResponse(mockQuizResponse) });
+      mockBackend({
+        [GENERATE_ADAPTIVE]: () =>
+          json({
+            ...singleQuestionQuiz,
+            questions: [
+              { ...singleQuestionQuiz.questions[0], text: 'Hard question?', difficulty: 'hard', difficulty_score: 0.85 },
+            ],
+            student_mastery: 0.7,
+            target_difficulty: 'hard',
+          }),
+      });
 
       await renderQuiz();
 
       fireEvent.click(screen.getByText('Start Adaptive Assessment'));
 
-      await waitFor(() => {
-        expect(screen.getByText('Hard question?')).toBeInTheDocument();
-        // Difficulty badge should be shown (capitalized label)
-        expect(screen.getByText('Hard')).toBeInTheDocument();
+      expect(await screen.findByText('Hard question?')).toBeInTheDocument();
+      // Difficulty badge should be shown (capitalized label)
+      expect(screen.getByText('Hard')).toBeInTheDocument();
+    });
+  });
+
+  describe('Invalid Quiz Data', () => {
+    it('offers to start again when a question cannot be shown', async () => {
+      mockBackend({
+        [GENERATE_ADAPTIVE]: () => json({ ...singleQuestionQuiz, questions: [null] }),
       });
+      await renderQuiz();
+
+      fireEvent.click(screen.getByText('Start Adaptive Assessment'));
+
+      expect(await screen.findByText('Quiz Error')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+      expect(await screen.findByRole('heading', { name: 'Start Assessment' })).toBeInTheDocument();
     });
   });
 });

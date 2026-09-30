@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
-import type { GraphStats } from '@/lib/types';
+import { describeError } from '@/lib/api-errors';
 import { useAppStore } from '@/lib/store';
+import { isSubjectAvailable } from '@/lib/subjects';
+import { useApiQuery } from '@/lib/useApiQuery';
 import { StatsSkeleton } from '@/components/Skeleton';
+import ErrorMessage from '@/components/ErrorMessage';
 import {
   Network,
   MessageSquare,
@@ -21,155 +23,131 @@ import {
 } from 'lucide-react';
 import SubjectPicker from '@/components/SubjectPicker';
 
+const TOP_CONCEPT_COUNT = 6;
+
+const chatHref = (concept: string) =>
+  `/chat?question=${encodeURIComponent(`Explain ${concept}`)}`;
+
 export default function Home() {
   const router = useRouter();
-  const [stats, setStats] = useState<GraphStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [topConcepts, setTopConcepts] = useState<string[]>([]);
+  const currentSubject = useAppStore((state) => state.currentSubject);
+  const masteryMap = useAppStore((state) => state.masteryMap);
 
-  const { masteryMap, getMastery, currentSubject, loadSubjectTheme } = useAppStore();
-
-  // Load subject theme on mount
-  useEffect(() => {
-    if (currentSubject) {
-      loadSubjectTheme(currentSubject);
-    }
-  }, [currentSubject, loadSubjectTheme]);
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setIsLoading(true);
-        const data = await apiClient.getGraphStats(currentSubject);
-        setStats(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching stats:', err);
-        setError('Unable to load statistics. Please ensure the backend is running.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    const fetchTopConcepts = async () => {
-      try {
-        const data = await apiClient.getTopConceptsForSubject(6, currentSubject);
-        setTopConcepts(data.map((concept) => concept.name));
-      } catch (err) {
-        console.error('Error fetching top concepts:', err);
-        setTopConcepts([]);
-      }
-    };
-
-    fetchStats();
-    fetchTopConcepts();
-  }, [currentSubject]);
+  const stats = useApiQuery(`stats:${currentSubject}`, (signal) =>
+    apiClient.getGraphStats(currentSubject, { signal })
+  );
+  const topConcepts = useApiQuery(`top-concepts:${currentSubject}`, (signal) =>
+    apiClient.getTopConceptsForSubject(TOP_CONCEPT_COUNT, currentSubject, { signal })
+  );
+  // Only for the attribution footer; SubjectPicker shows its own errors.
+  const subjects = useApiQuery('subjects', (signal) => apiClient.getSubjects({ signal }));
+  const availableSubjectNames = (subjects.data?.subjects ?? [])
+    .filter(isSubjectAvailable)
+    .map((subject) => subject.name);
 
   // Calculate overall progress from mastery map
-  const masteredCount = Object.values(masteryMap).filter(m => m.masteryLevel >= 0.7).length;
-  const inProgressCount = Object.values(masteryMap).filter(m => m.masteryLevel >= 0.3 && m.masteryLevel < 0.7).length;
-  const totalTracked = Object.keys(masteryMap).length;
+  const masteryEntries = Object.values(masteryMap);
+  const masteredCount = masteryEntries.filter(m => m.masteryLevel >= 0.7).length;
+  const inProgressCount = masteryEntries.filter(m => m.masteryLevel >= 0.3 && m.masteryLevel < 0.7).length;
+  const totalTracked = masteryEntries.length;
   const overallMastery = totalTracked > 0
-    ? Object.values(masteryMap).reduce((sum, m) => sum + m.masteryLevel, 0) / totalTracked
+    ? masteryEntries.reduce((sum, m) => sum + m.masteryLevel, 0) / totalTracked
     : 0;
+
+  const topConceptNames = (topConcepts.data ?? []).map((concept) => concept.name);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
                 Adaptive Knowledge Graph
               </h1>
               <p className="mt-2 text-gray-600">
-                Grounded AI tutoring over approved course content
+                Grounded AI tutoring over open textbooks
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <SubjectPicker />
-              <Link
-                href="/demo-status"
-                className="inline-flex items-center px-4 py-2 border border-amber-300 text-sm font-medium rounded-md text-amber-800 bg-amber-50 hover:bg-amber-100 transition-colors"
-              >
-                Demo Status
-              </Link>
-              <Link
-                href="/graph"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 transition-colors"
-              >
-                Explore Graph
-              </Link>
-              <Link
-                href="/chat"
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-              >
-                Ask Questions
-              </Link>
-            </div>
+            <SubjectPicker />
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
             Adaptive Learning Over
-            <span className="text-primary-600"> Approved Content</span>
+            <span className="text-primary-600"> Open Textbooks</span>
           </h2>
           <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-            A controlled OpenStax demo for publishers and institutions: KG-grounded answers,
-            citation traceability, adaptive practice, and measurable AI quality.
+            An open-source demo that combines a knowledge graph with retrieval-augmented
+            generation over OpenStax textbooks: grounded answers with citations, adaptive
+            practice, and measurable answer quality.
           </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            <Link
+              href="/graph"
+              className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 transition-colors"
+            >
+              Explore Graph
+            </Link>
+            <Link
+              href="/chat"
+              className="inline-flex items-center px-5 py-2.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+            >
+              Ask Questions
+            </Link>
+          </div>
         </div>
 
         {/* Statistics Dashboard */}
-        <div className="mb-16">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+        <section className="mb-16" aria-labelledby="stats-heading">
+          <h3 id="stats-heading" className="text-2xl font-bold text-gray-900 mb-6 text-center">
             Knowledge Graph Statistics
           </h3>
-          {isLoading ? (
+          {stats.isLoading ? (
             <StatsSkeleton />
+          ) : stats.error || !stats.data ? (
+            <ErrorMessage
+              title="Unable to load statistics."
+              message={describeError(stats.error)}
+              onRetry={stats.retry}
+            />
           ) : (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <StatCard
-                title="Exam Topics"
-                value={stats?.concept_count ?? 0}
+                title="Concepts"
+                value={stats.data.concept_count}
                 icon={<Network className="w-8 h-8" />}
                 color="blue"
-                description="Key concepts tracked"
+                description="Concepts in the knowledge graph"
               />
               <StatCard
                 title="Study Modules"
-                value={stats?.module_count ?? 0}
+                value={stats.data.module_count}
                 icon={<TrendingUp className="w-8 h-8" />}
                 color="purple"
                 description="Textbook chapters available"
               />
               <StatCard
                 title="Connections"
-                value={stats?.relationship_count ?? 0}
+                value={stats.data.relationship_count}
                 icon={<Zap className="w-8 h-8" />}
                 color="green"
                 description="Causal links & prerequisites"
               />
             </div>
           )}
-          {error && (
-            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-              <p className="text-sm text-yellow-800 text-center">{error}</p>
-            </div>
-          )}
-        </div>
+        </section>
 
         {/* Learning Progress Section */}
         <div className="mb-16">
           <div className="flex items-center justify-center gap-3 mb-6">
-            <Trophy className="w-7 h-7 text-amber-500" />
+            <Trophy className="w-7 h-7 text-amber-500" aria-hidden="true" />
             <h3 className="text-2xl font-bold text-gray-900">
               Your Learning Progress
             </h3>
@@ -203,7 +181,7 @@ export default function Home() {
                 </div>
 
                 {/* Progress Bar */}
-                <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-4 bg-gray-100 rounded-full overflow-hidden" aria-hidden="true">
                   <div
                     className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500"
                     style={{ width: `${overallMastery * 100}%` }}
@@ -213,10 +191,10 @@ export default function Home() {
                 {/* Concept Progress List */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {Object.entries(masteryMap).slice(0, 6).map(([name, data]) => (
-                    <div
+                    <Link
                       key={name}
-                      className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 cursor-pointer transition-all"
-                      onClick={() => router.push(`/chat?question=${encodeURIComponent(`Explain ${name}`)}`)}
+                      href={chatHref(name)}
+                      className="block p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900 truncate">{name}</span>
@@ -227,7 +205,7 @@ export default function Home() {
                           {Math.round(data.masteryLevel * 100)}%
                         </span>
                       </div>
-                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden" aria-hidden="true">
                         <div
                           className={`h-full transition-all ${
                             data.masteryLevel >= 0.7 ? 'bg-emerald-500' :
@@ -236,13 +214,13 @@ export default function Home() {
                           style={{ width: `${data.masteryLevel * 100}%` }}
                         />
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>
             ) : (
               <div className="text-center py-8">
-                <Sparkles className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+                <Sparkles className="w-12 h-12 text-amber-400 mx-auto mb-4" aria-hidden="true" />
                 <h4 className="text-lg font-semibold text-gray-900 mb-2">
                   Start Your Learning Journey
                 </h4>
@@ -254,14 +232,14 @@ export default function Home() {
                     href="/assessment"
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition-colors"
                   >
-                    <BookOpen className="w-4 h-4" />
+                    <BookOpen className="w-4 h-4" aria-hidden="true" />
                     Take Assessment
                   </Link>
                   <Link
                     href="/chat"
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                   >
-                    <MessageSquare className="w-4 h-4" />
+                    <MessageSquare className="w-4 h-4" aria-hidden="true" />
                     Ask AI Tutor
                   </Link>
                 </div>
@@ -271,33 +249,42 @@ export default function Home() {
         </div>
 
         {/* Quick Start Concepts */}
-        {topConcepts.length > 0 && (
-          <div className="mb-16">
+        {(topConcepts.error || topConceptNames.length > 0) && !topConcepts.isLoading && (
+          <section className="mb-16" aria-labelledby="start-learning-heading">
             <div className="flex items-center justify-center gap-3 mb-6">
-              <Target className="w-6 h-6 text-blue-600" />
-              <h3 className="text-2xl font-bold text-gray-900">
+              <Target className="w-6 h-6 text-blue-600" aria-hidden="true" />
+              <h3 id="start-learning-heading" className="text-2xl font-bold text-gray-900">
                 Start Learning
               </h3>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {topConcepts.map((concept) => (
-                <button
-                  key={concept}
-                  onClick={() => router.push(`/chat?question=${encodeURIComponent(`Explain ${concept}`)}`)}
-                  className="group p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all text-left"
-                >
-                  <p className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors text-sm">
-                    {concept}
-                  </p>
-                  <div className="flex items-center gap-1 mt-2 text-xs text-gray-500 group-hover:text-blue-500">
-                    <span>Learn</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+            {topConcepts.error ? (
+              <ErrorMessage
+                title="Unable to load suggested concepts."
+                message={describeError(topConcepts.error)}
+                onRetry={topConcepts.retry}
+              />
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {topConceptNames.map((concept) => (
+                  <button
+                    key={concept}
+                    type="button"
+                    onClick={() => router.push(chatHref(concept))}
+                    className="group p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all text-left"
+                  >
+                    <p className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors text-sm">
+                      {concept}
+                    </p>
+                    <div className="flex items-center gap-1 mt-2 text-xs text-gray-500 group-hover:text-blue-500">
+                      <span>Learn</span>
+                      <ArrowRight className="w-3 h-3" aria-hidden="true" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         )}
 
         {/* Feature Cards */}
@@ -314,7 +301,7 @@ export default function Home() {
             />
             <FeatureCard
               title="AI Tutor Chat"
-              description="Ask questions with citations from approved textbooks"
+              description="Ask questions with citations from open textbooks"
               icon={<MessageSquare className="w-6 h-6" />}
               link="/chat"
             />
@@ -326,7 +313,7 @@ export default function Home() {
             />
             <FeatureCard
               title="Local-First"
-              description="Privacy-focused: All data stays on your machine"
+              description="Runs on your machine with a local LLM by default"
               icon={<Zap className="w-6 h-6" />}
               link="/about"
             />
@@ -375,7 +362,8 @@ export default function Home() {
             >
               OpenStax
             </a>
-            {' '}open textbooks (US History, Economics, Biology, World History)
+            {' '}open textbooks
+            {availableSubjectNames.length > 0 && ` (${availableSubjectNames.join(', ')})`}
           </p>
           <p className="mt-1">
             Licensed under{' '}
@@ -413,7 +401,7 @@ function StatCard({ title, value, icon, color, description }: StatCardProps) {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg transition-shadow">
-      <div className={`inline-flex p-3 rounded-lg ${colorClasses[color]}`}>
+      <div className={`inline-flex p-3 rounded-lg ${colorClasses[color]}`} aria-hidden="true">
         {icon}
       </div>
       <h4 className="mt-4 text-3xl font-bold text-gray-900">
@@ -437,7 +425,7 @@ function FeatureCard({ title, description, icon, link }: FeatureCardProps) {
     <Link href={link}>
       <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg hover:border-primary-300 transition-all cursor-pointer h-full">
         <div className="flex items-center gap-3 mb-3">
-          <div className="text-primary-600">{icon}</div>
+          <div className="text-primary-600" aria-hidden="true">{icon}</div>
           <h4 className="text-lg font-semibold text-gray-900">{title}</h4>
         </div>
         <p className="text-sm text-gray-600">{description}</p>
