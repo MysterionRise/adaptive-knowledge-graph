@@ -1,35 +1,39 @@
 # osv-scanner configuration (https://google.github.io/osv-scanner/configuration/)
 #
-# Time-boxed exceptions for advisories that are fixed only in a new major version of
-# the affected package. Each entry names the upgrade issue that removes it. Delete the
-# entry when that upgrade lands; do not extend ignoreUntil without re-checking the
-# advisory against the code.
+# Time-boxed exceptions for advisories that cannot be fixed in this release. Each entry
+# names the upgrade issue that removes it:
+#   - transformers and langchain entries are fixed only in a new major version of the
+#     affected package (#71, #72);
+#   - the two torch entries are fixed within 2.x (2.11 / 2.13), but those releases switch
+#     the Linux wheels to CUDA 13, a deliberate wheel-set change deferred to #79.
+# Delete an entry when its upgrade lands; do not extend ignoreUntil without re-checking
+# the advisory against the code.
 
 # --- transformers 4.57.x: fixed only in 5.x (migration with sentence-transformers 6: #71)
 [[IgnoredVulns]]
 id = "GHSA-29pf-2h5f-8g72"
 ignoreUntil = 2026-12-31
-reason = "transformers 4.x: pinned trusted BGE-M3 model only; transformers 5 migration tracked in #71"
+reason = "transformers 4.x (remote code execution): configured BAAI bge-m3 / bge-reranker-v2-m3 only; no trust_remote_code/save_pretrained/Trainer usage; `kernels` package not installed; transformers 5 migration #71"
 
 [[IgnoredVulns]]
 id = "GHSA-fgcw-684q-jj6r"
 ignoreUntil = 2026-12-31
-reason = "transformers 4.x (LightGlue model init): pinned trusted BGE-M3 model only; transformers 5 migration tracked in #71"
+reason = "transformers 4.x (LightGlue model init): configured BAAI bge-m3 / bge-reranker-v2-m3 only; no trust_remote_code/save_pretrained/Trainer usage; `kernels` package not installed; transformers 5 migration #71"
 
 [[IgnoredVulns]]
 id = "GHSA-xrqw-3rrv-vx5w"
 ignoreUntil = 2026-12-31
-reason = "transformers 4.x (save_pretrained path traversal): app never saves models; pinned trusted BGE-M3 model only; #71"
+reason = "transformers 4.x (save_pretrained path traversal): configured BAAI bge-m3 / bge-reranker-v2-m3 only; no trust_remote_code/save_pretrained/Trainer usage; `kernels` package not installed; transformers 5 migration #71"
 
 [[IgnoredVulns]]
 id = "GHSA-69w3-r845-3855"
 ignoreUntil = 2026-12-31
-reason = "transformers 4.x (Trainer class): app does no training; pinned trusted BGE-M3 model only; #71"
+reason = "transformers 4.x (Trainer class): configured BAAI bge-m3 / bge-reranker-v2-m3 only; no trust_remote_code/save_pretrained/Trainer usage; `kernels` package not installed; transformers 5 migration #71"
 
 [[IgnoredVulns]]
 id = "PYSEC-2025-217"
 ignoreUntil = 2026-12-31
-reason = "transformers 4.x (X-CLIP checkpoint conversion, CVE-2025-14929): not used; pinned trusted BGE-M3 model only; #71"
+reason = "transformers 4.x (X-CLIP checkpoint conversion, CVE-2025-14929): configured BAAI bge-m3 / bge-reranker-v2-m3 only; no trust_remote_code/save_pretrained/Trainer usage; `kernels` package not installed; transformers 5 migration #71"
 
 # --- langchain 0.3.x: fixed only in the 1.x line (migration: #72)
 [[IgnoredVulns]]

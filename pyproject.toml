@@ -166,12 +166,7 @@ warn_no_return = true
 module = [
     "yaml.*",
     "yake.*",
-    "keybert.*",
-    "hdbscan.*",
     "opensearchpy.*",
-    "outlines.*",
-    "instructor.*",
-    "ragas.*",
     "neo4j.*",
     "networkx.*",
     "sentence_transformers.*",
