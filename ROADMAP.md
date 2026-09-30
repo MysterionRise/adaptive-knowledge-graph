@@ -1,42 +1,81 @@
 # Roadmap
 
-The project is currently a production-shaped AI platform prototype, not a
-production certification product. The roadmap focuses on credibility,
-evaluation, and operational maturity before adding broad enterprise features.
+Adaptive Knowledge Graph is a proof of concept and pilot prototype. The roadmap
+puts evidence, correctness and operational basics ahead of broad new features.
+Work is tracked in
+[GitHub issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues);
+issues labelled
+[help wanted](https://github.com/MysterionRise/adaptive-knowledge-graph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+are good places to contribute.
 
-## Next 30 Days: Evidence and Stability
+## Done
 
-- Expand `data/evals/golden_qa.yaml` to 50+ questions across subjects.
-- Add eval report snapshots for retrieval/prompt changes.
-- Keep CI strict for backend fast tests, frontend unit tests, and type checks.
-- Split tribunal/adversarial tests into a separate risk-register job.
-- Clean remaining docs claims around IRT, teacher mode, mock fallback, and
-  production readiness.
-- Add screenshots or a short demo video to the portfolio case study.
+- The golden evaluation set covers 53 questions across US History and
+  Economics, including unsupported-claim and prompt-injection cases.
+- The adversarial (tribunal) tests run as their own suite (`-m tribunal`,
+  `make test-tribunal`) and CI job, separate from the regular tests.
+- Documentation claims about IRT, teacher editing, a mock-data fallback and
+  production readiness were removed or corrected.
 
-## Next 60 Days: Platform Hardening
+## Now: v0.3.0 open-source quality sprint
 
-- Replace API-key-only access with identity, roles, and scoped permissions.
-- Add tenant and cohort data boundaries.
-- Add OpenTelemetry spans for KG expansion, retrieval, reranking, LLM generation,
-  and student updates.
-- Move blocking graph/search calls behind executors or adopt async clients.
-- Add database migrations and backup/restore documentation for SQLite/Neo4j.
-- Add staging-backed browser E2E instead of manual-only Playwright runs.
+Tracked in [#105](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/105):
 
-## Next 90 Days: Assessment Integrity
+- Patch vulnerable dependencies, and scan both lockfiles in CI.
+- Production mode (`APP_ENV=production`), enforced `PRIVACY_LOCAL_ONLY`,
+  read-only graph queries, and correct API input and error contracts.
+- A one-command local stack (`make quickstart`, `make doctor`).
+- Frontend platform upgrade and Node 24.
+- Backend coverage of at least 70%, enforced, and the tribunal suite on every
+  pull request.
+- A verified quickstart, a real evaluation report, screenshots and a tagged
+  v0.3.0 release.
 
-- Add a persistent question bank with versioned generated questions.
-- Add assessment attempt ledger with signed attempt records.
-- Calibrate difficulty with learner response data before making IRT claims.
-- Add human-review workflow for generated questions.
-- Add instructor/admin dashboards only after role boundaries exist.
-- Produce a deployment runbook covering secrets, TLS, backups, observability, and
+## Next: evidence and stability
+
+- Keep evaluation report snapshots for retrieval and prompt changes, and
+  require evaluation deltas in pull requests that touch them.
+- Seed the configured Biology 2e and World History subjects
+  ([#75](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/75)).
+- Upgrade to transformers 5 and sentence-transformers 6
+  ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71))
+  and langchain 1.x
+  ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
+- Support Python 3.14
+  ([#76](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/76))
+  and install CPU-only torch wheels in CI
+  ([#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79)).
+- Generate the frontend API types from the OpenAPI schema
+  ([#77](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/77)).
+
+## Later: platform hardening
+
+- Per-learner identity, roles and scoped permissions
+  ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)).
+- Tenant and cohort data boundaries.
+- Async Neo4j and OpenSearch clients and a proper application lifecycle
+  ([#78](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/78)).
+- OpenTelemetry spans for KG expansion, retrieval, reranking, LLM generation
+  and learner-model updates.
+- Database migrations and backup and restore documentation for SQLite and
+  Neo4j.
+- Browser tests against a staging stack instead of manual-only Playwright runs.
+
+## Later: assessment integrity
+
+- Server-side quiz grading and an answer-submission endpoint
+  ([#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74)).
+- A persistent question bank with versioned generated questions.
+- An assessment attempt ledger with signed attempt records.
+- Calibrated difficulty from learner response data before any IRT claims.
+- A human-review workflow for generated questions.
+- Instructor and admin dashboards, only after role boundaries exist.
+- A deployment runbook covering secrets, TLS, backups, observability and
   incident response.
 
-## Explicit Non-Goals For Now
+## Explicit non-goals for now
 
-- No claim of production certification issuance.
-- No full proctoring product.
-- No enterprise dashboard until identity, tenancy, and audit logging are real.
-- No claim that LLM-generated difficulty equals psychometric calibration.
+- No production certification issuance.
+- No proctoring.
+- No enterprise dashboard until identity, tenancy and audit logging exist.
+- No claim that LLM-estimated difficulty equals psychometric calibration.

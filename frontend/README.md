@@ -1,167 +1,129 @@
 # Adaptive Knowledge Graph Frontend
 
-Next.js 14 interface for the Adaptive Knowledge Graph client demo.
-
-The app is designed for a local OpenStax walkthrough: demo readiness, KG-RAG
-chat with citations, graph exploration, KG/plain comparison, and adaptive
-assessment over synthetic learner state.
+The Next.js (App Router) interface for Adaptive Knowledge Graph: KG-RAG chat
+with citations, graph exploration, a KG-versus-plain comparison, adaptive
+assessment over synthetic learner state, and a demo readiness page.
 
 ## Prerequisites
 
-- Node.js 20
+- Node.js 24 LTS, pinned in the repository's [`.node-version`](../.node-version).
+  `npm ci` enforces the `engines` range in `package.json`
+  (`engine-strict=true` in `.npmrc`), so an unsupported Node version fails
+  early.
 - npm
-- FastAPI backend running on `http://localhost:8000`
+- The FastAPI backend running on `http://localhost:8000`. See the
+  [README quickstart](../README.md#quickstart).
 
-The repo includes `.node-version` at the project root. Use your Node manager to
-select Node 20 before running demo checks.
-
-## Quick Start
+## Quick start
 
 ```bash
 npm ci
-cp .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000`.
-
-For the full client demo path, run the root-level commands first:
-
-```bash
-make demo-client-prep
-make run-api
-make demo-eval
-make demo-client-check
-```
+Open <http://localhost:3000>.
 
 ## Environment
+
+No environment file is needed for local development. To change the defaults,
+copy `.env.example` to `.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 
-# Optional. Set to backend API_KEY when protected demo endpoints are enabled.
+# Optional. Sent as X-API-Key when the backend has API_KEY set.
 NEXT_PUBLIC_API_KEY=
 ```
 
-`NEXT_PUBLIC_API_KEY` is sent as `X-API-Key` by the shared API client, streaming
-chat requests, quiz/recommendation requests, and student profile calls.
+Next.js compiles every `NEXT_PUBLIC_*` value into the JavaScript bundle, so
+anyone who can load the app can read `NEXT_PUBLIC_API_KEY`. It is a convenience
+for local and demo setups, not a secret; see [SECURITY.md](../SECURITY.md).
+Restart the dev server after changing environment variables.
 
 ## Routes
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Client-demo home page and graph summary |
-| `/demo-status` | Readiness dashboard for services, seeded data, and latest eval |
+| `/` | Home page with the graph summary |
 | `/chat` | KG-aware tutor with citations and expanded concepts |
-| `/graph` | Cytoscape knowledge graph visualization |
-| `/comparison` | KG-expanded retrieval vs plain retrieval |
+| `/graph` | Cytoscape.js knowledge graph explorer |
+| `/comparison` | KG-expanded retrieval versus plain retrieval |
 | `/assessment` | Adaptive quiz and mastery workflow |
-| `/about` | Project overview |
+| `/demo-status` | Readiness of services, seeded data and the latest evaluation |
+| `/about` | Project overview and attribution |
 
-## Key UI Surfaces
+## Key UI surfaces
 
-### Demo Status
-
-`/demo-status` calls `GET /api/v1/demo/status` and shows Neo4j, OpenSearch,
-Ollama, subject data, latest eval validity, and next actions.
-
-### Chat
-
-The chat view exposes KG expansion, streaming responses, citations, source
-scores, and expanded concepts.
-
-### Graph
-
-The graph view uses Cytoscape.js. Relationship coloring includes `PREREQ`,
-`RELATED_TO`, and content/module edges returned by the backend.
-
-### Assessment
-
-The assessment flow generates topic-based questions, updates synthetic mastery,
-and requests recommendations from protected backend endpoints when API-key
-protection is enabled.
+- **Chat** streams answers and shows citations, source scores, expanded
+  concepts and a KG expansion toggle.
+- **Graph** colours edges by relationship type (`PREREQ`, `RELATED` and
+  `COVERS`) and sizes nodes by importance.
+- **Assessment** generates topic-based questions, updates synthetic mastery
+  and requests recommendations. Those endpoints need `NEXT_PUBLIC_API_KEY` when
+  the backend has an API key.
+- **Demo status** calls `GET /api/v1/demo/status` and reports Neo4j,
+  OpenSearch, Ollama, subject data and the validity of the latest evaluation.
 
 ## Scripts
 
 ```bash
-npm run dev          # Start dev server
-npm run build        # Build production bundle
-npm run start        # Start production server
-npm run lint         # Run Next lint
-npm run type-check   # Run TypeScript checks
-npm test             # Run Jest tests
-npm run test:e2e     # Run Playwright tests
+npm run dev               # development server
+npm run build             # production build
+npm run start             # serve the production build
+npm run lint              # ESLint (eslint .)
+npm run type-check        # TypeScript checks (tsc --noEmit)
+npm test                  # Jest unit tests
+npm run test:coverage     # Jest with coverage
+npm run test:e2e          # Playwright end-to-end tests
+npm run test:integration  # Playwright tests against a live, seeded stack
 ```
 
-Current CI-style frontend verification:
+The checks CI runs:
 
 ```bash
+npm run lint
 npm run type-check
-npm test -- --ci --runInBand --forceExit
+npm test -- --ci
+npm run build
 ```
 
-The Jest suite reports all tests before force-exiting; some existing tests keep
-asynchronous handles open after completion.
-
-## Project Structure
+## Project structure
 
 ```text
 frontend/
-├── app/
-│   ├── page.tsx
-│   ├── demo-status/
-│   ├── graph/
-│   ├── chat/
-│   ├── comparison/
-│   ├── assessment/
-│   └── about/
-├── components/
+├── app/            # routes: page.tsx, chat/, graph/, comparison/, assessment/, demo-status/, about/
+├── components/     # KnowledgeGraph, Quiz, LearningPath, SubjectPicker, ...
 ├── lib/
 │   ├── api-client.ts
 │   ├── store.ts
 │   └── types.ts
-└── tests/
-    ├── unit/
-    └── e2e/
+├── tests/
+│   ├── unit/         # Jest + React Testing Library
+│   ├── integration/  # Playwright against live services
+│   └── e2e/          # Playwright
+└── types/          # type declarations for Cytoscape plugins
 ```
 
-## Backend Contract
+## Backend contract
 
-The frontend expects a running FastAPI backend. Unit tests use explicit mocks;
-the app itself does not silently switch to mock data for demo-critical flows.
-
-Useful backend endpoints:
+The app needs a running backend. It does not fall back to mock data; unit tests
+mock the API client explicitly. Useful endpoints:
 
 - `GET /health/ready`
 - `GET /api/v1/demo/status`
-- `GET /api/v1/graph/stats`
-- `POST /api/v1/ask`
-- `POST /api/v1/ask/stream`
-- `POST /api/v1/quiz/generate`
+- `GET /api/v1/subjects`
+- `GET /api/v1/graph/stats` and `GET /api/v1/graph/data`
+- `POST /api/v1/ask` and `POST /api/v1/ask/stream`
+- `POST /api/v1/quiz/generate` and `POST /api/v1/quiz/generate-adaptive`
 - `GET /api/v1/student/profile`
 
 ## Troubleshooting
 
-### API client cannot reach the server
-
-1. Confirm backend health: `curl http://localhost:8000/health`.
-2. Confirm `NEXT_PUBLIC_API_URL` in `.env.local`.
-3. Restart the frontend after changing environment variables.
-
-### Protected student/profile calls fail
-
-If backend `API_KEY` is configured, set the same value in
-`NEXT_PUBLIC_API_KEY` for the local demo.
-
-### Graph is empty
-
-Run the root-level setup:
-
-```bash
-make demo-client-prep
-make demo-client-check
-```
-
-### Next.js refuses to start
-
-Check `node --version`. The demo path expects Node 20.
+- **The app cannot reach the API.** Check `curl http://localhost:8000/health`,
+  then `NEXT_PUBLIC_API_URL` in `.env.local`, and restart the dev server.
+- **Student or recommendation calls return 401.** The backend has `API_KEY`
+  set; put the same value in `NEXT_PUBLIC_API_KEY`.
+- **The graph is empty.** The data is not seeded. Run `make seed` in the
+  repository root.
+- **`npm ci` fails with an engine error.** Switch to the Node version in
+  `.node-version`.

@@ -77,13 +77,21 @@ If anyone other than you can reach the API, run it in production mode:
 
 ## Accepted risks
 
-- **transformers 4.x advisories.** The Python stack stays on transformers 4.x,
-  which has published advisories (including remote code execution) that are
-  only fixed in 5.x. They are allowlisted, time-boxed, in the dependency
-  scanner configuration until the upgrade in
-  [#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)
-  lands. Mitigation: the application only loads the pinned `BAAI/bge-m3`
-  embedding model and the optional `BAAI/bge-reranker-v2-m3` reranker.
+- **Advisories that need a major upgrade.** A small number of published
+  advisories can only be fixed by a major-version upgrade. They are
+  allowlisted, each with an expiry date, in `osv-scanner.toml` at the
+  repository root. That file is the source of truth for exactly which
+  advisories are accepted. Each upgrade has its own issue:
+  - `transformers` 4.x, including remote-code-execution advisories, until the
+    move to transformers 5 and sentence-transformers 6
+    ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
+    Mitigation: the application only loads the pinned `BAAI/bge-m3` embedding
+    model and the optional `BAAI/bge-reranker-v2-m3` reranker.
+  - `langchain`, `langchain-core` and `langchain-text-splitters`, until the
+    move to langchain 1.x
+    ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
+    This project does not use the affected APIs, such as the legacy prompt
+    loader.
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
   read that key. An API key therefore only gates non-browser clients such as

@@ -1,331 +1,122 @@
-# Manual Testing Checklist for Adaptive Knowledge Graph Frontend
+# Manual Testing Checklist for the Frontend
 
-This checklist helps ensure all features work correctly before demo/deployment.
+Use this checklist before a release or a demo to walk through every page by
+hand. Automated coverage is described in [docs/TESTING.md](../docs/TESTING.md).
 
-## Pre-Test Setup
+The app has no mock-data fallback: every page needs the backend and seeded
+data. When the backend is down, pages must show a clear error instead of
+invented numbers.
 
-- [ ] Backend API is running on `http://localhost:8000`
-- [ ] Neo4j is running with populated knowledge graph
-- [ ] OpenSearch vector database is running with indexed chunks
-- [ ] Frontend dev server is running on `http://localhost:3000`
-- [ ] Browser DevTools console is open for error checking
+## Pre-test setup
 
----
-
-## 1. Home Page (`/`)
-
-### Visual/Layout
-- [ ] Page loads without errors
-- [ ] Header displays "Adaptive Knowledge Graph" title
-- [ ] Navigation buttons ("Explore Graph", "Ask Questions") are visible
-- [ ] Statistics dashboard displays 3 cards (Concepts, Modules, Relationships)
-- [ ] Feature cards (4 total) are displayed in grid layout
-- [ ] "How It Works" section with 3 steps is visible
-- [ ] OpenStax attribution footer is present
-
-### Functionality
-- [ ] Statistics load from API (or show mock data with warning)
-- [ ] Clicking "Explore Graph" navigates to `/graph`
-- [ ] Clicking "Ask Questions" navigates to `/chat`
-- [ ] Clicking feature cards navigates to correct pages
-- [ ] OpenStax links open in new tab
-- [ ] All icons render correctly
-
-### Responsive Design
-- [ ] Page looks good on desktop (1920x1080)
-- [ ] Page looks good on tablet (768x1024)
-- [ ] Page looks good on mobile (375x667)
-
-### Error Handling
-- [ ] If API is down, shows warning message
-- [ ] Statistics still display (using mock data)
+- [ ] `make doctor` reports no problems
+- [ ] Neo4j and OpenSearch are running and seeded (`make up`, `make seed`)
+- [ ] Ollama is running with the configured model
+- [ ] The API is running on `http://localhost:8000` (`make run-api`)
+- [ ] The frontend dev server is running on `http://localhost:3000`
+- [ ] The browser DevTools console is open
 
 ---
 
-## 2. Knowledge Graph Page (`/graph`)
+## 1. Home page (`/`)
 
-### Visual/Layout
-- [ ] Page loads without errors
-- [ ] Graph visualization container is visible
-- [ ] Legend shows all relationship types (Prerequisite, Covers, Related, Highlighted)
-- [ ] Control buttons (Fit to View, Center) are visible
-- [ ] Sidebar shows "How to Use" instructions
-- [ ] Graph stats (Nodes, Edges count) display correctly
+- [ ] The page loads without console errors
+- [ ] Graph statistics (concepts, modules, relationships) come from the API
+- [ ] Navigation to Graph, Chat, Comparison and Assessment works
+- [ ] The subject picker lists the seeded subjects and switching subject updates the statistics
+- [ ] The OpenStax attribution is visible and its links open in a new tab
 
-### Graph Interaction
-- [ ] Graph renders with nodes and edges
-- [ ] Nodes are sized by importance (larger = more important)
-- [ ] Nodes are colored by importance (gradient)
-- [ ] Clicking a node highlights it (green border)
-- [ ] Clicking a node shows selected concept info at bottom-left
-- [ ] Connected nodes are highlighted when node is selected
-- [ ] Edges are colored by type:
-  - Red = Prerequisite
-  - Blue = Covers
-  - Purple = Related
-- [ ] Can drag to pan the graph
-- [ ] Can scroll to zoom in/out
-- [ ] "Fit to View" button resets zoom to see all nodes
-- [ ] "Center" button centers the graph
-- [ ] Clicking background deselects node
+## 2. Knowledge graph (`/graph`)
 
-### Functionality
-- [ ] Clicking "Ask AI Tutor About This" navigates to chat with pre-filled question
-- [ ] Back button navigates to home page
-- [ ] Graph stats show correct numbers
+- [ ] The graph renders nodes and edges for the selected subject
+- [ ] Nodes are sized by importance
+- [ ] Edges are coloured by relationship type, matching the legend
+- [ ] Clicking a node selects it, highlights its neighbours and shows its details
+- [ ] Clicking the background clears the selection
+- [ ] Dragging pans, scrolling zooms, and "Fit to view" and "Center" work
+- [ ] "Ask the tutor" from a selected concept opens Chat with the question filled in
+- [ ] The graph loads within a few seconds and interactions stay smooth
 
-### Performance
-- [ ] Graph loads within 3 seconds
-- [ ] Interactions are smooth (no lag)
-- [ ] No console errors
+## 3. Chat (`/chat`)
 
----
+- [ ] The example questions match the selected subject (for US History, for example, "What caused the American Revolution?")
+- [ ] Sending is disabled for an empty input; Enter and the Send button both submit
+- [ ] The answer streams in, then shows citations, source snippets with scores and the model name
+- [ ] With KG expansion on, expanded concepts are listed; turning it off removes them
+- [ ] The answer shows the textbook attribution
+- [ ] `/chat?question=...` asks the question on page load
+- [ ] If the API fails, an error appears in the conversation and the next question still works
 
-## 3. Chat Page (`/chat`)
+## 4. Comparison (`/comparison`)
 
-### Visual/Layout
-- [ ] Page loads without errors
-- [ ] Header shows "AI Tutor Chat" title
-- [ ] KG Expansion toggle is visible and ON by default
-- [ ] Welcome message with 4 example questions is displayed
-- [ ] Input field and Send button are visible
-- [ ] Messages area is empty initially
+- [ ] Example questions fill the input; an empty question disables "Compare"
+- [ ] Both panels (KG-expanded and plain retrieval) show loading states, then answers
+- [ ] The KG panel lists the expanded concepts; both panels show retrieval counts and sources
+- [ ] Differences between the two answers are easy to see
 
-### Chat Functionality
-- [ ] Typing in input field works
-- [ ] Send button is disabled when input is empty
-- [ ] Send button is enabled when text is entered
-- [ ] Clicking Send or pressing Enter submits question
-- [ ] User message appears in blue bubble (right-aligned)
-- [ ] Loading indicator ("Thinking...") appears while waiting
-- [ ] AI response appears in white bubble (left-aligned)
-- [ ] Multiple messages stack correctly in conversation
+## 5. Assessment (`/assessment`)
 
-### KG Expansion Toggle
-- [ ] Toggle is ON (checked) by default
-- [ ] Clicking toggle turns it OFF
-- [ ] Visual indicator changes when toggled
-- [ ] Questions asked with toggle ON show expanded concepts
-- [ ] Expanded concepts appear in blue box with badges
+- [ ] Generating a quiz for a topic returns questions with options
+- [ ] Answering shows whether the answer was correct, with the explanation
+- [ ] Mastery updates after each answer and the next quiz targets the new difficulty
+- [ ] Recommendations appear after the quiz (prerequisites to review or topics to explore)
+- [ ] Resetting the profile returns mastery to its initial state
+- [ ] With `API_KEY` set on the backend, these calls work when `NEXT_PUBLIC_API_KEY` matches and fail clearly when it does not
 
-### AI Response Features
-- [ ] Answer text is displayed
-- [ ] Expanded concepts (if KG ON) are shown with badges
-- [ ] "Show/Hide Sources" button appears
-- [ ] Clicking "Show Sources" reveals source citations
-- [ ] Sources show chapter/section, text snippet, and relevance score
-- [ ] Attribution footer shows OpenStax CC BY 4.0
-- [ ] Model name is displayed
+## 6. Demo status (`/demo-status`)
 
-### Example Questions
-- [ ] Clicking any example question fills input and sends
-- [ ] "What is photosynthesis?" works
-- [ ] "Explain cellular respiration" works
-- [ ] "How does DNA replication work?" works
-- [ ] "What is the difference between mitosis and meiosis?" works
+- [ ] Neo4j, OpenSearch and Ollama report their real state
+- [ ] Seeded subject data is listed with counts
+- [ ] The latest evaluation shows as valid only after a successful `make demo-eval`
 
-### Pre-filled Questions (from URL)
-- [ ] Navigate to `/chat?question=What+is+photosynthesis?`
-- [ ] Question is automatically asked on page load
-- [ ] Response appears correctly
+## 7. About (`/about`)
 
-### Error Handling
-- [ ] If API fails, error message is shown in chat
-- [ ] User can continue asking questions after error
-
----
-
-## 4. Comparison Page (`/comparison`)
-
-### Visual/Layout
-- [ ] Page loads without errors
-- [ ] Header shows "KG-RAG vs Regular RAG Comparison" title
-- [ ] Question input field is visible
-- [ ] 3 example question buttons are visible
-- [ ] "Compare Approaches" button is visible
-- [ ] Two result panels (With KG, Regular RAG) are ready
-
-### Functionality
-- [ ] Typing question enables Compare button
-- [ ] Empty question disables Compare button
-- [ ] Clicking example question fills input
-- [ ] Clicking "Compare Approaches" triggers comparison
-
-### Comparison Results
-- [ ] Both panels show loading spinners initially
-- [ ] "With KG Expansion" panel has green border/theme
-- [ ] "Regular RAG" panel has gray border/theme
-- [ ] Both answers are displayed side-by-side
-- [ ] KG panel shows expanded concepts with badges
-- [ ] Stats show retrieved chunks and concepts used
-- [ ] Source count is displayed for each
-- [ ] "Why KG Expansion Matters" explanation is visible
-
-### Comparison Quality
-- [ ] KG-expanded answer shows MORE concepts
-- [ ] KG-expanded answer is typically more comprehensive
-- [ ] Visual difference between approaches is clear
-
----
-
-## 5. About Page (`/about`)
-
-### Visual/Layout
-- [ ] Page loads without errors
-- [ ] Overview section is readable
-- [ ] 4 feature cards (Privacy-First, Knowledge Graph, Local LLMs, Open Source)
-- [ ] Technology stack section with Backend/Frontend lists
-- [ ] Attribution section with OpenStax links
-- [ ] License section
-
-### Functionality
-- [ ] Back button navigates to home
+- [ ] The overview, technology stack, attribution and license sections render
 - [ ] External links open in new tabs
-- [ ] All icons render correctly
 
----
+## 8. Navigation
 
-## 6. Cross-Page Navigation
+- [ ] Every page links back to Home
+- [ ] Browser back and forward buttons work and the URL updates on each navigation
 
-- [ ] Can navigate from Home → Graph → Back to Home
-- [ ] Can navigate from Home → Chat → Back to Home
-- [ ] Can navigate from Home → Comparison → Back to Home
-- [ ] Can navigate from Home → About → Back to Home
-- [ ] Browser back button works correctly
-- [ ] URL changes correctly on each navigation
+## 9. Accessibility
 
----
+- [ ] All interactive elements can be reached with Tab and have a visible focus indicator
+- [ ] Forms submit with Enter
+- [ ] Images have alt text and icon-only buttons have accessible labels
+- [ ] Headings are in a logical order
+- [ ] Text contrast meets WCAG AA (check with the browser DevTools)
 
-## 7. Accessibility
+## 10. Responsive layout
 
-### Keyboard Navigation
-- [ ] Can tab through all interactive elements
-- [ ] Focus indicators are visible
-- [ ] Can submit forms with Enter key
-- [ ] Can navigate back with Escape (if applicable)
+- [ ] Desktop (1920×1080)
+- [ ] Tablet (768×1024)
+- [ ] Mobile (375×667)
 
-### Screen Reader
-- [ ] All images have alt text
-- [ ] Buttons have aria-labels
-- [ ] Headings are in logical order
-- [ ] Links describe their destination
+## 11. Edge cases
 
-### Color Contrast
-- [ ] Text is readable on all backgrounds
-- [ ] Meets WCAG AA standards (test with browser DevTools)
+- [ ] **API down:** stop the API and reload each page. Each page shows an error or empty state and does not crash
+- [ ] **Network drop:** disconnect mid-request. An error appears and a retry works after reconnecting
+- [ ] **Empty data:** with an unseeded subject, the graph and chat explain that no data is available
+- [ ] **Long content:** long answers, long concept names and many expanded concepts do not break the layout
 
----
+## 12. Browsers
 
-## 8. Performance
-
-### Load Times
-- [ ] Home page loads in < 2 seconds
-- [ ] Graph page loads in < 3 seconds
-- [ ] Chat page loads in < 2 seconds
-- [ ] Comparison page loads in < 2 seconds
-
-### API Calls
-- [ ] No unnecessary duplicate API calls
-- [ ] Loading states are shown during API calls
-- [ ] Errors are handled gracefully
-
-### Browser Console
-- [ ] No JavaScript errors
-- [ ] No React warnings
-- [ ] No network errors (except expected API failures)
-
----
-
-## 9. Browser Compatibility
-
-Test on:
-- [ ] Chrome (latest)
-- [ ] Firefox (latest)
-- [ ] Safari (latest, Mac only)
-- [ ] Edge (latest)
+- [ ] Chrome
+- [ ] Firefox
+- [ ] Safari (macOS)
+- [ ] Edge
 - [ ] Mobile Safari (iOS)
 - [ ] Mobile Chrome (Android)
 
 ---
 
-## 10. Edge Cases
+## Sign-off
 
-### API Down
-- [ ] Navigate to home page with backend stopped
-- [ ] Warning message appears
-- [ ] Mock data is displayed
-- [ ] App doesn't crash
+- No crashes, blank pages or broken navigation
+- Graph, chat, comparison and assessment work end to end for every seeded subject
+- No console errors during normal use
+- Pages fail visibly and recover when the backend is unavailable
 
-### Network Errors
-- [ ] Disconnect network mid-request
-- [ ] Error message is shown
-- [ ] Can retry after reconnecting
-
-### Empty States
-- [ ] Empty chat conversation shows welcome message
-- [ ] No graph data shows appropriate message
-
-### Long Content
-- [ ] Very long AI answers don't break layout
-- [ ] Long concept names in graph don't overflow
-- [ ] Many expanded concepts display correctly
-
----
-
-## Test Scenarios for Demo
-
-### Scenario 1: "Show Me the Magic" (5 min)
-1. Start on home page
-2. Point out statistics
-3. Click "Explore Graph"
-4. Click a node (e.g., "Photosynthesis")
-5. Click "Ask AI Tutor About This"
-6. Show KG expansion toggle (turn ON/OFF)
-7. Observe expanded concepts list
-
-### Scenario 2: "Compare the Difference" (3 min)
-1. Navigate to Comparison page
-2. Enter "What is cellular respiration?"
-3. Click "Compare Approaches"
-4. Point out KG panel has 8+ concepts
-5. Point out Regular RAG panel has 1 concept
-6. Explain why KG answer is better
-
-### Scenario 3: "Interactive Exploration" (4 min)
-1. Go back to Graph page
-2. Zoom and pan around
-3. Click multiple nodes
-4. Show how relationships are highlighted
-5. Explain prerequisite chains
-6. Navigate to a concept and ask about it
-
----
-
-## Success Criteria
-
-**All features pass if:**
-- ✅ No critical bugs (crashes, blank pages, broken navigation)
-- ✅ All core features work (graph, chat, comparison)
-- ✅ Visual design is polished (no misaligned elements)
-- ✅ Performance is acceptable (< 3s load times)
-- ✅ Accessibility basics are covered (keyboard nav, labels)
-- ✅ Error handling works (graceful degradation)
-
-**Ready for demo if:**
-- ✅ All above criteria met
-- ✅ Mock data works when backend is unavailable
-- ✅ Can complete all 3 demo scenarios successfully
-- ✅ No console errors during normal use
-
----
-
-## Notes
-
-- Test with **backend running** for full functionality
-- Test with **backend stopped** to verify mock data fallback
-- Take screenshots of any bugs found
-- Note browser/OS for any compatibility issues
-
-**Last Updated:** {DATE}
-**Tested By:** _______________
-**Test Environment:** _______________
+Record the date, the commit (`git rev-parse --short HEAD`), the browser and OS,
+and screenshots of any bug in the pull request or issue.

@@ -1,398 +1,138 @@
-# Testing Guide
+# Testing
 
-This document describes the testing infrastructure and practices for the Adaptive Knowledge Graph project.
+How the test suites are organised, how to run them, and what CI checks.
 
-## Test Structure
+## Backend (pytest)
 
-```
-backend/tests/
-├── conftest.py              # Shared fixtures and configuration
-├── test_settings.py         # Settings and configuration tests
-├── test_logging.py          # Logging configuration tests
-├── test_main.py             # FastAPI application tests
-├── test_docker.py           # Docker configuration validation
-├── test_makefile.py         # Makefile target validation
-└── test_poetry.py           # Poetry and dependency tests
-```
+Backend tests live in [`backend/tests/`](../backend/tests/): 21 test modules
+plus shared fixtures in `conftest.py`. The fixtures provide a FastAPI
+`TestClient` and mocks for Neo4j, OpenSearch, the LLM client, the KG expander,
+the quiz generator and the Cypher QA service, so the suite runs without the
+Docker stack, Ollama or model downloads.
 
-## Running Tests
+| Area | Modules |
+| --- | --- |
+| API routes | `test_api_ask.py`, `test_api_graph.py`, `test_api_quiz.py`, `test_streaming.py`, `test_demo_status.py`, `test_main.py`, `test_rate_limit.py` |
+| Retrieval and graph | `test_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_neo4j_adapter.py` |
+| LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_recommendation_service.py` |
+| Configuration and tooling | `test_settings.py`, `test_logging.py`, `test_docker.py`, `test_makefile.py`, `test_poetry.py` |
+| Adversarial review | `test_tribunal_prosecution.py` |
 
-### Quick Start
-
-```bash
-# Run all tests
-make test
-
-# Run tests with verbose output
-poetry run pytest -v
-
-# Run specific test file
-poetry run pytest backend/tests/test_settings.py
-
-# Run specific test
-poetry run pytest backend/tests/test_settings.py::test_settings_defaults
-```
-
-### Test Categories
-
-Tests are marked with pytest markers:
+### Running the tests
 
 ```bash
-# Run only unit tests
-poetry run pytest -m unit
+make test                 # every backend test, with coverage
+make test-fast            # everything except the tribunal suite
+make test-tribunal        # only the tribunal suite
+make pre-commit           # format, lint, type-check, then test
 
-# Run only integration tests
-poetry run pytest -m integration
-
-# Skip slow tests
-poetry run pytest -m "not slow"
-
-# Run all tests including slow ones
-poetry run pytest
+poetry run pytest backend/tests/test_settings.py                           # one module
+poetry run pytest backend/tests/test_settings.py::test_settings_defaults   # one test
+poetry run pytest -m unit                                                   # by marker
+poetry run pytest -x --pdb                                                  # stop and debug on the first failure
 ```
 
-### Coverage Reports
+### Markers
+
+Markers are registered in [`pyproject.toml`](../pyproject.toml):
+
+| Marker | Meaning |
+| --- | --- |
+| `unit` | Fast, isolated tests of a single unit |
+| `integration` | Tests that combine several components |
+| `slow` | Slow tests; skip them with `-m "not slow"` |
+| `tribunal` | The adversarial-review suite |
+
+### Timeouts
+
+An autouse fixture in `conftest.py` fails any test that runs longer than
+`PYTEST_TEST_TIMEOUT_SECONDS` (60 seconds by default; `0` turns it off). It
+uses `SIGALRM`, so it has no effect on Windows.
+
+### Coverage
+
+`pytest` always measures coverage of `backend/app` (see `addopts` in
+`pyproject.toml`), excluding the tests and `__init__.py` files. The minimum is
+enforced with `fail_under` in `[tool.coverage.report]`. For an HTML report:
 
 ```bash
-# Run tests with coverage
-make test
-
-# Generate HTML coverage report
 poetry run pytest --cov=backend/app --cov-report=html
 open htmlcov/index.html
-
-# Check coverage percentage
-poetry run pytest --cov=backend/app --cov-report=term
 ```
 
-## Test Types
+### The tribunal suite
 
-### 1. Unit Tests
+`test_tribunal_prosecution.py` holds the tests written during the
+[February 2026 adversarial review](archive/tribunal-2026-02/README.md). Each
+test targets one charge, a weakness the review found.
 
-Test individual functions and classes in isolation.
+- `xfail_strict = true` is set in `pyproject.toml`. A known defect is marked
+  `xfail(strict=True)`. When someone fixes it, the test passes unexpectedly
+  and the run fails, so the marker has to be removed together with the fix.
+- The remaining expected failures document open design gaps: per-learner
+  identity
+  ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73))
+  and server-side quiz grading
+  ([#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74)).
 
-**Example**: `test_settings.py`
-```python
-def test_settings_defaults():
-    """Test that settings load with default values."""
-    settings = Settings()
-    assert settings.app_name == "Adaptive Knowledge Graph"
-```
+### Writing backend tests
 
-**Markers**: `@pytest.mark.unit`
+- Name files `test_*.py`, functions `test_*` and classes `Test*`.
+- Mock external services with the fixtures in `conftest.py` or `pytest-mock`'s
+  `mocker`; a test must not need the network, a running database or a model
+  download.
+- Mark async tests with `@pytest.mark.asyncio` (`pytest-asyncio`).
+- Add a marker when it helps people select the test, and a regression test
+  for every bug fix.
 
-### 2. Integration Tests
+## Frontend (Jest and Playwright)
 
-Test how components work together.
-
-**Example**: `test_main.py`
-```python
-def test_health_endpoint(client):
-    """Test health check endpoint."""
-    response = client.get("/health")
-    assert response.status_code == 200
-```
-
-**Markers**: `@pytest.mark.integration`
-
-### 3. Configuration Tests
-
-Validate configuration files and infrastructure.
-
-**Examples**:
-- `test_docker.py` - Docker configuration validation
-- `test_makefile.py` - Makefile target validation
-- `test_poetry.py` - Poetry dependencies validation
-
-### 4. Slow Tests
-
-Tests that take longer to run (> 1 second).
-
-**Markers**: `@pytest.mark.slow`
-
-## Writing Tests
-
-### Test Naming Conventions
-
-- File names: `test_*.py`
-- Test functions: `test_*`
-- Test classes: `Test*`
-
-### Using Fixtures
-
-Fixtures are defined in `conftest.py`:
-
-```python
-def test_with_client(client):
-    """Test using the FastAPI test client fixture."""
-    response = client.get("/")
-    assert response.status_code == 200
-
-def test_with_temp_dir(temp_data_dir):
-    """Test using temporary data directory."""
-    assert temp_data_dir.exists()
-```
-
-### Async Tests
-
-Use `pytest-asyncio` for async functions:
-
-```python
-import pytest
-
-@pytest.mark.asyncio
-async def test_async_function():
-    result = await some_async_function()
-    assert result is not None
-```
-
-### Mocking
-
-Use `pytest-mock` for mocking:
-
-```python
-def test_with_mock(mocker):
-    mock_api = mocker.patch("backend.app.api.external_api")
-    mock_api.return_value = {"status": "ok"}
-    # Test code
-```
-
-## CI/CD Integration
-
-### GitHub Actions
-
-Our CI pipeline runs automatically on:
-- Push to `main` or `claude/**` branches
-- Pull requests to `main`
-
-**Jobs**:
-1. **Lint** - Code formatting and style checks (ruff)
-2. **Type Check** - Static type checking (mypy)
-3. **Test** - Unit and integration tests (pytest)
-4. **Docker Build** - Validate Dockerfiles build
-5. **Docker Compose** - Validate services start
-6. **Docs Check** - Markdown linting
-7. **Security** - Dependency scanning (safety, bandit)
-
-### Pipeline Configuration
-
-See `.github/workflows/ci.yaml` for details.
-
-**Key features**:
-- Caching of dependencies (Poetry virtualenv)
-- Matrix testing (Python 3.11, 3.12)
-- Coverage upload to Codecov
-- Parallel job execution
-
-### Local Pre-commit Checks
-
-Run the same checks locally before committing:
+Run these from `frontend/`:
 
 ```bash
-# Install pre-commit hooks
-poetry run pre-commit install
-
-# Run all checks manually
-make pre-commit
-
-# Run individual checks
-make lint          # Ruff linting
-make format        # Ruff formatting
-make type-check    # Mypy type checking
-make test          # Pytest
+npm run lint            # ESLint
+npm run type-check      # TypeScript, no emit
+npm test -- --ci        # Jest unit tests
+npm run test:coverage   # Jest with coverage
+npm run build           # production build
 ```
 
-## Code Coverage Goals
+| Suite | Location | Needs |
+| --- | --- | --- |
+| Unit (Jest, React Testing Library) | `frontend/tests/unit/` | Nothing; the API client is mocked |
+| Integration (Playwright) | `frontend/tests/integration/` | A running, seeded stack; run with `make test-integration` |
+| End-to-end (Playwright) | `frontend/tests/e2e/` | The frontend dev server; run with `npm run test:e2e` |
 
-**Target**: 80% coverage minimum
+Before a release or demo, walk through the manual
+[testing checklist](../frontend/TESTING_CHECKLIST.md).
 
-**Current coverage**:
-```bash
-# Check current coverage
-make test
-```
+## Continuous integration
 
-**Coverage exclusions**:
-- `*/tests/*` - Test files themselves
-- `*/__init__.py` - Empty init files
-- Prototype/experimental code (mark with `# pragma: no cover`)
+[`.github/workflows/ci.yaml`](../.github/workflows/ci.yaml) runs on every pull
+request and on pushes to `main`. It covers:
 
-## Docker Testing
+- ruff lint and format check, and mypy
+- backend tests on Python 3.11, 3.12 and 3.13, and the tribunal suite
+- frontend lint, type check and tests
+- Docker Compose validation
+- documentation checks (markdownlint)
+- security scanning
 
-### Build Validation
+The `All Checks Passed` job depends on the required jobs and is the required
+status check for merging into `main`. Browser tests against a live stack are
+not part of CI; run `make test-integration` locally.
 
-```bash
-# Test CPU Dockerfile builds
-docker build -f infra/docker/api.cpu.Dockerfile -t test-cpu .
+## Evaluation
 
-# Test GPU Dockerfile builds
-docker build -f infra/docker/api.gpu.Dockerfile -t test-gpu .
-```
-
-### Service Integration
-
-```bash
-# Start services
-docker compose -f infra/compose/compose.yaml up -d neo4j opensearch
-
-# Check health
-docker compose -f infra/compose/compose.yaml ps
-
-# View logs
-docker compose -f infra/compose/compose.yaml logs
-
-# Clean up
-docker compose -f infra/compose/compose.yaml down -v
-```
-
-## Debugging Tests
-
-### Run with Debug Output
-
-```bash
-# Verbose output
-poetry run pytest -v
-
-# Show print statements
-poetry run pytest -s
-
-# Stop on first failure
-poetry run pytest -x
-
-# Drop into debugger on failure
-poetry run pytest --pdb
-```
-
-### Check Test Discovery
-
-```bash
-# List all tests
-poetry run pytest --collect-only
-
-# List tests matching pattern
-poetry run pytest --collect-only -k "settings"
-```
-
-## Performance Testing
-
-### Benchmark Tests
-
-Use `pytest-benchmark` for performance tests:
-
-```python
-def test_extraction_performance(benchmark):
-    result = benchmark(extract_concepts, sample_text)
-    assert result is not None
-```
-
-### Profiling
-
-```bash
-# Profile test execution
-poetry run pytest --profile
-
-# Generate profiling data
-poetry run pytest --profile-svg
-```
-
-## Test Data
-
-### Fixtures
-
-Shared test data in `conftest.py`:
-- `test_settings` - Test configuration
-- `client` - FastAPI test client
-- `temp_data_dir` - Temporary data directory
-- `mock_neo4j_uri` - Mock database URI
-- `mock_opensearch_config` - Mock vector DB config
-
-### Sample Data
-
-Store sample data in `backend/tests/fixtures/`:
-```
-backend/tests/fixtures/
-├── sample_textbook.json
-├── sample_concepts.json
-└── sample_graph.json
-```
-
-## Continuous Improvement
-
-### Adding New Tests
-
-When adding new features:
-1. Write tests first (TDD) or alongside feature
-2. Ensure coverage doesn't decrease
-3. Add integration tests for API endpoints
-4. Mark slow tests appropriately
-5. Update this guide if adding new test patterns
-
-### Test Review Checklist
-
-- [ ] Tests pass locally
-- [ ] Coverage maintained or improved
-- [ ] Tests are deterministic (no flakiness)
-- [ ] Appropriate markers used (unit/integration/slow)
-- [ ] Fixtures reused where possible
-- [ ] Test names are descriptive
-- [ ] Edge cases covered
+The retrieval and answer-quality evaluation is not a unit test: it runs the
+golden question set against a live, seeded API. See
+[evals/README.md](evals/README.md).
 
 ## Troubleshooting
 
-### Tests Fail in CI but Pass Locally
-
-**Common causes**:
-- Environment variables not set in CI
-- Missing dependencies in CI
-- Path differences (use `Path` objects)
-- Timezone differences
-
-**Solution**: Check `.github/workflows/ci.yaml` environment setup
-
-### Slow Test Suite
-
-**Solutions**:
-- Mark slow tests with `@pytest.mark.slow`
-- Run fast tests during development: `pytest -m "not slow"`
-- Use mocking for external dependencies
-- Parallelize with `pytest-xdist`: `pytest -n auto`
-
-### Import Errors
-
-**Solutions**:
-- Ensure `backend/app` is in PYTHONPATH
-- Install project in editable mode: `poetry install`
-- Check for circular imports
-
-## Resources
-
-- [pytest documentation](https://docs.pytest.org/)
-- [pytest-cov documentation](https://pytest-cov.readthedocs.io/)
-- [pytest-asyncio documentation](https://pytest-asyncio.readthedocs.io/)
-- [ruff documentation](https://docs.astral.sh/ruff/)
-- [mypy documentation](https://mypy.readthedocs.io/)
-
----
-
-## Quick Reference
-
-```bash
-# Development workflow
-make format        # Format code
-make lint          # Lint code
-make type-check    # Type check
-make test          # Run tests
-make pre-commit    # All checks
-
-# CI/CD
-git push           # Triggers GitHub Actions
-
-# Coverage
-make test          # Shows coverage report
-open htmlcov/index.html  # View HTML report
-
-# Docker
-make docker-build  # Build images
-make docker-up     # Start services
-make docker-down   # Stop services
-```
+- **Import errors.** Run the tests from the repository root with
+  `poetry run`, after `poetry install`.
+- **A test hits the timeout.** Something is waiting on a real service; mock it.
+- **Passes locally, fails in CI.** Check for missing environment variables,
+  dependencies that are only installed locally, or path assumptions; the CI
+  job environment is defined in `.github/workflows/ci.yaml`.

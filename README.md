@@ -45,10 +45,10 @@ matters for education data.
 - **Cited answers.** Answers are grounded in retrieved passages with numbered
   citations, source snippets, the expanded concepts and the textbook
   attribution. They can be streamed token by token over server-sent events.
-- **Knowledge graph explorer.** Concepts, modules and chunks live in Neo4j with
-  `PREREQ`, `RELATED` and `COVERS` relationships. The UI shows them in an
-  interactive Cytoscape.js graph, and the API serves prerequisite chains and
-  learning paths.
+- **Knowledge graph explorer.** Concepts and the textbook modules that cover
+  them live in Neo4j with `PREREQ`, `RELATED` and `COVERS` relationships. The
+  UI shows them in an interactive Cytoscape.js graph, and the API serves
+  prerequisite chains and learning paths.
 - **Hybrid retrieval.** OpenSearch BM25 and kNN search over
   [BGE-M3](https://huggingface.co/BAAI/bge-m3) embeddings are fused with
   reciprocal rank fusion. A cross-encoder reranker is available as an option.
@@ -90,6 +90,17 @@ flowchart LR
 | [`scripts/`](scripts/) | Ingestion, knowledge-graph build, indexing and evaluation |
 | [`config/subjects.yaml`](config/subjects.yaml) | Subject definitions: books, prompts, indices, theme, attribution |
 | [`infra/compose/`](infra/compose/) | Docker Compose stack for Neo4j, OpenSearch and the optional API containers |
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js 16 and React 19 on Node 24, Cytoscape.js for the graph |
+| API | FastAPI on Python 3.11–3.13 |
+| Knowledge graph | Neo4j 5.26 Community, APOC limited to `apoc.meta.*` |
+| Search | OpenSearch 3.9.0 (BM25 and kNN) |
+| Embeddings and reranking | BGE-M3 and the optional bge-reranker-v2-m3 via sentence-transformers, PyTorch 2.10 and NumPy 2 |
+| Concept extraction | spaCy (`en_core_web_sm`) and YAKE |
+| LLM | Ollama with `llama3.1:8b-instruct-q4_K_M`; OpenRouter as an opt-in remote provider |
+| Learner store | SQLite |
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers the request flows, data
 boundaries, security model and trade-offs in more detail.
@@ -153,7 +164,7 @@ Approximate memory use of the full local stack:
 | Python | 3.11, 3.12 or 3.13 |
 | [Poetry](https://python-poetry.org/docs/#installation) | 2.x |
 | [Node.js](https://nodejs.org/) | 24 LTS (pinned in [`.node-version`](.node-version)) |
-| Docker with Compose v2 | Docker Desktop or Docker Engine |
+| Docker with Compose v2 | Compose 2.24 or newer (Docker Desktop or Docker Engine) |
 | [Ollama](https://ollama.com/download) | current release |
 | Git and GNU Make | any recent version |
 
@@ -171,8 +182,8 @@ cd adaptive-knowledge-graph
 make quickstart
 ```
 
-`make quickstart` installs the Python dependencies, checks that Ollama and the
-model are available, starts Neo4j and OpenSearch with
+`make quickstart` installs the Python and frontend dependencies, checks that
+Ollama and the model are available, starts Neo4j and OpenSearch with
 `docker compose up -d --wait`, seeds US History and Economics, and prints the
 next steps. If a prerequisite is missing it stops with a message; run
 `make doctor` to see the state of every dependency.
@@ -226,6 +237,9 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
 - **A container exits or the machine starts swapping.** Neo4j and OpenSearch
   need 5–6 GB together. Give Docker Desktop more memory and close other
   applications.
+- **OpenSearch exits on Linux with a `vm.max_map_count` error.** Run
+  `sudo sysctl -w vm.max_map_count=262144`. More Linux notes are in
+  [infra/compose/README.md](infra/compose/README.md#linux-notes).
 - **Answers say no relevant content was found, or the graph is empty.** Seeding
   did not finish. Run `make seed` again and watch for errors.
 - **`/health/ready` returns `503`.** Neo4j or OpenSearch is down. Run `make up`.

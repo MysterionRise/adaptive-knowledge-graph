@@ -170,8 +170,9 @@ certs
 # OS files
 .DS_Store
 
-# Local runtime data (learner profiles, generated chunks, build output, logs)
-*.sqlite3
+# Local runtime data (learner profiles incl. SQLite -wal/-shm files, generated
+# chunks, build output, logs)
+*.sqlite3*
 data/processed/chunks_*.json
 data/processed/build/
 logs/
