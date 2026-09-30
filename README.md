@@ -184,11 +184,14 @@ cd adaptive-knowledge-graph
 make quickstart
 ```
 
-`make quickstart` installs the Python and frontend dependencies, checks that
-Ollama and the model are available, starts Neo4j and OpenSearch with
-`docker compose up -d --wait`, seeds US History and Economics, and prints the
-next steps. If a prerequisite is missing it stops with a message; run
-`make doctor` to see the state of every dependency.
+`make quickstart` runs six steps: it checks the prerequisites, installs the
+Python dependencies and the spaCy model, checks that Ollama serves the model
+(with a one-token test generation), installs the frontend dependencies, starts
+Neo4j and OpenSearch with `docker compose up -d --wait`, and seeds US History
+and Economics. It is safe to re-run: subjects that are already seeded are
+skipped. Set `SKIP_FRONTEND=1` or `SKIP_OLLAMA_CHECK=1` to skip those steps. If
+a prerequisite is missing it stops with a message; `make doctor` then reports
+the state of every dependency.
 
 ### 3. Start the API
 
@@ -220,7 +223,8 @@ generate a quiz in **Assessment**.
 | `make doctor` | Check the local environment and report what is missing |
 | `make up` / `make down` | Start or stop Neo4j and OpenSearch; `make down` keeps the data |
 | `make seed` | Seed US History and Economics into Neo4j and OpenSearch (`SUBJECT=economics` for one subject) |
-| `make run-api` | Run the API with auto-reload on port 8000 |
+| `make run-api` | Run the API with auto-reload on `127.0.0.1:8000` |
+| `make docker-up PROFILE=full` | Run the API and frontend in containers as well ([infra/compose/README.md](infra/compose/README.md)) |
 | `make test` | Run the backend test suite with coverage |
 | `make demo-eval` | Run the evaluation against the running API |
 | `make help` | List every target |
@@ -231,8 +235,10 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
 
 ### Troubleshooting
 
-- **Start with `make doctor`.** It reports missing tools, stopped services and
-  a missing model.
+- **Start with `make doctor`.** It checks the tools (Docker, Compose, Python,
+  Poetry, Node), resources (disk, RAM, Docker memory), ports, container health,
+  seed status per subject, the API and the frontend, the Ollama model with a
+  test generation, and the spaCy model. It exits non-zero only on failures.
 - **Ollama is unreachable or the model is missing.** Start Ollama
   (`ollama serve` or the desktop app), check `ollama list`, and pull the model
   again. If Ollama runs elsewhere, set `LLM_OLLAMA_HOST`.
@@ -277,7 +283,7 @@ need:
 | `STUDENT_BKT_ENABLED` | `true` | BKT mastery updates; `false` switches to a simple linear update. |
 | `STUDENT_PROFILES_DB` | `data/processed/student_profiles.sqlite3` | SQLite file for learner profiles. |
 | `STUDENT_VALIDATE_CONCEPTS` | `false` | Rejects mastery updates for concepts that are not in the subject's knowledge graph. |
-| `RATE_LIMIT_*` | see below | Per-client limits: `RATE_LIMIT_ASK` (`10/minute`), `RATE_LIMIT_QUIZ` (`5/minute`), `RATE_LIMIT_GRAPH` (`30/minute`), `RATE_LIMIT_GRAPH_QUERY` (`10/minute`), `RATE_LIMIT_STUDENT_WRITE` (`30/minute`) and `RATE_LIMIT_RECOMMENDATIONS` (`10/minute`). |
+| `RATE_LIMIT_*` | see below | Per-client limits: `RATE_LIMIT_ASK` (`10/minute`), `RATE_LIMIT_QUIZ` (`5/minute`), `RATE_LIMIT_GRAPH` (`30/minute`), `RATE_LIMIT_GRAPH_QUERY` (`10/minute`), `RATE_LIMIT_STUDENT_WRITE` (`30/minute`) and `RATE_LIMIT_RECOMMENDATIONS` (`10/minute`). Every endpoint also has a fixed default of 100 requests per minute per client, counted before authentication. |
 
 To run in production mode, generate a key and start the API without auto-reload,
 behind a TLS-terminating reverse proxy (see [SECURITY.md](SECURITY.md)):

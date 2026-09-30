@@ -136,9 +136,10 @@ Other hardening in place:
 - TLS verification for external calls is on by default; the local OpenSearch
   uses plain HTTP instead of pretending to use TLS.
 - Container images are pinned to specific versions.
-- Per-client rate limits cover Q&A, quiz generation, graph reads,
-  `/graph/query`, learner-profile writes and `/quiz/recommendations`; each
-  limit is set with a `RATE_LIMIT_*` setting.
+- Every endpoint has a default limit of 100 requests per minute per client,
+  counted before authentication. Stricter, configurable limits
+  (`RATE_LIMIT_*` settings) cover Q&A, quiz generation, graph reads,
+  `/graph/query`, learner-profile writes and `/quiz/recommendations`.
 - `X-Forwarded-For` is ignored for rate limiting unless
   `TRUST_PROXY_HEADERS=true`; then the right-most hop, the one the trusted
   proxy appended, identifies the client.

@@ -18,6 +18,10 @@ is compiled in the release pull request
   `LLM_MODE=local`. The API refuses to start with `LLM_MODE=remote` or
   `LLM_MODE=hybrid` unless you also set `PRIVACY_LOCAL_ONLY=false`
   ([#89](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/89)).
+- The Docker Compose project is now named `adaptive-kg`, so volumes from an
+  older checkout (`compose_*`) are no longer used automatically. Set
+  `COMPOSE_PROJECT_NAME=compose` to keep them, or re-seed with `make seed`
+  ([#102](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/102)).
 - `LICENSE` is now the plain MIT text. OpenStax attribution and the trademark
   notice moved to `NOTICE`
   ([#99](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/99)).

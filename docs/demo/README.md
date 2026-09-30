@@ -33,8 +33,8 @@ follow the [Quickstart](../../README.md#quickstart).
 Install the [prerequisites](../../README.md#1-install-the-prerequisites) and
 pull the Ollama model first.
 
-1. Prepare services and seed the OpenStax data. If there is no `.env` yet, this
-   creates one from `.env.demo.example`:
+1. Check Ollama and the spaCy model, start the databases and seed the OpenStax
+   data. If there is no `.env` yet, this creates one from `.env.demo.example`:
 
    ```bash
    make demo-client-prep

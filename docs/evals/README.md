@@ -28,6 +28,27 @@ poetry run python scripts/check_demo_eval.py
 Each question is asked twice, with and without KG expansion. The results are
 written to `latest.json` and `latest.md` in this directory.
 
+The evaluator paces its requests to the `/api/v1/ask` rate limit
+(`RATE_LIMIT_ASK`, 10 per minute by default, so one request every 6.25
+seconds) and retries `429` responses. A full run of 106 requests therefore
+takes about 11 minutes. Useful options:
+
+| Option | Effect |
+| --- | --- |
+| `--subject us_history` | Only cases for that subject (repeatable or comma-separated) |
+| `--limit 3` | At most N cases |
+| `--delay 2` | Minimum seconds between requests, overriding the pacing |
+| `--max-retries 5` | Retries per request after `429` |
+
+With Make, pass them through `EVAL_ARGS`:
+
+```bash
+make eval-rag EVAL_ARGS="--subject economics --limit 3"
+```
+
+`check_demo_eval.py` rejects partial reports (for example from `--limit`)
+unless you pass `--allow-partial`.
+
 ## What is measured
 
 - **Answer term recall:** the share of expected terms that appear in the answer.
