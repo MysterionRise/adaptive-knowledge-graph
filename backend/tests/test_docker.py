@@ -89,6 +89,9 @@ def test_neo4j_apoc_is_restricted_and_gds_dropped(services):
     env = services["neo4j"]["environment"]
     assert env["NEO4J_PLUGINS"] == '["apoc"]'
     assert env["NEO4J_dbms_security_procedures_allowlist"] == "apoc.meta.*"
+    # The image would otherwise default unrestricted to apoc.*
+    assert env["NEO4J_dbms_security_procedures_unrestricted"] == "apoc.meta.*"
+    assert env["NEO4J_apoc_import_file_enabled"] == "false"
     assert "graph-data-science" not in COMPOSE_FILE.read_text()
 
 

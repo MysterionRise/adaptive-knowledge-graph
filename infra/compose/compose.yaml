@@ -74,9 +74,15 @@ services:
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-password}
       # APOC core ships with the image; only the schema-introspection procedures that
-      # langchain's Neo4jGraph needs (/api/v1/graph/schema, /api/v1/graph/query) are loaded.
+      # langchain's Neo4jGraph needs (/api/v1/graph/schema, /api/v1/graph/query) are loaded, so
+      # apoc.load.*, apoc.cypher.*, apoc.periodic.* and the rest are not callable. This is the
+      # database-level backstop for LLM-generated Cypher; built-in db.* procedures are unaffected.
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_allowlist: apoc.meta.*
+      # apoc.meta.data needs unrestricted access; without this the image's APOC defaults would
+      # mark every apoc.* procedure unrestricted
+      NEO4J_dbms_security_procedures_unrestricted: apoc.meta.*
+      NEO4J_apoc_import_file_enabled: "false"
       NEO4J_server_memory_heap_max__size: 2G
       NEO4J_server_memory_pagecache_size: 1G
       NEO4J_server_default__listen__address: 0.0.0.0
