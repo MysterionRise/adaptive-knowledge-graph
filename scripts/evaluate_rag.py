@@ -13,7 +13,7 @@ Usage:
 import argparse
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -277,7 +277,7 @@ def main() -> None:
                 }
             )
 
-    generated_at = datetime.now(timezone.utc).isoformat()
+    generated_at = datetime.now(UTC).isoformat()
     summary = _summarize(results)
     report = {
         "generated_at": generated_at,

@@ -17,9 +17,10 @@ import pytest
 
 def _make_generator():
     """Create a QuizGenerator with mocked dependencies."""
-    with patch("backend.app.student.quiz_generator.get_llm_client") as mock_llm, patch(
-        "backend.app.student.quiz_generator.get_retriever"
-    ) as mock_retriever:
+    with (
+        patch("backend.app.student.quiz_generator.get_llm_client") as mock_llm,
+        patch("backend.app.student.quiz_generator.get_retriever") as mock_retriever,
+    ):
         from backend.app.student.quiz_generator import QuizGenerator
 
         mock_llm_instance = AsyncMock()

@@ -44,8 +44,7 @@ class QuizGenerator:
             Quiz object with generated questions
         """
         logger.info(
-            f"Generating quiz for topic: {topic} "
-            f"(target_difficulty={target_difficulty or 'mixed'})"
+            f"Generating quiz for topic: {topic} (target_difficulty={target_difficulty or 'mixed'})"
         )
 
         # 1. Retrieve content

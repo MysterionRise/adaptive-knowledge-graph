@@ -267,7 +267,7 @@ class RecommendationService:
                 timeout=_DEEP_DIVE_TIMEOUT_SECONDS,
             )
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Deep dive generation timed out for {concept}")
             return None
         except Exception as e:

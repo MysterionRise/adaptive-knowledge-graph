@@ -27,13 +27,14 @@ class TestAskEndpoint:
         mock_kg_expander,
     ):
         """Test successful question answering with KG expansion."""
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client
-        ), patch(
-            "backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander
-        ), patch(
-            "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
-            return_value=["photosynthesis", "chloroplast"],
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
+            patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
+            patch(
+                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                return_value=["photosynthesis", "chloroplast"],
+            ),
         ):
             response = client.post(
                 "/api/v1/ask",
@@ -72,8 +73,9 @@ class TestAskEndpoint:
         mock_llm_client,
     ):
         """Test question answering without KG expansion."""
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
         ):
             response = client.post(
                 "/api/v1/ask",
@@ -94,8 +96,9 @@ class TestAskEndpoint:
         empty_retriever = MagicMock()
         empty_retriever.retrieve.return_value = []
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=empty_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=empty_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
         ):
             response = client.post(
                 "/api/v1/ask",
@@ -113,8 +116,9 @@ class TestAskEndpoint:
         failing_llm = AsyncMock()
         failing_llm.answer_question.side_effect = LLMGenerationError("LLM timeout")
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=failing_llm
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=failing_llm),
         ):
             response = client.post(
                 "/api/v1/ask",
@@ -188,9 +192,10 @@ class TestAskEndpoint:
             }
         ]
 
-        with patch(
-            "backend.app.api.routes.ask.get_retriever", return_value=long_text_retriever
-        ), patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client):
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=long_text_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
+        ):
             response = client.post(
                 "/api/v1/ask",
                 json={
@@ -214,13 +219,14 @@ class TestAskEndpoint:
         failing_expander = MagicMock()
         failing_expander.expand_query.side_effect = Exception("Neo4j connection failed")
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client
-        ), patch(
-            "backend.app.api.routes.ask.get_kg_expander", return_value=failing_expander
-        ), patch(
-            "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
-            return_value=["photosynthesis"],
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
+            patch("backend.app.api.routes.ask.get_kg_expander", return_value=failing_expander),
+            patch(
+                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                return_value=["photosynthesis"],
+            ),
         ):
             response = client.post(
                 "/api/v1/ask",
@@ -260,13 +266,14 @@ class TestAskEndpoint:
         mock_kg_expander,
     ):
         """Test that default parameters are applied correctly."""
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client
-        ), patch(
-            "backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander
-        ), patch(
-            "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
-            return_value=["photosynthesis"],
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
+            patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
+            patch(
+                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                return_value=["photosynthesis"],
+            ),
         ):
             # Only provide question, rely on defaults
             response = client.post(
@@ -287,8 +294,9 @@ class TestAskEndpoint:
         mock_llm_client,
     ):
         """Test that response includes OpenStax attribution."""
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
         ):
             response = client.post(
                 "/api/v1/ask",

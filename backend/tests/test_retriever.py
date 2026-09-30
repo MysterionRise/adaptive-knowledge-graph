@@ -54,7 +54,7 @@ class TestReciprocalRankFusion:
     def test_respects_top_k(self):
         retriever = self._make_retriever()
         knn_hits = [self._make_hit(f"doc{i}", f"Text {i}") for i in range(5)]
-        bm25_hits = [self._make_hit(f"doc{i+5}", f"Text {i+5}") for i in range(5)]
+        bm25_hits = [self._make_hit(f"doc{i + 5}", f"Text {i + 5}") for i in range(5)]
 
         result = retriever._reciprocal_rank_fusion(knn_hits, bm25_hits, k=60, top_k=3)
         assert len(result) == 3

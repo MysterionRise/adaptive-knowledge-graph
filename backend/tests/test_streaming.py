@@ -52,8 +52,9 @@ class TestStreamingProtocol:
         """First SSE event should be metadata with sources."""
         mock_llm = self._mock_stream(["Hello", " world"])
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
         ):
             response = client.post(
                 "/api/v1/ask/stream",
@@ -81,8 +82,9 @@ class TestStreamingProtocol:
         """Token events should have type='token' and content."""
         mock_llm = self._mock_stream(["Hello", " ", "world"])
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
         ):
             response = client.post(
                 "/api/v1/ask/stream",
@@ -104,8 +106,9 @@ class TestStreamingProtocol:
         """Last SSE event should be [DONE]."""
         mock_llm = self._mock_stream(["token"])
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
         ):
             response = client.post(
                 "/api/v1/ask/stream",
@@ -127,8 +130,9 @@ class TestStreamingProtocol:
         ]
         mock_llm = self._mock_stream(["answer"])
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=long_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=long_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
         ):
             response = client.post(
                 "/api/v1/ask/stream",
@@ -147,8 +151,9 @@ class TestStreamingProtocol:
         """Stream with no tokens should still produce metadata and [DONE]."""
         mock_llm = self._mock_stream([])
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
         ):
             response = client.post(
                 "/api/v1/ask/stream",
@@ -250,8 +255,9 @@ class TestStreamingErrors:
 
         mock_llm.answer_question_stream = failing_stream
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
         ):
             response = client.post(
                 "/api/v1/ask/stream",
@@ -297,13 +303,14 @@ class TestStreamingWithKGExpansion:
         """Metadata should include expanded concepts when KG expansion is used."""
         mock_llm = self._mock_stream(["answer"])
 
-        with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever), patch(
-            "backend.app.api.routes.ask.get_llm_client", return_value=mock_llm
-        ), patch(
-            "backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander
-        ), patch(
-            "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
-            return_value=["photosynthesis", "chloroplast"],
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
+            patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
+            patch(
+                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                return_value=["photosynthesis", "chloroplast"],
+            ),
         ):
             response = client.post(
                 "/api/v1/ask/stream",
