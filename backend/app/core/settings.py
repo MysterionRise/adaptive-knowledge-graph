@@ -2,10 +2,19 @@
 Application settings and configuration.
 """
 
+from importlib.metadata import PackageNotFoundError, version
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _package_version() -> str:
+    """Installed package version: the single source of truth for ``app_version``."""
+    try:
+        return version("adaptive-knowledge-graph")
+    except PackageNotFoundError:  # a source tree that was never installed
+        return "0.0.0+unknown"
 
 
 class Settings(BaseSettings):
@@ -19,10 +28,21 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = "Adaptive Professional Certifications"
-    app_version: str = "0.2.0"
+    app_name: str = "Adaptive Knowledge Graph"
+    app_version: str = Field(default_factory=_package_version)
+    # "production" refuses to start without API_KEY and hides the API docs by default;
+    # "development" allows the keyless local quickstart (with a startup warning).
+    app_env: Literal["development", "production"] = "development"
+    # /docs, /redoc and /openapi.json. Unset or empty: on in development, off in production.
+    api_docs_enabled: bool | None = None
     debug: bool = False
     log_level: str = "INFO"
+
+    @field_validator("api_docs_enabled", mode="before")
+    @classmethod
+    def _empty_docs_flag_means_unset(cls, value: object) -> object:
+        """``API_DOCS_ENABLED=`` (empty, as in a copied .env) falls back to the APP_ENV default."""
+        return None if isinstance(value, str) and not value.strip() else value
 
     # API
     api_host: str = "127.0.0.1"
@@ -32,6 +52,8 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     rate_limit_enabled: bool = True
+    # Every endpoint except health checks, per client and endpoint, counted before auth
+    rate_limit_default: str = "100/minute"
     rate_limit_ask: str = "10/minute"  # 10 requests per minute for /ask
     rate_limit_quiz: str = "5/minute"  # 5 requests per minute for /quiz
     rate_limit_graph: str = "30/minute"  # 30 requests per minute for /graph/*
@@ -113,8 +135,12 @@ class Settings(BaseSettings):
     student_storage_backend: Literal["sqlite", "json"] = "sqlite"
     student_profiles_db: str = "data/processed/student_profiles.sqlite3"
 
-    # CORS
+    # CORS (comma-separated lists; production refuses "*")
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
+    cors_allow_methods: str = "GET,POST,OPTIONS"
+    cors_allow_headers: str = "Content-Type,X-API-Key,X-Request-ID"
+    # Rate-limit by the right-most X-Forwarded-For hop; enable only behind a reverse proxy
+    # that appends the client address.
     trust_proxy_headers: bool = False
 
     # Privacy & Compliance

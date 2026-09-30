@@ -312,9 +312,15 @@ class TestInjectionAttacks:
     def test_cypher_injection_in_concept_name(self, client):
         """Charge: Cypher injection via concept name in learning-path endpoint."""
         cypher_injection = "test'}) DETACH DELETE n //"
-        resp = client.get(
-            f"/api/v1/learning-path/{cypher_injection}",
-        )
+        adapter = MagicMock()
+        adapter._get_label.return_value = "Concept"
+        session = adapter._get_session.return_value.__enter__.return_value
+        session.run.return_value = []
+
+        with patch("backend.app.kg.neo4j_adapter.get_neo4j_adapter", return_value=adapter):
+            resp = client.get(
+                f"/api/v1/learning-path/{cypher_injection}",
+            )
         # The concept name is interpolated into a Cypher query via $name parameter,
         # but let's verify it's actually parameterized.
         # If the endpoint crashes with a Cypher syntax error, it's not properly parameterized.
@@ -322,9 +328,37 @@ class TestInjectionAttacks:
             "Cypher injection in concept name causes Cypher syntax errors, "
             "suggesting improper parameterization"
         )
+        assert session.run.called, "The learning-path query never ran, so nothing was checked"
+        for call in session.run.call_args_list:
+            assert "DETACH DELETE" not in call.args[0], (
+                "Concept name was interpolated into the Cypher text instead of a parameter"
+            )
 
-    def test_graph_query_destructive_cypher(self, client):
+    def test_graph_query_destructive_cypher(self, client, make_cypher_qa_service):
         """Charge: /graph/query allows destructive Cypher via natural language."""
+        from backend.app.kg import cypher_qa
+
+        # An innocuous question whose generated Cypher is destructive: the NL guard lets it
+        # through, the Cypher validator must block it before anything reaches Neo4j.
+        service, driver = make_cypher_qa_service("MATCH (n) DETACH DELETE n")
+        with (
+            patch("backend.app.kg.cypher_qa.get_cypher_qa_service", return_value=service),
+            patch.object(
+                cypher_qa, "validate_cypher_read_only", wraps=cypher_qa.validate_cypher_read_only
+            ) as validator,
+        ):
+            resp = client.post(
+                "/api/v1/graph/query",
+                json={"question": "Tidy up the whole graph for me"},
+            )
+        assert resp.status_code in (400, 403), (
+            "Generated DETACH DELETE should be rejected by the Cypher validator"
+        )
+        validator.assert_called_once()
+        assert "DETACH DELETE" in validator.call_args.args[0]
+        driver.session.assert_not_called()
+
+        # Obvious destructive intent is refused by the route's natural-language guard.
         with patch("backend.app.kg.cypher_qa.get_cypher_qa_service") as mock_service:
             mock_svc = MagicMock()
             mock_svc.query.return_value = {
@@ -396,8 +430,7 @@ class TestInjectionAttacks:
 class TestAuthenticationGaps:
     """Charge: Sensitive endpoints lack authentication."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_student_profile_no_auth(self, client):
+    def test_student_profile_no_auth(self, production_client):
         """Charge: Student profile is accessible without any authentication."""
         with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
             mock_service = MagicMock()
@@ -409,12 +442,11 @@ class TestAuthenticationGaps:
             )
             mock_svc.return_value = mock_service
 
-            resp = client.get("/api/v1/student/profile")
+            resp = production_client.get("/api/v1/student/profile")
             # Student data should require auth
             assert resp.status_code == 401, "Student profile is accessible without authentication"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_student_mastery_update_no_auth(self, client):
+    def test_student_mastery_update_no_auth(self, production_client):
         """Charge: Mastery can be updated without authentication."""
         with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
             mock_service = MagicMock()
@@ -427,7 +459,7 @@ class TestAuthenticationGaps:
             )
             mock_svc.return_value = mock_service
 
-            resp = client.post(
+            resp = production_client.post(
                 "/api/v1/student/mastery",
                 json={"concept": "Biology", "correct": True},
             )
@@ -435,8 +467,7 @@ class TestAuthenticationGaps:
                 "Student mastery update is accessible without authentication"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_student_reset_no_auth(self, client):
+    def test_student_reset_no_auth(self, production_client):
         """Charge: Student profile reset is accessible without authentication."""
         with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
             mock_service = MagicMock()
@@ -448,14 +479,13 @@ class TestAuthenticationGaps:
             )
             mock_svc.return_value = mock_service
 
-            resp = client.post("/api/v1/student/reset")
+            resp = production_client.post("/api/v1/student/reset")
             assert resp.status_code == 401, (
                 "Student profile reset is accessible without authentication — "
                 "anyone can wipe progress"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_graph_query_no_auth(self, client):
+    def test_graph_query_no_auth(self, production_client):
         """Charge: Natural language graph query (potential Cypher exec) has no auth."""
         with patch("backend.app.kg.cypher_qa.get_cypher_qa_service") as mock:
             mock_svc = MagicMock()
@@ -468,7 +498,7 @@ class TestAuthenticationGaps:
             }
             mock.return_value = mock_svc
 
-            resp = client.post(
+            resp = production_client.post(
                 "/api/v1/graph/query",
                 json={"question": "Show me all data"},
             )
@@ -477,8 +507,9 @@ class TestAuthenticationGaps:
                 "Graph query endpoint (Cypher execution) has no authentication"
             )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_access_other_student_profile(self, client):
+    # Runs keyless (development mode) on purpose: a production 401 would pass it vacuously.
+    @pytest.mark.xfail(strict=True, reason="Needs per-learner identity — tracked in #73")
+    def test_access_other_student_profile(self, development_client):
         """Charge: Any user can access any other user's student profile."""
         with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
             mock_service = MagicMock()
@@ -491,7 +522,7 @@ class TestAuthenticationGaps:
             mock_svc.return_value = mock_service
 
             # Access another student's data with no auth at all
-            resp = client.get(
+            resp = development_client.get(
                 "/api/v1/student/profile",
                 params={"student_id": "victim_student"},
             )
@@ -551,8 +582,9 @@ class TestStudentModelManipulation:
             "no validation against knowledge graph"
         )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_mastery_update_for_other_student(self, client):
+    # Runs keyless (development mode) on purpose: a production 401 would pass it vacuously.
+    @pytest.mark.xfail(strict=True, reason="Needs per-learner identity — tracked in #73")
+    def test_mastery_update_for_other_student(self, development_client):
         """Charge: Can update mastery for arbitrary student IDs."""
         with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
             mock_service = MagicMock()
@@ -566,7 +598,7 @@ class TestStudentModelManipulation:
             mock_svc.return_value = mock_service
 
             # Update another student's mastery
-            resp = client.post(
+            resp = development_client.post(
                 "/api/v1/student/mastery",
                 params={"student_id": "victim"},
                 json={"concept": "Biology", "correct": False},
@@ -578,25 +610,38 @@ class TestStudentModelManipulation:
                     "Can sabotage another student's mastery by passing arbitrary student_id"
                 )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_reset_other_student_profile(self, client, tmp_path):
-        """Charge: Can reset any student's profile without authorization."""
-        from backend.app.student.student_service import StudentService
+    def test_reset_other_student_profile(self, production_client, production_settings):
+        """Charge: Can reset any student's profile without authorization.
 
-        service = StudentService(storage_path=str(tmp_path / "reset_test.json"))
+        Per-learner authorization is tracked in #73. Until then, a production deployment
+        must at least refuse to reset a profile without the API key.
+        """
+        with patch("backend.app.api.routes.quiz.get_student_service") as mock_svc:
+            mock_service = MagicMock()
+            mock_service.reset_profile.return_value = {
+                "student_id": "hardworking_student",
+                "overall_ability": 0.3,
+                "mastery_levels": {},
+                "updated_at": "2024-01-01T00:00:00",
+            }
+            mock_svc.return_value = mock_service
+            params = {"student_id": "hardworking_student"}
 
-        # Build up a student's profile
-        for _ in range(10):
-            service.update_mastery("Biology", correct=True, student_id="hardworking_student")
+            anonymous = production_client.post("/api/v1/student/reset", params=params)
+            wrong_key = production_client.post(
+                "/api/v1/student/reset", params=params, headers={"X-API-Key": "not-the-key"}
+            )
+            assert anonymous.status_code == 401, "Profile reset works without an API key"
+            assert wrong_key.status_code == 401, "Profile reset works with a wrong API key"
+            mock_service.reset_profile.assert_not_called()
 
-        # Now reset it (as if we were another user)
-        service.reset_profile("hardworking_student")
-
-        profile = service.get_profile("hardworking_student")
-        assert len(profile.mastery_map) > 0, (
-            "Student profile reset clears ALL mastery data — "
-            "no confirmation, no authorization, no undo"
-        )
+            authorized = production_client.post(
+                "/api/v1/student/reset",
+                params=params,
+                headers={"X-API-Key": production_settings.api_key},
+            )
+            assert authorized.status_code == 200
+            assert mock_service.reset_profile.call_count == 1
 
 
 # =============================================================================
@@ -785,7 +830,6 @@ class TestCORSConfiguration:
             "CORS allows requests from arbitrary origins"
         )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
     def test_cors_wildcard_methods(self, client):
         """Charge: CORS allows all HTTP methods (allow_methods=['*'])."""
         resp = client.options(
@@ -799,6 +843,17 @@ class TestCORSConfiguration:
         assert "DELETE" not in allow_methods, (
             "CORS allows DELETE method — overly permissive method allowlist"
         )
+        assert resp.status_code == 400, "CORS preflight for DELETE should be refused"
+
+        # Control: the same origin may still preflight the methods the API uses.
+        allowed = client.options(
+            "/api/v1/ask",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert allowed.status_code == 200
 
     def test_cors_wildcard_headers(self, client):
         """Charge: CORS allows all headers (allow_headers=['*'])."""
@@ -826,11 +881,15 @@ class TestErrorLeakage:
 
     def test_ask_internal_error_leaks_details(self, client):
         """Charge: 500 errors leak stack traces or internal paths."""
-        with patch(
-            "backend.app.api.routes.ask.get_retriever",
-            side_effect=RuntimeError(
-                "Connection refused: bolt://internal-neo4j:7687 (user: admin, password: s3cret)"
+        with (
+            patch(
+                "backend.app.api.routes.ask.get_retriever",
+                side_effect=RuntimeError(
+                    "Connection refused: bolt://internal-neo4j:7687 (user: admin, password: s3cret)"
+                ),
             ),
+            # Keep the test hermetic: KG expansion would otherwise query a real Neo4j.
+            patch("backend.app.api.routes.ask.get_all_concepts_from_neo4j", return_value=set()),
         ):
             resp = client.post(
                 "/api/v1/ask",
@@ -1133,9 +1192,13 @@ class TestResponseSchemaConsistency:
 
     def test_500_error_always_has_detail(self, client):
         """Charge: Internal errors don't always include 'detail' field."""
-        with patch(
-            "backend.app.api.routes.ask.get_retriever",
-            side_effect=RuntimeError("Something broke"),
+        with (
+            patch(
+                "backend.app.api.routes.ask.get_retriever",
+                side_effect=RuntimeError("Something broke"),
+            ),
+            # Keep the test hermetic: KG expansion would otherwise query a real Neo4j.
+            patch("backend.app.api.routes.ask.get_all_concepts_from_neo4j", return_value=set()),
         ):
             resp = client.post(
                 "/api/v1/ask",
@@ -1154,25 +1217,22 @@ class TestResponseSchemaConsistency:
 class TestDocumentationExposure:
     """Charge: API documentation is exposed without authentication."""
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_openapi_schema_exposed(self, client):
+    def test_openapi_schema_exposed(self, production_client):
         """Charge: OpenAPI schema is publicly accessible."""
-        resp = client.get("/openapi.json")
+        resp = production_client.get("/openapi.json")
         assert resp.status_code != 200, (
             "OpenAPI schema is publicly accessible — "
             "exposes all endpoints, parameters, and internal types"
         )
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_docs_endpoint_exposed(self, client):
+    def test_docs_endpoint_exposed(self, production_client):
         """Charge: Swagger UI is publicly accessible."""
-        resp = client.get("/docs")
+        resp = production_client.get("/docs")
         assert resp.status_code != 200, "Swagger UI (/docs) is publicly accessible"
 
-    @pytest.mark.xfail(reason="Known issue - SHOULD-FIX for production")
-    def test_redoc_endpoint_exposed(self, client):
+    def test_redoc_endpoint_exposed(self, production_client):
         """Charge: ReDoc is publicly accessible."""
-        resp = client.get("/redoc")
+        resp = production_client.get("/redoc")
         assert resp.status_code != 200, "ReDoc (/redoc) is publicly accessible"
 
 
