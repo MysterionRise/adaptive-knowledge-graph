@@ -90,8 +90,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES_SOURCE: ${{ steps.notes.outputs.source }}
         run: |
-          # Tags such as v0.3.0-rc.1 are published as pre-releases.
-          case "${TAG}" in
+          # Tags such as v0.3.0-rc.1 are published as pre-releases; build metadata
+          # after "+" (v1.0.0+build-7) does not make a release a pre-release.
+          case "${TAG%%+*}" in
             *-*) prerelease=true ;;
             *) prerelease=false ;;
           esac
@@ -106,9 +107,20 @@ jobs:
               exit 0
             fi
             echo "Publishing the existing draft release ${TAG} (id ${release_id})"
+            # Keep a title and notes someone already wrote into the draft. Only fill in
+            # what is empty, from the CHANGELOG section or GitHub's generated notes.
             patch=(-X PATCH "repos/${GH_REPO}/releases/${release_id}"
-              -f "tag_name=${TAG}" -f "name=${TAG}" -F draft=false -F "prerelease=${prerelease}")
-            if [ "${NOTES_SOURCE}" = "changelog" ]; then
+              -f "tag_name=${TAG}" -F draft=false -F "prerelease=${prerelease}")
+            draft_name=$(gh api "repos/${GH_REPO}/releases/${release_id}" --jq '.name // ""')
+            if [ -z "${draft_name}" ]; then
+              patch+=(-f "name=${TAG}")
+            fi
+            draft_body=$(gh api "repos/${GH_REPO}/releases/${release_id}" --jq '.body // ""')
+            if [[ ! "${draft_body}" =~ [^[:space:]] ]]; then
+              if [ "${NOTES_SOURCE}" != "changelog" ]; then
+                gh api -X POST "repos/${GH_REPO}/releases/generate-notes" \
+                  -f "tag_name=${TAG}" --jq .body > notes.md
+              fi
               patch+=(-F "body=@notes.md")
             fi
             gh api "${patch[@]}" > /dev/null

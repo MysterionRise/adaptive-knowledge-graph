@@ -6,8 +6,8 @@ name: Docker Build
 on:
   pull_request:
     branches: [main]
-    # Everything the CPU image COPYs, plus the build inputs themselves
-    # (config/** is copied once the #119 Dockerfile lands).
+    # Everything the CPU image COPYs (see infra/docker/api.cpu.Dockerfile), plus the
+    # build inputs themselves. The image does not copy data/.
     paths:
       - "infra/docker/**"
       - "pyproject.toml"
@@ -16,7 +16,6 @@ on:
       - "backend/**"
       - "config/**"
       - "scripts/**"
-      - "data/**"
       - ".dockerignore"
       - ".github/workflows/docker-build.yml"
   workflow_dispatch:

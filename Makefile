@@ -78,8 +78,8 @@ format: ## Format code with ruff
 	poetry run ruff format backend/ scripts/
 	poetry run ruff check --fix backend/ scripts/
 
-type-check: ## Run type checking with mypy
-	poetry run mypy backend/app scripts/
+type-check: ## Run type checking with mypy (paths from [tool.mypy] files)
+	poetry run mypy
 
 pre-commit: format lint type-check test ## Run all pre-commit checks
 
