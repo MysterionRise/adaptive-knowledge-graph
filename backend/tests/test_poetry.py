@@ -48,7 +48,6 @@ def test_required_dependencies():
         "torch",
         "neo4j",
         "networkx",
-        "rdflib",
         "opensearch-py",
         "beautifulsoup4",
         "pydantic",
