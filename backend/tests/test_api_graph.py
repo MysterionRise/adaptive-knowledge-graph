@@ -719,10 +719,41 @@ class TestGraphQueryGuard:
         assert response.status_code == 503
         assert response.json()["detail"] == detail
 
+    def test_generated_cypher_error_is_502(self, client, mock_cypher_qa_service):
+        """An invalid generated query is 502, although it subclasses LLMGenerationError."""
+        from backend.app.kg.cypher_qa import GeneratedCypherError
+
+        mock_cypher_qa_service.query.side_effect = GeneratedCypherError(
+            "The model generated an invalid query"
+        )
+
+        with patch(
+            "backend.app.kg.cypher_qa.get_cypher_qa_service",
+            return_value=mock_cypher_qa_service,
+        ):
+            response = client.post(
+                "/api/v1/graph/query", json={"question": "Which concepts cover tariffs?"}
+            )
+
+        assert response.status_code == 502
+        assert response.json()["detail"] == "The model generated an invalid query"
+
+    def test_response_has_no_error_field(self, client, mock_cypher_qa_service):
+        with patch(
+            "backend.app.kg.cypher_qa.get_cypher_qa_service",
+            return_value=mock_cypher_qa_service,
+        ):
+            response = client.post(
+                "/api/v1/graph/query", json={"question": "Which concepts cover tariffs?"}
+            )
+
+        assert response.status_code == 200
+        assert set(response.json()) == {"question", "cypher", "result", "answer"}
+
     def test_error_responses_are_declared_in_openapi(self):
         responses = app.openapi()["paths"]["/api/v1/graph/query"]["post"]["responses"]
 
-        assert {"400", "401", "422", "429", "503"} <= set(responses)
+        assert {"400", "401", "422", "429", "502", "503"} <= set(responses)
 
     def test_malformed_service_result_is_500(self, client, mock_cypher_qa_service):
         mock_cypher_qa_service.query.return_value = {"question": "q", "result": {"not": "a list"}}

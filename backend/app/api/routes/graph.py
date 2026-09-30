@@ -322,14 +322,13 @@ class GraphQueryResponse(BaseModel):
     cypher: str | None = None
     result: list | str | None = None
     answer: str | None = None
-    error: str | None = None
 
 
 @router.post(
     "/graph/query",
     response_model=GraphQueryResponse,
     dependencies=[Depends(verify_api_key)],
-    responses=error_responses(400, 401, 429, 503),
+    responses=error_responses(400, 401, 429, 502, 503),
 )
 @limiter.limit(settings.rate_limit_graph_query)
 async def query_graph_natural_language(request: Request, body: GraphQueryRequest):
@@ -348,15 +347,17 @@ async def query_graph_natural_language(request: Request, body: GraphQueryRequest
     - "What concepts are related to mitosis?"
 
     Requests to modify the graph ("delete all nodes", raw Cypher write clauses)
-    are rejected with 400; an unavailable LLM or Neo4j answers 503.
+    are rejected with 400. A query the model generated that Neo4j cannot run answers
+    502; an unavailable LLM or Neo4j answers 503.
     """
     # Route-level guard: reject requests with obvious write/destructive intent
     if _is_destructive_request(body.question):
         raise HTTPException(status_code=400, detail=_READ_ONLY_DETAIL)
 
-    try:
-        from backend.app.kg.cypher_qa import get_cypher_qa_service
+    # Imported here so LangChain loads only when the endpoint is used
+    from backend.app.kg.cypher_qa import GeneratedCypherError, get_cypher_qa_service
 
+    try:
         service = get_cypher_qa_service()
 
         if body.preview_only:
@@ -377,7 +378,6 @@ async def query_graph_natural_language(request: Request, body: GraphQueryRequest
             cypher=result.get("cypher"),
             result=result.get("result"),
             answer=result.get("answer"),
-            error=result.get("error"),
         )
 
     except ValidationError as e:
@@ -391,6 +391,10 @@ async def query_graph_natural_language(request: Request, body: GraphQueryRequest
     except Neo4jConnectionError as e:
         logger.exception("Neo4j unavailable for graph query: {}", e)
         raise HTTPException(status_code=503, detail="Database connection failed") from e
+    except GeneratedCypherError as e:
+        # Subclass of LLMGenerationError, so it must be caught before the 503 below
+        logger.exception("The model generated a query Neo4j could not run: {}", e)
+        raise HTTPException(status_code=502, detail="The model generated an invalid query") from e
     except (LLMGenerationError, LLMConnectionError) as e:
         logger.exception("LLM failed during graph query: {}", e)
         raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e

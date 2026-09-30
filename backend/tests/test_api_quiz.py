@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 from backend.app.core.exceptions import (
     ContentNotFoundError,
@@ -603,25 +602,12 @@ class TestAdaptiveQuizEndpoint:
         mock_quiz_generator.generate_from_topic.assert_not_called()
 
 
-PRODUCTION_API_KEY = "production-test-key"
-
-
-@pytest.fixture
-def production_client(monkeypatch):
-    """Client for the app configured as in production: API key set, APP_ENV=production.
-
-    A configured key is enforced in every mode. APP_ENV is set as well where the
-    settings define it.
-    """
-    monkeypatch.setattr(settings, "api_key", PRODUCTION_API_KEY)
-    if "app_env" in type(settings).model_fields:
-        monkeypatch.setattr(settings, "app_env", "production")
-    return TestClient(app)
-
-
 @pytest.mark.unit
 class TestAdaptiveQuizAuth:
-    """The adaptive quiz returns learner mastery, so it requires the API key."""
+    """The adaptive quiz returns learner mastery, so it requires the API key.
+
+    Uses the production-mode app from conftest (APP_ENV=production, API key set).
+    """
 
     def test_missing_api_key_is_401(
         self, production_client, mock_quiz_generator, student_service_stub
@@ -655,7 +641,7 @@ class TestAdaptiveQuizAuth:
         student_service_stub.get_target_difficulty.assert_not_called()
 
     def test_valid_api_key_is_accepted(
-        self, production_client, mock_quiz_generator, student_service_stub
+        self, production_client, production_settings, mock_quiz_generator, student_service_stub
     ):
         with patch(
             "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
@@ -663,7 +649,7 @@ class TestAdaptiveQuizAuth:
             response = production_client.post(
                 "/api/v1/quiz/generate-adaptive",
                 params={"topic": "Photosynthesis"},
-                headers={"X-API-Key": PRODUCTION_API_KEY},
+                headers={"X-API-Key": production_settings.api_key},
             )
 
         assert response.status_code == 200

@@ -22,6 +22,7 @@ from backend.app.core.exceptions import (
     Neo4jConnectionError,
     QuizGenerationError,
 )
+from backend.app.kg.cypher_qa import GeneratedCypherError
 from backend.app.student.models import TargetDifficultyResponse
 
 BRACED = 'Ollama error: {"error": "x"}'
@@ -201,11 +202,19 @@ class TestGraphErrorLogging:
         [
             (RuntimeError(BRACED), 500),
             (ValueError(BRACED), 400),
+            (GeneratedCypherError(BRACED), 502),
             (LLMGenerationError(BRACED), 503),
             (LLMConnectionError(BRACED), 503),
             (Neo4jConnectionError(BRACED), 503),
         ],
-        ids=["unexpected", "blocked-cypher", "llm-error", "llm-unreachable", "neo4j-unavailable"],
+        ids=[
+            "unexpected",
+            "blocked-cypher",
+            "invalid-generated-cypher",
+            "llm-error",
+            "llm-unreachable",
+            "neo4j-unavailable",
+        ],
     )
     def test_graph_query_error(self, client, error_records, error, status_code):
         service = MagicMock()
