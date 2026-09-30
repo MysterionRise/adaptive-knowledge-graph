@@ -172,8 +172,12 @@ def test_subject_is_forwarded():
 
 
 def test_tribunal_run_skips_the_coverage_gate():
-    # A tribunal-only run covers far less than the global fail_under threshold
+    # A tribunal-only run covers far less than the coverage floor
     assert "pytest -m tribunal --no-cov" in run_make("test-tribunal").stdout
+
+
+def test_fast_run_mirrors_the_ci_coverage_floor():
+    assert 'pytest -m "not tribunal" --cov-fail-under=75' in run_make("test-fast").stdout
 
 
 def test_run_api_binds_loopback_by_default():
