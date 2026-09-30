@@ -1,0 +1,142 @@
+name: Set up Python and Poetry
+description: >-
+  Install Python and a pinned Poetry (via pipx), then build the in-project
+  .venv with `poetry sync`. The .venv is restored from the Actions cache and,
+  on a miss, saved again straight after the install, before any job step can
+  change it. The cache key covers the OS, runner image, full Python version,
+  Poetry version, install arguments and poetry.lock.
+
+inputs:
+  python-version:
+    description: Python version for actions/setup-python, for example "3.11".
+    required: true
+  install-args:
+    description: >-
+      Extra arguments for `poetry sync`, for example "--only dev" or
+      "--without pyirt,pybkt". They are part of the cache key.
+    required: false
+    default: ""
+  poetry-version:
+    description: Poetry version installed with pipx.
+    required: false
+    default: "2.4.1"
+  cache:
+    description: >-
+      "true" restores and saves the .venv cache; "false" always installs from
+      scratch (for environments that would overflow the repository cache quota).
+    required: false
+    default: "true"
+  free-disk-space:
+    description: >-
+      "true" deletes unused preinstalled toolchains before the install when
+      less than 25 GB is free on /.
+    required: false
+    default: "false"
+
+outputs:
+  python-version:
+    description: Full version of the installed Python.
+    value: ${{ steps.python.outputs.python-version }}
+  cache-hit:
+    description: '"true" when the .venv was restored from an exact cache key match.'
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Free disk space when the runner is low
+      if: inputs.free-disk-space == 'true'
+      shell: bash
+      run: |
+        avail_gb=$(df --output=avail -BG / | tail -n 1 | tr -dc '0-9')
+        echo "Free space on /: ${avail_gb} GB"
+        if [ "${avail_gb}" -lt 25 ]; then
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android \
+            "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}/CodeQL"
+          df -h /
+        fi
+
+    - name: Set up Python ${{ inputs.python-version }}
+      id: python
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Poetry ${{ inputs.poetry-version }} with pipx
+      shell: bash
+      env:
+        POETRY_VERSION: ${{ inputs.poetry-version }}
+        PYTHON_PATH: ${{ steps.python.outputs.python-path }}
+      run: |
+        pipx install --python "${PYTHON_PATH}" "poetry==${POETRY_VERSION}"
+        poetry --version
+        poetry config virtualenvs.in-project true
+
+    - name: Compute .venv cache key
+      id: key
+      if: inputs.cache == 'true'
+      shell: bash
+      env:
+        INSTALL_ARGS: ${{ inputs.install-args }}
+        LOCK_HASH: ${{ hashFiles('poetry.lock') }}
+        POETRY_VERSION: ${{ inputs.poetry-version }}
+        PYTHON_VERSION: ${{ steps.python.outputs.python-version }}
+      run: |
+        if [ -z "${LOCK_HASH}" ]; then
+          echo "::error::poetry.lock not found; cannot build the .venv cache key"
+          exit 1
+        fi
+        # Cache keys cannot contain commas, so the install arguments are hashed.
+        args_hash=$(printf '%s' "${INSTALL_ARGS}" | sha256sum | cut -c1-12)
+        prefix="venv-v1-${RUNNER_OS}-${RUNNER_ARCH}-${ImageOS:-unknown}-py${PYTHON_VERSION}-poetry${POETRY_VERSION}-${args_hash}-"
+        echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
+        echo "key=${prefix}${LOCK_HASH}" >> "${GITHUB_OUTPUT}"
+
+    - name: Restore .venv cache
+      id: restore
+      if: inputs.cache == 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: .venv
+        key: ${{ steps.key.outputs.key }}
+        # A venv built from an older poetry.lock is a warm start: `poetry sync`
+        # below adds, upgrades and removes packages until it matches the lock.
+        restore-keys: ${{ steps.key.outputs.prefix }}
+
+    - name: Report .venv cache result
+      shell: bash
+      env:
+        CACHE_ENABLED: ${{ inputs.cache }}
+        CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+        MATCHED_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+        PRIMARY_KEY: ${{ steps.key.outputs.key }}
+        PYTHON_VERSION: ${{ steps.python.outputs.python-version }}
+      run: |
+        if [ "${CACHE_ENABLED}" != "true" ]; then
+          result="disabled"
+        elif [ "${CACHE_HIT}" = "true" ]; then
+          result="hit (${PRIMARY_KEY})"
+        elif [ -n "${MATCHED_KEY}" ]; then
+          result="partial (restored ${MATCHED_KEY})"
+        else
+          result="miss (${PRIMARY_KEY})"
+        fi
+        echo "Python ${PYTHON_VERSION} .venv cache: ${result}" | tee -a "${GITHUB_STEP_SUMMARY}"
+
+    - name: Install dependencies (poetry sync ${{ inputs.install-args }})
+      shell: bash
+      env:
+        INSTALL_ARGS: ${{ inputs.install-args }}
+        PYTHON_PATH: ${{ steps.python.outputs.python-path }}
+      run: |
+        poetry env use "${PYTHON_PATH}"
+        # INSTALL_ARGS is a list of CLI flags, so word splitting is intended.
+        # shellcheck disable=SC2086
+        poetry sync --no-interaction ${INSTALL_ARGS}
+
+    - name: Save .venv cache
+      if: inputs.cache == 'true' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .venv
+        key: ${{ steps.key.outputs.key }}

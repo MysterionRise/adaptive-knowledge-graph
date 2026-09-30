@@ -9,7 +9,9 @@ jest.mock('@/lib/api-client', () => ({
 }));
 
 jest.mock('next/link', () => {
-  return ({ children, href }: any) => <a href={href}>{children}</a>;
+  return function MockLink({ children, href }: any) {
+    return <a href={href}>{children}</a>;
+  };
 });
 
 const readyStatus = {
