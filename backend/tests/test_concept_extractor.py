@@ -154,6 +154,22 @@ class TestYakeStrategy:
 
         assert [(m.name, m.score) for m in matches] == [("Stamp Act", pytest.approx(1 / 1.5))]
 
+    def test_keywords_resolving_to_one_concept_are_deduplicated(self):
+        extractor = ConceptExtractor(known_concepts={"Stamp Act", "Slavery"})
+        extractor._yake_extractor = MagicMock()
+        extractor._yake_extractor.extract_keywords.return_value = [
+            ("stamp act", 0.5),
+            ("stamp act protests", 0.25),  # contains "Stamp Act": same concept, better score
+            ("slavery", 1.0),
+        ]
+
+        matches = extractor.extract_concepts("...", strategy="yake")
+
+        assert [(m.name, m.score) for m in matches] == [
+            ("Stamp Act", pytest.approx(1 / 1.25)),
+            ("Slavery", pytest.approx(1 / 2.0)),
+        ]
+
     def test_yake_failure_returns_no_matches(self):
         extractor = ConceptExtractor(known_concepts=set(KNOWN))
         extractor._yake_extractor = MagicMock()

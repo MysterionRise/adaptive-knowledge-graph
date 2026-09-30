@@ -252,7 +252,8 @@ class ConceptExtractor:
         except Exception as e:
             logger.warning(f"YAKE extraction failed: {e}")
 
-        return matches
+        # Several keywords can resolve to one concept ("stamp act", "the stamp act tax")
+        return self._deduplicate(matches)
 
     def _extract_embedding(
         self, text: str, similarity_threshold: float = 0.5

@@ -606,6 +606,21 @@ class TestBuildFromRecords:
         assert edge.evidence == "The Townshend Acts built on the Stamp Act."
         assert edge.confidence == 0.5
 
+    def test_cue_phrase_edges_never_cancel_glossary_edges(self):
+        text = "\n\n".join(
+            [
+                "The Townshend Acts paved the way for the Stamp Act.",  # cue: Townshend -> Stamp
+                "### Glossary",
+                "Townshend Acts\n: taxes that followed the Stamp Act",  # glossary: Stamp -> Townshend
+            ]
+        )
+        records = [record("m1", text, key_terms=["Stamp Act", "Townshend Acts"])]
+        _, kg = self.build(records, vocabulary=[], always=[], prereq_patterns=True)
+
+        prereqs = {(r.source, r.target): r for r in edges(kg, RelationshipType.PREREQ)}
+        assert set(prereqs) == {("Stamp Act", "Townshend Acts")}
+        assert prereqs[("Stamp Act", "Townshend Acts")].provenance["source"] == "glossary"
+
     def test_prereq_patterns_have_word_boundaries(self):
         led_to = next(p for p in PREREQ_PATTERNS if p.name == "led_to")
 

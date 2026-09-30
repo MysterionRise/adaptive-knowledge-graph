@@ -863,16 +863,20 @@ class KGBuilder:
         """
         Add PREREQ edges while keeping the prerequisite graph acyclic.
 
-        Mutual pairs (each concept named in the other's definition) have no clear
-        order and are skipped; any other edge that would close a cycle is skipped too.
-        Earlier (higher-confidence) edges win.
+        Mutual pairs from the same source (each concept named in the other's
+        definition) have no clear order and are skipped; any other edge that would
+        close a cycle is skipped too. Earlier (higher-confidence) edges win, so a
+        cue-phrase edge never cancels the reverse glossary edge.
         """
-        pairs = {(edge.prerequisite, edge.dependent) for edge in edges}
+        pairs = {
+            (edge.provenance.get("source"), edge.prerequisite, edge.dependent) for edge in edges
+        }
         dag: nx.DiGraph = nx.DiGraph()
         added = 0
         for edge in edges:
             source, target = edge.prerequisite, edge.dependent
-            if source == target or (target, source) in pairs or dag.has_edge(source, target):
+            mutual = (edge.provenance.get("source"), target, source) in pairs
+            if source == target or mutual or dag.has_edge(source, target):
                 continue
             if source in dag and target in dag and nx.has_path(dag, target, source):
                 continue
