@@ -132,8 +132,10 @@ pipeline:
    default) answers from a subject-specific prompt that restricts it to the
    retrieved context and asks it to cite passages as `[1]`, `[2]`. The response
    carries the answer, the sources with scores, the expanded concepts, the model
-   and the OpenStax attribution. The API returns `503` when the LLM is
+   and the OpenStax attribution. `/ask` returns `503` when the LLM is
    unreachable and `502` when it produces an empty or invalid answer.
+   `/ask/stream` returns `503` only when the LLM is unreachable before streaming
+   starts; a later failure or an empty answer arrives as an SSE `error` event.
 
 ## Hardware requirements
 
@@ -269,7 +271,7 @@ need:
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `APP_ENV` | `development` | `development` runs without an API key and logs a warning at startup. `production` refuses to start without `API_KEY` or with a `*` in any CORS setting, and turns off `/docs`, `/redoc` and `/openapi.json` unless `API_DOCS_ENABLED=true`. |
-| `API_KEY` | empty | Required in production, where it must be at least 16 characters. In both modes it must be printable ASCII without leading or trailing whitespace, or the API refuses to start; a whitespace-only key counts as no key. Clients send it in the `X-API-Key` header to reach the protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`). |
+| `API_KEY` | empty | Required in production, where it must be at least 16 characters. In both modes it must be printable ASCII without leading or trailing whitespace, or the API refuses to start; a whitespace-only key counts as no key. Clients send it in the `X-API-Key` header to reach the protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/graph/query`). |
 | `API_DOCS_ENABLED` | unset | Unset or empty means on in development and off in production; `true` or `false` forces either. |
 | `CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS` | `http://localhost:3000,http://localhost:3001`; `GET,POST,OPTIONS`; `Content-Type,X-API-Key,X-Request-ID` | Comma-separated CORS allow-lists. |
 | `TRUST_PROXY_HEADERS` | `false` | Keys rate limits on the right-most `X-Forwarded-For` hop. Enable it only behind a proxy that appends the client IP. |

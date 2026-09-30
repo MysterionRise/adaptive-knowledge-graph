@@ -59,8 +59,10 @@ helper, so blocking and streaming answers cannot drift apart.
 7. Generate the answer with a subject-specific prompt that restricts the model
    to the retrieved context and asks for numbered citations.
 8. Return the answer, sources with scores, expanded concepts, model,
-   attribution and counts. An unreachable LLM returns `503`; an empty or
-   invalid LLM answer returns `502`.
+   attribution and counts. On `/ask`, an unreachable LLM returns `503` and an
+   empty or invalid LLM answer returns `502`. `/ask/stream` returns `503` only
+   when the LLM is unreachable before streaming starts; a later failure or an
+   empty answer is sent as an SSE `error` event.
 
 #### Window retrieval is opt-in
 
@@ -72,11 +74,13 @@ more context. It only runs when all of these hold:
 - `RAG_WINDOW_RETRIEVAL` is `true` and the request does not turn off
   `use_window_retrieval`,
 - the chunks exist in Neo4j with `NEXT` relationships between them. The
-  standard seeding does not create these; run `make build-windows` after
-  seeding to build them.
+  standard seeding does not create these; after seeding, run
+  `make build-windows SUBJECT=<id>` for each subject (without `SUBJECT` it
+  builds only the default subject).
 
-`RAG_WINDOW_SIZE` and the per-request `window_size` control how many
-neighbours are added.
+The request's `window_size` (default 1, from 0 to 3) sets how many neighbours
+are added on each side. `RAG_WINDOW_SIZE` is only the default for callers that
+do not pass a size; the Q&A endpoints always pass one.
 
 ### Adaptive assessment
 
@@ -122,7 +126,8 @@ without an API key and logs a warning at startup. `APP_ENV=production` refuses
 to start without `API_KEY` or with `*` in any CORS allow-list
 (`CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS`), and disables
 `/docs`, `/redoc` and `/openapi.json` unless `API_DOCS_ENABLED=true`. The
-protected routes (`/student/*`, `/quiz/recommendations` and `/graph/query`)
+protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations` and
+`/graph/query`)
 require the `X-API-Key` header whenever a key is configured.
 
 `PRIVACY_LOCAL_ONLY=true` (the default) makes the API refuse to start unless

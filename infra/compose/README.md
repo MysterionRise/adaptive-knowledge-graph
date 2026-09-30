@@ -50,7 +50,7 @@ make docker-ps           # show container status
 The Make targets call Compose through `scripts/compose.sh`, which adds the
 repository-root `.env` (when it exists) and, on a native Linux Docker Engine,
 the `compose.linux.yaml` override. To call Compose directly, pass the same
-options yourself:
+options yourself (leave out `--env-file .env` when there is no `.env`):
 
 ```bash
 docker compose -f infra/compose/compose.yaml --env-file .env up -d --wait neo4j opensearch

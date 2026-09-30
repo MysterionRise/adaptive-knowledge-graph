@@ -4,8 +4,8 @@ How the test suites are organised, how to run them, and what CI checks.
 
 ## Backend (pytest)
 
-Backend tests live in [`backend/tests/`](../backend/tests/): 32 test modules
-plus shared fixtures in `conftest.py`. The fixtures provide FastAPI test
+Backend tests live in [`backend/tests/`](../backend/tests/): the test modules
+in the table below plus shared fixtures in `conftest.py`. The fixtures provide FastAPI test
 clients (`client`, plus `production_client` and `development_client` for the
 two `APP_ENV` modes), captured logs, and mocks for the Neo4j adapter and
 driver, the OpenSearch retriever, the LLM client, the KG expander, the quiz
@@ -14,11 +14,12 @@ Ollama or model downloads.
 
 | Area | Modules |
 | --- | --- |
-| API routes and contracts | `test_api_ask.py`, `test_api_graph.py`, `test_api_quiz.py`, `test_api_student.py`, `test_api_subjects_availability.py`, `test_api_validators.py`, `test_api_error_logging.py`, `test_streaming.py`, `test_demo_status.py`, `test_main.py` |
+| API routes and contracts | `test_api_ask.py`, `test_api_graph.py`, `test_api_quiz.py`, `test_api_student.py`, `test_api_subjects.py`, `test_api_subjects_availability.py`, `test_api_validators.py`, `test_api_error_logging.py`, `test_streaming.py`, `test_demo_status.py`, `test_main.py` |
 | Security and rate limits | `test_auth.py`, `test_exceptions.py`, `test_rate_limit.py`, `test_api_rate_limits.py` |
-| Retrieval, embeddings and graph | `test_retriever.py`, `test_window_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_embeddings.py`, `test_neo4j_adapter.py`, `test_cypher_qa.py` |
+| Retrieval, embeddings and graph | `test_retriever.py`, `test_window_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_embeddings.py`, `test_neo4j_adapter.py`, `test_cypher_qa.py`, `test_chunker.py` |
+| Knowledge-graph building and concept extraction | `test_kg_builder.py`, `test_kg_schema.py`, `test_concept_extractor.py` |
 | LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_recommendation_service.py` |
-| Configuration and tooling | `test_settings.py`, `test_logging.py`, `test_docker.py`, `test_makefile.py`, `test_poetry.py`, `test_dx_scripts.py` |
+| Configuration and tooling | `test_settings.py`, `test_subjects.py`, `test_logging.py`, `test_docker.py`, `test_makefile.py`, `test_poetry.py`, `test_dx_scripts.py` |
 | Adversarial review | `test_tribunal_prosecution.py` |
 
 ### Running the tests
@@ -121,7 +122,7 @@ for merging into `main`):
 | Job | What it runs |
 | --- | --- |
 | Lint & Format Check | `ruff check` and `ruff format --check`, plus a `poetry.lock` consistency check |
-| Type Check (mypy) | `mypy backend/app scripts/` |
+| Type Check (mypy) | `mypy`, with the paths from `[tool.mypy] files` (`backend/app` and `scripts`) |
 | Tests (Python 3.11, 3.12, 3.13) | `pytest -m "not tribunal"`, failing below 75% coverage |
 | Frontend (lint, types, tests, build) | `npm run lint`, `npm run type-check`, Jest with coverage, `npm run build` |
 | Docker Compose Validation | Starts Neo4j and OpenSearch, waits until they are healthy and checks that they respond |
@@ -137,11 +138,13 @@ required):
 - **Link Check:** lychee in offline mode over the same Markdown files as the
   documentation check.
 - **npm audit:** part of the frontend job.
+- **E2E Tests (Playwright):** the hermetic Chromium suite (`npm run test:e2e`,
+  with the API stubbed) on every pull request, push and manual dispatch.
+- **Shellcheck:** `shellcheck scripts/*.sh`.
 
-The Playwright end-to-end job runs only on manual dispatch for now, and the
-live-stack integration suite runs locally with `make test-integration`.
+The live-stack integration suite runs locally with `make test-integration`.
 Separate workflows run CodeQL analysis, build the Docker images when their
-inputs change, and publish a GitHub Release for `v*` tags.
+inputs change, and publish a GitHub Release for `vX.Y.Z` tags on `main`.
 
 ## Evaluation
 

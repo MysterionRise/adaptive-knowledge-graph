@@ -34,8 +34,8 @@ invented numbers.
 - [ ] Edges are coloured by relationship type, matching the legend
 - [ ] Clicking a node selects it, highlights its neighbours and shows its details
 - [ ] Clicking the background clears the selection
-- [ ] Dragging pans, scrolling zooms, and "Fit to view" and "Center" work
-- [ ] "Ask the tutor" from a selected concept opens Chat with the question filled in
+- [ ] Dragging pans, scrolling zooms, and "Zoom in", "Zoom out", "Fit to view" and "Reset view" work
+- [ ] "Ask AI Tutor About This" on a selected concept opens Chat with the question filled in
 - [ ] The graph loads within a few seconds and interactions stay smooth
 
 ## 3. AI Tutor (`/chat`)

@@ -26,7 +26,7 @@ Tracked in [#105](https://github.com/MysterionRise/adaptive-knowledge-graph/issu
   read-only graph queries, and correct API input and error contracts.
 - A one-command local stack (`make quickstart`, `make doctor`).
 - Frontend platform upgrade and Node 24.
-- Backend coverage of at least 70%, enforced, and the tribunal suite on every
+- Backend coverage of at least 75%, enforced, and the tribunal suite on every
   pull request.
 - A verified quickstart, a real evaluation report, screenshots and a tagged
   v0.3.0 release.
@@ -59,7 +59,8 @@ Tracked in [#105](https://github.com/MysterionRise/adaptive-knowledge-graph/issu
   and learner-model updates.
 - Database migrations and backup and restore documentation for SQLite and
   Neo4j.
-- Browser tests against a staging stack instead of manual-only Playwright runs.
+- Browser tests against a live staging stack, beyond the hermetic Playwright
+  suite that runs on every pull request.
 
 ## Later: assessment integrity
 

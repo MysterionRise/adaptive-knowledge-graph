@@ -29,7 +29,7 @@ make test-fast              # Everything except the tribunal suite
 make test-tribunal          # Tribunal (adversarial review) suite only
 make lint                   # ruff check backend/ scripts/
 make format                 # ruff format + ruff check --fix
-make type-check             # mypy backend/app scripts/
+make type-check             # mypy (paths from [tool.mypy] files: backend/app, scripts)
 make pre-commit             # format -> lint -> type-check -> test
 poetry run pytest -m unit   # By marker: unit, integration, slow, tribunal
 poetry run pytest backend/tests/test_settings.py::test_settings_defaults   # Single test
@@ -42,7 +42,7 @@ cd frontend && npm run lint && npm run type-check && npm test -- --ci && npm run
 make ingest-books SUBJECT=economics   # Fetch and normalize a subject's books
 make build-kg SUBJECT=economics       # Build that subject's knowledge graph in Neo4j
 make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch
-make build-windows                    # Chunk NEXT edges in Neo4j (only for opt-in window retrieval)
+make build-windows SUBJECT=economics  # Chunk NEXT edges in Neo4j for one subject (only for opt-in window retrieval)
 make demo-eval                        # Golden-set evaluation against the running API
 ```
 
@@ -68,7 +68,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 3. OpenSearch retrieval: hybrid BM25 + kNN fused with reciprocal rank fusion (`RETRIEVAL_MODE=hybrid`, default) or kNN only.
 4. Optional window retrieval: opt-in, needs `VECTOR_BACKEND=neo4j` or `hybrid` and NEXT edges between chunks (built by `make build-windows`, not by the standard seed).
 5. Optional reranking: `backend/app/rag/reranker.py` (cross-encoder `BAAI/bge-reranker-v2-m3`), opt-in via `RERANKER_ENABLED=true`; retrieves `RAG_RETRIEVAL_TOP_K` candidates and keeps `top_k`.
-6. LLM answer with citations and the subject's attribution. LLM unavailable: 503; empty or invalid LLM output: 502 (the quiz endpoints use the same contract).
+6. LLM answer with citations and the subject's attribution. On `/ask`: LLM unavailable 503, empty or invalid LLM output 502 (the quiz endpoints use the same contract). `/ask/stream` returns 503 only before streaming starts; later failures and empty answers arrive as an SSE `error` event.
 
 ## Key Modules
 
@@ -91,7 +91,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 
 Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key variables:
 
-- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/recommendations`, `/graph/query`) need `X-API-Key` when a key is set. `API_KEY` must be printable ASCII without surrounding whitespace (and at least 16 characters in production), or startup fails; a whitespace-only key counts as no key. `API_DOCS_ENABLED` unset or empty follows the `APP_ENV` default; `true`/`false` force it
+- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/graph/query`) need `X-API-Key` when a key is set. `API_KEY` must be printable ASCII without surrounding whitespace (and at least 16 characters in production), or startup fails; a whitespace-only key counts as no key. `API_DOCS_ENABLED` unset or empty follows the `APP_ENV` default; `true`/`false` force it
 - `TRUST_PROXY_HEADERS=true` keys rate limits on the right-most `X-Forwarded-For` hop; only behind a proxy that appends the client IP
 - `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`; startup fails otherwise
 - `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
