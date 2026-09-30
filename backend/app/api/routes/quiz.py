@@ -125,7 +125,9 @@ async def generate_quiz(
 @router.post(
     "/quiz/generate-adaptive",
     response_model=AdaptiveQuiz,
-    responses=error_responses(404, 429, 502, 503),
+    # Returns the learner's mastery, so it is protected like the other learner-data routes
+    dependencies=[Depends(verify_api_key)],
+    responses=error_responses(401, 404, 429, 502, 503),
 )
 @limiter.limit(settings.rate_limit_quiz)
 async def generate_adaptive_quiz(
@@ -149,7 +151,10 @@ async def generate_adaptive_quiz(
         student_id: Student identifier
         subject: Subject ID (e.g., 'us_history', 'biology'). Defaults to the default subject.
 
-    Errors: same as /quiz/generate.
+    The response includes the learner's mastery, so the X-API-Key header is required
+    whenever an API key is configured (always in production).
+
+    Errors: 401 missing or invalid API key; otherwise the same as /quiz/generate.
     """
     ensure_no_markup(topic, field="topic", location="query")
     with _quiz_generation_errors("Adaptive quiz generation"):
