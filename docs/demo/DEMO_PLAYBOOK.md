@@ -73,7 +73,7 @@ Talking points:
 
 ### 8–13 min: Graph
 
-Open `/graph`.
+Open the **Graph** (`/graph`).
 
 Actions:
 
@@ -89,7 +89,7 @@ Framing:
 
 ### 13–18 min: KG-RAG chat
 
-Open `/chat`.
+Open the **AI Tutor** (`/chat`).
 
 Ask:
 
@@ -111,7 +111,7 @@ Framing:
 
 ### 18–23 min: Adaptive assessment
 
-Open `/assessment`.
+Open **Assessment** (`/assessment`).
 
 Actions:
 
@@ -181,7 +181,9 @@ Use the [5-minute script](DEMO_5MIN.md).
 ## Claims to avoid
 
 - Production-ready.
-- FERPA, COPPA or GDPR compliant.
+- Any regulatory compliance or certification (FERPA, COPPA, GDPR). The
+  accurate statement is "designed so learner data stays on the machine; no
+  compliance certification" (see [COMPLIANCE.md](../COMPLIANCE.md)).
 - Certification-grade.
 - Full IRT or psychometric validation.
 - A teacher authoring workflow (none is implemented).

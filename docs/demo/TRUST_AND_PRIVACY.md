@@ -27,8 +27,10 @@ Browser
 
 ## Education privacy caveats
 
-- FERPA, COPPA or GDPR readiness requires a legal and security review for the
-  specific deployment.
+- The project is designed so learner data stays on the machine, but it has no
+  compliance certification. Readiness for FERPA, COPPA, GDPR or similar rules
+  requires a legal and security review of the specific deployment; see
+  [COMPLIANCE.md](../COMPLIANCE.md).
 - A production pilot needs role boundaries, tenant isolation, a retention
   policy, a deletion workflow, audit logs and a documented list of
   subprocessors.
@@ -55,13 +57,13 @@ formally audited.
 - Local demo.
 - OpenStax-based prototype.
 - Synthetic learner data.
-- Local-first architecture.
+- Local-first architecture: designed so learner data stays on the machine.
 - Evaluation-backed KG-RAG experiment.
 
 ## Claims to avoid
 
-- FERPA compliant.
-- COPPA compliant.
+- Any regulatory compliance or certification (FERPA, COPPA, GDPR). There is
+  no compliance certification.
 - Production-ready.
 - Certification-grade assessment.
 - Psychometrically validated difficulty.

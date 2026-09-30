@@ -52,10 +52,17 @@ Restart the dev server after changing environment variables.
 | `/demo-status` | Readiness of services, seeded data and the latest evaluation |
 | `/about` | Project overview and attribution |
 
+A shared navigation bar (Graph, AI Tutor, Compare, Assessment, Demo Status,
+About) appears on every page. Unknown URLs show a "Page not found" page, and an
+unexpected error shows an error page with **Try again**.
+
 ## Key UI surfaces
 
-- **Chat** streams answers and shows citations, source scores, expanded
-  concepts and a KG expansion toggle.
+- **Subject picker** lists the configured subjects. Subjects without seeded
+  data are marked "Coming soon" and cannot be selected. The choice is saved in
+  the browser (`localStorage` key `akg-preferences`) and survives a reload.
+- **AI Tutor** (`/chat`) streams answers and shows citations, source scores,
+  expanded concepts and a KG expansion toggle.
 - **Graph** colours edges by relationship type (`PREREQ`, `RELATED` and
   `COVERS`) and sizes nodes by importance.
 - **Assessment** generates topic-based questions, updates synthetic mastery

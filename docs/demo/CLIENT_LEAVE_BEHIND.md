@@ -54,10 +54,10 @@ See the [pilot outline](CLIENT_PILOT_PROPOSAL.md) for details.
 
 ## Current boundaries
 
-This is not yet:
+It is designed so learner data stays on the machine, but it has no compliance
+certification (for example under FERPA, COPPA or GDPR). It is also not yet:
 
 - production certification infrastructure
-- FERPA, COPPA or GDPR certified
 - integrated with an LMS or LTI
 - psychometrically calibrated
 - a proctoring or credentialing product

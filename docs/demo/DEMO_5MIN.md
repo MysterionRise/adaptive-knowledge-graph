@@ -36,7 +36,7 @@ Say:
 
 ## 0:45–1:35: Knowledge graph
 
-Open `/graph`.
+Open the **Graph** (`/graph`).
 
 Show:
 
@@ -50,7 +50,7 @@ Say:
 
 ## 1:35–2:45: KG-RAG chat
 
-Open `/chat`.
+Open the **AI Tutor** (`/chat`).
 
 Ask:
 
@@ -71,7 +71,7 @@ Say:
 
 ## 2:45–3:50: Adaptive practice
 
-Open `/assessment`.
+Open **Assessment** (`/assessment`).
 
 Generate a quiz for `The American Revolution` and show:
 

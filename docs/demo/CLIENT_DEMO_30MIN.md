@@ -65,7 +65,7 @@ Talking points:
 
 ### 8–14 min: Content and citations
 
-Open `/chat`.
+Open the **AI Tutor** (`/chat`).
 
 Ask:
 
@@ -87,7 +87,7 @@ Say:
 
 ### 14–19 min: The knowledge graph
 
-Open `/graph`.
+Open the **Graph** (`/graph`).
 
 Actions:
 
@@ -104,7 +104,7 @@ Say:
 
 ### 19–24 min: Adaptive practice
 
-Open `/assessment`.
+Open **Assessment** (`/assessment`).
 
 Actions:
 
@@ -157,7 +157,9 @@ Describe what a constrained pilot would look like (see the
 ## Claims to avoid
 
 - Production-ready
-- FERPA, COPPA or GDPR compliant
+- Any regulatory compliance or certification (FERPA, COPPA, GDPR). Say
+  instead: "designed so learner data stays on the machine; no compliance
+  certification" (see [COMPLIANCE.md](../COMPLIANCE.md))
 - Psychometrically validated
 - Certification-grade
 - Hallucination-free

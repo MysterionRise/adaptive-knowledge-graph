@@ -22,8 +22,9 @@ invented numbers.
 
 - [ ] The page loads without console errors
 - [ ] Graph statistics (concepts, modules, relationships) come from the API
-- [ ] Navigation to Graph, Chat, Comparison and Assessment works
-- [ ] The subject picker lists the seeded subjects and switching subject updates the statistics
+- [ ] The statistics cards (Concepts, Modules, Relationships) show API values
+- [ ] The subject picker lists every configured subject; subjects without seeded data show "Coming soon" and cannot be selected
+- [ ] Switching subject updates the statistics, and the choice survives a reload (browser storage key `akg-preferences`)
 - [ ] The OpenStax attribution is visible and its links open in a new tab
 
 ## 2. Knowledge graph (`/graph`)
@@ -37,7 +38,7 @@ invented numbers.
 - [ ] "Ask the tutor" from a selected concept opens Chat with the question filled in
 - [ ] The graph loads within a few seconds and interactions stay smooth
 
-## 3. Chat (`/chat`)
+## 3. AI Tutor (`/chat`)
 
 - [ ] The example questions match the selected subject (for US History, for example, "What caused the American Revolution?")
 - [ ] Sending is disabled for an empty input; Enter and the Send button both submit
@@ -50,7 +51,7 @@ invented numbers.
 ## 4. Comparison (`/comparison`)
 
 - [ ] Example questions fill the input; an empty question disables "Compare"
-- [ ] Both panels (KG-expanded and plain retrieval) show loading states, then answers
+- [ ] Both panels (KG-expanded and plain retrieval) show loading states, then answers rendered as Markdown (lists and emphasis display correctly)
 - [ ] The KG panel lists the expanded concepts; both panels show retrieval counts and sources
 - [ ] Differences between the two answers are easy to see
 
@@ -63,7 +64,7 @@ invented numbers.
 - [ ] Resetting the profile returns mastery to its initial state
 - [ ] With `API_KEY` set on the backend, these calls work when `NEXT_PUBLIC_API_KEY` matches and fail clearly when it does not
 
-## 6. Demo status (`/demo-status`)
+## 6. Demo Status (`/demo-status`)
 
 - [ ] Neo4j, OpenSearch and Ollama report their real state
 - [ ] Seeded subject data is listed with counts
@@ -76,8 +77,11 @@ invented numbers.
 
 ## 8. Navigation
 
-- [ ] Every page links back to Home
+- [ ] The shared navigation bar (Graph, AI Tutor, Compare, Assessment, Demo Status, About) appears on every page and highlights the current one
+- [ ] The logo returns to Home
 - [ ] Browser back and forward buttons work and the URL updates on each navigation
+- [ ] An unknown URL shows "Page not found" with a link to the home page
+- [ ] An unexpected error shows the error page, and "Try again" recovers
 
 ## 9. Accessibility
 

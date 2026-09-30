@@ -213,8 +213,8 @@ npm run dev
 ```
 
 Open <http://localhost:3000>. Try asking "What was the Stamp Act and how did it
-lead to colonial resistance?" in **Chat**, click around the **Graph**, then
-generate a quiz in **Assessment**.
+lead to colonial resistance?" in the **AI Tutor**, click around the **Graph**,
+then generate a quiz in **Assessment**.
 
 ### Everyday commands
 
