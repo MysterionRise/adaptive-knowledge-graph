@@ -1,0 +1,19 @@
+# Linux Docker Engine override: it has no host.docker.internal, so map that name to the host
+# gateway (the docker0 address, usually 172.17.0.1) for the API containers.
+#
+# Not for Docker Desktop, Rancher Desktop, Colima or OrbStack: they resolve host.docker.internal
+# to the host themselves, and on the VM-based ones host-gateway would point at the VM instead.
+# The Makefile and scripts/*.sh (scripts/lib.sh compose()) add this file automatically on a Linux
+# host whose Docker engine is none of those; by hand:
+#   docker compose -f infra/compose/compose.yaml -f infra/compose/compose.linux.yaml --profile cpu up -d --wait
+#
+# The host Ollama must also listen on that address (the default is 127.0.0.1 only), e.g.
+# OLLAMA_HOST=172.17.0.1:11434 in its service environment (then set LLM_OLLAMA_HOST to match for
+# host-side tools), or OLLAMA_HOST=0.0.0.0 behind a firewall that blocks port 11434.
+services:
+  api-cpu:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  api-gpu:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
