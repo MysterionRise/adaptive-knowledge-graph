@@ -7,10 +7,12 @@ by relevance to the query before passing them to the LLM.
 from __future__ import annotations
 
 import copy
+import threading
 
 from loguru import logger
 
 from backend.app.core.settings import settings
+from backend.app.nlp.embeddings import resolve_device
 
 
 class Reranker:
@@ -18,31 +20,27 @@ class Reranker:
 
     def __init__(self) -> None:
         self._model = None
+        self._load_lock = threading.Lock()
 
     @property
     def is_loaded(self) -> bool:
         return self._model is not None
 
     def load(self) -> None:
-        """Load the cross-encoder model."""
+        """Load the cross-encoder model (thread-safe; concurrent callers load it once)."""
         if self._model is not None:
             return
 
-        from sentence_transformers import CrossEncoder
+        with self._load_lock:
+            if self._model is not None:
+                return
 
-        device = settings.reranker_device
-        try:
-            import torch
+            from sentence_transformers import CrossEncoder
 
-            if device == "cuda" and not torch.cuda.is_available():
-                logger.warning("CUDA not available for reranker, falling back to CPU")
-                device = "cpu"
-        except ImportError:
-            device = "cpu"
-
-        logger.info(f"Loading reranker model {settings.reranker_model} on {device}")
-        self._model = CrossEncoder(settings.reranker_model, device=device)
-        logger.info("Reranker model loaded")
+            device = resolve_device(settings.reranker_device)
+            logger.info(f"Loading reranker model {settings.reranker_model} on {device}")
+            self._model = CrossEncoder(settings.reranker_model, device=device)
+            logger.info("Reranker model loaded")
 
     def rerank(self, query: str, chunks: list[dict], top_k: int) -> list[dict]:
         """Rerank chunks by relevance to query.
@@ -79,11 +77,14 @@ class Reranker:
 
 
 _reranker: Reranker | None = None
+_reranker_lock = threading.Lock()
 
 
 def get_reranker() -> Reranker:
     """Get the global reranker singleton."""
     global _reranker
     if _reranker is None:
-        _reranker = Reranker()
+        with _reranker_lock:
+            if _reranker is None:
+                _reranker = Reranker()
     return _reranker
