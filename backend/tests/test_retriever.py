@@ -175,6 +175,58 @@ class TestRetrieveMode:
 
 
 @pytest.mark.unit
+class TestCreateCollection:
+    """Index creation body: kNN mapping and replica count."""
+
+    def _make_retriever(self):
+        with patch("backend.app.rag.retriever.get_embedding_model"):
+            from backend.app.rag.retriever import OpenSearchRetriever
+
+            retriever = OpenSearchRetriever(index_name="textbook_chunks_test")
+        retriever.client = MagicMock()
+        retriever.client.indices.exists.return_value = False
+        return retriever
+
+    def _created_body(self, retriever) -> dict:
+        create_call = retriever.client.indices.create.call_args
+        assert create_call.kwargs["index"] == "textbook_chunks_test"
+        return create_call.kwargs["body"]
+
+    def test_new_index_has_no_replicas_by_default(self, monkeypatch):
+        """0 replicas keeps a single-node dev cluster green instead of permanently yellow."""
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "opensearch_number_of_replicas", 0)
+        retriever = self._make_retriever()
+
+        retriever.create_collection(embedding_dim=1024)
+
+        body = self._created_body(retriever)
+        assert body["settings"]["index"]["number_of_replicas"] == 0
+        assert body["settings"]["index"]["knn"] is True
+        assert body["mappings"]["properties"]["embedding"]["dimension"] == 1024
+
+    def test_replicas_follow_setting(self, monkeypatch):
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "opensearch_number_of_replicas", 2)
+        retriever = self._make_retriever()
+
+        retriever.create_collection(embedding_dim=8)
+
+        assert self._created_body(retriever)["settings"]["index"]["number_of_replicas"] == 2
+
+    def test_existing_index_is_left_alone(self):
+        retriever = self._make_retriever()
+        retriever.client.indices.exists.return_value = True
+
+        retriever.create_collection(embedding_dim=1024)
+
+        retriever.client.indices.create.assert_not_called()
+        retriever.client.indices.delete.assert_not_called()
+
+
+@pytest.mark.unit
 class TestCollectionInfo:
     """Tests for get_collection_info."""
 
@@ -205,3 +257,105 @@ class TestCollectionInfo:
         retriever.client.indices.exists.return_value = False
         info = retriever.get_collection_info()
         assert info["exists"] is False
+
+
+@pytest.mark.unit
+class TestDefaultSubjectIndex:
+    """Without a subject, retrieval uses default_subject's prefixed index."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_registry(self):
+        from backend.app.rag.retriever import clear_retrievers
+
+        clear_retrievers()
+        yield
+        clear_retrievers()
+
+    def test_retriever_without_index_uses_default_subject_index(self):
+        from backend.app.core.subjects import get_subject
+
+        with patch("backend.app.rag.retriever.get_embedding_model"):
+            from backend.app.rag.retriever import OpenSearchRetriever
+
+            retriever = OpenSearchRetriever()
+
+        assert retriever.index_name == get_subject(None).database.opensearch_index
+        assert retriever.index_name != "textbook_chunks"
+
+    def test_get_retriever_none_resolves_default_subject(self):
+        from backend.app.core.subjects import get_default_subject_id, get_subject
+        from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
+
+        default_id = get_default_subject_id()
+        with (
+            patch("backend.app.rag.retriever.get_embedding_model"),
+            patch.object(OpenSearchRetriever, "connect") as mock_connect,
+        ):
+            retriever = get_retriever(None)
+            assert get_retriever(default_id) is retriever
+
+        assert retriever.index_name == get_subject(default_id).database.opensearch_index
+        assert mock_connect.called
+
+    def test_get_retriever_uses_each_subjects_index(self):
+        from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
+
+        with (
+            patch("backend.app.rag.retriever.get_embedding_model"),
+            patch.object(OpenSearchRetriever, "connect"),
+        ):
+            economics = get_retriever("economics")
+            history = get_retriever("us_history")
+
+        assert economics is not history
+        assert economics.index_name == "textbook_chunks_economics"
+        assert history.index_name == "textbook_chunks_us_history"
+
+    def test_get_retriever_reconnects_cached_retriever(self):
+        from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
+
+        with (
+            patch("backend.app.rag.retriever.get_embedding_model"),
+            patch.object(OpenSearchRetriever, "connect") as mock_connect,
+        ):
+            get_retriever("us_history")
+            get_retriever("us_history")  # client is still None -> reconnect
+
+        assert mock_connect.call_count == 2
+
+    def test_unknown_subject_raises_key_error(self):
+        from backend.app.rag.retriever import get_retriever
+
+        with pytest.raises(KeyError):
+            get_retriever("no_such_subject")
+
+    def test_concurrent_first_calls_create_one_retriever(self):
+        import threading
+        import time
+
+        from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
+
+        created: list[OpenSearchRetriever] = []
+
+        def slow_connect(self):
+            time.sleep(0.05)  # widen the race window
+            created.append(self)
+            self.client = MagicMock()
+
+        results: list[OpenSearchRetriever] = []
+        with (
+            patch("backend.app.rag.retriever.get_embedding_model"),
+            patch.object(OpenSearchRetriever, "connect", slow_connect),
+        ):
+            threads = [
+                threading.Thread(target=lambda: results.append(get_retriever("us_history")))
+                for _ in range(8)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+        assert len(created) == 1
+        assert len(results) == 8
+        assert all(result is created[0] for result in results)

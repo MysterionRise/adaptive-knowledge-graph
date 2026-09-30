@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, useCallback, useId, useMemo } from 'react';
 import cytoscape, {
   Core,
   NodeSingular,
   EdgeSingular,
+  EventObject,
 } from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import type { GraphData } from '@/lib/types';
@@ -35,12 +36,25 @@ const DEFAULT_CHAPTER_COLORS: Record<string, string> = {
   'default': '#6366f1',
 };
 
+// Stable default, so a missing prop never looks like new highlights on a re-render
+const NO_HIGHLIGHTS: string[] = [];
+
+// Number of concepts named in the text summary for screen readers
+const SUMMARY_CONCEPT_COUNT = 10;
+
 interface KnowledgeGraphProps {
   data: GraphData;
   onNodeClick?: (nodeId: string, nodeName: string) => void;
   highlightedConcepts?: string[];
   className?: string;
   chapterColors?: Record<string, string>; // Dynamic colors from subject theme
+}
+
+interface SelectedNodeInfo {
+  id: string;
+  label: string;
+  importance: number;
+  connections: number;
 }
 
 // Helper to get color based on chapter/topic
@@ -56,10 +70,44 @@ function getNodeColor(node: NodeSingular, chapterColors: Record<string, string>)
   return chapterColors.default || DEFAULT_CHAPTER_COLORS.default;
 }
 
+function clearFocus(cy: Core) {
+  cy.nodes().removeClass('selected highlighted faded');
+  cy.edges().removeClass('highlighted faded');
+}
+
+/** Highlight the nodes whose label matches one of `concepts` and fade the others. */
+function applyHighlights(cy: Core, concepts: string[]) {
+  cy.nodes().removeClass('highlighted faded');
+  cy.edges().removeClass('highlighted faded');
+
+  const wanted = concepts.map((concept) => concept.trim().toLowerCase()).filter(Boolean);
+  if (wanted.length === 0) return;
+
+  const highlightedNodes = cy.nodes().filter((node) => {
+    const label = String(node.data('label') ?? '').toLowerCase();
+    return wanted.some((concept) => label === concept || label.includes(concept));
+  });
+  // No concept is on this graph: keep the graph readable instead of fading every node.
+  if (highlightedNodes.length === 0) return;
+
+  highlightedNodes.addClass('highlighted');
+
+  // Get all connected edges between highlighted nodes
+  const connectedEdges = highlightedNodes.edgesWith(highlightedNodes);
+  connectedEdges.addClass('highlighted');
+
+  // Fade non-highlighted nodes for focus
+  cy.nodes().not(highlightedNodes).addClass('faded');
+  cy.edges().not(connectedEdges).addClass('faded');
+
+  // Fit view to highlighted nodes
+  cy.fit(highlightedNodes, 80);
+}
+
 export default function KnowledgeGraph({
   data,
   onNodeClick,
-  highlightedConcepts = [],
+  highlightedConcepts = NO_HIGHLIGHTS,
   className = '',
   chapterColors,
 }: KnowledgeGraphProps) {
@@ -70,16 +118,31 @@ export default function KnowledgeGraph({
   );
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const animationRef = useRef<number | null>(null);
+  const colorsRef = useRef(effectiveColors);
+  const summaryId = useId();
 
+  // A selection belongs to one data set: a new graph starts without one.
+  const [selection, setSelection] = useState<{ data: GraphData; node: SelectedNodeInfo } | null>(
+    null
+  );
+  const selectedNode = selection?.data === data ? selection.node : null;
+
+  // Called from Cytoscape handlers. As effect events they always see the latest props, so a
+  // parent passing a new onNodeClick function never rebuilds (and re-lays out) the graph.
+  const handleNodeTap = useEffectEvent((node: SelectedNodeInfo) => {
+    setSelection({ data, node });
+    onNodeClick?.(node.id, node.label);
+  });
+  const handleBackgroundTap = useEffectEvent(() => setSelection(null));
+
+  // Build the graph and run the layout once per data set.
   useEffect(() => {
-    if (!containerRef.current || !data) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     // Initialize Cytoscape
     const cy = cytoscape({
-      container: containerRef.current,
+      container,
       elements: {
         nodes: data.nodes,
         edges: data.edges,
@@ -89,7 +152,7 @@ export default function KnowledgeGraph({
           selector: 'node',
           style: {
             'label': 'data(label)',
-            'background-color': (ele: NodeSingular) => getNodeColor(ele, effectiveColors),
+            'background-color': (ele: NodeSingular) => getNodeColor(ele, colorsRef.current),
             'width': (ele: NodeSingular) => {
               const importance = ele.data('importance') || 0.5;
               return 25 + importance * 45; // Size 25-70px based on importance
@@ -217,14 +280,11 @@ export default function KnowledgeGraph({
     cyRef.current = cy;
 
     // Node click handler with enhanced visual feedback
-    cy.on('tap', 'node', (event) => {
-      const node = event.target;
-      const nodeId = node.id();
-      const nodeName = node.data('label');
+    cy.on('tap', 'node', (event: EventObject) => {
+      const node = event.target as NodeSingular;
 
       // Remove all previous classes
-      cy.nodes().removeClass('selected highlighted faded');
-      cy.edges().removeClass('highlighted faded');
+      clearFocus(cy);
 
       // Add selection to clicked node
       node.addClass('selected');
@@ -242,79 +302,59 @@ export default function KnowledgeGraph({
       cy.nodes().not(node).not(connectedNodes).addClass('faded');
       cy.edges().not(connectedEdges).addClass('faded');
 
-      setSelectedNode(nodeId);
-
-      // Call parent callback if provided
-      if (onNodeClick) {
-        onNodeClick(nodeId, nodeName);
-      }
+      handleNodeTap({
+        id: node.id(),
+        label: node.data('label'),
+        importance: Number(node.data('importance') ?? 0),
+        connections: connectedNodes.length,
+      });
     });
 
     // Click on background to reset view
-    cy.on('tap', (event) => {
+    cy.on('tap', (event: EventObject) => {
       if (event.target === cy) {
-        cy.nodes().removeClass('selected highlighted faded');
-        cy.edges().removeClass('highlighted faded');
-        setSelectedNode(null);
+        clearFocus(cy);
+        handleBackgroundTap();
       }
     });
 
-    // Hover effects for better interactivity
-    cy.on('mouseover', 'node', (event) => {
-      const node = event.target;
-      if (!node.hasClass('selected')) {
-        node.style('cursor', 'pointer');
-      }
+    // Pointer cursor over nodes
+    cy.on('mouseover', 'node', () => {
+      container.style.cursor = 'pointer';
+    });
+    cy.on('mouseout', 'node', () => {
+      container.style.cursor = '';
     });
 
     // Cleanup
     return () => {
       cy.destroy();
+      if (cyRef.current === cy) cyRef.current = null;
     };
-  }, [data, onNodeClick, effectiveColors]);
+  }, [data]);
 
-  // Update highlighted concepts when prop changes (from chat page)
+  // Recolour the nodes when the subject theme changes, without rebuilding the graph.
+  useEffect(() => {
+    colorsRef.current = effectiveColors;
+    cyRef.current?.style().update();
+  }, [effectiveColors]);
+
+  // Highlight the concepts sent from the chat page, again after every rebuild of the graph.
   useEffect(() => {
     if (!cyRef.current) return;
+    applyHighlights(cyRef.current, highlightedConcepts);
+  }, [data, highlightedConcepts]);
 
-    const cy = cyRef.current;
-
-    // Remove all highlights and fades
-    cy.nodes().removeClass('highlighted faded');
-    cy.edges().removeClass('highlighted faded');
-
-    // Add highlights for specified concepts
-    if (highlightedConcepts.length > 0) {
-      const highlightedNodes = cy.collection();
-
-      highlightedConcepts.forEach((conceptName) => {
-        const node = cy.nodes().filter((n) => {
-          const label = n.data('label') || '';
-          return label.toLowerCase() === conceptName.toLowerCase() ||
-                 label.toLowerCase().includes(conceptName.toLowerCase());
-        });
-        if (node.length > 0) {
-          highlightedNodes.merge(node);
-        }
-      });
-
-      // Highlight matched nodes
-      highlightedNodes.addClass('highlighted');
-
-      // Get all connected edges between highlighted nodes
-      const connectedEdges = highlightedNodes.edgesWith(highlightedNodes);
-      connectedEdges.addClass('highlighted');
-
-      // Fade non-highlighted nodes for focus
-      cy.nodes().not(highlightedNodes).addClass('faded');
-      cy.edges().not(connectedEdges).addClass('faded');
-
-      // Fit view to highlighted nodes
-      if (highlightedNodes.length > 0) {
-        cy.fit(highlightedNodes, 80);
-      }
-    }
-  }, [highlightedConcepts]);
+  // Text alternative for the canvas: the most important concepts of the graph.
+  const summary = useMemo(() => {
+    const topConcepts = [...data.nodes]
+      .sort((a, b) => (b.data.importance ?? 0) - (a.data.importance ?? 0))
+      .slice(0, SUMMARY_CONCEPT_COUNT)
+      .map((node) => node.data.label);
+    return topConcepts.length > 0
+      ? `Most important concepts: ${topConcepts.join(', ')}.`
+      : 'The graph has no concepts yet.';
+  }, [data]);
 
   // Zoom controls
   const handleZoomIn = useCallback(() => {
@@ -333,10 +373,9 @@ export default function KnowledgeGraph({
   }, []);
 
   const handleResetView = useCallback(() => {
+    setSelection(null);
     if (!cyRef.current) return;
-    cyRef.current.nodes().removeClass('selected highlighted faded');
-    cyRef.current.edges().removeClass('highlighted faded');
-    setSelectedNode(null);
+    clearFocus(cyRef.current);
     cyRef.current.fit(undefined, 50);
   }, []);
 
@@ -344,9 +383,18 @@ export default function KnowledgeGraph({
     <div className={`relative ${className}`}>
       <div
         ref={containerRef}
+        role="img"
+        aria-label={`Knowledge graph with ${data.nodes.length} concepts and ${data.edges.length} relationships`}
+        aria-describedby={summaryId}
         className="cytoscape-container w-full h-full bg-gray-50 rounded-lg border border-gray-200"
         style={{ minHeight: '600px' }}
       />
+      <div id={summaryId} className="sr-only">
+        <p>{summary}</p>
+        {highlightedConcepts.length > 0 && (
+          <p>Highlighted concepts: {highlightedConcepts.join(', ')}.</p>
+        )}
+      </div>
 
       {/* Legend */}
       <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md p-4 border border-gray-200">
@@ -417,19 +465,19 @@ export default function KnowledgeGraph({
             </h4>
           </div>
           <p className="text-lg font-bold text-gray-900 mb-2">
-            {cyRef.current?.getElementById(selectedNode).data('label')}
+            {selectedNode.label}
           </p>
           <div className="flex items-center gap-4 text-sm">
             <div className="flex items-center gap-1.5">
               <span className="text-gray-500">Importance:</span>
               <span className="font-semibold text-emerald-600">
-                {(cyRef.current?.getElementById(selectedNode).data('importance') * 100).toFixed(0)}%
+                {(selectedNode.importance * 100).toFixed(0)}%
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-gray-500">Connections:</span>
               <span className="font-semibold text-blue-600">
-                {cyRef.current?.getElementById(selectedNode).neighborhood().nodes().length}
+                {selectedNode.connections}
               </span>
             </div>
           </div>

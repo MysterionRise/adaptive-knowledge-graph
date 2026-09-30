@@ -1,9 +1,10 @@
 import { test, expect, graphData } from './fixtures';
 
 test.describe('Graph Visualization Page', () => {
-  test('shows the page heading', async ({ page }) => {
+  test('shows the page heading and title', async ({ page }) => {
     await page.goto('/graph');
 
+    await expect(page).toHaveTitle('Knowledge Graph | Adaptive Knowledge Graph');
     await expect(
       page.getByRole('heading', { name: 'Knowledge Graph Visualization' })
     ).toBeVisible();
@@ -24,6 +25,18 @@ test.describe('Graph Visualization Page', () => {
     const url = new URL(api.calls('GET /graph/data')[0].url());
     expect(url.searchParams.get('subject')).toBe('us_history');
     expect(url.searchParams.get('limit')).toBe('100');
+  });
+
+  test('describes the graph for screen readers', async ({ page }) => {
+    await page.goto('/graph');
+
+    const graph = page.getByRole('img', {
+      name: `Knowledge graph with ${graphData.nodes.length} concepts and ${graphData.edges.length} relationships`,
+    });
+    await expect(graph).toBeVisible();
+    await expect(graph).toHaveAccessibleDescription(
+      'Most important concepts: American Revolution, Constitution, Declaration of Independence, Colonial America.'
+    );
   });
 
   test('shows usage instructions', async ({ page }) => {
@@ -53,21 +66,44 @@ test.describe('Graph Visualization Page', () => {
     }
   });
 
-  test('shows an error when graph data cannot be loaded', async ({ page, api }) => {
+  test('shows the error with a retry action when graph data cannot be loaded', async ({
+    page,
+    api,
+  }) => {
     api.on('GET /graph/data', { status: 503, json: { detail: 'Neo4j unavailable' } });
 
     await page.goto('/graph');
 
-    await expect(
-      page.getByText('Failed to load graph data. Please ensure the backend is running.')
-    ).toBeVisible();
-    await expect(page.getByText('No graph data available')).toBeVisible();
+    const alert = page.getByRole('main').getByRole('alert');
+    await expect(alert).toContainText('Unable to load the knowledge graph.');
+    await expect(alert).toContainText('Neo4j unavailable');
+    await expect(page.locator('.cytoscape-container')).toHaveCount(0);
+
+    api.on('GET /graph/data', { json: graphData });
+    await page.getByRole('button', { name: 'Retry' }).click();
+
+    await expect(page.locator('.cytoscape-container canvas').first()).toBeVisible();
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   });
 
-  test('navigates back to home', async ({ page }) => {
+  test('explains an empty graph', async ({ page, api }) => {
+    api.on('GET /graph/data', { json: { nodes: [], edges: [] } });
+
     await page.goto('/graph');
 
-    await page.getByRole('button', { name: 'Back to home' }).click();
+    await expect(page.getByText('No graph data available')).toBeVisible();
+    await expect(
+      page.getByText('This subject has no concepts in the knowledge graph yet.')
+    ).toBeVisible();
+  });
+
+  test('goes back to home from the navigation bar', async ({ page }) => {
+    await page.goto('/graph');
+
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Adaptive Knowledge Graph' })
+      .click();
 
     await expect(page).toHaveURL('/');
   });

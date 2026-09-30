@@ -10,18 +10,6 @@ export default defineConfig([
       '@next/next/no-page-custom-font': 'off',
     },
   },
-  {
-    // eslint-plugin-react-hooks v7 (bundled with eslint-config-next 16) adds React Compiler
-    // rules that the previous config did not have. Existing components trip these three, so
-    // they are reported as warnings until the components are refactored; then remove this block
-    // to restore the preset's `error` level.
-    files: ['app/**', 'components/**'],
-    rules: {
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
-      'react-hooks/immutability': 'warn',
-    },
-  },
   globalIgnores([
     '.next/**',
     'out/**',

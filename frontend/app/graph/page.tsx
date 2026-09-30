@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { apiClient } from '@/lib/api-client';
-import type { GraphData } from '@/lib/types';
-import { ArrowLeft, X, Loader2 } from 'lucide-react';
+import { describeError } from '@/lib/api-errors';
+import { X, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import { useApiQuery } from '@/lib/useApiQuery';
 import { GraphSkeleton } from '@/components/Skeleton';
+import ErrorMessage from '@/components/ErrorMessage';
 import SubjectPicker from '@/components/SubjectPicker';
 
 // Dynamic import to avoid SSR issues with Cytoscape
@@ -15,51 +17,45 @@ const KnowledgeGraph = dynamic(() => import('@/components/KnowledgeGraph'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg">
-      <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+      <Loader2 className="w-8 h-8 animate-spin text-primary-600" aria-label="Loading graph" />
     </div>
   ),
 });
 
+// Maximum number of concepts requested for the visualization
+const GRAPH_CONCEPT_LIMIT = 100;
+
+interface SelectedConcept {
+  subject: string;
+  id: string;
+  name: string;
+}
+
 export default function GraphPage() {
   const router = useRouter();
-  const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedConcept, setSelectedConcept] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  // Narrow selectors: the page only re-renders when these values change
+  const currentSubject = useAppStore((state) => state.currentSubject);
+  const highlightedConcepts = useAppStore((state) => state.highlightedConcepts);
+  const clearHighlightedConcepts = useAppStore((state) => state.clearHighlightedConcepts);
+  const lastQuery = useAppStore((state) => state.lastQuery);
+  const chapterColors = useAppStore((state) => state.subjectTheme?.chapter_colors);
 
-  // Get highlighted concepts and subject from store
-  const {
-    highlightedConcepts,
-    clearHighlightedConcepts,
-    lastQuery,
-    currentSubject,
-    subjectTheme,
-  } = useAppStore();
+  const graph = useApiQuery(`graph:${currentSubject}`, (signal) =>
+    apiClient.getGraphData(GRAPH_CONCEPT_LIMIT, currentSubject, { signal })
+  );
+  const graphData = graph.isLoading || graph.error ? null : graph.data;
 
-  useEffect(() => {
-    const fetchGraphData = async () => {
-      try {
-        setIsLoading(true);
-        const data = await apiClient.getGraphData(100, currentSubject);
-        setGraphData(data);
-        setError(null);
-      } catch (err: any) {
-        console.error('Error fetching graph data:', err);
-        setError(err.detail || 'Failed to load graph data. Please ensure the backend is running.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const [selected, setSelected] = useState<SelectedConcept | null>(null);
+  // A concept selected on another subject's graph is not shown
+  const selectedConcept = selected?.subject === currentSubject ? selected : null;
 
-    fetchGraphData();
-  }, [currentSubject]);
-
-  const handleNodeClick = (nodeId: string, nodeName: string) => {
-    setSelectedConcept({ id: nodeId, name: nodeName });
-  };
+  // Stable handler, so re-renders of this page never rebuild the graph
+  const handleNodeClick = useCallback(
+    (nodeId: string, nodeName: string) => {
+      setSelected({ subject: currentSubject, id: nodeId, name: nodeName });
+    },
+    [currentSubject]
+  );
 
   const handleAskAboutConcept = () => {
     if (selectedConcept) {
@@ -72,23 +68,14 @@ export default function GraphPage() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.push('/')}
-                className="text-gray-600 hover:text-gray-900"
-                aria-label="Back to home"
-              >
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Knowledge Graph Visualization
-                </h1>
-                <p className="mt-2 text-gray-600">
-                  Explore concepts and their relationships
-                </p>
-              </div>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Knowledge Graph Visualization
+              </h1>
+              <p className="mt-2 text-gray-600">
+                Explore concepts and their relationships
+              </p>
             </div>
             <SubjectPicker />
           </div>
@@ -96,13 +83,7 @@ export default function GraphPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && (
-          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-sm text-yellow-800">{error}</p>
-          </div>
-        )}
-
+      <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Graph Visualization */}
           <div className="lg:col-span-3">
@@ -120,28 +101,38 @@ export default function GraphPage() {
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={clearHighlightedConcepts}
                   className="p-1 hover:bg-amber-100 rounded transition-colors"
                   aria-label="Clear highlights"
                 >
-                  <X className="w-4 h-4 text-amber-700" />
+                  <X className="w-4 h-4 text-amber-700" aria-hidden="true" />
                 </button>
               </div>
             )}
 
-            {isLoading ? (
+            {graph.isLoading ? (
               <GraphSkeleton />
-            ) : graphData ? (
+            ) : graph.error ? (
+              <ErrorMessage
+                title="Unable to load the knowledge graph."
+                message={describeError(graph.error)}
+                onRetry={graph.retry}
+              />
+            ) : graphData && graphData.nodes.length > 0 ? (
               <KnowledgeGraph
                 data={graphData}
                 onNodeClick={handleNodeClick}
                 highlightedConcepts={highlightedConcepts}
-                chapterColors={subjectTheme?.chapter_colors}
+                chapterColors={chapterColors}
                 className="h-[600px]"
               />
             ) : (
-              <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex flex-col items-center justify-center gap-1 h-[600px] bg-gray-50 rounded-lg border border-gray-200 text-center px-4">
                 <p className="text-gray-600">No graph data available</p>
+                <p className="text-sm text-gray-500">
+                  This subject has no concepts in the knowledge graph yet.
+                </p>
               </div>
             )}
           </div>
@@ -153,19 +144,19 @@ export default function GraphPage() {
               <h3 className="font-semibold text-gray-900 mb-3">How to Use</h3>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li className="flex gap-2">
-                  <span className="text-primary-600">•</span>
+                  <span className="text-primary-600" aria-hidden="true">•</span>
                   <span>Click nodes to see details and relationships</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="text-primary-600">•</span>
+                  <span className="text-primary-600" aria-hidden="true">•</span>
                   <span>Drag to pan, scroll to zoom</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="text-primary-600">•</span>
+                  <span className="text-primary-600" aria-hidden="true">•</span>
                   <span>Node size indicates importance</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="text-primary-600">•</span>
+                  <span className="text-primary-600" aria-hidden="true">•</span>
                   <span>Edge colors show relationship types</span>
                 </li>
               </ul>
@@ -181,6 +172,7 @@ export default function GraphPage() {
                   {selectedConcept.name}
                 </p>
                 <button
+                  type="button"
                   onClick={handleAskAboutConcept}
                   className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                 >

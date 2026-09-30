@@ -1,52 +1,21 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
+import cytoscapeModule from 'cytoscape';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
 import type { GraphData } from '@/lib/types';
+import { fakeNode, type CytoscapeMock, type FakeCy } from './helpers/cytoscapeMock';
 
-// Mock Cytoscape and its layout extension
-// NOTE: jest.mock is hoisted above variable declarations, so mockCyInstance
-// must be assigned inside the factory to avoid temporal dead zone errors.
-var mockCyInstance: any;
-
-jest.mock('cytoscape', () => {
-  mockCyInstance = {
-    nodes: jest.fn().mockReturnThis(),
-    edges: jest.fn().mockReturnThis(),
-    collection: jest.fn().mockReturnValue({
-      merge: jest.fn().mockReturnThis(),
-      addClass: jest.fn().mockReturnThis(),
-      edgesWith: jest.fn().mockReturnValue({
-        addClass: jest.fn().mockReturnThis(),
-      }),
-    }),
-    zoom: jest.fn().mockReturnValue(1),
-    center: jest.fn(),
-    fit: jest.fn(),
-    on: jest.fn(),
-    getElementById: jest.fn().mockReturnValue({
-      data: jest.fn().mockImplementation((key: string) => {
-        if (key === 'label') return 'Test Concept';
-        if (key === 'importance') return 0.75;
-        return null;
-      }),
-      neighborhood: jest.fn().mockReturnValue({
-        nodes: jest.fn().mockReturnValue({ length: 3 }),
-      }),
-    }),
-    destroy: jest.fn(),
-    not: jest.fn().mockReturnThis(),
-    filter: jest.fn().mockReturnThis(),
-    removeClass: jest.fn().mockReturnThis(),
-    addClass: jest.fn().mockReturnThis(),
-    hasClass: jest.fn().mockReturnValue(false),
-    style: jest.fn(),
-  };
-
-  const mockCytoscape: any = jest.fn().mockReturnValue(mockCyInstance);
-  mockCytoscape.use = jest.fn();
-  return mockCytoscape;
-});
-
+// Fake Cytoscape: one fake instance per build of the graph (see the helper)
+jest.mock('cytoscape', () => require('./helpers/cytoscapeMock').createCytoscapeMock());
 jest.mock('cytoscape-cose-bilkent', () => jest.fn());
+
+const cytoscape = cytoscapeModule as unknown as CytoscapeMock;
+const mockCyInstances = cytoscape.instances;
+
+/** The Cytoscape instance created by the latest build of the graph. */
+const lastCy = (): any => mockCyInstances[mockCyInstances.length - 1];
+
+const tapNode = (cy: FakeCy, node: ReturnType<typeof fakeNode>) =>
+  act(() => cy.handlers['tap node']({ target: node }));
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
@@ -75,6 +44,7 @@ describe('KnowledgeGraph Component', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCyInstances.length = 0;
   });
 
   describe('Rendering', () => {
@@ -128,7 +98,7 @@ describe('KnowledgeGraph Component', () => {
       const zoomInButton = screen.getByRole('button', { name: /zoom in/i });
       fireEvent.click(zoomInButton);
 
-      expect(mockCyInstance.zoom).toHaveBeenCalled();
+      expect(lastCy().zoom).toHaveBeenCalledWith(1.3);
     });
 
     it('calls zoom out handler when zoom out button is clicked', () => {
@@ -137,7 +107,7 @@ describe('KnowledgeGraph Component', () => {
       const zoomOutButton = screen.getByRole('button', { name: /zoom out/i });
       fireEvent.click(zoomOutButton);
 
-      expect(mockCyInstance.zoom).toHaveBeenCalled();
+      expect(lastCy().zoom).toHaveBeenCalledWith(1 / 1.3);
     });
 
     it('calls fit handler when fit to view button is clicked', () => {
@@ -146,7 +116,7 @@ describe('KnowledgeGraph Component', () => {
       const fitButton = screen.getByRole('button', { name: /fit to view/i });
       fireEvent.click(fitButton);
 
-      expect(mockCyInstance.fit).toHaveBeenCalled();
+      expect(lastCy().fit).toHaveBeenCalledWith(undefined, 50);
     });
 
     it('calls reset handler when reset view button is clicked', () => {
@@ -155,48 +125,227 @@ describe('KnowledgeGraph Component', () => {
       const resetButton = screen.getByRole('button', { name: /reset view/i });
       fireEvent.click(resetButton);
 
-      expect(mockCyInstance.fit).toHaveBeenCalled();
+      expect(lastCy().fit).toHaveBeenCalled();
+      expect(lastCy().nodes().removeClass).toHaveBeenCalledWith('selected highlighted faded');
     });
   });
 
   describe('Node Interaction', () => {
-    it('receives onNodeClick prop', () => {
+    it('registers tap handlers for nodes and the background', () => {
       render(
         <KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />
       );
 
-      // The component registers click handlers
-      expect(mockCyInstance.on).toHaveBeenCalledWith('tap', 'node', expect.any(Function));
+      expect(lastCy().on).toHaveBeenCalledWith('tap', 'node', expect.any(Function));
+      expect(lastCy().on).toHaveBeenCalledWith('tap', expect.any(Function));
     });
 
-    it('registers tap handler for background clicks', () => {
-      render(<KnowledgeGraph data={mockGraphData} />);
+    it('shows a pointer cursor over nodes', () => {
+      const { container } = render(<KnowledgeGraph data={mockGraphData} />);
+      const canvasContainer = container.querySelector('.cytoscape-container') as HTMLElement;
 
-      expect(mockCyInstance.on).toHaveBeenCalledWith('tap', expect.any(Function));
+      lastCy().handlers['mouseover node']({});
+      expect(canvasContainer.style.cursor).toBe('pointer');
+
+      lastCy().handlers['mouseout node']({});
+      expect(canvasContainer.style.cursor).toBe('');
     });
 
-    it('registers mouseover handler for nodes', () => {
-      render(<KnowledgeGraph data={mockGraphData} />);
+    it('reports a clicked node and shows its details', () => {
+      render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
 
-      expect(mockCyInstance.on).toHaveBeenCalledWith(
-        'mouseover',
-        'node',
-        expect.any(Function)
+      tapNode(lastCy(), fakeNode('concept-1', 'American Revolution', 0.9, 3));
+
+      expect(mockOnNodeClick).toHaveBeenCalledWith('concept-1', 'American Revolution');
+      expect(screen.getByText('Selected Concept')).toBeInTheDocument();
+      expect(screen.getByText('90%')).toBeInTheDocument();
+      expect(screen.getByText('3')).toBeInTheDocument();
+    });
+
+    it('clears the selection when the background is clicked', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      const cy = lastCy();
+      tapNode(cy, fakeNode('concept-1', 'American Revolution', 0.9));
+
+      act(() => cy.handlers.tap({ target: cy }));
+
+      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
+    });
+
+    it('keeps the selection when a click on the background hits an element', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      const cy = lastCy();
+      tapNode(cy, fakeNode('concept-1', 'American Revolution', 0.9));
+
+      act(() => cy.handlers.tap({ target: {} }));
+
+      expect(screen.getByText('Selected Concept')).toBeInTheDocument();
+    });
+
+    it('clears the selection with the reset control', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      tapNode(lastCy(), fakeNode('concept-1', 'American Revolution', 0.9));
+
+      fireEvent.click(screen.getByRole('button', { name: /reset view/i }));
+
+      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Graph Lifecycle', () => {
+    it('keeps the graph and its layout when a node is clicked', () => {
+      render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
+      const cy = lastCy();
+
+      tapNode(cy, fakeNode('concept-3', 'Constitution', 0.95));
+
+      expect(cytoscape).toHaveBeenCalledTimes(1);
+      expect(cy.destroy).not.toHaveBeenCalled();
+      expect(screen.getByText('Selected Concept')).toBeInTheDocument();
+    });
+
+    it('does not rebuild the graph when the parent passes a new click handler', () => {
+      const firstHandler = jest.fn();
+      const secondHandler = jest.fn();
+      const { rerender } = render(
+        <KnowledgeGraph data={mockGraphData} onNodeClick={firstHandler} />
       );
+      const cy = lastCy();
+
+      rerender(<KnowledgeGraph data={mockGraphData} onNodeClick={secondHandler} />);
+      tapNode(cy, fakeNode('concept-2', 'Declaration of Independence', 0.85));
+
+      expect(cytoscape).toHaveBeenCalledTimes(1);
+      expect(cy.destroy).not.toHaveBeenCalled();
+      // The graph calls the latest handler
+      expect(secondHandler).toHaveBeenCalledWith('concept-2', 'Declaration of Independence');
+      expect(firstHandler).not.toHaveBeenCalled();
+    });
+
+    it('rebuilds the graph for new data and drops the old selection', () => {
+      const { rerender } = render(<KnowledgeGraph data={mockGraphData} />);
+      const firstCy = lastCy();
+      tapNode(firstCy, fakeNode('concept-1', 'American Revolution', 0.9));
+
+      const newData: GraphData = {
+        nodes: [{ data: { id: 'e1', label: 'Supply and Demand', importance: 0.9 } }],
+        edges: [],
+      };
+      rerender(<KnowledgeGraph data={newData} />);
+
+      expect(cytoscape).toHaveBeenCalledTimes(2);
+      expect(firstCy.destroy).toHaveBeenCalledTimes(1);
+      expect(lastCy().options.elements.nodes).toEqual(newData.nodes);
+      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
+    });
+
+    it('recolours the nodes for a new theme without rebuilding the graph', () => {
+      const { rerender } = render(
+        <KnowledgeGraph data={mockGraphData} chapterColors={{ Revolution: '#ff0000' }} />
+      );
+      const cy = lastCy();
+
+      rerender(<KnowledgeGraph data={mockGraphData} chapterColors={{ Revolution: '#00ff00' }} />);
+
+      expect(cytoscape).toHaveBeenCalledTimes(1);
+      expect(cy.styleUpdate).toHaveBeenCalled();
+      const nodeStyle = cy.options.style.find((entry: any) => entry.selector === 'node').style;
+      const revolutionNode = { data: (key: string) => (key === 'chapter' ? 'Revolution' : 'Boston Tea Party') };
+      const otherNode = { data: (key: string) => (key === 'label' ? 'Taxes' : '') };
+      expect(nodeStyle['background-color'](revolutionNode)).toBe('#00ff00');
+      expect(nodeStyle['background-color'](otherNode)).toBe('#6366f1');
+    });
+
+    it('destroys cytoscape instance on unmount', () => {
+      const { unmount } = render(<KnowledgeGraph data={mockGraphData} />);
+
+      unmount();
+
+      expect(lastCy().destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('Styles', () => {
+    const styleOf = (selector: string) =>
+      lastCy().options.style.find((entry: any) => entry.selector === selector).style;
+    const element = (data: Record<string, unknown>) => ({ data: (key: string) => data[key] });
+
+    it('sizes nodes by importance', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      const node = styleOf('node');
+
+      expect(node.width(element({ importance: 1 }))).toBe(70);
+      expect(node.height(element({ importance: 0 }))).toBe(47.5); // missing importance = 0.5
+    });
+
+    it.each([
+      ['PREREQ', '#ef4444'],
+      ['COVERS', '#3b82f6'],
+      ['RELATED', '#8b5cf6'],
+      ['OTHER', '#9ca3af'],
+    ])('colours %s edges', (type, color) => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      const edge = styleOf('edge');
+
+      expect(edge['line-color'](element({ type }))).toBe(color);
+      expect(edge['target-arrow-color'](element({ type }))).toBe(color);
     });
   });
 
   describe('Highlighted Concepts', () => {
-    it('accepts highlightedConcepts prop', () => {
+    it('highlights the matching nodes and fits the view to them', () => {
       render(
         <KnowledgeGraph
           data={mockGraphData}
-          highlightedConcepts={['American Revolution', 'Constitution']}
+          highlightedConcepts={['american revolution', 'Constitution']}
         />
       );
+      const cy = lastCy();
 
-      // The component should handle highlighted concepts through useEffect
-      expect(mockCyInstance.nodes).toHaveBeenCalled();
+      const matches = cy.nodes().filter.mock.results[0].value;
+      expect(matches.length).toBe(2);
+      expect(matches.addClass).toHaveBeenCalledWith('highlighted');
+      expect(cy.nodes().not).toHaveBeenCalledWith(matches);
+      expect(cy.fit).toHaveBeenCalledWith(matches, 80);
+    });
+
+    it('re-applies the highlights after the graph is rebuilt', () => {
+      const highlights = ['Supply and Demand'];
+      const { rerender } = render(
+        <KnowledgeGraph data={mockGraphData} highlightedConcepts={highlights} />
+      );
+
+      const newData: GraphData = {
+        nodes: [{ data: { id: 'e1', label: 'Supply and Demand', importance: 0.9 } }],
+        edges: [],
+      };
+      rerender(<KnowledgeGraph data={newData} highlightedConcepts={highlights} />);
+
+      const cy = lastCy();
+      expect(cytoscape).toHaveBeenCalledTimes(2);
+      expect(cy.fit).toHaveBeenCalledTimes(1);
+      expect(cy.nodes().filter.mock.results[0].value.addClass).toHaveBeenCalledWith('highlighted');
+    });
+
+    it('does not re-apply highlights on unrelated re-renders', () => {
+      const highlights = ['Constitution'];
+      const { rerender } = render(
+        <KnowledgeGraph data={mockGraphData} highlightedConcepts={highlights} />
+      );
+
+      rerender(
+        <KnowledgeGraph data={mockGraphData} highlightedConcepts={highlights} className="wide" />
+      );
+
+      expect(lastCy().fit).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the graph readable when no highlighted concept is on it', () => {
+      render(<KnowledgeGraph data={mockGraphData} highlightedConcepts={['Photosynthesis']} />);
+      const cy = lastCy();
+
+      expect(cy.nodes().addClass).not.toHaveBeenCalledWith('faded');
+      expect(cy.fit).not.toHaveBeenCalled();
     });
 
     it('handles empty highlightedConcepts array', () => {
@@ -204,8 +353,35 @@ describe('KnowledgeGraph Component', () => {
         <KnowledgeGraph data={mockGraphData} highlightedConcepts={[]} />
       );
 
-      // Should not cause any errors
-      expect(mockCyInstance.nodes).toHaveBeenCalled();
+      expect(lastCy().nodes().removeClass).toHaveBeenCalledWith('highlighted faded');
+      expect(lastCy().nodes().filter).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Text Alternative', () => {
+    it('labels the canvas with the size of the graph', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+
+      expect(
+        screen.getByRole('img', { name: 'Knowledge graph with 4 concepts and 3 relationships' })
+      ).toBeInTheDocument();
+    });
+
+    it('describes the most important concepts and the highlights', () => {
+      render(<KnowledgeGraph data={mockGraphData} highlightedConcepts={['Civil War']} />);
+
+      const graph = screen.getByRole('img', { name: /Knowledge graph/ });
+      expect(graph).toHaveAccessibleDescription(
+        'Most important concepts: Constitution, American Revolution, Civil War, Declaration of Independence. Highlighted concepts: Civil War.'
+      );
+    });
+
+    it('explains an empty graph', () => {
+      render(<KnowledgeGraph data={{ nodes: [], edges: [] }} />);
+
+      expect(screen.getByRole('img', { name: /Knowledge graph/ })).toHaveAccessibleDescription(
+        'The graph has no concepts yet.'
+      );
     });
   });
 
@@ -230,16 +406,6 @@ describe('KnowledgeGraph Component', () => {
       render(<KnowledgeGraph data={nodesOnlyData} />);
 
       expect(screen.getByText('Legend')).toBeInTheDocument();
-    });
-  });
-
-  describe('Cleanup', () => {
-    it('destroys cytoscape instance on unmount', () => {
-      const { unmount } = render(<KnowledgeGraph data={mockGraphData} />);
-
-      unmount();
-
-      expect(mockCyInstance.destroy).toHaveBeenCalled();
     });
   });
 
