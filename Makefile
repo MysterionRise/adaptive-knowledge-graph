@@ -60,7 +60,7 @@ test: ## Run tests with coverage
 	poetry run pytest
 
 test-fast: ## Run non-adversarial backend tests with per-test timeout
-	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal"
+	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov-fail-under=75
 
 test-tribunal: ## Run adversarial/risk-register tests separately (no coverage gate)
 	PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal --no-cov
