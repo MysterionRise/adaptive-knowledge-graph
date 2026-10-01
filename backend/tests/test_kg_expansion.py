@@ -227,22 +227,130 @@ class TestKGExpanderInit:
 
     def test_connect_with_subject(self):
         mock_adapter = MagicMock()
-        with patch("backend.app.kg.neo4j_adapter.get_neo4j_adapter", return_value=mock_adapter):
+        with patch(
+            "backend.app.rag.kg_expansion.get_neo4j_adapter", return_value=mock_adapter
+        ) as factory:
             expander = KGExpander(subject_id="us_history")
             expander.connect()
             assert expander.neo4j_adapter is mock_adapter
+        factory.assert_called_once_with("us_history")
 
-    def test_connect_without_subject(self):
+    def test_connect_without_subject_uses_default_subject_adapter(self):
+        """No subject -> the registry adapter for default_subject (prefixed labels)."""
         mock_adapter = MagicMock()
-        with patch("backend.app.rag.kg_expansion.Neo4jAdapter", return_value=mock_adapter):
+        with (
+            patch(
+                "backend.app.rag.kg_expansion.get_neo4j_adapter", return_value=mock_adapter
+            ) as factory,
+            patch("backend.app.kg.neo4j_adapter.Neo4jAdapter") as raw_adapter,
+        ):
             expander = KGExpander()
             expander.connect()
             assert expander.neo4j_adapter is mock_adapter
-            mock_adapter.connect.assert_called_once()
+        factory.assert_called_once_with(None)
+        raw_adapter.assert_not_called()
 
-    def test_close(self):
+    def test_close_releases_shared_adapter_without_closing_it(self):
         expander = KGExpander()
         mock_adapter = MagicMock()
         expander.neo4j_adapter = mock_adapter
         expander.close()
-        mock_adapter.close.assert_called_once()
+        mock_adapter.close.assert_not_called()
+        assert expander.neo4j_adapter is None
+
+
+@pytest.mark.unit
+class TestFactories:
+    """get_kg_expander / get_all_concepts_from_neo4j resolve the default subject."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_registry(self):
+        from backend.app.rag.kg_expansion import clear_kg_expanders
+
+        clear_kg_expanders()
+        yield
+        clear_kg_expanders()
+
+    def test_get_kg_expander_none_resolves_default_subject(self):
+        from backend.app.core.subjects import get_default_subject_id
+        from backend.app.rag.kg_expansion import get_kg_expander
+
+        default_id = get_default_subject_id()
+        with patch("backend.app.rag.kg_expansion.get_neo4j_adapter") as factory:
+            expander = get_kg_expander()
+            assert expander.subject_id == default_id
+            assert get_kg_expander(default_id) is expander
+        factory.assert_called_once_with(default_id)
+
+    def test_get_kg_expander_caches_per_subject(self):
+        from backend.app.rag.kg_expansion import get_kg_expander
+
+        with patch("backend.app.rag.kg_expansion.get_neo4j_adapter"):
+            economics = get_kg_expander("economics")
+            history = get_kg_expander("us_history")
+        assert economics is not history
+        assert economics.subject_id == "economics"
+
+    def test_concurrent_first_calls_create_one_expander(self):
+        import threading
+        import time
+
+        from backend.app.rag.kg_expansion import get_kg_expander
+
+        def slow_adapter(subject_id):
+            time.sleep(0.05)  # widen the race window
+            return MagicMock()
+
+        results: list[KGExpander] = []
+        with patch(
+            "backend.app.rag.kg_expansion.get_neo4j_adapter", side_effect=slow_adapter
+        ) as factory:
+            threads = [
+                threading.Thread(target=lambda: results.append(get_kg_expander("us_history")))
+                for _ in range(8)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+        factory.assert_called_once_with("us_history")
+        assert len(results) == 8
+        assert all(result is results[0] for result in results)
+
+    def test_get_kg_expander_unknown_subject_raises(self):
+        from backend.app.rag.kg_expansion import get_kg_expander
+
+        with pytest.raises(KeyError):
+            get_kg_expander("no_such_subject")
+
+    def test_get_kg_expander_survives_connection_failure(self):
+        from backend.app.rag.kg_expansion import get_kg_expander
+
+        with patch(
+            "backend.app.rag.kg_expansion.get_neo4j_adapter",
+            side_effect=RuntimeError("Neo4j down"),
+        ):
+            expander = get_kg_expander("us_history")
+        assert expander.neo4j_adapter is None
+
+    def test_get_all_concepts_uses_subject_adapter(self):
+        from backend.app.rag.kg_expansion import get_all_concepts_from_neo4j
+
+        adapter = MagicMock()
+        adapter.get_all_concept_names.return_value = {"Civil War", "Reconstruction"}
+        with patch(
+            "backend.app.rag.kg_expansion.get_neo4j_adapter", return_value=adapter
+        ) as factory:
+            assert get_all_concepts_from_neo4j() == {"Civil War", "Reconstruction"}
+            assert get_all_concepts_from_neo4j("economics") == {"Civil War", "Reconstruction"}
+        assert [c.args for c in factory.call_args_list] == [(None,), ("economics",)]
+
+    def test_get_all_concepts_returns_empty_set_on_error(self):
+        from backend.app.rag.kg_expansion import get_all_concepts_from_neo4j
+
+        with patch(
+            "backend.app.rag.kg_expansion.get_neo4j_adapter",
+            side_effect=RuntimeError("Neo4j down"),
+        ):
+            assert get_all_concepts_from_neo4j("us_history") == set()

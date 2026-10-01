@@ -7,11 +7,13 @@ from pathlib import Path
 
 from loguru import logger
 
-from backend.app.core.settings import settings
+from backend.app.core.settings import Settings, settings
 
 
-def setup_logging() -> None:
-    """Configure application logging."""
+def setup_logging(app_settings: Settings | None = None) -> None:
+    """Configure application logging (from ``app_settings``, default: global settings)."""
+    app_settings = app_settings or settings
+
     # Remove default handler
     logger.remove()
 
@@ -26,7 +28,7 @@ def setup_logging() -> None:
         "rid={extra[request_id]} | "
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
         "<level>{message}</level>",
-        level=settings.log_level,
+        level=app_settings.log_level,
         colorize=True,
     )
 
@@ -46,7 +48,7 @@ def setup_logging() -> None:
     )
 
     # Add file handler for all logs if debug mode
-    if settings.debug:
+    if app_settings.debug:
         logger.add(
             log_dir / "debug.log",
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | "
@@ -58,4 +60,4 @@ def setup_logging() -> None:
             compression="zip",
         )
 
-    logger.info(f"Logging initialized at level {settings.log_level}")
+    logger.info(f"Logging initialized at level {app_settings.log_level}")

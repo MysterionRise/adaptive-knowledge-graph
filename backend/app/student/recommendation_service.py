@@ -9,6 +9,7 @@ import asyncio
 
 from loguru import logger
 
+from backend.app.core.subjects import get_subject
 from backend.app.kg.neo4j_adapter import Neo4jAdapter, get_neo4j_adapter
 from backend.app.nlp.llm_client import LLMClient, get_llm_client
 from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
@@ -267,7 +268,7 @@ class RecommendationService:
                 timeout=_DEEP_DIVE_TIMEOUT_SECONDS,
             )
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Deep dive generation timed out for {concept}")
             return None
         except Exception as e:
@@ -310,15 +311,20 @@ _recommendation_services: dict[str, RecommendationService] = {}
 
 
 def get_recommendation_service(subject: str | None = None) -> RecommendationService:
-    """Get or create a RecommendationService instance for a subject."""
-    key = subject or "_default"
+    """
+    Get or create a RecommendationService instance for a subject.
 
-    if key not in _recommendation_services:
-        _recommendation_services[key] = RecommendationService(
-            neo4j=get_neo4j_adapter(subject),
-            retriever=get_retriever(subject),
+    Args:
+        subject: Subject identifier; None uses default_subject from config/subjects.yaml
+    """
+    subject_id = get_subject(subject).id
+
+    if subject_id not in _recommendation_services:
+        _recommendation_services[subject_id] = RecommendationService(
+            neo4j=get_neo4j_adapter(subject_id),
+            retriever=get_retriever(subject_id),
             llm=get_llm_client(),
             student_service=get_student_service(),
         )
 
-    return _recommendation_services[key]
+    return _recommendation_services[subject_id]

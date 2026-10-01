@@ -30,7 +30,7 @@ __all__ = [
 # Lazy imports for optional LangChain functionality
 def __getattr__(name: str):
     """Lazy import for optional dependencies."""
-    if name in ("CypherQAService", "get_cypher_qa_service", "is_langchain_available"):
+    if name in ("CypherQAService", "get_cypher_qa_service"):
         from backend.app.kg import cypher_qa
 
         return getattr(cypher_qa, name)

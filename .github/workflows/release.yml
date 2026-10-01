@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Fallback for re-publishing an existing tag (for example after a failed run).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish, for example v0.3.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create or publish the release
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Validate the tag name
+        run: |
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'${TAG}' is not a release tag (expected vMAJOR.MINOR.PATCH[-PRERELEASE])"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - name: Refuse tags whose commit is not on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          status=$(gh api "repos/${GH_REPO}/compare/main...${sha}" --jq .status)
+          case "${status}" in
+            identical | behind) echo "${TAG} (${sha}) is on main" ;;
+            *)
+              echo "::error::${TAG} points at ${sha}, which is not on main (compare status: ${status})"
+              exit 1
+              ;;
+          esac
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        run: |
+          version="${TAG#v}"
+          : > notes.md
+          if [ -f CHANGELOG.md ]; then
+            # Print the body of the "## [x.y.z]" section up to the next level-2
+            # heading, without Keep a Changelog link reference definitions.
+            # Lines inside fenced code blocks never end the section.
+            awk -v heading="## [${version}]" '
+              /^[[:space:]]*(```|~~~)/ {
+                fence = !fence
+                if (found) print
+                next
+              }
+              !fence && /^## / {
+                if (found) exit
+                if (index($0, heading) == 1) { found = 1; next }
+              }
+              found && (fence || !/^\[.*\]: /) { print }
+            ' CHANGELOG.md > notes.md
+          fi
+          if grep -q '[^[:space:]]' notes.md; then
+            echo "Using the [${version}] section of CHANGELOG.md"
+            echo "source=changelog" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No [${version}] section in CHANGELOG.md; using generated notes"
+            echo "source=generated" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Create the GitHub Release (or publish an existing draft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES_SOURCE: ${{ steps.notes.outputs.source }}
+        run: |
+          # Tags such as v0.3.0-rc.1 are published as pre-releases; build metadata
+          # after "+" (v1.0.0+build-7) does not make a release a pre-release.
+          case "${TAG%%+*}" in
+            *-*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+
+          # The releases list includes drafts; the TAG format was validated above.
+          existing=$(gh api --paginate "repos/${GH_REPO}/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"${TAG}\") | [.id, .draft] | @tsv" | head -n 1)
+          if [ -n "${existing}" ]; then
+            read -r release_id is_draft <<<"${existing}"
+            if [ "${is_draft}" != "true" ]; then
+              echo "::notice::Release ${TAG} is already published; leaving it unchanged"
+              exit 0
+            fi
+            echo "Publishing the existing draft release ${TAG} (id ${release_id})"
+            # Keep a title and notes someone already wrote into the draft. Only fill in
+            # what is empty, from the CHANGELOG section or GitHub's generated notes.
+            patch=(-X PATCH "repos/${GH_REPO}/releases/${release_id}"
+              -f "tag_name=${TAG}" -F draft=false -F "prerelease=${prerelease}")
+            draft_name=$(gh api "repos/${GH_REPO}/releases/${release_id}" --jq '.name // ""')
+            if [ -z "${draft_name}" ]; then
+              patch+=(-f "name=${TAG}")
+            fi
+            draft_body=$(gh api "repos/${GH_REPO}/releases/${release_id}" --jq '.body // ""')
+            if [[ ! "${draft_body}" =~ [^[:space:]] ]]; then
+              if [ "${NOTES_SOURCE}" != "changelog" ]; then
+                gh api -X POST "repos/${GH_REPO}/releases/generate-notes" \
+                  -f "tag_name=${TAG}" --jq .body > notes.md
+              fi
+              patch+=(-F "body=@notes.md")
+            fi
+            gh api "${patch[@]}" > /dev/null
+            exit 0
+          fi
+
+          args=(--title "${TAG}" --verify-tag)
+          if [ "${NOTES_SOURCE}" = "changelog" ]; then
+            args+=(--notes-file notes.md)
+          else
+            args+=(--generate-notes)
+          fi
+          if [ "${prerelease}" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${TAG}" "${args[@]}"

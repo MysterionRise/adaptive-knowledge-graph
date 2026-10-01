@@ -2,11 +2,17 @@
 LLM client for question answering and text generation.
 
 Supports local Ollama and remote OpenRouter APIs, including streaming.
+
+Privacy: while ``PRIVACY_LOCAL_ONLY`` is enabled no request is ever sent to
+OpenRouter. Remote mode is refused and hybrid mode never falls back. This is
+checked on every call, in addition to the startup validation in ``Settings``.
 """
 
 import json
 import ssl
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Any, Literal
 
 import aiohttp
 from loguru import logger
@@ -21,6 +27,33 @@ from tenacity import (
 from backend.app.core.exceptions import LLMConnectionError, LLMGenerationError
 from backend.app.core.settings import settings
 
+LLMProvider = Literal["local", "remote"]
+
+DEFAULT_MAX_TOKENS = 1024
+
+
+class RemoteLLMDisabledError(LLMGenerationError):
+    """A remote LLM call was attempted while PRIVACY_LOCAL_ONLY is enabled."""
+
+
+@dataclass(frozen=True)
+class LLMResult:
+    """Generated text plus the provider and model that actually produced it."""
+
+    text: str
+    provider: LLMProvider
+    model: str
+    fallback: bool = False  # True when hybrid mode fell back from Ollama to OpenRouter
+
+
+@dataclass
+class LLMStreamInfo:
+    """Filled in by a streaming call before its first token is yielded."""
+
+    provider: LLMProvider | None = None
+    model: str | None = None
+    fallback: bool = False
+
 
 class LLMClient:
     """Client for LLM inference (Ollama or OpenRouter)."""
@@ -34,15 +67,84 @@ class LLMClient:
         Initialize LLM client.
 
         Args:
-            mode: LLM mode ('local', 'remote', or 'hybrid')
-            model_name: Model name to use
+            mode: LLM mode ('local', 'remote', or 'hybrid'); defaults to LLM_MODE
+            model_name: Override for the primary model: the OpenRouter model in remote
+                mode, otherwise the Ollama model
         """
         self.mode = mode or settings.llm_mode
-        self.model_name = model_name or settings.llm_local_model
+        if self.mode == "remote":
+            self.local_model = settings.llm_local_model
+            self.remote_model = model_name or settings.openrouter_model
+        else:
+            self.local_model = model_name or settings.llm_local_model
+            self.remote_model = settings.openrouter_model
 
         self.ollama_host = settings.llm_ollama_host
         self.openrouter_api_key = settings.openrouter_api_key
         self.openrouter_base_url = settings.openrouter_base_url
+
+    @property
+    def model_name(self) -> str:
+        """The model tried first in this mode (the OpenRouter model in remote mode)."""
+        return self.remote_model if self.mode == "remote" else self.local_model
+
+    @staticmethod
+    def _remote_allowed() -> bool:
+        return not settings.privacy_local_only
+
+    def _ensure_remote_allowed(self) -> None:
+        if not self._remote_allowed():
+            raise RemoteLLMDisabledError(
+                "Remote LLM calls are disabled because PRIVACY_LOCAL_ONLY=true "
+                "(set LLM_MODE=local, or PRIVACY_LOCAL_ONLY=false to allow OpenRouter)"
+            )
+
+    def _may_fall_back(self) -> bool:
+        """Whether a failed local call may be retried on OpenRouter."""
+        if self.mode != "hybrid":
+            return False
+        if not self._remote_allowed():
+            logger.warning("Hybrid fallback to OpenRouter skipped: PRIVACY_LOCAL_ONLY=true")
+            return False
+        return True
+
+    async def generate_result(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> LLMResult:
+        """
+        Generate text and report which provider and model produced it.
+
+        Args:
+            prompt: User prompt
+            system_prompt: System/instruction prompt
+            temperature: Temperature for sampling (defaults to LLM_TEMPERATURE)
+            max_tokens: Maximum tokens to generate (defaults to 1024)
+
+        Returns:
+            LLMResult with the generated text, provider, model and fallback flag
+        """
+        temperature = temperature if temperature is not None else settings.llm_temperature
+        max_tokens = max_tokens or DEFAULT_MAX_TOKENS
+
+        if self.mode == "remote":
+            self._ensure_remote_allowed()
+            text = await self._generate_openrouter(prompt, system_prompt, temperature, max_tokens)
+            return LLMResult(text=text, provider="remote", model=self.remote_model)
+
+        try:
+            text = await self._generate_ollama(prompt, system_prompt, temperature, max_tokens)
+            return LLMResult(text=text, provider="local", model=self.local_model)
+        except (LLMConnectionError, LLMGenerationError) as e:
+            if not self._may_fall_back():
+                raise
+            logger.warning(f"Local LLM failed ({e}), falling back to remote")
+
+        text = await self._generate_openrouter(prompt, system_prompt, temperature, max_tokens)
+        return LLMResult(text=text, provider="remote", model=self.remote_model, fallback=True)
 
     async def generate(
         self,
@@ -63,21 +165,8 @@ class LLMClient:
         Returns:
             Generated text
         """
-        temperature = temperature if temperature is not None else settings.llm_temperature
-        max_tokens = max_tokens or 1024
-
-        if self.mode == "local":
-            return await self._generate_ollama(prompt, system_prompt, temperature)
-        elif self.mode == "remote":
-            return await self._generate_openrouter(prompt, system_prompt, temperature, max_tokens)
-        else:  # hybrid - try local first, fall back to remote
-            try:
-                return await self._generate_ollama(prompt, system_prompt, temperature)
-            except (LLMConnectionError, LLMGenerationError) as e:
-                logger.warning(f"Local LLM failed ({e}), falling back to remote")
-                return await self._generate_openrouter(
-                    prompt, system_prompt, temperature, max_tokens
-                )
+        result = await self.generate_result(prompt, system_prompt, temperature, max_tokens)
+        return result.text
 
     async def generate_stream(
         self,
@@ -85,50 +174,76 @@ class LLMClient:
         system_prompt: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        stream_info: LLMStreamInfo | None = None,
     ) -> AsyncIterator[str]:
         """
         Generate text using LLM with streaming.
 
-        Yields tokens as they arrive from the LLM provider.
+        Yields tokens as they arrive from the LLM provider. When ``stream_info`` is
+        given it is filled in with the serving provider and model before the first
+        token. Hybrid mode only falls back to OpenRouter if Ollama fails before
+        producing any token.
         """
         temperature = temperature if temperature is not None else settings.llm_temperature
-        max_tokens = max_tokens or 1024
+        max_tokens = max_tokens or DEFAULT_MAX_TOKENS
+        info = stream_info if stream_info is not None else LLMStreamInfo()
 
-        if self.mode == "local":
-            async for token in self._stream_ollama(prompt, system_prompt, temperature):
-                yield token
-        elif self.mode == "remote":
+        if self.mode == "remote":
+            self._ensure_remote_allowed()
+            info.provider = "remote"
+            info.model = self.remote_model
             async for token in self._stream_openrouter(
                 prompt, system_prompt, temperature, max_tokens
             ):
                 yield token
-        else:  # hybrid
-            try:
-                async for token in self._stream_ollama(prompt, system_prompt, temperature):
-                    yield token
-            except (LLMConnectionError, LLMGenerationError) as e:
-                logger.warning(f"Local LLM stream failed ({e}), falling back to remote")
-                async for token in self._stream_openrouter(
-                    prompt, system_prompt, temperature, max_tokens
-                ):
-                    yield token
+            return
+
+        info.provider = "local"
+        info.model = self.local_model
+        yielded_any = False
+        try:
+            async for token in self._stream_ollama(prompt, system_prompt, temperature, max_tokens):
+                yielded_any = True
+                yield token
+            return
+        except (LLMConnectionError, LLMGenerationError) as e:
+            if yielded_any or not self._may_fall_back():
+                raise
+            logger.warning(f"Local LLM stream failed ({e}), falling back to remote")
+
+        info.provider = "remote"
+        info.model = self.remote_model
+        info.fallback = True
+        async for token in self._stream_openrouter(prompt, system_prompt, temperature, max_tokens):
+            yield token
+
+    def _ollama_payload(
+        self,
+        prompt: str,
+        system_prompt: str | None,
+        temperature: float,
+        max_tokens: int,
+        stream: bool,
+    ) -> dict[str, Any]:
+        """Build an Ollama /api/generate payload; sampling parameters go in ``options``."""
+        return {
+            "model": self.local_model,
+            "prompt": prompt,
+            "system": system_prompt or "",
+            "stream": stream,
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+        }
 
     async def _generate_ollama(
         self,
         prompt: str,
         system_prompt: str | None,
         temperature: float,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> str:
         """Generate using local Ollama."""
         url = f"{self.ollama_host}/api/generate"
-
-        payload = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "system": system_prompt or "",
-            "temperature": temperature,
-            "stream": False,
-        }
+        payload = self._ollama_payload(prompt, system_prompt, temperature, max_tokens, False)
 
         @retry(
             stop=stop_after_attempt(settings.llm_retry_attempts),
@@ -163,17 +278,11 @@ class LLMClient:
         prompt: str,
         system_prompt: str | None,
         temperature: float,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> AsyncIterator[str]:
         """Stream tokens from local Ollama."""
         url = f"{self.ollama_host}/api/generate"
-
-        payload = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "system": system_prompt or "",
-            "temperature": temperature,
-            "stream": True,
-        }
+        payload = self._ollama_payload(prompt, system_prompt, temperature, max_tokens, True)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -204,6 +313,47 @@ class LLMClient:
         except aiohttp.ClientError as e:
             raise LLMConnectionError(f"Ollama connection failed: {e}") from e
 
+    def _openrouter_request(
+        self,
+        prompt: str,
+        system_prompt: str | None,
+        temperature: float,
+        max_tokens: int,
+        stream: bool,
+    ) -> tuple[str, dict[str, Any], dict[str, str], ssl.SSLContext | bool]:
+        """Build URL, payload, headers and SSL option for an OpenRouter chat completion."""
+        self._ensure_remote_allowed()
+        if not self.openrouter_api_key:
+            raise LLMGenerationError("OpenRouter API key not configured")
+
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload: dict[str, Any] = {
+            "model": self.remote_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if stream:
+            payload["stream"] = True
+
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        ssl_param: ssl.SSLContext | bool = True
+        if not settings.openrouter_verify_ssl:
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            ssl_param = ssl_context
+
+        return f"{self.openrouter_base_url}/chat/completions", payload, headers, ssl_param
+
     async def _generate_openrouter(
         self,
         prompt: str,
@@ -212,35 +362,9 @@ class LLMClient:
         max_tokens: int,
     ) -> str:
         """Generate using OpenRouter API."""
-        if not self.openrouter_api_key:
-            raise LLMGenerationError("OpenRouter API key not configured")
-
-        url = f"{self.openrouter_base_url}/chat/completions"
-
-        messages: list[dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        payload = {
-            "model": settings.openrouter_model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-        }
-
-        # Configure SSL context
-        ssl_context = None
-        if not settings.openrouter_verify_ssl:
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-        ssl_param: ssl.SSLContext | bool = ssl_context if ssl_context is not None else True
+        url, payload, headers, ssl_param = self._openrouter_request(
+            prompt, system_prompt, temperature, max_tokens, stream=False
+        )
 
         @retry(
             stop=stop_after_attempt(settings.llm_retry_attempts),
@@ -280,35 +404,9 @@ class LLMClient:
         max_tokens: int,
     ) -> AsyncIterator[str]:
         """Stream tokens from OpenRouter API (SSE)."""
-        if not self.openrouter_api_key:
-            raise LLMGenerationError("OpenRouter API key not configured")
-
-        url = f"{self.openrouter_base_url}/chat/completions"
-
-        messages: list[dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        payload = {
-            "model": settings.openrouter_model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": True,
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-        }
-
-        ssl_context = None
-        if not settings.openrouter_verify_ssl:
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-        ssl_param: ssl.SSLContext | bool = ssl_context if ssl_context is not None else True
+        url, payload, headers, ssl_param = self._openrouter_request(
+            prompt, system_prompt, temperature, max_tokens, stream=True
+        )
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -350,7 +448,7 @@ class LLMClient:
         attribution: str,
         system_prompt: str | None = None,
         context_label: str | None = None,
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """
         Answer a question using retrieved context.
 
@@ -362,23 +460,26 @@ class LLMClient:
             context_label: Label for the context section (e.g., "Context from US History")
 
         Returns:
-            Dict with 'answer' and 'reasoning'
+            Dict with 'answer', 'question', 'model' (the model that produced the answer),
+            'provider' ('local' or 'remote'), 'fallback' (hybrid fell back to remote)
+            and 'mode'
         """
         prompts = self._build_answer_prompts(
             question, context, attribution, system_prompt, context_label
         )
 
-        # Generate answer
-        answer = await self.generate(
+        result = await self.generate_result(
             prompt=prompts["user_prompt"],
             system_prompt=prompts["system_prompt"],
             temperature=0.1,  # Low temperature for factual accuracy
         )
 
         return {
-            "answer": answer,
+            "answer": result.text,
             "question": question,
-            "model": self.model_name,
+            "model": result.model,
+            "provider": result.provider,
+            "fallback": result.fallback,
             "mode": self.mode,
         }
 
@@ -389,6 +490,7 @@ class LLMClient:
         attribution: str,
         system_prompt: str | None = None,
         context_label: str | None = None,
+        stream_info: LLMStreamInfo | None = None,
     ) -> AsyncIterator[str]:
         """Stream answer tokens for a question using retrieved context."""
         prompts = self._build_answer_prompts(
@@ -399,6 +501,7 @@ class LLMClient:
             prompt=prompts["user_prompt"],
             system_prompt=prompts["system_prompt"],
             temperature=0.1,
+            stream_info=stream_info,
         ):
             yield token
 

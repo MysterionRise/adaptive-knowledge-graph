@@ -1,9 +1,14 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
+      # Raw source text and pipeline output (data/raw, data/processed) and the
+      # eval reports written by scripts/evaluate_rag.py are generated; rewriting
+      # them would be undone on regeneration. Hand-written files stay checked.
       - id: trailing-whitespace
+        exclude: ^(data/(raw|processed)/|docs/evals/latest\.(json|md)$)
       - id: end-of-file-fixer
+        exclude: ^(data/(raw|processed)/|docs/evals/latest\.(json|md)$)
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=1000']
@@ -12,20 +17,30 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.2.0
+  # Ruff and mypy run from the project's Poetry environment, so the hooks use
+  # exactly the versions locked in poetry.lock and check what CI checks.
+  - repo: local
     hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-check
+        name: ruff check
+        entry: poetry run ruff check --fix --exit-non-zero-on-fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: ruff-format
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
-    hooks:
+        name: ruff format
+        entry: poetry run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: mypy
-        additional_dependencies: [types-all]
-        args: [--ignore-missing-imports]
-        files: ^backend/app/
+        name: mypy
+        # Paths come from [tool.mypy] files in pyproject.toml.
+        entry: poetry run mypy
+        language: system
+        types: [python]
+        files: ^(backend/app|scripts)/
+        pass_filenames: false
 
   # Frontend hooks
   - repo: local

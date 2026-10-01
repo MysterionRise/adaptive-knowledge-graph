@@ -13,10 +13,13 @@ test.describe('Home Page — Integration', () => {
       { timeout: DATA_TIMEOUT }
     );
 
-    // Stat cards: "Exam Topics", "Study Modules", "Connections"
-    const examTopics = page.locator('text=Exam Topics').locator('..').locator('h4');
-    const studyModules = page.locator('text=Study Modules').locator('..').locator('h4');
-    const connections = page.locator('text=Connections').locator('..').locator('h4');
+    // Stat cards: "Concepts", "Study Modules", "Connections"
+    const stats = page.getByRole('region', { name: 'Knowledge Graph Statistics' });
+    const statValue = (title: string) =>
+      stats.getByText(title, { exact: true }).locator('..').locator('h4');
+    const examTopics = statValue('Concepts');
+    const studyModules = statValue('Study Modules');
+    const connections = statValue('Connections');
 
     // Each stat value should be a number > 0
     await expect(examTopics).toBeVisible({ timeout: DATA_TIMEOUT });

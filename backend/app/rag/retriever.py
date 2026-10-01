@@ -1,13 +1,18 @@
 """
 Retriever for semantic search using OpenSearch vector database.
 
-Handles document retrieval and reranking for RAG.
+Indexes chunks and retrieves them with kNN vector search, or with hybrid
+BM25 + kNN search merged by reciprocal rank fusion. Reranking is a separate,
+optional step (see backend/app/rag/reranker.py).
 """
+
+import threading
 
 from loguru import logger
 from opensearchpy import OpenSearch, helpers
 
 from backend.app.core.settings import settings
+from backend.app.core.subjects import get_subject
 from backend.app.nlp.embeddings import get_embedding_model
 
 
@@ -26,11 +31,12 @@ class OpenSearchRetriever:
         Initialize OpenSearch retriever.
 
         Args:
-            index_name: OpenSearch index name
+            index_name: OpenSearch index name (defaults to the default subject's index
+                from config/subjects.yaml)
             host: OpenSearch host
             port: OpenSearch port
         """
-        self.index_name = index_name or settings.opensearch_index
+        self.index_name = index_name or get_subject(None).database.opensearch_index
         self.host = host or settings.opensearch_host
         self.port = port or settings.opensearch_port
         self.username = username
@@ -71,12 +77,14 @@ class OpenSearchRetriever:
             client.indices.delete(index=self.index_name)
 
         if not client.indices.exists(index=self.index_name):
-            # Create index with kNN settings
+            # Create index with kNN settings. Replicas default to 0 so a single-node
+            # cluster stays green (a replica can never be allocated on one node).
             index_body = {
                 "settings": {
                     "index": {
                         "knn": True,
                         "knn.algo_param.ef_search": 100,
+                        "number_of_replicas": settings.opensearch_number_of_replicas,
                     }
                 },
                 "mappings": {
@@ -335,38 +343,28 @@ class OpenSearchRetriever:
 
         sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
 
-        merged = []
-        for doc_id in sorted_ids[:top_k]:
-            hit = chunk_data[doc_id]
-            chunk = {
-                "text": hit["_source"]["text"],
-                "score": scores[doc_id],
-                "id": hit["_source"].get("id"),
-                "module_id": hit["_source"].get("module_id"),
-                "module_title": hit["_source"].get("module_title"),
-                "section": hit["_source"].get("section"),
-                "key_terms": hit["_source"].get("key_terms", []),
-                "attribution": hit["_source"].get("attribution"),
-            }
-            merged.append(chunk)
+        return [
+            self._hit_to_chunk(chunk_data[doc_id], scores[doc_id]) for doc_id in sorted_ids[:top_k]
+        ]
 
-        return merged
+    @staticmethod
+    def _hit_to_chunk(hit: dict, score: float) -> dict:
+        """Convert an OpenSearch hit into the standard chunk dict."""
+        source = hit["_source"]
+        return {
+            "text": source["text"],
+            "score": score,
+            "id": source.get("id"),
+            "module_id": source.get("module_id"),
+            "module_title": source.get("module_title"),
+            "section": source.get("section"),
+            "key_terms": source.get("key_terms", []),
+            "attribution": source.get("attribution"),
+        }
 
     def _format_results(self, results: dict, mode: str) -> list[dict]:
         """Format OpenSearch results into standard chunk dicts."""
-        retrieved = []
-        for hit in results["hits"]["hits"]:
-            chunk = {
-                "text": hit["_source"]["text"],
-                "score": hit["_score"],
-                "id": hit["_source"].get("id"),
-                "module_id": hit["_source"].get("module_id"),
-                "module_title": hit["_source"].get("module_title"),
-                "section": hit["_source"].get("section"),
-                "key_terms": hit["_source"].get("key_terms", []),
-                "attribution": hit["_source"].get("attribution"),
-            }
-            retrieved.append(chunk)
+        retrieved = [self._hit_to_chunk(hit, hit["_score"]) for hit in results["hits"]["hits"]]
 
         logger.info(f"Retrieved {len(retrieved)} chunks ({mode})")
         return retrieved
@@ -386,68 +384,50 @@ class OpenSearchRetriever:
         }
 
 
-# Global singleton for backward compatibility
-_retriever: OpenSearchRetriever | None = None
-
 # Registry of retrievers per subject
 _retrievers: dict[str, OpenSearchRetriever] = {}
+_retrievers_lock = threading.Lock()
 
 
 def get_retriever(subject_id: str | None = None) -> OpenSearchRetriever:
     """
     Get or create a retriever instance for a specific subject.
 
-    Uses a registry pattern to reuse retrievers per subject.
+    Uses a thread-safe registry to reuse retrievers per subject.
 
     Args:
         subject_id: Subject identifier (e.g., "us_history", "biology").
-                   If None, uses the default subject (backward compatible).
+                   If None, uses default_subject from config/subjects.yaml.
 
     Returns:
-        OpenSearchRetriever instance configured for the subject
+        OpenSearchRetriever instance configured for the subject's index
     """
-    global _retriever
+    subject_config = get_subject(subject_id)
 
-    # Backward compatibility: if no subject_id, use default singleton
-    if subject_id is None:
-        if _retriever is None:
-            _retriever = OpenSearchRetriever(
+    # Fast path: cached and connected
+    retriever = _retrievers.get(subject_config.id)
+    if retriever is not None and retriever.client is not None:
+        return retriever
+
+    with _retrievers_lock:
+        retriever = _retrievers.get(subject_config.id)
+        if retriever is None:
+            # Create new retriever with subject-specific index
+            retriever = OpenSearchRetriever(
+                index_name=subject_config.database.opensearch_index,
                 username=settings.opensearch_user,
                 password=settings.opensearch_password,
             )
-            _retriever.connect()
-        return _retriever
-
-    # Return cached retriever if available
-    if subject_id in _retrievers:
-        retriever = _retrievers[subject_id]
-        # Reconnect if client is None
-        if retriever.client is None:
+            retriever.connect()
+            _retrievers[subject_config.id] = retriever
+        elif retriever.client is None:
+            # Reconnect a cached retriever whose client was dropped
             retriever.connect()
         return retriever
-
-    # Get subject configuration
-    from backend.app.core.subjects import get_subject
-
-    subject_config = get_subject(subject_id)
-
-    # Create new retriever with subject-specific index
-    retriever = OpenSearchRetriever(
-        index_name=subject_config.database.opensearch_index,
-        username=settings.opensearch_user,
-        password=settings.opensearch_password,
-    )
-    retriever.connect()
-
-    # Cache the retriever
-    _retrievers[subject_id] = retriever
-
-    return retriever
 
 
 def clear_retrievers() -> None:
     """Clear all cached retrievers."""
-    global _retriever
-    _retriever = None
-    _retrievers.clear()
+    with _retrievers_lock:
+        _retrievers.clear()
     logger.info("Cleared all cached retrievers")

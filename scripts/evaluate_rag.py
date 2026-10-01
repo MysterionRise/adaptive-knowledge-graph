@@ -5,15 +5,24 @@ This is intentionally lightweight: it runs against the FastAPI service, compares
 answers and citations to expected terms/sources, and writes JSON + Markdown
 reports under docs/evals/.
 
+Requests are paced to the API's /api/v1/ask rate limit (default 10/minute, so about one
+request every 6.25 s; every case asks twice, with and without KG expansion) and HTTP 429
+responses are retried, honouring Retry-After.
+
 Usage:
     poetry run python scripts/evaluate_rag.py
     poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
+    poetry run python scripts/evaluate_rag.py --subject economics --limit 3 --out-dir /tmp/eval
+    poetry run python scripts/evaluate_rag.py --delay 0   # API started with RATE_LIMIT_ENABLED=false
 """
 
 import argparse
 import json
+import re
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
@@ -67,17 +76,156 @@ def _looks_like_refusal(answer: str) -> bool:
     return any(marker in answer_lower for marker in refusal_markers)
 
 
-def _ask(client: httpx.Client, api_url: str, case: dict[str, Any], use_kg: bool) -> dict[str, Any]:
+# Default /api/v1/ask limit of the API (settings.rate_limit_ask); the eval paces itself to it.
+DEFAULT_ASK_RATE_LIMIT = "10/minute"
+# Extra spacing per request so clock jitter never lets one request too many into a window.
+PACING_MARGIN_SECONDS = 0.25
+MAX_RETRY_WAIT_SECONDS = 120.0
+_PERIOD_SECONDS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
+_RATE_LIMIT_RE = re.compile(
+    r"^\s*(\d+)\s*(?:/|per)\s*(\d+)?\s*(second|minute|hour|day)s?\s*$", re.IGNORECASE
+)
+_WINDOW_RE = re.compile(r"^\s*(\d+)?\s*(second|minute|hour|day)s?\s*$", re.IGNORECASE)
+
+
+def _min_interval(rate_limit: str) -> float:
+    """Seconds between request starts that respect a limits-style string ('10/minute')."""
+    interval = 0.0
+    for part in re.split(r"[;,]", rate_limit):
+        if not part.strip():
+            continue
+        match = _RATE_LIMIT_RE.match(part)
+        if not match:
+            raise ValueError(f"unsupported rate limit: {part!r}")
+        count, multiplier, unit = int(match[1]), int(match[2] or 1), match[3].lower()
+        interval = max(interval, _PERIOD_SECONDS[unit] * multiplier / count)
+    return interval
+
+
+def _default_delay() -> float:
+    """Derive the pacing from the backend's ask rate limit (settings/.env when importable)."""
+    rate_limit, enabled = DEFAULT_ASK_RATE_LIMIT, True
+    try:
+        from backend.app.core.settings import settings
+
+        rate_limit, enabled = settings.rate_limit_ask, settings.rate_limit_enabled
+    except Exception:
+        pass
+    if not enabled:
+        return 0.0
+    try:
+        interval = _min_interval(rate_limit)
+    except ValueError:
+        interval = _min_interval(DEFAULT_ASK_RATE_LIMIT)
+    return round(interval + PACING_MARGIN_SECONDS, 2)
+
+
+class Pacer:
+    """Keeps at least `interval` seconds between the starts of consecutive requests."""
+
+    def __init__(
+        self,
+        interval: float,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.interval = interval
+        self._sleep = sleep
+        self._clock = clock
+        self._last_start: float | None = None
+
+    def wait(self) -> None:
+        if self._last_start is not None:
+            remaining = self.interval - (self._clock() - self._last_start)
+            if remaining > 0:
+                self._sleep(remaining)
+        self._last_start = self._clock()
+
+
+def _retry_after_header_seconds(header: str) -> float | None:
+    """Parse a Retry-After header: delay-seconds or an HTTP date."""
+    try:
+        return max(0.0, float(header))
+    except ValueError:
+        pass
+    try:
+        when: datetime = parsedate_to_datetime(header)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    delta: float = (when - datetime.now(UTC)).total_seconds()
+    return max(0.0, delta)
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    """Seconds to wait after a 429: the Retry-After header, else the API's `retry_after` window."""
+    header = response.headers.get("Retry-After")
+    if header:
+        seconds = _retry_after_header_seconds(header)
+        if seconds is not None:
+            return seconds
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    window = str(body.get("retry_after", "")) if isinstance(body, dict) else ""
+    match = _WINDOW_RE.match(window)
+    if match:
+        return float(int(match[1] or 1) * _PERIOD_SECONDS[match[2].lower()])
+    return None
+
+
+def _post_ask(
+    client: httpx.Client,
+    url: str,
+    payload: dict[str, Any],
+    pacer: Pacer,
+    max_retries: int,
+    sleep: Callable[[float], None] = time.sleep,
+) -> tuple[httpx.Response, float, int]:
+    """POST with pacing; retry 429s (Retry-After, else exponential backoff).
+
+    Returns (response, latency of the final attempt in ms, number of 429 retries).
+    """
+    retries = 0
+    while True:
+        pacer.wait()
+        started = time.perf_counter()
+        response = client.post(url, json=payload)
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
+        if response.status_code != 429 or retries >= max_retries:
+            return response, latency_ms, retries
+        wait = _retry_after_seconds(response)
+        if wait is None:
+            wait = max(pacer.interval, 1.0) * 2**retries
+        wait = min(wait, MAX_RETRY_WAIT_SECONDS)
+        retries += 1
+        print(f"    429 rate limited; retry {retries}/{max_retries} in {wait:.0f}s", flush=True)
+        sleep(wait)
+
+
+def _ask(
+    client: httpx.Client,
+    api_url: str,
+    case: dict[str, Any],
+    use_kg: bool,
+    pacer: Pacer | None = None,
+    max_retries: int = 5,
+) -> dict[str, Any]:
     started = time.perf_counter()
     try:
-        response = client.post(
+        response, latency_ms, retries = _post_ask(
+            client,
             f"{api_url.rstrip('/')}/api/v1/ask",
-            json={
+            {
                 "question": case["question"],
                 "subject": case["subject"],
                 "use_kg_expansion": use_kg,
                 "top_k": 5,
             },
+            pacer or Pacer(0.0),
+            max_retries,
         )
     except httpx.RequestError as e:
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
@@ -88,12 +236,11 @@ def _ask(client: httpx.Client, api_url: str, case: dict[str, Any], use_kg: bool)
             "error": str(e)[:300],
         }
 
-    latency_ms = round((time.perf_counter() - started) * 1000, 2)
-
     if response.status_code >= 400:
         return {
             "status_code": response.status_code,
             "latency_ms": latency_ms,
+            "rate_limit_retries": retries,
             "error": response.text[:300],
         }
 
@@ -106,6 +253,7 @@ def _ask(client: httpx.Client, api_url: str, case: dict[str, Any], use_kg: bool)
     return {
         "status_code": response.status_code,
         "latency_ms": latency_ms,
+        "rate_limit_retries": retries,
         "answer_term_recall": round(_contains_all_terms(answer, case.get("expected_terms", [])), 3),
         "citation_hit": bool(source_rank) if case.get("expected_sources") else None,
         "mrr": round(_reciprocal_rank(source_rank), 3),
@@ -202,17 +350,21 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
         f"Generated: {report['generated_at']}",
         f"API URL: `{report['api_url']}`",
         f"Environment valid: `{report['environment_valid']}`",
-        "",
-        "## Summary",
-        "",
     ]
+    run_config = report.get("run_config", {})
+    if run_config.get("subjects") or run_config.get("limit"):
+        lines.append(
+            f"Partial run: subjects `{', '.join(run_config.get('subjects') or ['all'])}`, "
+            f"limit `{run_config.get('limit')}`"
+        )
+    lines.extend(["", "## Summary", ""])
     for key, value in report["summary"].items():
         lines.append(f"- `{key}`: {value}")
 
     lines.extend(
         [
             "",
-            "## Client-Readable Signals",
+            "## Summary signals",
             "",
             "- Citation hit rate checks whether expected source sections appear in returned citations.",
             "- Expected-source MRR rewards the expected source appearing higher in the citation list.",
@@ -250,7 +402,15 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
             ]
         )
 
-    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Exactly one trailing newline (markdownlint MD012, end-of-file-fixer)
+    report_path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+
+
+def _select_cases(
+    cases: list[dict[str, Any]], subjects: list[str], limit: int | None
+) -> list[dict[str, Any]]:
+    selected = [case for case in cases if not subjects or case.get("subject") in subjects]
+    return selected[:limit] if limit is not None else selected
 
 
 def main() -> None:
@@ -259,25 +419,62 @@ def main() -> None:
     parser.add_argument("--cases", default="data/evals/golden_qa.yaml")
     parser.add_argument("--out-dir", default="docs/evals")
     parser.add_argument("--timeout", type=float, default=90.0)
+    parser.add_argument(
+        "--subject",
+        action="append",
+        default=[],
+        help="Only evaluate cases of this subject (repeatable or comma-separated)",
+    )
+    parser.add_argument("--limit", type=int, default=None, help="Evaluate at most N cases")
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=None,
+        help="Minimum seconds between /ask requests (default: derived from RATE_LIMIT_ASK)",
+    )
+    parser.add_argument(
+        "--max-retries", type=int, default=5, help="Retries per request after HTTP 429"
+    )
     args = parser.parse_args()
 
-    cases = _load_cases(Path(args.cases))
-    results: list[dict[str, Any]] = []
+    subjects = [s.strip() for value in args.subject for s in value.split(",") if s.strip()]
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be at least 1")
+    cases = _select_cases(_load_cases(Path(args.cases)), subjects, args.limit)
+    if not cases:
+        parser.error(f"no cases match subject(s) {subjects} in {args.cases}")
 
+    delay = _default_delay() if args.delay is None else max(0.0, args.delay)
+    pacer = Pacer(delay)
+    print(
+        f"Evaluating {len(cases)} cases ({2 * len(cases)} requests) against {args.api_url}, "
+        f"at most one request every {delay:.2f}s",
+        flush=True,
+    )
+
+    results: list[dict[str, Any]] = []
     with httpx.Client(timeout=args.timeout) as client:
-        for case in cases:
+        for index, case in enumerate(cases, start=1):
+            kg = _ask(client, args.api_url, case, True, pacer, args.max_retries)
+            plain = _ask(client, args.api_url, case, False, pacer, args.max_retries)
             results.append(
                 {
                     "id": case["id"],
                     "subject": case["subject"],
                     "question": case["question"],
                     "tags": case.get("tags", []),
-                    "kg": _ask(client, args.api_url, case, use_kg=True),
-                    "plain": _ask(client, args.api_url, case, use_kg=False),
+                    "kg": kg,
+                    "plain": plain,
                 }
             )
+            print(
+                f"[{index}/{len(cases)}] {case['id']}: kg={kg.get('status_code')} "
+                f"({kg.get('latency_ms')}ms) plain={plain.get('status_code')} "
+                f"({plain.get('latency_ms')}ms)",
+                flush=True,
+            )
 
-    generated_at = datetime.now(timezone.utc).isoformat()
+    generated_at = datetime.now(UTC).isoformat()
     summary = _summarize(results)
     report = {
         "generated_at": generated_at,
@@ -285,6 +482,13 @@ def main() -> None:
         "environment_valid": (
             summary["kg_successful_cases"] > 0 and summary["plain_successful_cases"] > 0
         ),
+        "run_config": {
+            "cases_file": args.cases,
+            "subjects": subjects,
+            "limit": args.limit,
+            "delay_seconds": delay,
+            "max_retries": args.max_retries,
+        },
         "summary": summary,
         "results": results,
     }
@@ -293,7 +497,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "latest.json"
     md_path = out_dir / "latest.md"
-    json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     _write_markdown(md_path, report)
 
     print(f"Wrote {json_path}")

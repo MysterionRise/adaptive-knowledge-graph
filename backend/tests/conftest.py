@@ -2,9 +2,9 @@
 Pytest configuration and shared fixtures.
 
 Provides:
-- Test settings with mocked services
-- Mock factories for Neo4j, OpenSearch, LLM
-- TestClient fixture for API testing
+- Per-test timeout, rate-limiter and graph-cache isolation (autouse)
+- TestClient fixtures for the default app and for explicit development/production apps
+- Mock factories for Neo4j, retrieval, LLM, quiz generation and Cypher QA
 """
 
 import os
@@ -15,7 +15,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.settings import Settings
-from backend.app.main import app
+from backend.app.main import app, create_app
+
+# API key configured on production-mode test apps (production requires 16+ characters).
+TEST_API_KEY = "test-api-key-for-production"
 
 
 @pytest.fixture(autouse=True)
@@ -38,18 +41,6 @@ def per_test_timeout():
         signal.signal(signal.SIGALRM, previous_handler)
 
 
-@pytest.fixture(scope="session")
-def test_settings():
-    """Create test settings."""
-    return Settings(
-        debug=True,
-        log_level="DEBUG",
-        neo4j_uri="bolt://localhost:7687",
-        opensearch_host="localhost",
-        privacy_local_only=True,
-    )
-
-
 @pytest.fixture
 def client():
     """Create FastAPI test client."""
@@ -57,12 +48,35 @@ def client():
 
 
 @pytest.fixture
-def temp_data_dir(tmp_path):
-    """Create temporary data directories."""
-    data_dir = tmp_path / "data"
-    (data_dir / "raw").mkdir(parents=True)
-    (data_dir / "processed").mkdir(parents=True)
-    return data_dir
+def production_settings():
+    """APP_ENV=production settings with an API key configured (no .env file)."""
+    return Settings(_env_file=None, app_env="production", api_key=TEST_API_KEY)
+
+
+@pytest.fixture
+def production_client(production_settings):
+    """Test client for an app built in production mode (API key required, no docs)."""
+    return TestClient(create_app(production_settings))
+
+
+@pytest.fixture
+def development_client():
+    """Test client for a keyless development-mode app, whatever the environment says."""
+    return TestClient(create_app(Settings(_env_file=None, app_env="development", api_key="")))
+
+
+@pytest.fixture
+def captured_logs():
+    """Loguru messages emitted during the test; each item's ``.record`` has the details."""
+    from loguru import logger
+
+    messages: list = []
+    handler_id = logger.add(messages.append, level="DEBUG", format="{message}")
+    yield messages
+    try:
+        logger.remove(handler_id)
+    except ValueError:  # the test reconfigured logging and already removed it
+        pass
 
 
 @pytest.fixture(autouse=True)
@@ -72,10 +86,11 @@ def setup_test_env(monkeypatch):
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("PRIVACY_LOCAL_ONLY", "true")
 
-    # Disable rate limiting in tests
+    # Disable rate limiting in tests, and start every test with empty counters
     from backend.app.core.rate_limit import limiter
 
     limiter.enabled = False
+    limiter.reset()
 
     # Clear graph response cache between tests
     from backend.app.api.routes.graph import clear_graph_cache
@@ -86,22 +101,6 @@ def setup_test_env(monkeypatch):
 
     # Re-enable rate limiting after test
     limiter.enabled = True
-
-
-@pytest.fixture
-def mock_neo4j_uri():
-    """Mock Neo4j connection URI."""
-    return "bolt://localhost:7687"
-
-
-@pytest.fixture
-def mock_opensearch_config():
-    """Mock OpenSearch configuration."""
-    return {
-        "host": "localhost",
-        "port": 9200,
-        "index": "test_index",
-    }
 
 
 # ==========================================================================
@@ -287,104 +286,66 @@ def mock_cypher_qa_service():
         "MATCH (p:Concept)-[:PREREQ]->(c:Concept {name: 'Photosynthesis'}) RETURN p"
     )
     service.get_schema.return_value = (
-        "Node types: Concept, Module, Chunk. " "Relationships: CONTAINS, RELATED_TO, PREREQ, NEXT."
+        "Node types: Concept, Module, Chunk. Relationships: CONTAINS, RELATED_TO, PREREQ, NEXT."
     )
     return service
 
 
-# ==========================================================================
-# Patch Context Managers
-# ==========================================================================
+def mock_neo4j_driver(records: list[dict] | None = None) -> MagicMock:
+    """A mocked ``neo4j.Driver`` whose READ transactions return ``records``.
+
+    ``driver.session(...)`` yields ``driver.mock_session``; ``session.execute_read(work)``
+    calls ``work`` with ``driver.mock_tx``, whose ``run()`` result fetches ``records``.
+    """
+    driver = MagicMock(name="neo4j_driver")
+    session = MagicMock(name="session")
+    tx = MagicMock(name="managed_transaction")
+    fetched = [MagicMock(data=MagicMock(return_value=record)) for record in records or []]
+    tx.run.return_value.fetch.return_value = fetched
+    tx.run.return_value.__iter__.side_effect = lambda: iter(fetched)
+    session.execute_read.side_effect = lambda work, *args, **kwargs: work(tx, *args, **kwargs)
+    driver.session.return_value.__enter__.return_value = session
+    driver.mock_session = session
+    driver.mock_tx = tx
+    return driver
 
 
 @pytest.fixture
-def patch_neo4j(mock_neo4j_adapter):
-    """Patch Neo4jAdapter with mock."""
-    with patch(
-        "backend.app.kg.neo4j_adapter.Neo4jAdapter", return_value=mock_neo4j_adapter
-    ) as mock:
-        yield mock
+def make_neo4j_driver():
+    """Factory fixture: ``make_neo4j_driver(records)`` returns ``mock_neo4j_driver(records)``."""
+    return mock_neo4j_driver
 
 
 @pytest.fixture
-def patch_retriever(mock_retriever):
-    """Patch get_retriever with mock."""
-    with patch("backend.app.api.routes.ask.get_retriever", return_value=mock_retriever) as mock:
-        yield mock
+def make_cypher_qa_service():
+    """Build a real ``CypherQAService`` (real chain) on a fake LLM and a mocked driver.
 
+    ``make_cypher_qa_service(*llm_responses, records=[...])`` returns ``(service, driver)``;
+    the LLM answers the Cypher-generation prompt, then the QA prompt, in order. Nothing
+    touches the network.
+    """
+    from langchain_core.language_models import FakeListLLM
 
-@pytest.fixture
-def patch_llm_client(mock_llm_client):
-    """Patch get_llm_client with mock."""
-    with patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client) as mock:
-        yield mock
+    from backend.app.kg.cypher_qa import CypherQAService, ReadOnlyNeo4jGraph
 
+    def _make(*llm_responses: str, records: list[dict] | None = None):
+        driver = mock_neo4j_driver(records)
+        with patch("neo4j.GraphDatabase.driver", return_value=driver):
+            graph = ReadOnlyNeo4jGraph(
+                url="bolt://neo4j.test:7687",
+                username="neo4j",
+                password="test-password",
+                refresh_schema=False,
+            )
+        graph.structured_schema = {
+            "node_props": {"Concept": [{"property": "name", "type": "STRING"}]},
+            "rel_props": {},
+            "relationships": [{"start": "Concept", "type": "PREREQ", "end": "Concept"}],
+            "metadata": {"constraint": [], "index": []},
+        }
+        service = CypherQAService()
+        service._graph = graph
+        service._llm = FakeListLLM(responses=list(llm_responses))
+        return service, driver
 
-@pytest.fixture
-def patch_kg_expander(mock_kg_expander):
-    """Patch KG expander functions."""
-    with patch(
-        "backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander
-    ) as mock_expander, patch(
-        "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
-        return_value=["photosynthesis", "chloroplast", "chlorophyll", "ATP"],
-    ) as mock_concepts:
-        yield mock_expander, mock_concepts
-
-
-@pytest.fixture
-def patch_quiz_generator(mock_quiz_generator):
-    """Patch get_quiz_generator with mock."""
-    with patch(
-        "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
-    ) as mock:
-        yield mock
-
-
-@pytest.fixture
-def patch_cypher_qa(mock_cypher_qa_service):
-    """Patch get_cypher_qa_service with mock."""
-    with patch(
-        "backend.app.api.routes.graph.get_cypher_qa_service", return_value=mock_cypher_qa_service
-    ) as mock:
-        yield mock
-
-
-# ==========================================================================
-# Sample Data Fixtures
-# ==========================================================================
-
-
-@pytest.fixture
-def sample_question_request():
-    """Sample question request payload."""
-    return {
-        "question": "What is photosynthesis and how does it work?",
-        "use_kg_expansion": True,
-        "use_window_retrieval": False,
-        "top_k": 5,
-    }
-
-
-@pytest.fixture
-def sample_quiz_topic():
-    """Sample quiz topic."""
-    return "Photosynthesis"
-
-
-@pytest.fixture
-def sample_graph_query_request():
-    """Sample graph query request payload."""
-    return {
-        "question": "What concepts are prerequisites for Photosynthesis?",
-        "preview_only": False,
-    }
-
-
-@pytest.fixture
-def sample_concept_search_request():
-    """Sample concept search request payload."""
-    return {
-        "query": "photo",
-        "limit": 10,
-    }
+    return _make

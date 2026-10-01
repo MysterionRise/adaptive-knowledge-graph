@@ -1,10 +1,19 @@
+"""
+Quiz generation from textbook content.
+
+Retrieves the most relevant chunk for a topic from the subject's index and asks
+the LLM for multiple-choice questions returned as JSON.
+"""
+
 import json
 import re
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from loguru import logger
 
+from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
+from backend.app.core.subjects import get_subject
 from backend.app.nlp.llm_client import get_llm_client
 from backend.app.rag.retriever import get_retriever
 from backend.app.ui_payloads.quiz import Quiz, QuizOption, QuizQuestion
@@ -19,11 +28,11 @@ class QuizGenerator:
 
         Args:
             subject_id: Subject identifier for multi-subject support.
-                       If None, uses the default subject.
+                       If None, uses default_subject from config/subjects.yaml.
         """
-        self.subject_id = subject_id
+        self.subject_id = get_subject(subject_id).id
         self.llm = get_llm_client()
-        self.retriever = get_retriever(subject_id)
+        self.retriever = get_retriever(self.subject_id)
 
     async def generate_from_topic(
         self,
@@ -42,17 +51,20 @@ class QuizGenerator:
 
         Returns:
             Quiz object with generated questions
+
+        Raises:
+            ContentNotFoundError: If the subject's index has no content for the topic
+            QuizGenerationError: If the LLM reply is not valid quiz JSON
         """
         logger.info(
-            f"Generating quiz for topic: {topic} "
-            f"(target_difficulty={target_difficulty or 'mixed'})"
+            f"Generating quiz for topic: {topic} (target_difficulty={target_difficulty or 'mixed'})"
         )
 
         # 1. Retrieve content
         chunks = self.retriever.retrieve(query=topic, top_k=2)  # Get top 2 chunks for context
         if not chunks:
             logger.warning(f"No content found for topic: {topic}")
-            raise ValueError(f"No content found for {topic}")
+            raise ContentNotFoundError(f"No content found for {topic}")
 
         # 2. Use the most relevant chunk for the quiz base
         # simpler MVP: generate questions from the top chunk
@@ -64,67 +76,91 @@ class QuizGenerator:
         system_prompt = self._build_system_prompt(target_difficulty)
         user_prompt = self._build_user_prompt(num_questions, context_text, target_difficulty)
 
+        response_text = await self.llm.generate(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            temperature=0.3,  # low temp for structured output
+            max_tokens=2048,
+        )
+
         try:
-            response_text = await self.llm.generate(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                temperature=0.3,  # low temp for structured output
-                max_tokens=2048,
-            )
-
-            # Clean up potential markdown formatting (```json ... ```)
-            cleaned_json = self._clean_json_response(response_text)
-            data = json.loads(cleaned_json)
-
-            questions = []
-            total_difficulty = 0.0
-
-            for q_data in data.get("questions", []):
-                # Extract difficulty from LLM response
-                difficulty_str = q_data.get("difficulty", "medium")
-                # Use LLM-provided score if available, otherwise fall back to parsing
-                llm_score = q_data.get("difficulty_score")
-                if llm_score is not None:
-                    difficulty_score = float(llm_score)
-                    difficulty = self._score_to_difficulty(difficulty_score)
-                else:
-                    difficulty, difficulty_score = self._parse_difficulty(difficulty_str)
-
-                total_difficulty += difficulty_score
-
-                q = QuizQuestion(
-                    id=str(uuid.uuid4()),
-                    text=q_data["text"],
-                    options=[QuizOption(**opt) for opt in q_data["options"]],
-                    correct_option_id=q_data["correct_option_id"],
-                    explanation=q_data["explanation"],
-                    source_chunk_id=chunk_id,
-                    related_concept=topic,
-                    difficulty=difficulty,
-                    difficulty_score=difficulty_score,
-                )
-                questions.append(q)
-
-            # Calculate average difficulty
-            avg_difficulty = total_difficulty / len(questions) if questions else 0.5
-
-            return Quiz(
-                id=str(uuid.uuid4()),
-                title=f"Assessment: {topic}",
-                questions=questions,
-                average_difficulty=round(avg_difficulty, 2),
-            )
-
-        except Exception as e:
-            logger.error(f"Quiz generation failed: {e}")
+            questions = self._parse_questions(response_text, chunk_id=chunk_id, topic=topic)
+        except QuizGenerationError as e:
+            logger.error(f"Quiz generation failed for topic {topic!r}: {e}")
             raise
+
+        # Calculate average difficulty
+        avg_difficulty = sum(q.difficulty_score or 0.0 for q in questions) / len(questions)
+
+        return Quiz(
+            id=str(uuid.uuid4()),
+            title=f"Assessment: {topic}",
+            questions=questions,
+            average_difficulty=round(avg_difficulty, 2),
+        )
+
+    def _parse_questions(
+        self, response_text: str, chunk_id: str | None, topic: str
+    ) -> list[QuizQuestion]:
+        """Parse the LLM reply into questions; raise QuizGenerationError if it is invalid."""
+        # Clean up potential markdown formatting (```json ... ```)
+        try:
+            data = json.loads(self._clean_json_response(response_text))
+        except json.JSONDecodeError as e:
+            raise QuizGenerationError(f"LLM returned invalid JSON: {e}") from e
+
+        raw_questions = data.get("questions") if isinstance(data, dict) else None
+        if not isinstance(raw_questions, list) or not raw_questions:
+            raise QuizGenerationError("LLM reply does not contain a non-empty 'questions' list")
+
+        questions = []
+        for number, q_data in enumerate(raw_questions, start=1):
+            try:
+                questions.append(self._build_question(q_data, chunk_id, topic))
+            except (KeyError, TypeError, ValueError) as e:  # pydantic errors are ValueErrors
+                raise QuizGenerationError(
+                    f"LLM returned a malformed question #{number}: {e!r}"
+                ) from e
+        return questions
+
+    def _build_question(self, q_data: Any, chunk_id: str | None, topic: str) -> QuizQuestion:
+        """Build one question from the LLM's dict; raises KeyError/TypeError/ValueError."""
+        if not isinstance(q_data, dict):
+            raise TypeError(f"expected a JSON object, got {type(q_data).__name__}")
+
+        # Use LLM-provided score if available, otherwise fall back to parsing the label
+        llm_score = q_data.get("difficulty_score")
+        if llm_score is not None:
+            difficulty_score = min(max(float(llm_score), 0.0), 1.0)
+            difficulty = self._score_to_difficulty(difficulty_score)
+        else:
+            difficulty, difficulty_score = self._parse_difficulty(
+                str(q_data.get("difficulty", "medium"))
+            )
+
+        options = [QuizOption(**opt) for opt in q_data["options"]]
+        correct_option_id = q_data["correct_option_id"]
+        if correct_option_id not in {option.id for option in options}:
+            raise ValueError(f"correct_option_id {correct_option_id!r} matches no option")
+
+        return QuizQuestion(
+            id=str(uuid.uuid4()),
+            text=q_data["text"],
+            options=options,
+            correct_option_id=correct_option_id,
+            explanation=q_data["explanation"],
+            source_chunk_id=chunk_id,
+            related_concept=topic,
+            difficulty=difficulty,
+            difficulty_score=difficulty_score,
+        )
 
     def _build_system_prompt(
         self,
         target_difficulty: Literal["easy", "medium", "hard"] | None = None,
     ) -> str:
         """Build system prompt based on difficulty targeting."""
-        base_prompt = """You are an expert exam creator for adult professional certification.
+        base_prompt = """You are an experienced educator who writes quiz questions that help students learn.
 Create multiple-choice questions based ONLY on the provided text.
 For each question, estimate its difficulty:
 - "difficulty": one of "easy", "medium", or "hard"
@@ -249,9 +285,6 @@ JSON Output:"""
         return text.strip()
 
 
-# Global singleton for backward compatibility
-_quiz_generator: QuizGenerator | None = None
-
 # Registry of quiz generators per subject
 _quiz_generators: dict[str, QuizGenerator] = {}
 
@@ -262,35 +295,27 @@ def get_quiz_generator(subject_id: str | None = None) -> QuizGenerator:
 
     Args:
         subject_id: Subject identifier (e.g., "us_history", "biology").
-                   If None, uses the default singleton for backward compatibility.
+                   If None, uses default_subject from config/subjects.yaml.
 
     Returns:
         QuizGenerator instance configured for the subject
     """
-    global _quiz_generator
-
-    # Backward compatibility: if no subject_id, use default singleton
-    if subject_id is None:
-        if _quiz_generator is None:
-            _quiz_generator = QuizGenerator()
-        return _quiz_generator
+    resolved_id = get_subject(subject_id).id
 
     # Return cached generator if available
-    if subject_id in _quiz_generators:
-        return _quiz_generators[subject_id]
+    if resolved_id in _quiz_generators:
+        return _quiz_generators[resolved_id]
 
     # Create new generator with subject-specific configuration
-    generator = QuizGenerator(subject_id=subject_id)
+    generator = QuizGenerator(subject_id=resolved_id)
 
     # Cache the generator
-    _quiz_generators[subject_id] = generator
+    _quiz_generators[resolved_id] = generator
 
     return generator
 
 
 def clear_quiz_generators() -> None:
     """Clear all cached quiz generators."""
-    global _quiz_generator
-    _quiz_generator = None
     _quiz_generators.clear()
     logger.info("Cleared all cached quiz generators")

@@ -13,11 +13,10 @@ from loguru import logger
 from pydantic import BaseModel
 
 # Add project root to path
-sys.path.append(os.getcwd())
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.app.core.settings import settings
-from backend.app.core.subjects import SubjectConfig, get_all_subjects, get_subject
-from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
+from backend.app.core.subjects import get_all_subjects, get_subject
 
 
 class BookConfig(BaseModel):
@@ -205,70 +204,10 @@ def fetch_openstax_page(slug: str, page_slug: str) -> str | None:
     return text.strip() if text.strip() else None
 
 
-def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
-    words = text.split()
-    chunks = []
-    current_chunk = []
-    current_count = 0
-
-    for word in words:
-        current_chunk.append(word)
-        current_count += 1
-        if current_count >= chunk_size:
-            chunks.append(" ".join(current_chunk))
-            current_chunk = []
-            current_count = 0
-
-    if current_chunk:
-        chunks.append(" ".join(current_chunk))
-
-    return chunks
-
-
-def _add_record_and_index(
-    record: dict,
-    all_records: list[dict],
-    subject_id: str,
-    subject_config: SubjectConfig,
-    index_rag: bool,
-    retriever: OpenSearchRetriever | None,
-    book_title: str,
-    module_id: str,
-) -> None:
-    """Add a record to results and optionally index into OpenSearch."""
-    all_records.append(record)
-
-    if index_rag and retriever:
-        docs = []
-        for chunk_idx, chunk in enumerate(record["chunks"]):
-            docs.append(
-                {
-                    "id": f"{subject_id}_{module_id}_chunk_{chunk_idx}",
-                    "text": chunk,
-                    "module_id": module_id,
-                    "module_title": book_title,
-                    "section": module_id,
-                    "book": book_title,
-                    "key_terms": [],
-                    "attribution": subject_config.attribution,
-                    "subject_id": subject_id,
-                }
-            )
-
-        if docs:
-            try:
-                retriever.index_chunks(docs, show_progress=False)
-            except Exception as e:
-                logger.error(f"Failed to index {module_id}: {e}")
-
-
 def _process_github_raw_book(
     book: BookConfig,
     subject_id: str,
-    subject_config: SubjectConfig,
     limit: int,
-    index_rag: bool,
-    retriever: OpenSearchRetriever | None,
     all_records: list[dict],
 ) -> None:
     """Process a book from a philschatz GitHub raw source."""
@@ -294,40 +233,26 @@ def _process_github_raw_book(
             continue
 
         clean_content = clean_markdown(content)
-        chunks = chunk_text(clean_content, chunk_size=settings.rag_chunk_size)
-
         module_id = filename.replace(".md", "")
 
-        if chunks:
-            record = {
-                "module_id": module_id,
-                "module_title": f"{book.title} - {module_id}",
-                "book_title": book.title,
-                "section": module_id,
-                "text": clean_content,
-                "key_terms": [],
-                "chunks": chunks,
-                "subject_id": subject_id,
-            }
-            _add_record_and_index(
-                record,
-                all_records,
-                subject_id,
-                subject_config,
-                index_rag,
-                retriever,
-                book.title,
-                module_id,
+        if clean_content.split():
+            all_records.append(
+                {
+                    "module_id": module_id,
+                    "module_title": f"{book.title} - {module_id}",
+                    "book_title": book.title,
+                    "section": module_id,
+                    "text": clean_content,
+                    "key_terms": [],
+                    "subject_id": subject_id,
+                }
             )
 
 
 def _process_openstax_web_book(
     book: BookConfig,
     subject_id: str,
-    subject_config: SubjectConfig,
     limit: int,
-    index_rag: bool,
-    retriever: OpenSearchRetriever | None,
     all_records: list[dict],
 ) -> None:
     """Process a book from the OpenStax website (HTML source)."""
@@ -358,30 +283,20 @@ def _process_openstax_web_book(
         # Rate-limit after successful fetch to be polite to openstax.org
         time.sleep(OPENSTAX_FETCH_DELAY)
 
-        chunks = chunk_text(content, chunk_size=settings.rag_chunk_size)
         # page_slug is already URL-safe (alphanumeric + hyphens) from OpenStax
         module_id = page_slug
 
-        if chunks:
-            record = {
-                "module_id": module_id,
-                "module_title": f"{book.title} - {page_title}",
-                "book_title": book.title,
-                "section": module_id,
-                "text": content,
-                "key_terms": [],
-                "chunks": chunks,
-                "subject_id": subject_id,
-            }
-            _add_record_and_index(
-                record,
-                all_records,
-                subject_id,
-                subject_config,
-                index_rag,
-                retriever,
-                book.title,
-                module_id,
+        if content.split():
+            all_records.append(
+                {
+                    "module_id": module_id,
+                    "module_title": f"{book.title} - {page_title}",
+                    "book_title": book.title,
+                    "section": module_id,
+                    "text": content,
+                    "key_terms": [],
+                    "subject_id": subject_id,
+                }
             )
 
 
@@ -416,16 +331,6 @@ async def process_books(
     # Use subject-specific JSONL path
     books_jsonl_path = os.path.join(settings.data_processed_dir, f"books_{subject_id}.jsonl")
 
-    # Get subject-specific retriever
-    retriever = get_retriever(subject_id) if index_rag else None
-
-    # Create the index if it doesn't exist
-    if retriever:
-        try:
-            retriever.create_collection(embedding_dim=1024, recreate=False)
-        except Exception as e:
-            logger.warning(f"Could not create index (may already exist): {e}")
-
     all_records: list[dict] = []
 
     for book in books:
@@ -435,28 +340,27 @@ async def process_books(
             if not book.openstax_slug:
                 logger.error(f"No openstax_slug for openstax_web book: {book.title}")
                 continue
-            _process_openstax_web_book(
-                book, subject_id, subject_config, limit, index_rag, retriever, all_records
-            )
+            _process_openstax_web_book(book, subject_id, limit, all_records)
         else:
             # Default: github_raw
             if not book.repo_url_raw:
                 logger.error(f"No repo_url_raw for github_raw book: {book.title}")
                 continue
-            _process_github_raw_book(
-                book, subject_id, subject_config, limit, index_rag, retriever, all_records
-            )
+            _process_github_raw_book(book, subject_id, limit, all_records)
 
     # Save to JSONL
     logger.info(f"Saving {len(all_records)} records to {books_jsonl_path}")
     with open(books_jsonl_path, "w", encoding="utf-8") as f:
         for record in all_records:
-            # Remove giant 'chunks' from jsonl if not needed for KG but useful for debugging
-            record_copy = record.copy()
-            del record_copy["chunks"]
-            f.write(json.dumps(record_copy) + "\n")
+            f.write(json.dumps(record) + "\n")
 
     logger.success(f"Ingestion complete for {subject_id}! Processed {len(all_records)} modules.")
+
+    if index_rag:
+        # Same chunker and documents as scripts/index_to_opensearch.py (make index-rag)
+        from scripts.index_to_opensearch import index_records
+
+        index_records(subject_id, all_records)
 
 
 def parse_args():
@@ -479,7 +383,7 @@ def parse_args():
     parser.add_argument(
         "--index-rag",
         action="store_true",
-        help="Index content into OpenSearch for RAG retrieval.",
+        help="Also index into OpenSearch, exactly like scripts/index_to_opensearch.py.",
     )
     parser.add_argument(
         "--list-subjects",

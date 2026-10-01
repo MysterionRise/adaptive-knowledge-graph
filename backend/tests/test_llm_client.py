@@ -4,9 +4,11 @@ Tests for the LLM client module.
 Tests cover:
 - Initialization with default settings and custom overrides
 - Mode-based dispatch routing (local, remote, hybrid)
-- Ollama generate: success, error status, connection error
+- Ollama generate: success, error status, connection error, payload options
 - OpenRouter generate: success, error status, missing API key
-- Hybrid fallback: local failure cascading to remote
+- Hybrid fallback: local failure cascading to remote (never after partial streams)
+- PRIVACY_LOCAL_ONLY: no remote call or fallback is ever attempted
+- Provider/model reporting (local, remote, fallback)
 - Ollama streaming: NDJSON token yielding, done flag, connection error
 - OpenRouter streaming: SSE token yielding, [DONE] sentinel, missing API key
 - answer_question: prompt construction, generate call, return structure
@@ -20,32 +22,66 @@ import aiohttp
 import pytest
 
 from backend.app.core.exceptions import LLMConnectionError, LLMGenerationError
-from backend.app.nlp.llm_client import LLMClient
+from backend.app.nlp import llm_client as llm_client_module
+from backend.app.nlp.llm_client import (
+    LLMClient,
+    LLMResult,
+    LLMStreamInfo,
+    RemoteLLMDisabledError,
+)
+
+REMOTE_MODEL = "mistralai/mixtral-8x7b-instruct"
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_client(mode="local", model_name="test-model", api_key="test-key"):
-    """Create an LLMClient with patched settings to avoid env leakage."""
+@pytest.fixture(autouse=True)
+def llm_settings():
+    """Patch the client's settings for the whole test (privacy off, no retry waits)."""
     with patch("backend.app.nlp.llm_client.settings") as mock_settings:
-        mock_settings.llm_mode = mode
-        mock_settings.llm_local_model = model_name
+        mock_settings.llm_mode = "local"
+        mock_settings.llm_local_model = "test-model"
         mock_settings.llm_ollama_host = "http://localhost:11434"
-        mock_settings.openrouter_api_key = api_key
+        mock_settings.openrouter_api_key = "test-key"
         mock_settings.openrouter_base_url = "https://openrouter.ai/api/v1"
-        mock_settings.openrouter_model = "mistralai/mixtral-8x7b-instruct"
+        mock_settings.openrouter_model = REMOTE_MODEL
         mock_settings.openrouter_verify_ssl = True
+        mock_settings.privacy_local_only = False
         mock_settings.llm_temperature = 0.1
         mock_settings.llm_timeout = 60
         mock_settings.llm_stream_timeout = 120
         mock_settings.llm_retry_attempts = 1  # fast tests, no real retries
         mock_settings.llm_retry_min_wait = 0
         mock_settings.llm_retry_max_wait = 0
+        yield mock_settings
 
-        client = LLMClient(mode=mode, model_name=model_name)
-    return client
+
+def _make_client(mode="local", model_name="test-model", api_key="test-key"):
+    """Create an LLMClient from the patched settings."""
+    llm_client_module.settings.llm_mode = mode
+    llm_client_module.settings.openrouter_api_key = api_key
+    return LLMClient(mode=mode, model_name=model_name)
+
+
+def _failing_stream(error: Exception, tokens_before: tuple[str, ...] = ()):
+    """Build an async generator function that yields some tokens, then raises."""
+
+    async def stream(*args, **kwargs):
+        for token in tokens_before:
+            yield token
+        raise error
+
+    return stream
+
+
+def _token_stream(*tokens: str):
+    async def stream(*args, **kwargs):
+        for token in tokens:
+            yield token
+
+    return stream
 
 
 def _mock_aiohttp_response(status=200, json_data=None, text_data="", content_lines=None):
@@ -103,31 +139,39 @@ def _mock_aiohttp_session(mock_response):
 class TestLLMClientInit:
     """Tests for LLMClient.__init__ defaults and overrides."""
 
-    def test_defaults_from_settings(self):
+    def test_defaults_from_settings(self, llm_settings):
         """Init without arguments should pull from settings."""
-        with patch("backend.app.nlp.llm_client.settings") as mock_settings:
-            mock_settings.llm_mode = "local"
-            mock_settings.llm_local_model = "llama3.1:8b"
-            mock_settings.llm_ollama_host = "http://localhost:11434"
-            mock_settings.openrouter_api_key = ""
-            mock_settings.openrouter_base_url = "https://openrouter.ai/api/v1"
+        llm_settings.llm_local_model = "llama3.1:8b"
 
-            client = LLMClient()
+        client = LLMClient()
 
         assert client.mode == "local"
         assert client.model_name == "llama3.1:8b"
+        assert client.local_model == "llama3.1:8b"
+        assert client.remote_model == REMOTE_MODEL
         assert client.ollama_host == "http://localhost:11434"
 
     def test_custom_mode_and_model(self):
-        """Custom mode and model_name should override settings."""
+        """In remote mode model_name overrides the OpenRouter model."""
         client = _make_client(mode="remote", model_name="my-custom-model")
         assert client.mode == "remote"
         assert client.model_name == "my-custom-model"
+        assert client.remote_model == "my-custom-model"
 
     def test_hybrid_mode(self):
-        """Hybrid mode should be accepted."""
+        """Hybrid mode should be accepted; the primary model is the local one."""
         client = _make_client(mode="hybrid")
         assert client.mode == "hybrid"
+        assert client.model_name == "test-model"
+        assert client.remote_model == REMOTE_MODEL
+
+    def test_remote_mode_reports_remote_model(self, llm_settings):
+        """Without an override, remote mode reports the OpenRouter model, not Ollama's."""
+        llm_settings.llm_mode = "remote"
+
+        client = LLMClient()
+
+        assert client.model_name == REMOTE_MODEL
 
 
 # ===========================================================================
@@ -263,7 +307,7 @@ class TestGenerateOllama:
         payload = call_kwargs[1]["json"] if "json" in call_kwargs[1] else call_kwargs[0][1]
         assert payload["system"] == "be helpful"
         assert payload["prompt"] == "my prompt"
-        assert payload["temperature"] == 0.5
+        assert payload["options"]["temperature"] == 0.5
         assert payload["stream"] is False
 
 
@@ -745,11 +789,13 @@ class TestAnswerQuestion:
 
     @pytest.mark.asyncio
     async def test_returns_expected_dict(self):
-        """answer_question should return a dict with answer, question, model, mode."""
+        """answer_question returns answer, question, model, provider, fallback and mode."""
         client = _make_client(mode="local", model_name="test-model")
 
-        with patch.object(client, "generate", new_callable=AsyncMock) as mock_gen:
-            mock_gen.return_value = "The answer is 42."
+        with patch.object(client, "generate_result", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = LLMResult(
+                text="The answer is 42.", provider="local", model="test-model"
+            )
 
             result = await client.answer_question(
                 question="What is the answer?",
@@ -760,15 +806,39 @@ class TestAnswerQuestion:
         assert result["answer"] == "The answer is 42."
         assert result["question"] == "What is the answer?"
         assert result["model"] == "test-model"
+        assert result["provider"] == "local"
+        assert result["fallback"] is False
         assert result["mode"] == "local"
 
     @pytest.mark.asyncio
+    async def test_reports_fallback_model(self):
+        """When hybrid falls back, 'model' is the OpenRouter model that answered."""
+        client = _make_client(mode="hybrid")
+
+        with (
+            patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local,
+            patch.object(client, "_generate_openrouter", new_callable=AsyncMock) as mock_remote,
+        ):
+            mock_local.side_effect = LLMConnectionError("connection refused")
+            mock_remote.return_value = "remote answer"
+
+            result = await client.answer_question(
+                question="Q?", context=["chunk"], attribution="attr"
+            )
+
+        assert result["answer"] == "remote answer"
+        assert result["model"] == REMOTE_MODEL
+        assert result["provider"] == "remote"
+        assert result["fallback"] is True
+        assert result["mode"] == "hybrid"
+
+    @pytest.mark.asyncio
     async def test_calls_generate_with_built_prompts(self):
-        """answer_question should pass the built prompts to generate."""
+        """answer_question should pass the built prompts to generate_result."""
         client = _make_client(mode="local")
 
-        with patch.object(client, "generate", new_callable=AsyncMock) as mock_gen:
-            mock_gen.return_value = "answer"
+        with patch.object(client, "generate_result", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = LLMResult(text="answer", provider="local", model="test-model")
 
             await client.answer_question(
                 question="Q?",
@@ -788,8 +858,8 @@ class TestAnswerQuestion:
         """Custom system_prompt should override the default."""
         client = _make_client(mode="local")
 
-        with patch.object(client, "generate", new_callable=AsyncMock) as mock_gen:
-            mock_gen.return_value = "answer"
+        with patch.object(client, "generate_result", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = LLMResult(text="answer", provider="local", model="test-model")
 
             await client.answer_question(
                 question="Q?",
@@ -806,8 +876,8 @@ class TestAnswerQuestion:
         """Custom context_label should appear in the user prompt."""
         client = _make_client(mode="local")
 
-        with patch.object(client, "generate", new_callable=AsyncMock) as mock_gen:
-            mock_gen.return_value = "answer"
+        with patch.object(client, "generate_result", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = LLMResult(text="answer", provider="local", model="test-model")
 
             await client.answer_question(
                 question="Q?",
@@ -839,9 +909,316 @@ class TestAnswerQuestion:
 
         assert tokens == ["Hello", " World"]
 
+    @pytest.mark.asyncio
+    async def test_answer_question_stream_forwards_stream_info(self):
+        client = _make_client(mode="local")
+        info = LLMStreamInfo()
+
+        with patch.object(client, "_stream_ollama", side_effect=_token_stream("Hi")):
+            tokens = [
+                t
+                async for t in client.answer_question_stream(
+                    question="Q?", context=["chunk"], attribution="attr", stream_info=info
+                )
+            ]
+
+        assert tokens == ["Hi"]
+        assert (info.provider, info.model, info.fallback) == ("local", "test-model", False)
+
 
 # ===========================================================================
-# 9. _build_answer_prompts
+# 9. Ollama payload shape
+# ===========================================================================
+
+
+def _posted_payload(mock_session) -> dict:
+    return mock_session.post.call_args[1]["json"]
+
+
+@pytest.mark.unit
+class TestOllamaPayload:
+    """temperature and num_predict must be sent inside Ollama's `options`."""
+
+    @pytest.mark.asyncio
+    async def test_generate_sends_options(self):
+        client = _make_client(mode="local")
+        mock_session = _mock_aiohttp_session(
+            _mock_aiohttp_response(status=200, json_data={"response": "ok"})
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            await client._generate_ollama("prompt", "system", 0.5, 256)
+
+        payload = _posted_payload(mock_session)
+        assert payload["options"] == {"temperature": 0.5, "num_predict": 256}
+        assert "temperature" not in payload
+        assert "max_tokens" not in payload
+        assert payload["model"] == "test-model"
+
+    @pytest.mark.asyncio
+    async def test_stream_sends_options(self):
+        client = _make_client(mode="local")
+        lines = [json.dumps({"response": "", "done": True}).encode() + b"\n"]
+        mock_session = _mock_aiohttp_session(
+            _mock_aiohttp_response(status=200, content_lines=lines)
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            _ = [t async for t in client._stream_ollama("prompt", None, 0.2, 64)]
+
+        payload = _posted_payload(mock_session)
+        assert payload["options"] == {"temperature": 0.2, "num_predict": 64}
+        assert payload["stream"] is True
+        assert "temperature" not in payload
+
+    @pytest.mark.asyncio
+    async def test_generate_forwards_max_tokens_as_num_predict(self):
+        """The quiz generator's 2048-token cap reaches Ollama."""
+        client = _make_client(mode="local")
+        mock_session = _mock_aiohttp_session(
+            _mock_aiohttp_response(status=200, json_data={"response": "ok"})
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            await client.generate("prompt", temperature=0.3, max_tokens=2048)
+
+        assert _posted_payload(mock_session)["options"] == {
+            "temperature": 0.3,
+            "num_predict": 2048,
+        }
+
+    @pytest.mark.asyncio
+    async def test_generate_defaults(self, llm_settings):
+        llm_settings.llm_temperature = 0.15
+        client = _make_client(mode="local")
+        mock_session = _mock_aiohttp_session(
+            _mock_aiohttp_response(status=200, json_data={"response": "ok"})
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            await client.generate("prompt")
+
+        assert _posted_payload(mock_session)["options"] == {
+            "temperature": 0.15,
+            "num_predict": 1024,
+        }
+
+
+# ===========================================================================
+# 10. PRIVACY_LOCAL_ONLY guard
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestPrivacyGuard:
+    """While PRIVACY_LOCAL_ONLY is on, no request may ever reach OpenRouter."""
+
+    @pytest.fixture(autouse=True)
+    def _privacy_on(self, llm_settings):
+        llm_settings.privacy_local_only = True
+
+    def test_error_is_an_llm_generation_error(self):
+        # Existing handlers map LLMGenerationError to 503
+        assert issubclass(RemoteLLMDisabledError, LLMGenerationError)
+
+    @pytest.mark.asyncio
+    async def test_remote_generate_refused_without_network(self):
+        client = _make_client(mode="remote", api_key="sk-test")
+
+        with patch("aiohttp.ClientSession") as session_cls:
+            with pytest.raises(RemoteLLMDisabledError, match="PRIVACY_LOCAL_ONLY"):
+                await client.generate("prompt")
+
+        session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_remote_stream_refused_without_network(self):
+        client = _make_client(mode="remote", api_key="sk-test")
+
+        with patch("aiohttp.ClientSession") as session_cls:
+            with pytest.raises(RemoteLLMDisabledError):
+                async for _ in client.generate_stream("prompt"):
+                    pass  # pragma: no cover
+
+        session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_direct_openrouter_calls_refused(self):
+        client = _make_client(mode="remote", api_key="sk-test")
+
+        with patch("aiohttp.ClientSession") as session_cls:
+            with pytest.raises(RemoteLLMDisabledError):
+                await client._generate_openrouter("prompt", None, 0.1, 64)
+            with pytest.raises(RemoteLLMDisabledError):
+                async for _ in client._stream_openrouter("prompt", None, 0.1, 64):
+                    pass  # pragma: no cover
+
+        session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_hybrid_does_not_fall_back(self):
+        client = _make_client(mode="hybrid", api_key="sk-test")
+
+        with (
+            patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local,
+            patch.object(client, "_generate_openrouter", new_callable=AsyncMock) as mock_remote,
+        ):
+            mock_local.side_effect = LLMConnectionError("connection refused")
+            with pytest.raises(LLMConnectionError, match="connection refused"):
+                await client.generate("prompt")
+
+        mock_remote.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_hybrid_stream_does_not_fall_back(self):
+        client = _make_client(mode="hybrid", api_key="sk-test")
+        remote_stream = MagicMock(side_effect=_token_stream("remote"))
+
+        with (
+            patch.object(
+                client,
+                "_stream_ollama",
+                side_effect=_failing_stream(LLMGenerationError("model error")),
+            ),
+            patch.object(client, "_stream_openrouter", remote_stream),
+        ):
+            with pytest.raises(LLMGenerationError, match="model error"):
+                async for _ in client.generate_stream("prompt"):
+                    pass  # pragma: no cover
+
+        remote_stream.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_local_mode_still_works(self):
+        client = _make_client(mode="local")
+
+        with patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local:
+            mock_local.return_value = "local answer"
+            result = await client.generate_result("prompt")
+
+        assert result == LLMResult(text="local answer", provider="local", model="test-model")
+
+
+# ===========================================================================
+# 11. Provider / model reporting
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestProviderReporting:
+    """generate_result and stream_info report the provider and model that answered."""
+
+    @pytest.mark.asyncio
+    async def test_local(self):
+        client = _make_client(mode="local", model_name="llama-local")
+
+        with patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local:
+            mock_local.return_value = "answer"
+            result = await client.generate_result("prompt")
+
+        assert result == LLMResult(text="answer", provider="local", model="llama-local")
+
+    @pytest.mark.asyncio
+    async def test_remote(self):
+        client = _make_client(mode="remote", model_name=None)
+
+        with patch.object(client, "_generate_openrouter", new_callable=AsyncMock) as mock_remote:
+            mock_remote.return_value = "answer"
+            result = await client.generate_result("prompt")
+
+        assert result == LLMResult(text="answer", provider="remote", model=REMOTE_MODEL)
+
+    @pytest.mark.asyncio
+    async def test_remote_payload_uses_reported_model(self):
+        client = _make_client(mode="remote", model_name="anthropic/some-model")
+        json_data = {"choices": [{"message": {"content": "ok"}}]}
+        mock_session = _mock_aiohttp_session(
+            _mock_aiohttp_response(status=200, json_data=json_data)
+        )
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            result = await client.generate_result("prompt")
+
+        assert _posted_payload(mock_session)["model"] == "anthropic/some-model"
+        assert result.model == "anthropic/some-model"
+
+    @pytest.mark.asyncio
+    async def test_hybrid_fallback(self):
+        client = _make_client(mode="hybrid")
+
+        with (
+            patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local,
+            patch.object(client, "_generate_openrouter", new_callable=AsyncMock) as mock_remote,
+        ):
+            mock_local.side_effect = LLMGenerationError("model not loaded")
+            mock_remote.return_value = "answer"
+            result = await client.generate_result("prompt")
+
+        assert result == LLMResult(
+            text="answer", provider="remote", model=REMOTE_MODEL, fallback=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_hybrid_local_success_is_not_a_fallback(self):
+        client = _make_client(mode="hybrid")
+
+        with patch.object(client, "_generate_ollama", new_callable=AsyncMock) as mock_local:
+            mock_local.return_value = "answer"
+            result = await client.generate_result("prompt")
+
+        assert (result.provider, result.model, result.fallback) == ("local", "test-model", False)
+
+    @pytest.mark.asyncio
+    async def test_stream_info_remote(self):
+        client = _make_client(mode="remote", model_name=None)
+        info = LLMStreamInfo()
+
+        with patch.object(client, "_stream_openrouter", side_effect=_token_stream("a")):
+            _ = [t async for t in client.generate_stream("prompt", stream_info=info)]
+
+        assert (info.provider, info.model, info.fallback) == ("remote", REMOTE_MODEL, False)
+
+    @pytest.mark.asyncio
+    async def test_stream_info_hybrid_fallback(self):
+        client = _make_client(mode="hybrid")
+        info = LLMStreamInfo()
+
+        with (
+            patch.object(
+                client, "_stream_ollama", side_effect=_failing_stream(LLMConnectionError("down"))
+            ),
+            patch.object(client, "_stream_openrouter", side_effect=_token_stream("remote")),
+        ):
+            tokens = [t async for t in client.generate_stream("prompt", stream_info=info)]
+
+        assert tokens == ["remote"]
+        assert (info.provider, info.model, info.fallback) == ("remote", REMOTE_MODEL, True)
+
+    @pytest.mark.asyncio
+    async def test_stream_does_not_fall_back_after_partial_output(self):
+        """Falling back mid-answer would mix two models' output in one response."""
+        client = _make_client(mode="hybrid")
+        remote_stream = MagicMock(side_effect=_token_stream("remote"))
+
+        with (
+            patch.object(
+                client,
+                "_stream_ollama",
+                side_effect=_failing_stream(LLMConnectionError("dropped"), ("partial",)),
+            ),
+            patch.object(client, "_stream_openrouter", remote_stream),
+        ):
+            tokens = []
+            with pytest.raises(LLMConnectionError, match="dropped"):
+                async for token in client.generate_stream("prompt"):
+                    tokens.append(token)
+
+        assert tokens == ["partial"]
+        remote_stream.assert_not_called()
+
+
+# ===========================================================================
+# 12. _build_answer_prompts
 # ===========================================================================
 
 

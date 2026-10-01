@@ -1,7 +1,9 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import LearningPath from '@/components/LearningPath';
 import { apiClient } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-errors';
 import { useAppStore } from '@/lib/store';
+import type { LearningPathResponse } from '@/lib/types';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -24,21 +26,28 @@ jest.mock('@/lib/api-client', () => ({
 const initialStoreState = useAppStore.getState();
 const mockGetLearningPath = apiClient.getLearningPath as jest.Mock;
 
-const mockLearningPath = {
-  concept: 'Advanced Topic',
-  path: [
-    { name: 'Basic Concept', depth: 2, importance: 0.6 },
-    { name: 'Intermediate Concept', depth: 1, importance: 0.7 },
-    { name: 'Advanced Topic', depth: 0, importance: 0.9 },
+// The payload of GET /learning-path/{concept}: prerequisites only, `depth` = steps to the target
+const mockLearningPath: LearningPathResponse = {
+  target_concept: 'Advanced Topic',
+  prerequisites: [
+    { id: 'c2', name: 'Intermediate Concept', importance: 0.7, chapter: 'Ch 2', depth: 1 },
+    { id: 'c1', name: 'Basic Concept', importance: 0.6, chapter: null, depth: 2 },
   ],
-  depth: 2,
+  total_concepts: 3,
 };
+
+/** Names of the steps, in the order shown. */
+const stepNames = () =>
+  within(screen.getByRole('list', { name: /Learning path to/ }))
+    .getAllByRole('heading', { level: 4 })
+    .map((heading) => heading.textContent?.replace('Target', ''));
 
 describe('LearningPath Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAppStore.setState(initialStoreState);
     mockGetLearningPath.mockReset();
+    mockGetLearningPath.mockResolvedValue(mockLearningPath);
   });
 
   describe('Loading State', () => {
@@ -47,110 +56,121 @@ describe('LearningPath Component', () => {
 
       render(<LearningPath conceptName="Test Concept" />);
 
-      expect(screen.getByText('Loading learning path...')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Loading learning path...');
+    });
+
+    it('does not load or spin forever without a concept', () => {
+      render(<LearningPath conceptName="   " />);
+
+      expect(screen.getByText('Choose a concept to see its learning path.')).toBeInTheDocument();
+      expect(screen.queryByText('Loading learning path...')).not.toBeInTheDocument();
+      expect(mockGetLearningPath).not.toHaveBeenCalled();
     });
   });
 
   describe('Error State', () => {
-    it('shows error message when fetch fails', async () => {
-      mockGetLearningPath.mockRejectedValueOnce(new Error('Network error'));
+    it('shows the error with a retry action', async () => {
+      mockGetLearningPath
+        .mockRejectedValueOnce(new ApiError('http', 'Database connection failed', { status: 503 }))
+        .mockResolvedValueOnce(mockLearningPath);
 
-      render(<LearningPath conceptName="Test Concept" />);
+      render(<LearningPath conceptName="Advanced Topic" />);
 
-      await waitFor(() => {
-        expect(
-          screen.getByText('Unable to load learning path. Please try again.')
-        ).toBeInTheDocument();
-      });
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Unable to load learning path.');
+      expect(alert).toHaveTextContent('Database connection failed');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(await screen.findByText('Basic Concept')).toBeInTheDocument();
+      expect(mockGetLearningPath).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('Empty State', () => {
-    it('shows empty message when no path found', async () => {
-      mockGetLearningPath.mockResolvedValueOnce({ concept: 'Test', path: [], depth: 0 });
+    it('shows empty message when the concept has no prerequisites', async () => {
+      mockGetLearningPath.mockResolvedValueOnce({
+        target_concept: 'Test Concept',
+        prerequisites: [],
+        total_concepts: 1,
+      });
 
       render(<LearningPath conceptName="Test Concept" />);
 
-      await waitFor(() => {
-        expect(
-          screen.getByText('No prerequisite path found for this concept.')
-        ).toBeInTheDocument();
-      });
+      expect(
+        await screen.findByText('No prerequisite path found for this concept.')
+      ).toBeInTheDocument();
     });
   });
 
   describe('Successful Render', () => {
-    beforeEach(async () => {
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-    });
-
     it('renders learning path header', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Learning Path')).toBeInTheDocument();
-      });
+      expect(await screen.findByRole('heading', { name: 'Learning Path' })).toBeInTheDocument();
+      expect(screen.getByText(/Master these concepts in order to understand/)).toHaveTextContent(
+        'Advanced Topic'
+      );
     });
 
-    it('shows target concept in description', async () => {
+    it('lists the prerequisites in learning order and ends with the target', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
 
-      await waitFor(() => {
-        // "Advanced Topic" appears in both the description and concept card
-        const elements = screen.getAllByText('Advanced Topic');
-        expect(elements.length).toBeGreaterThanOrEqual(1);
-        // Check the description span specifically
-        const descSpan = elements.find(el => el.classList.contains('text-blue-600'));
-        expect(descSpan).toBeDefined();
-      });
+      expect(stepNames()).toEqual(['Basic Concept', 'Intermediate Concept', 'Advanced Topic']);
     });
 
-    it('renders all concepts in path', async () => {
-      render(<LearningPath conceptName="Advanced Topic" />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Basic Concept')).toBeInTheDocument();
-        expect(screen.getByText('Intermediate Concept')).toBeInTheDocument();
-        // "Advanced Topic" appears in both description and concept card
-        expect(screen.getAllByText('Advanced Topic').length).toBeGreaterThanOrEqual(1);
+    it('does not list the target twice when the backend includes it', async () => {
+      mockGetLearningPath.mockResolvedValueOnce({
+        ...mockLearningPath,
+        prerequisites: [
+          ...mockLearningPath.prerequisites,
+          { id: 'c3', name: 'advanced topic', importance: 0.9, depth: 0 },
+        ],
       });
+
+      render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
+
+      expect(stepNames()).toEqual(['Basic Concept', 'Intermediate Concept', 'Advanced Topic']);
     });
 
-    it('shows target badge on target concept', async () => {
+    it('marks the target concept', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Target')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Target')).toBeInTheDocument();
+      expect(screen.getByText('Target concept')).toBeInTheDocument();
     });
 
-    it('shows depth information for each concept', async () => {
+    it('describes how far each prerequisite is from the target', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Depth: 2/)).toBeInTheDocument();
-        expect(screen.getByText(/Depth: 1/)).toBeInTheDocument();
-        expect(screen.getByText(/Depth: 0/)).toBeInTheDocument();
+      expect(await screen.findByText('Direct prerequisite')).toBeInTheDocument();
+      expect(screen.getByText('2 steps before the target')).toBeInTheDocument();
+    });
+
+    it('requests the path of the concept for the current subject', async () => {
+      useAppStore.setState({ currentSubject: 'economics' });
+
+      render(<LearningPath conceptName=" Advanced Topic " />);
+      await screen.findByText('Basic Concept');
+
+      expect(mockGetLearningPath).toHaveBeenCalledWith('Advanced Topic', 5, 'economics', {
+        signal: expect.any(AbortSignal),
       });
     });
   });
 
   describe('Mastery Display', () => {
-    it('shows mastery percentage for each concept', async () => {
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-
+    it('shows the initial mastery for untracked concepts', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
 
-      await waitFor(() => {
-        // Default mastery is 30%
-        const masteryElements = screen.getAllByText('30%');
-        expect(masteryElements.length).toBeGreaterThan(0);
-      });
+      expect(screen.getAllByText('30%')).toHaveLength(3);
     });
 
     it('uses mastery from store when available', async () => {
       useAppStore.setState({
-        ...initialStoreState,
         masteryMap: {
           'Basic Concept': {
             conceptName: 'Basic Concept',
@@ -161,193 +181,143 @@ describe('LearningPath Component', () => {
         },
       });
 
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-
       render(<LearningPath conceptName="Advanced Topic" />);
 
-      await waitFor(() => {
-        expect(screen.getByText('85%')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('85%')).toBeInTheDocument();
     });
-  });
 
-  describe('Summary Section', () => {
-    it('shows mastery summary counts', async () => {
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
+    it('updates when the mastery changes', async () => {
+      render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
+
+      act(() => {
+        useAppStore.setState({
+          masteryMap: {
+            'Intermediate Concept': {
+              conceptName: 'Intermediate Concept',
+              masteryLevel: 0.75,
+              attempts: 1,
+              lastAssessed: null,
+            },
+          },
+        });
+      });
+
+      expect(screen.getByText('75%')).toBeInTheDocument();
+    });
+
+    it('counts mastered, in-progress and new concepts', async () => {
+      useAppStore.setState({
+        masteryMap: {
+          'Basic Concept': { conceptName: 'Basic Concept', masteryLevel: 0.9, attempts: 3, lastAssessed: null },
+          'Intermediate Concept': { conceptName: 'Intermediate Concept', masteryLevel: 0.1, attempts: 3, lastAssessed: null },
+        },
+      });
 
       render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
 
-      await waitFor(() => {
-        expect(screen.getByText('Mastered')).toBeInTheDocument();
-        expect(screen.getByText('In Progress')).toBeInTheDocument();
-        expect(screen.getByText('To Learn')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Mastered').nextSibling).toHaveTextContent('1');
+      expect(screen.getByText('In Progress').nextSibling).toHaveTextContent('1');
+      expect(screen.getByText('To Learn').nextSibling).toHaveTextContent('1');
     });
   });
 
   describe('Actions', () => {
-    beforeEach(async () => {
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-    });
-
-    it('renders Ask Tutor buttons for each concept', async () => {
+    it('renders Ask Tutor and Practice buttons for each concept', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
 
-      await waitFor(() => {
-        const askButtons = screen.getAllByText('Ask Tutor');
-        expect(askButtons.length).toBe(3);
-      });
-    });
-
-    it('renders Practice buttons for each concept', async () => {
-      render(<LearningPath conceptName="Advanced Topic" />);
-
-      await waitFor(() => {
-        const practiceButtons = screen.getAllByText('Practice');
-        expect(practiceButtons.length).toBe(3);
-      });
+      expect(screen.getAllByText('Ask Tutor')).toHaveLength(3);
+      expect(screen.getAllByText('Practice')).toHaveLength(3);
     });
 
     it('navigates to chat when Ask Tutor is clicked', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
 
-      await waitFor(() => {
-        expect(screen.getAllByText('Ask Tutor')[0]).toBeInTheDocument();
-      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Ask Tutor about Basic Concept' }));
 
-      fireEvent.click(screen.getAllByText('Ask Tutor')[0]);
-
-      expect(mockPush).toHaveBeenCalledWith(
-        expect.stringContaining('/chat?question=')
-      );
+      expect(mockPush).toHaveBeenCalledWith('/chat?question=Explain%20Basic%20Concept');
     });
 
-    it('navigates to quiz when Practice is clicked', async () => {
+    it('opens the assessment for the concept when Practice is clicked', async () => {
       render(<LearningPath conceptName="Advanced Topic" />);
 
-      await waitFor(() => {
-        expect(screen.getAllByText('Practice')[0]).toBeInTheDocument();
-      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Practice Basic Concept' }));
 
-      fireEvent.click(screen.getAllByText('Practice')[0]);
-
-      expect(mockPush).toHaveBeenCalledWith(
-        expect.stringContaining('/quiz?topic=')
-      );
+      expect(mockPush).toHaveBeenCalledWith('/assessment?topic=Basic%20Concept');
     });
   });
 
   describe('Callbacks', () => {
-    it('calls onConceptClick when concept card is clicked', async () => {
+    it('calls onConceptClick from a keyboard-reachable concept button', async () => {
       const onConceptClick = jest.fn();
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
 
-      render(
-        <LearningPath
-          conceptName="Advanced Topic"
-          onConceptClick={onConceptClick}
-        />
-      );
+      render(<LearningPath conceptName="Advanced Topic" onConceptClick={onConceptClick} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Basic Concept')).toBeInTheDocument();
-      });
+      const conceptButton = await screen.findByRole('button', { name: 'Basic Concept' });
+      conceptButton.focus();
+      expect(conceptButton).toHaveFocus();
+      fireEvent.click(conceptButton);
 
-      // Click on the concept card (not the buttons)
-      const basicConceptCard = screen
-        .getByText('Basic Concept')
-        .closest('div[class*="cursor-pointer"]');
-      if (basicConceptCard) {
-        fireEvent.click(basicConceptCard);
-        expect(onConceptClick).toHaveBeenCalledWith('Basic Concept');
-      }
+      expect(onConceptClick).toHaveBeenCalledWith('Basic Concept');
+      // The card actions do not trigger the card callback
+      fireEvent.click(screen.getByRole('button', { name: 'Ask Tutor about Basic Concept' }));
+      expect(onConceptClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows plain concept names without a callback', async () => {
+      render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
+
+      expect(screen.queryByRole('button', { name: 'Basic Concept' })).not.toBeInTheDocument();
     });
   });
 
   describe('API Call', () => {
-    it('fetches learning path on mount', async () => {
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-
-      render(<LearningPath conceptName="Test Concept" />);
-
-      await waitFor(() => {
-        expect(apiClient.getLearningPath).toHaveBeenCalledWith(
-          'Test Concept',
-          5,
-          useAppStore.getState().currentSubject
-        );
-      });
-    });
-
     it('refetches when conceptName changes', async () => {
-      mockGetLearningPath.mockResolvedValue(mockLearningPath);
-
       const { rerender } = render(<LearningPath conceptName="Concept A" />);
-
-      await waitFor(() => {
-        expect(apiClient.getLearningPath).toHaveBeenCalledTimes(1);
-      });
+      await waitFor(() => expect(mockGetLearningPath).toHaveBeenCalledTimes(1));
 
       rerender(<LearningPath conceptName="Concept B" />);
 
-      await waitFor(() => {
-        expect(apiClient.getLearningPath).toHaveBeenCalledTimes(2);
-      });
+      await waitFor(() => expect(mockGetLearningPath).toHaveBeenCalledTimes(2));
+      expect(mockGetLearningPath).toHaveBeenLastCalledWith('Concept B', 5, 'us_history', expect.anything());
+    });
+
+    it('cancels the request when the concept changes or the path is unmounted', async () => {
+      mockGetLearningPath.mockImplementation(() => new Promise(() => {}));
+      const { rerender, unmount } = render(<LearningPath conceptName="Concept A" />);
+      const firstSignal: AbortSignal = mockGetLearningPath.mock.calls[0][3].signal;
+
+      rerender(<LearningPath conceptName="Concept B" />);
+      expect(firstSignal.aborted).toBe(true);
+
+      const secondSignal: AbortSignal = mockGetLearningPath.mock.calls[1][3].signal;
+      unmount();
+      expect(secondSignal.aborted).toBe(true);
     });
   });
 
   describe('Custom ClassName', () => {
     it('applies custom className', async () => {
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-
       const { container } = render(
         <LearningPath conceptName="Test" className="custom-class" />
       );
 
-      await waitFor(() => {
-        expect(container.firstChild).toHaveClass('custom-class');
-      });
-    });
-  });
-
-  describe('Mastery Status Colors', () => {
-    it('shows complete status for high mastery concepts', async () => {
-      useAppStore.setState({
-        ...initialStoreState,
-        masteryMap: {
-          'Basic Concept': {
-            conceptName: 'Basic Concept',
-            masteryLevel: 0.8,
-            attempts: 5,
-            lastAssessed: '2024-01-01',
-          },
-        },
-      });
-
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-
-      render(<LearningPath conceptName="Advanced Topic" />);
-
-      await waitFor(() => {
-        // Should show 80% mastery
-        expect(screen.getByText('80%')).toBeInTheDocument();
-      });
+      await screen.findByText('Basic Concept');
+      expect(container.firstChild).toHaveClass('custom-class');
     });
   });
 
   describe('Progress Bars', () => {
     it('renders progress bars for each concept', async () => {
-      mockGetLearningPath.mockResolvedValueOnce(mockLearningPath);
-
       const { container } = render(
         <LearningPath conceptName="Advanced Topic" />
       );
 
-      await waitFor(() => {
-        // Progress bars have h-2 class
-        const progressBars = container.querySelectorAll('.h-2.bg-gray-200');
-        expect(progressBars.length).toBe(3);
-      });
+      await screen.findByText('Basic Concept');
+      expect(container.querySelectorAll('.h-2.bg-gray-200')).toHaveLength(3);
     });
   });
 });
