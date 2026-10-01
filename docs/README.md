@@ -1,36 +1,33 @@
-# Documentation Index
+# Documentation
 
-Start with the root `README.md` for setup and current project scope.
+Start with the [project README](../README.md) for the overview, quickstart and
+configuration.
 
-## Client Demo
+## Using and running the project
 
-- `CLIENT_DEMO_30MIN.md`: primary 30-minute script for publisher,
-  institution, and technical buyers.
-- `DEMO_5MIN.md`: short executive version.
-- `DEMO_PLAYBOOK.md`: technical walkthrough and fallback paths.
-- `DEMO_ASSET_CAPTURE.md`: screenshot and recording checklist after the live
-  readiness gate passes.
-- `CLIENT_LEAVE_BEHIND.md`: one-page client brief.
+- [ARCHITECTURE.md](ARCHITECTURE.md): request flows, data boundaries, security
+  model, observability and trade-offs.
+- [TESTING.md](TESTING.md): backend and frontend test suites, markers and the
+  commands CI runs.
+- [COMPLIANCE.md](COMPLIANCE.md): OpenStax licensing, privacy modes and what
+  data the system stores.
+- [evals/README.md](evals/README.md): the evaluation harness and how to read
+  its reports. The latest report is [evals/latest.md](evals/latest.md); it only
+  counts as evidence when `environment_valid` is `true`.
 
-## Pilot And Trust
+## Scripted demo
 
-- `CLIENT_PILOT_PROPOSAL.md`: 4-6 week pilot plan, inputs, metrics, and
-  responsibilities.
-- `TRUST_AND_PRIVACY.md`: local-only demo posture, PII boundaries, and
-  compliance caveats.
+- [demo/README.md](demo/README.md): the scripted demo workflow, presenter
+  scripts, slides, pilot outline and case study.
 
-## Engineering Portfolio
+## Archive
 
-- `PORTFOLIO_CASE_STUDY.md`: portfolio narrative, evidence, known gaps, and
-  30/60/90-day roadmap.
-- `ARCHITECTURE.md`: implementation architecture, tradeoffs, and production
-  gap list.
-- `evals/README.md`: evaluation harness notes.
+- [archive/tribunal-2026-02/](archive/tribunal-2026-02/README.md): the
+  adversarial code review from February 2026. Its findings are tracked as
+  GitHub issues.
 
-## Generated Evidence
+## Project
 
-- `evals/latest.json`
-- `evals/latest.md`
-
-Treat latest eval files as client-demo evidence only when they were generated
-from a live seeded stack and `environment_valid` is `true`.
+- [ROADMAP.md](../ROADMAP.md), [CHANGELOG.md](../CHANGELOG.md),
+  [CONTRIBUTING.md](../CONTRIBUTING.md), [SECURITY.md](../SECURITY.md),
+  [SUPPORT.md](../SUPPORT.md) and [NOTICE](../NOTICE).

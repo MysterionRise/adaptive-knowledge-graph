@@ -1,0 +1,30 @@
+name: Documentation
+description: Report missing, unclear or incorrect documentation.
+title: "docs: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page or file
+      description: Link to the page, or the file path and section.
+      placeholder: README.md#quickstart
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+      description: For incorrect instructions, include what you ran and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to open a pull request for this.
