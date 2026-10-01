@@ -54,7 +54,7 @@ networkx = "^3.6"
 opensearch-py = "^3.0.0"
 
 # LLM Integration
-openai = "^2.0.0"  # required by langchain_community ChatOpenAI (LLM_MODE=remote, OpenRouter)
+openai = ">=2,<4"  # required by langchain_community ChatOpenAI (LLM_MODE=remote, OpenRouter)
 
 # LangChain (GraphCypherQAChain); 1.x migration: #72
 langchain = ">=0.3.30,<0.4"
