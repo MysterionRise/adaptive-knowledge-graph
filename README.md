@@ -114,6 +114,7 @@ has zero successful KG/plain cases.
 - [docs/PORTFOLIO_CASE_STUDY.md](docs/PORTFOLIO_CASE_STUDY.md): AI engineering
   portfolio narrative and roadmap.
 - [docs/evals/README.md](docs/evals/README.md): evaluation harness notes.
+- [docs/ADDING_A_SUBJECT.md](docs/ADDING_A_SUBJECT.md): add, process, index, and verify a configured subject.
 
 ## Development Commands
 
