@@ -1,317 +1,260 @@
 # Contributing to Adaptive Knowledge Graph
 
-Thank you for considering contributing to this project! This is an educational PoC designed for reuse and extension.
+Thanks for your interest in improving the project. This guide covers the
+development setup, the quality gates every change must pass and how pull
+requests are merged.
 
-## Code of Conduct
+By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Report security problems privately as described in [SECURITY.md](SECURITY.md),
+never in a public issue.
 
-Be respectful, inclusive, and professional. We're here to build something useful for education.
+## Where to start
 
-## How to Contribute
+- Browse the
+  [good first issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+  and the
+  [help wanted issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
+- Comment on an issue before you start, so nobody duplicates the work.
+- For larger changes, open an issue or a thread in
+  [Discussions](https://github.com/MysterionRise/adaptive-knowledge-graph/discussions)
+  first and agree on the approach.
+- Questions about setup go to
+  [Discussions: Q&A](https://github.com/MysterionRise/adaptive-knowledge-graph/discussions/categories/q-a).
 
-### 1. Fork and Clone
+## Development setup
+
+You need Python 3.11–3.13, Poetry 2.x, Node.js 24 LTS, Docker with Compose
+v2.24 or newer, and Ollama. The [README quickstart](README.md#quickstart) lists them with
+hardware requirements.
 
 ```bash
-# Fork the repository on GitHub
-git clone https://github.com/YOUR_USERNAME/adaptive-knowledge-graph.git
+# Fork the repository on GitHub, then:
+git clone https://github.com/<your-username>/adaptive-knowledge-graph.git
 cd adaptive-knowledge-graph
+git remote add upstream https://github.com/MysterionRise/adaptive-knowledge-graph.git
+
+ollama pull llama3.1:8b-instruct-q4_K_M
+make quickstart          # dependencies, local stack and seeded data
+make install-dev         # dev dependencies and the pre-commit hooks
+
+cd frontend && npm ci    # frontend dependencies
 ```
 
-### 2. Set Up Development Environment
+Most backend work does not need the full stack: the test suite mocks Neo4j,
+OpenSearch and the LLM. You need the running stack only to try changes end to
+end (`make run-api` and `npm run dev`).
+
+### Upgrading an existing checkout
+
+The v0.3.0 release removes many unused Python dependencies. Syncing an
+existing virtual environment in place can leave it broken (for example
+`import spacy` fails because removing `typer` deletes files that `typer-slim`
+shares), so recreate it after pulling:
 
 ```bash
-# Install dependencies
-poetry install
-
-# Install pre-commit hooks
-poetry run pre-commit install
-
-# Start services
-make docker-up
+poetry env remove --all
+poetry install --without pyirt,pybkt
+make quickstart   # reinstalls the spaCy model en_core_web_sm; safe to re-run
 ```
 
-### 3. Create a Branch
+The spaCy model is not in the lock file, so `poetry sync` also removes it;
+`make quickstart` puts it back, and `make doctor` reports when it is missing.
+
+If you must repair an environment in place instead, reinstall the locked
+`typer-slim` version (an unpinned install pulls an empty meta-package and spaCy
+still fails):
 
 ```bash
-# Create feature branch
-git checkout -b feature/your-feature-name
-
-# Or for bug fixes
-git checkout -b fix/bug-description
+poetry run pip install --force-reinstall --no-deps "typer-slim==0.20.0"
 ```
 
-### 4. Make Changes
+The local Docker stack also changed (new Compose project name and images); see
+[infra/compose/README.md](infra/compose/README.md#upgrading-from-an-older-checkout)
+to keep your existing data.
 
-Follow our coding standards:
+## Project layout
+
+```text
+adaptive-knowledge-graph/
+├── backend/
+│   ├── app/
+│   │   ├── api/routes/     # FastAPI routers: ask, quiz, graph, learning_path, subjects, demo
+│   │   ├── core/           # settings, subject config loader, auth, rate limiting, logging, middleware
+│   │   ├── kg/             # graph schema, builder, Neo4j adapter, Cypher QA
+│   │   ├── nlp/            # embeddings, concept extraction, LLM client
+│   │   ├── rag/            # chunker, retriever, KG expansion, reranker, window retrieval
+│   │   ├── student/        # quiz generation, learner model, recommendations
+│   │   ├── ui_payloads/    # response models for quiz and recommendation payloads
+│   │   └── main.py         # app setup, middleware and health endpoints
+│   └── tests/              # pytest suite (see docs/TESTING.md)
+├── config/subjects.yaml    # subject definitions: books, prompts, indices, theme, attribution
+├── data/                   # OpenStax source text, processed data, evaluation golden set
+├── docs/                   # architecture, testing, compliance, evaluation, demo, archive
+├── frontend/               # Next.js app: app/, components/, lib/, tests/
+├── infra/                  # Docker Compose stack and Dockerfiles
+└── scripts/                # ingestion, knowledge-graph build, indexing, evaluation, demo scripts
+```
+
+## Making a change
+
+1. Sync with upstream and create a branch:
+
+   ```bash
+   git fetch upstream
+   git checkout -b fix/short-description upstream/main
+   ```
+
+2. Make the change, with tests. Keep pull requests focused: one logical change
+   per PR is easier to review and to revert.
+3. Run the quality gates (next section).
+4. Update the documentation when behaviour, configuration or commands change,
+   and add a line under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for
+   user-visible changes.
+5. Push to your fork and open a pull request against `main`. The pull request
+   template lists what reviewers look for.
+
+## Quality gates
+
+CI runs these checks on every pull request. Run them locally before you push.
+
+Backend, from the repository root:
 
 ```bash
-# Format code
-make format
-
-# Check linting
-make lint
-
-# Type check
-make type-check
-
-# Run tests
-make test
+make format        # ruff format + ruff check --fix
+make lint          # ruff check
+make type-check    # mypy on backend/app and scripts/
+make test          # pytest with coverage
+make pre-commit    # all of the above in order
 ```
 
-### 5. Commit Changes
-
-Use conventional commit messages:
-
-```
-feat: Add new feature
-fix: Fix bug in component
-docs: Update documentation
-test: Add tests
-refactor: Refactor code
-style: Format code
-chore: Update dependencies
-```
-
-Example:
-```bash
-git add .
-git commit -m "feat: Add concept clustering with HDBSCAN"
-```
-
-### 6. Run Pre-commit Checks
+Frontend, from `frontend/`:
 
 ```bash
-# Run all checks
-make pre-commit
-
-# This runs:
-# - ruff format
-# - ruff lint
-# - mypy type check
-# - pytest
+npm run lint
+npm run type-check
+npm test -- --ci
+npm run build
 ```
 
-### 7. Push and Create PR
+Documentation, from the repository root:
 
 ```bash
-git push origin feature/your-feature-name
+npx --yes markdownlint-cli2 "*.md" "docs/**/*.md" "frontend/*.md" "infra/**/*.md" ".github/*.md"
 ```
 
-Then create a Pull Request on GitHub using the PR template.
+CI also checks relative links in those files with
+[lychee](https://github.com/lycheeverse/lychee) in offline mode.
 
-## Development Guidelines
+If you installed the hooks with `make install-dev`, `pre-commit` runs the
+formatters, ruff and mypy on each commit. See [docs/TESTING.md](docs/TESTING.md)
+for the full list of CI jobs, test markers, the tribunal suite and coverage.
 
-### Code Style
+## Coding standards
 
-We use **ruff** for linting and formatting:
+### Python
 
-```bash
-# Auto-format
-make format
-
-# Check style
-make lint
-```
-
-**Key conventions**:
-- Line length: 100 characters
-- Use type hints where possible
-- Docstrings for public functions (Google style)
-- Descriptive variable names
-
-### Type Hints
-
-Use type hints for function signatures:
+- Ruff handles linting and formatting (line length 100). Its rule set includes
+  pyupgrade (`UP`), so use modern syntax.
+- Type-hint public functions. Use built-in generics and `X | None`, not
+  `typing.List` or `Optional`.
+- Write Google-style docstrings for public functions and classes.
+- Read settings through `backend.app.core.settings.settings`; never hard-code
+  hosts, credentials or model names.
+- Log with `loguru`, and never log secrets. API error responses must not leak
+  exception details.
 
 ```python
-from typing import List, Dict, Optional
-
-def extract_concepts(text: str, max_concepts: int = 10) -> List[Dict[str, float]]:
+def extract_concepts(text: str, max_concepts: int = 10) -> list[dict[str, float]]:
     """Extract key concepts from text.
 
     Args:
-        text: Input text to analyze
-        max_concepts: Maximum number of concepts to extract
+        text: Input text to analyze.
+        max_concepts: Maximum number of concepts to return.
 
     Returns:
-        List of concept dictionaries with scores
+        Concept dictionaries with scores, highest score first.
     """
-    pass
+    ...
+
+
+def find_subject(subject_id: str | None = None) -> str | None:
+    """Return the subject ID to use, or None when no subject is configured."""
+    ...
 ```
 
-### Documentation
+### TypeScript
 
-- Update README.md for major features
-- Follow [docs/ADDING_A_SUBJECT.md](docs/ADDING_A_SUBJECT.md) for the subject configuration, ingestion, indexing, and attribution workflow.
-- Add docstrings to public APIs
-- Update TESTING.md for new test patterns
-- Update COMPLIANCE.md for privacy/licensing changes
+- ESLint and TypeScript strict checks must pass.
+- Call the backend through the shared client in `frontend/lib/api-client.ts`
+  and keep `frontend/lib/types.ts` in sync with the API models.
 
-### Testing
+### Tests
 
-**Required for all PRs**:
-- Unit tests for new functions
-- Integration tests for API endpoints
-- Maintain or improve coverage (target: 80%)
+- Add unit tests for new functions and route tests for new or changed
+  endpoints, and a regression test for every bug fix.
+- Tests must not depend on the network, a running database or model
+  downloads; use the fixtures in `backend/tests/conftest.py`.
+- Keep coverage from going down; CI enforces a minimum.
 
-```bash
-# Run tests
-make test
+### Content and privacy
 
-# Run specific test
-poetry run pytest backend/tests/test_yourfile.py
+- Keep the OpenStax attribution for any new or changed content, and do not
+  use OpenStax content to train models.
+- New outbound network calls must be blocked when `PRIVACY_LOCAL_ONLY=true`.
+- Never commit secrets, `.env` files, real learner data or personal data.
+
+## Common tasks
+
+**Add an API endpoint.** Add the route to the matching module in
+`backend/app/api/routes/`. A new module must be exported from
+`backend/app/api/routes/__init__.py` and `backend/app/api/__init__.py` and
+included in `backend/app/main.py`. Put request and response models next to the
+route (or in `backend/app/ui_payloads/` when the frontend shares them), and add
+tests in `backend/tests/test_api_*.py`. FastAPI generates the OpenAPI docs.
+
+**Add a setting.** Add the field to `backend/app/core/settings.py`, document it
+in `.env.example`, and add it to the README configuration table if users need
+to know about it.
+
+**Add a subject.** Add an entry to `config/subjects.yaml`, then build its data
+with `make ingest-books SUBJECT=<id>`, `make build-kg SUBJECT=<id>` and
+`make index-rag SUBJECT=<id>`. [docs/ADDING_A_SUBJECT.md](docs/ADDING_A_SUBJECT.md)
+walks through each step, including attribution and verification.
+
+**Change the knowledge-graph schema.** Update `backend/app/kg/schema.py`, the
+builder in `backend/app/kg/builder.py` and the queries in
+`backend/app/kg/neo4j_adapter.py`, then add tests.
+
+## Commit messages and pull requests
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for commit
+messages and pull request titles:
+
+```text
+feat: add a learning-path endpoint for prerequisites
+fix: return 404 for unknown subjects
+docs: explain window retrieval settings
+test: cover the reranker fallback
+refactor: split the quiz generator prompts
+chore: bump ruff
+ci: cache the Poetry virtualenv
 ```
 
-**Test markers**:
-```python
-@pytest.mark.unit
-def test_unit():
-    pass
+Mark breaking changes with `!` (for example `feat!: require LLM_MODE=local in
+privacy mode`) and describe the migration in the pull request.
 
-@pytest.mark.integration
-def test_integration():
-    pass
+## Review and merge
 
-@pytest.mark.slow
-def test_slow_operation():
-    pass
-```
-
-### OpenStax Attribution
-
-**When working with textbook content**:
-- Always include attribution in outputs
-- Do not train models on OpenStax content
-- Respect `PRIVACY_LOCAL_ONLY` setting
-- Document any new content processing
-
-## Project Structure
-
-```
-adaptive-knowledge-graph/
-├── backend/app/
-│   ├── api/              # REST + WebSocket routes
-│   ├── core/             # Settings, logging
-│   ├── kg/               # Knowledge graph logic
-│   ├── nlp/              # NLP and LLM wrappers
-│   ├── rag/              # Retrieval and RAG
-│   └── student/          # Student modeling
-├── frontend/             # Next.js UI
-├── scripts/              # Data pipeline scripts
-├── tests/                # Test suite
-└── infra/                # Docker and deployment
-```
-
-## Common Tasks
-
-### Adding a New API Endpoint
-
-1. Define route in `backend/app/api/routes.py`
-2. Add DTO in `backend/app/ui_payloads/`
-3. Write tests in `backend/tests/test_api.py`
-4. Update API docs (FastAPI auto-generates)
-
-### Adding a New NLP Model
-
-1. Add wrapper in `backend/app/nlp/`
-2. Update settings in `backend/app/core/settings.py`
-3. Add tests with mocks
-4. Document VRAM requirements in README
-
-### Adding a New Graph Edge Type
-
-1. Update schema in `backend/app/kg/schema.py`
-2. Add extraction logic in `backend/app/kg/edges.py`
-3. Update Neo4j queries in `backend/app/kg/neo4j_adapter.py`
-4. Add tests
-
-## CI/CD Pipeline
-
-Our GitHub Actions workflow runs on every push:
-
-**Jobs**:
-- ✅ Lint (ruff)
-- ✅ Type Check (mypy)
-- ✅ Test (pytest, Python 3.11 & 3.12)
-- ✅ Docker Build (CPU & GPU)
-- ✅ Docker Compose Validation
-- ✅ Docs Check (markdown lint)
-- ✅ Security Scan (safety, bandit)
-
-**PRs must pass all checks to be merged.**
-
-## Review Process
-
-1. **Automated checks** - CI must pass
-2. **Code review** - At least one approval required
-3. **Documentation** - Check README/docs updated
-4. **Testing** - Verify test coverage maintained
-5. **Merge** - Squash merge to main
-
-## Getting Help
-
-- **Questions**: Open a [Discussion](https://github.com/yourusername/adaptive-knowledge-graph/discussions)
-- **Bugs**: Open an [Issue](https://github.com/yourusername/adaptive-knowledge-graph/issues) with reproduction steps
-- **Features**: Open an Issue with detailed proposal
-
-## Areas We Need Help
-
-### Phase 2: Data Ingestion
-- OpenStax textbook fetcher optimization
-- HTML parser improvements
-- Additional textbook sources (philschatz mirrors)
-
-### Phase 3: Knowledge Graph
-- Better concept extraction algorithms
-- Edge weighting improvements
-- Graph visualization enhancements
-
-### Phase 4: RAG & LLMs
-- Prompt engineering for better QA
-- Local LLM optimization (quantization)
-- Retrieval quality improvements
-
-### Phase 5: Adaptive Learning
-- BKT/IRT implementation
-- Recommendation algorithm improvements
-- Assessment generation
-
-### Phase 6: UI/UX
-- Next.js frontend components
-- Cytoscape.js graph interactions
-- Accessibility improvements
-
-### Phase 7: Evaluation
-- RAGAS benchmark expansion
-- A/B testing framework
-- Performance metrics
-
-## Recognition
-
-Contributors will be:
-- Listed in README acknowledgments
-- Credited in release notes
-- Given contributor badge
+- `main` is protected. The required status check is **All Checks Passed**,
+  which succeeds only when every required CI job passes, and the branch must be
+  up to date with `main` before it can merge.
+- Approving reviews are not required by branch protection, but maintainers
+  review pull requests and may ask for changes.
+- Pull requests are squash-merged, so the pull request title becomes the commit
+  message on `main`.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
-
-Your contributions involving OpenStax content must respect CC BY 4.0 attribution requirements.
-
----
-
-## Quick Checklist Before Submitting PR
-
-- [ ] Code formatted with `make format`
-- [ ] Linting passes with `make lint`
-- [ ] Type checking passes with `make type-check`
-- [ ] Tests pass with `make test`
-- [ ] Coverage maintained or improved
-- [ ] Documentation updated
-- [ ] Commit messages follow conventions
-- [ ] PR template filled out
-- [ ] OpenStax attribution maintained (if applicable)
-
----
-
-**Thank you for contributing to educational technology! 🎓**
+By contributing, you agree that your contributions are licensed under the
+[MIT License](LICENSE). Content derived from OpenStax stays under CC BY 4.0 and
+must keep its attribution; see [NOTICE](NOTICE).

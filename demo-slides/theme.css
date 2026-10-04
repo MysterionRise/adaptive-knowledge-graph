@@ -1,26 +1,28 @@
-/* @theme epam */
+/* @theme akg-dark */
+
+/* Neutral dark Marp theme for the Adaptive Knowledge Graph slides. */
 
 @import 'default';
 
 :root {
-  --color-bg: #000000;
-  --color-bg-code: #0d0f14;
-  --color-accent: #00F6FF;
-  --color-accent-green: #00F4AB;
-  --color-accent-purple: #B896FF;
-  --color-accent-blue: #428DFF;
-  --color-text: #ffffff;
+  --color-bg: #111827;
+  --color-bg-code: #1f2937;
+  --color-accent: #60a5fa;
+  --color-accent-green: #34d399;
+  --color-accent-purple: #a78bfa;
+  --color-accent-blue: #93c5fd;
+  --color-text: #f9fafb;
   --color-text-muted: #9ca3af;
-  --color-warning: #FF4B9B;
-  --color-success: #00F4AB;
-  --color-danger: #FF4D40;
+  --color-warning: #fbbf24;
+  --color-success: #34d399;
+  --color-danger: #f87171;
 }
 
 /* -- Base slide -- */
 section {
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 28px;
   padding: 40px 60px;
 }
@@ -29,7 +31,7 @@ section {
 section h1 {
   color: var(--color-text);
   font-size: 42px;
-  border-bottom: 2px solid rgba(0, 246, 255, 0.4);
+  border-bottom: 2px solid rgba(96, 165, 250, 0.4);
   padding-bottom: 10px;
   margin-bottom: 20px;
 }
@@ -87,16 +89,16 @@ section table {
 }
 
 section table thead tr {
-  background: rgba(0, 246, 255, 0.08) !important;
+  background: rgba(96, 165, 250, 0.08) !important;
 }
 
 section table th {
-  background: rgba(0, 246, 255, 0.08) !important;
+  background: rgba(96, 165, 250, 0.08) !important;
   color: var(--color-accent) !important;
   padding: 10px 15px;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid rgba(0, 246, 255, 0.3);
+  border-bottom: 2px solid rgba(96, 165, 250, 0.3);
 }
 
 section table td {
@@ -131,7 +133,7 @@ section li::marker {
 
 /* -- Blockquotes (tips/notes) -- */
 section blockquote {
-  background: rgba(0, 246, 255, 0.06);
+  background: rgba(96, 165, 250, 0.06);
   border-left: 3px solid var(--color-accent);
   padding: 15px 20px;
   margin: 15px 0;
@@ -262,6 +264,6 @@ section img {
 /* -- Horizontal rule -- */
 section hr {
   border: none;
-  border-top: 1px solid rgba(0, 246, 255, 0.2);
+  border-top: 1px solid rgba(96, 165, 250, 0.2);
   margin: 20px 0;
 }

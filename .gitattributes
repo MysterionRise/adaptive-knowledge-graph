@@ -1,0 +1,16 @@
+# Normalize line endings: text files are stored and checked out with LF.
+* text=auto eol=lf
+
+# OpenStax source text and pipeline output: collapsed in diffs and excluded
+# from GitHub language statistics.
+data/** linguist-generated=true
+
+# Binary files: never normalize or diff as text.
+*.pdf binary
+*.png binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.webp binary
+*.mp4 binary
