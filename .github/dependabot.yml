@@ -32,6 +32,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "langchain*" # 1.x migration (#72)
         update-types: ["version-update:semver-major"]
+      - dependency-name: "langchain-neo4j" # 0.4 breaks kg/cypher_qa.py and pulls in pypdf 5.x (#72)
+        update-types: ["version-update:semver-minor"]
 
   # Frontend (Next.js, npm)
   - package-ecosystem: "npm"

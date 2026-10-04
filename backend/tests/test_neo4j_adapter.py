@@ -604,6 +604,31 @@ class TestPersistKnowledgeGraph:
         assert concept_call[1]["frequency"] == 10
         assert concept_call[1]["importance_score"] == 0.95
         assert concept_call[1]["source_modules"] == ["m2"]
+        # Optional fields default to None / []
+        assert concept_call[1]["definition"] is None
+        assert concept_call[1]["aliases"] == []
+
+    def test_concept_definition_and_aliases_are_persisted(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        kg = KnowledgeGraph(
+            concepts={
+                "GDP": ConceptNode(
+                    name="GDP",
+                    definition="The value of all final goods and services produced.",
+                    aliases=["Gross Domestic Product"],
+                ),
+            },
+            modules={},
+            relationships=[],
+        )
+
+        adapter.persist_knowledge_graph(kg)
+
+        query, kwargs = mock_session.run.call_args_list[0][0][0], mock_session.run.call_args[1]
+        assert "c.definition = $definition" in query
+        assert "c.aliases = $aliases" in query
+        assert kwargs["definition"] == "The value of all final goods and services produced."
+        assert kwargs["aliases"] == ["Gross Domestic Product"]
 
     def test_module_node_properties_are_passed(self):
         adapter, mock_session = _make_adapter(label_prefix=None)
@@ -653,6 +678,47 @@ class TestPersistKnowledgeGraph:
         assert rel_call[1]["target"] == "B"
         assert rel_call[1]["weight"] == 0.75
         assert rel_call[1]["confidence"] == 0.8
+        assert rel_call[1]["properties"] == {}
+        assert "r += $properties" in rel_call[0][0]
+
+    def test_relationship_evidence_is_persisted(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        kg = KnowledgeGraph(
+            concepts={"A": ConceptNode(name="A"), "B": ConceptNode(name="B")},
+            modules={},
+            relationships=[
+                Relationship(
+                    source="A",
+                    target="B",
+                    type=RelationshipType.PREREQ,
+                    evidence="B is defined in terms of A.",
+                ),
+            ],
+        )
+
+        adapter.persist_knowledge_graph(kg)
+
+        rel_call = mock_session.run.call_args_list[2]
+        assert rel_call[1]["properties"] == {"evidence": "B is defined in terms of A."}
+
+    def test_relationship_provenance_is_flattened(self):
+        """Neo4j cannot store maps, so provenance keys become provenance_* properties."""
+        from types import SimpleNamespace
+
+        from backend.app.kg.neo4j_adapter import _relationship_properties
+
+        rel = SimpleNamespace(
+            evidence=None,
+            provenance={"source": "glossary", "module_id": "m48590", "page": 3, "note": None},
+        )
+
+        assert _relationship_properties(rel) == {
+            "provenance_source": "glossary",
+            "provenance_module_id": "m48590",
+            "provenance_page": 3,
+        }
+        nested = SimpleNamespace(evidence="e", provenance={"spans": [1, 2]})
+        assert _relationship_properties(nested) == {"evidence": "e", "provenance_spans": "[1, 2]"}
 
     def test_unknown_relationship_type_is_skipped(self):
         """Relationships with an unrecognized type should be silently skipped."""
@@ -1214,3 +1280,196 @@ class TestFactoryFunction:
         # Should not raise when registry is empty
         clear_neo4j_adapters()
         assert len(_neo4j_adapters) == 0
+
+
+@pytest.mark.unit
+def test_concurrent_first_calls_create_one_adapter():
+    import threading
+    import time
+
+    created: list[Neo4jAdapter] = []
+
+    def slow_connect(self):
+        time.sleep(0.05)  # widen the race window
+        created.append(self)
+        self.driver = MagicMock()
+
+    results: list[Neo4jAdapter] = []
+    _neo4j_adapters.clear()
+    try:
+        with patch.object(Neo4jAdapter, "connect", slow_connect):
+            threads = [
+                threading.Thread(target=lambda: results.append(get_neo4j_adapter("us_history")))
+                for _ in range(8)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+    finally:
+        _neo4j_adapters.clear()
+
+    assert len(created) == 1
+    assert len(results) == 8
+    assert all(result is created[0] for result in results)
+    assert created[0].label_prefix == "us_history"
+
+
+@pytest.mark.unit
+class TestCloseAndReconnect:
+    """A closed adapter is reconnected by the registry instead of reused half-closed."""
+
+    def test_close_resets_driver(self):
+        adapter = Neo4jAdapter()
+        mock_driver = MagicMock()
+        adapter.driver = mock_driver
+
+        adapter.close()
+
+        mock_driver.close.assert_called_once()
+        assert adapter.driver is None
+
+    @patch("backend.app.core.subjects.get_subject")
+    @patch("backend.app.core.subjects.get_default_subject_id")
+    def test_registry_reconnects_closed_adapter(self, mock_default_id, mock_get_subject):
+        mock_subject = MagicMock()
+        mock_subject.database.neo4j_database = "neo4j"
+        mock_subject.database.label_prefix = "bio"
+        mock_get_subject.return_value = mock_subject
+        _neo4j_adapters.clear()
+        try:
+            with patch.object(Neo4jAdapter, "connect"):
+                adapter = get_neo4j_adapter("bio")
+            adapter.driver = MagicMock()
+            adapter.close()
+
+            with patch.object(adapter, "connect") as mock_connect:
+                assert get_neo4j_adapter("bio") is adapter
+                mock_connect.assert_called_once()
+        finally:
+            _neo4j_adapters.clear()
+
+
+@pytest.mark.unit
+class TestConceptLookup:
+    """get_all_concept_names / concept_exists use the subject's prefixed label."""
+
+    def test_get_all_concept_names(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result(
+            [{"name": "Civil War"}, {"name": "Reconstruction"}, {"name": None}]
+        )
+
+        names = adapter.get_all_concept_names()
+
+        assert names == {"Civil War", "Reconstruction"}
+        assert "us_history_Concept" in mock_session.run.call_args[0][0]
+
+    def test_concept_exists_matches_case_insensitively_and_ignores_leading_the(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result([{"found": True}])
+
+        assert adapter.concept_exists("  The   Civil War ") is True
+
+        query = mock_session.run.call_args[0][0]
+        assert "us_history_Concept" in query
+        assert "toLower(c.name) IN $names" in query
+        assert "coalesce(c.aliases, [])" in query  # aliases match too
+        assert mock_session.run.call_args[1]["names"] == ["the civil war", "civil war"]
+
+    def test_concept_exists_false_when_not_found(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result([{"found": False}])
+
+        assert adapter.concept_exists("TOTALLY_FAKE_CONCEPT_12345") is False
+        assert mock_session.run.call_args[1]["names"] == ["totally_fake_concept_12345"]
+
+    @pytest.mark.parametrize("name", ["", "   ", "\n"])
+    def test_blank_concept_never_exists(self, name):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+
+        assert adapter.concept_exists(name) is False
+        mock_session.run.assert_not_called()
+
+    def test_bare_the_is_not_stripped(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result([{"found": False}])
+
+        adapter.concept_exists("The")
+
+        assert mock_session.run.call_args[1]["names"] == ["the"]
+
+
+@pytest.mark.unit
+class TestChunkWindowSizes:
+    """get_chunk_window honours zero-sized windows and joins module titles."""
+
+    def test_zero_window_skips_next_traversal(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result([])
+
+        adapter.get_chunk_window("c1", window_before=0, window_after=0)
+
+        query = mock_session.run.call_args[0][0]
+        assert "NEXT" not in query
+        assert "*1..0" not in query
+        assert "us_history_Chunk" in query
+
+    def test_one_sided_window(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result([])
+
+        adapter.get_chunk_window("c1", window_before=0, window_after=2)
+
+        query = mock_session.run.call_args[0][0]
+        assert "(center)-[:NEXT*1..2]->(next:us_history_Chunk)" in query
+        assert "->(center)" not in query
+
+    def test_window_sizes_are_interpolated_as_integers(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result([])
+
+        adapter.get_chunk_window("c1", window_before=3, window_after=1)
+
+        query = mock_session.run.call_args[0][0]
+        assert "[:NEXT*1..3]->(center)" in query
+        assert "(center)-[:NEXT*1..1]->" in query
+
+    def test_returns_module_title_from_prefixed_module(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {
+                    "chunk_id": "c1",
+                    "text": "Text",
+                    "module_id": "m1",
+                    "module_title": "The Civil War",
+                    "section": "A",
+                    "chunk_index": 0,
+                }
+            ]
+        )
+
+        [chunk] = adapter.get_chunk_window("c1")
+
+        query = mock_session.run.call_args[0][0]
+        assert "us_history_Module" in query
+        assert "module.title AS module_title" in query
+        assert chunk["module_title"] == "The Civil War"
+
+    def test_negative_window_rejected(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+
+        with pytest.raises(ValueError):
+            adapter.get_chunk_window("c1", window_before=-1)
+        mock_session.run.assert_not_called()
+
+
+@pytest.mark.unit
+def test_query_concept_neighbors_uses_integer_hops():
+    adapter, mock_session = _make_adapter(label_prefix="bio")
+    mock_session.run.return_value = _make_mock_result([])
+
+    adapter.query_concept_neighbors("Photosynthesis", max_hops=2)
+
+    assert "*1..2" in mock_session.run.call_args[0][0]

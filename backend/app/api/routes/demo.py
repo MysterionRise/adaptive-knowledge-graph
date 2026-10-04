@@ -2,7 +2,8 @@
 Client-demo readiness endpoints.
 
 These endpoints expose a bounded, read-only summary of local demo health without
-leaking secrets, file paths, or raw driver errors.
+leaking secrets, file paths, or raw driver errors: failures are reported with fixed
+messages, and the underlying error is only logged.
 """
 
 import json
@@ -12,9 +13,9 @@ from typing import Literal
 
 import httpx
 from fastapi import APIRouter
+from loguru import logger
 from pydantic import BaseModel
 
-from backend.app.core.exceptions import safe_error_message
 from backend.app.core.settings import settings
 from backend.app.core.subjects import get_all_subjects
 
@@ -88,8 +89,9 @@ async def _check_neo4j() -> DemoServiceStatus:
                 latency_ms=latency_ms,
             )
         return DemoServiceStatus(status="ok", latency_ms=latency_ms)
-    except Exception as e:
-        return DemoServiceStatus(status="error", message=safe_error_message(e))
+    except Exception:
+        logger.opt(exception=True).warning("Demo status: Neo4j check failed")
+        return DemoServiceStatus(status="error", message="Neo4j unavailable")
 
 
 async def _check_opensearch() -> DemoServiceStatus:
@@ -132,8 +134,9 @@ async def _check_opensearch() -> DemoServiceStatus:
             message=f"Cluster status: {cluster_status}",
             latency_ms=latency_ms,
         )
-    except Exception as e:
-        return DemoServiceStatus(status="error", message=safe_error_message(e))
+    except Exception:
+        logger.opt(exception=True).warning("Demo status: OpenSearch check failed")
+        return DemoServiceStatus(status="error", message="OpenSearch unavailable")
 
 
 async def _check_ollama() -> DemoServiceStatus:
@@ -161,8 +164,9 @@ async def _check_ollama() -> DemoServiceStatus:
             message=f"Configured model not found: {settings.llm_local_model}",
             latency_ms=latency_ms,
         )
-    except Exception as e:
-        return DemoServiceStatus(status="error", message=safe_error_message(e))
+    except Exception:
+        logger.opt(exception=True).warning("Demo status: Ollama check failed")
+        return DemoServiceStatus(status="error", message="Ollama unavailable")
 
 
 def _subject_statuses() -> list[DemoSubjectStatus]:
@@ -192,22 +196,26 @@ def _subject_statuses() -> list[DemoSubjectStatus]:
                         else "Configured, but no graph concepts were found.",
                     )
                 )
-            except Exception as e:
+            except Exception:
+                logger.opt(exception=True).warning(
+                    "Demo status: graph statistics failed for subject {}", subject.id
+                )
                 statuses.append(
                     DemoSubjectStatus(
                         id=subject.id,
                         name=subject.name,
                         status="error",
-                        message=safe_error_message(e),
+                        message="Graph statistics unavailable",
                     )
                 )
-    except Exception as e:
+    except Exception:
+        logger.opt(exception=True).warning("Demo status: subject configuration failed to load")
         statuses.append(
             DemoSubjectStatus(
                 id="subjects",
                 name="Subject configuration",
                 status="error",
-                message=safe_error_message(e),
+                message="Subject configuration could not be loaded",
             )
         )
     return statuses
@@ -241,8 +249,9 @@ def _latest_eval_status(path: Path = Path("docs/evals/latest.json")) -> DemoEval
             if status == "ok"
             else "Latest eval is missing successful live KG/plain cases.",
         )
-    except Exception as e:
-        return DemoEvalStatus(status="error", message=safe_error_message(e))
+    except Exception:
+        logger.opt(exception=True).warning("Demo status: latest eval report could not be read")
+        return DemoEvalStatus(status="error", message="Latest eval report could not be read")
 
 
 def _overall_status(

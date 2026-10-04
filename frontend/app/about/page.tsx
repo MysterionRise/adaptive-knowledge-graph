@@ -1,36 +1,26 @@
-'use client';
+import type { Metadata } from 'next';
+import { Shield, Database, Cpu, Globe } from 'lucide-react';
 
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Shield, Database, Cpu, Globe } from 'lucide-react';
+export const metadata: Metadata = {
+  title: 'About',
+  description: 'What the Adaptive Knowledge Graph project is, how it works and what it is built with.',
+};
 
 export default function AboutPage() {
-  const router = useRouter();
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/')}
-              className="text-gray-600 hover:text-gray-900"
-              aria-label="Back to home"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">About</h1>
-              <p className="mt-2 text-gray-600">
-                Learn more about the Adaptive Knowledge Graph project
-              </p>
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900">About</h1>
+          <p className="mt-2 text-gray-600">
+            Learn more about the Adaptive Knowledge Graph project
+          </p>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Overview */}
         <div className="bg-white rounded-lg shadow-md p-8 border border-gray-200">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Overview</h2>
@@ -40,8 +30,9 @@ export default function AboutPage() {
             algorithms.
           </p>
           <p className="text-gray-700 leading-relaxed">
-            Built on OpenStax US History content, this system demonstrates how
-            AI can provide personalized, privacy-focused tutoring at scale.
+            It works with openly licensed OpenStax textbooks and supports several
+            subjects: each subject is configured in the backend and becomes available
+            once its textbook content has been ingested into the knowledge graph.
           </p>
         </div>
 
@@ -49,8 +40,8 @@ export default function AboutPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FeatureCard
             icon={<Shield className="w-8 h-8" />}
-            title="Privacy-First"
-            description="All processing happens locally. No student data leaves your machine. FERPA and GDPR compliant by design."
+            title="Local-First"
+            description="By default the API, the databases and the language model all run on your own machine, so questions and learner progress stay there. A remote LLM provider is only used if you configure one."
             color="blue"
           />
           <FeatureCard
@@ -62,13 +53,13 @@ export default function AboutPage() {
           <FeatureCard
             icon={<Cpu className="w-8 h-8" />}
             title="Local LLMs"
-            description="Runs on commodity hardware (RTX 4070) with 4-bit quantized models. No cloud dependencies."
+            description="Quantized open models served by Ollama. Runs on an ordinary laptop or workstation; a GPU makes answers faster but is not required."
             color="green"
           />
           <FeatureCard
             icon={<Globe className="w-8 h-8" />}
             title="Open Source"
-            description="Built with OpenStax content (CC BY 4.0). Transparent, auditable, and extensible for research."
+            description="MIT-licensed code built on OpenStax content (CC BY 4.0). Transparent, auditable, and extensible for research."
             color="orange"
           />
         </div>
@@ -82,17 +73,17 @@ export default function AboutPage() {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">Backend</h3>
               <ul className="space-y-2 text-sm text-gray-700">
-                <li>• FastAPI for REST/WebSocket API</li>
+                <li>• FastAPI REST API, with server-sent events for streamed answers</li>
                 <li>• Neo4j for knowledge graph storage</li>
                 <li>• OpenSearch for vector search</li>
                 <li>• BGE-M3 embeddings</li>
-                <li>• Llama 3.1 / Qwen 2.5 (via Ollama)</li>
+                <li>• Local LLMs via Ollama (Llama 3.1 8B by default)</li>
               </ul>
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 mb-3">Frontend</h3>
               <ul className="space-y-2 text-sm text-gray-700">
-                <li>• Next.js 14 with TypeScript</li>
+                <li>• Next.js and React with TypeScript</li>
                 <li>• Tailwind CSS for styling</li>
                 <li>• Cytoscape.js for graph visualization</li>
                 <li>• Jest & Playwright for testing</li>
@@ -109,14 +100,14 @@ export default function AboutPage() {
           <p className="text-sm text-blue-800 mb-2">
             This project uses content from{' '}
             <a
-              href="https://openstax.org/details/books/us-history"
+              href="https://openstax.org/"
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-blue-900"
             >
-              OpenStax US History
-            </a>
-            , licensed under{' '}
+              OpenStax
+            </a>{' '}
+            textbooks, licensed under{' '}
             <a
               href="https://creativecommons.org/licenses/by/4.0/"
               target="_blank"
@@ -125,7 +116,7 @@ export default function AboutPage() {
             >
               CC BY 4.0
             </a>
-            .
+            . Each answer names the book it is based on.
           </p>
           <p className="text-xs text-blue-700">
             OpenStax™ is a trademark of Rice University. This project is not
@@ -163,7 +154,7 @@ function FeatureCard({ icon, title, description, color }: FeatureCardProps) {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-      <div className={`inline-flex p-3 rounded-lg ${colorClasses[color]} mb-4`}>
+      <div className={`inline-flex p-3 rounded-lg ${colorClasses[color]} mb-4`} aria-hidden="true">
         {icon}
       </div>
       <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>

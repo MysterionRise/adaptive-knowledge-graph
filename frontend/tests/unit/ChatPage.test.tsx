@@ -1,8 +1,10 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ChatPage from '@/app/chat/page';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, type StreamCallbacks } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-errors';
 import { useAppStore } from '@/lib/store';
+import type { Source } from '@/lib/types';
 
 // Mock scrollIntoView (not implemented in jsdom)
 Element.prototype.scrollIntoView = jest.fn();
@@ -10,14 +12,7 @@ Element.prototype.scrollIntoView = jest.fn();
 // Mock the API client
 jest.mock('@/lib/api-client', () => ({
   apiClient: {
-    askQuestion: jest.fn(),
     askQuestionStream: jest.fn(),
-    getSubjects: jest.fn().mockResolvedValue({
-      subjects: [
-        { id: 'us_history', name: 'US History', description: 'American History', is_default: true },
-      ],
-      default_subject: 'us_history',
-    }),
   },
 }));
 
@@ -41,72 +36,71 @@ jest.mock('@/components/SubjectPicker', () => {
   };
 });
 
+const mockStream = apiClient.askQuestionStream as jest.Mock;
+
 // Reset store between tests
 const initialStoreState = useAppStore.getState();
 
-/**
- * Helper to create a mock implementation of askQuestionStream that
- * simulates the streaming callbacks synchronously.
- */
-function mockStreamResponse(response: {
-  question: string;
+interface StreamedAnswer {
   answer: string;
-  sources: any[];
-  expanded_concepts: string[] | null;
-  retrieved_count: number;
-  model: string;
-  attribution: string;
-}) {
-  return (apiClient.askQuestionStream as jest.Mock).mockImplementation(
-    async (_request: any, _subject: any, callbacks: any) => {
-      // Send metadata
-      callbacks?.onMetadata?.({
-        sources: response.sources,
-        expanded_concepts: response.expanded_concepts,
-        retrieved_count: response.retrieved_count,
-        model: response.model,
-        attribution: response.attribution,
+  sources?: Source[];
+  expanded_concepts?: string[] | null;
+  retrieved_count?: number;
+  model?: string;
+  attribution?: string;
+}
+
+/** Stream the answer through the callbacks and finish (the promise resolves when done). */
+function mockStreamResponse({
+  answer,
+  sources = [],
+  expanded_concepts = [],
+  retrieved_count = 0,
+  model = 'llama3.1:8b',
+  attribution = 'OpenStax US History',
+}: StreamedAnswer) {
+  return mockStream.mockImplementation(
+    async (_request: unknown, _subject: unknown, callbacks: StreamCallbacks) => {
+      callbacks.onMetadata?.({
+        type: 'metadata',
+        sources,
+        expanded_concepts,
+        retrieved_count,
+        model,
+        attribution,
       });
-
-      // Send answer as a single token
-      callbacks?.onToken?.(response.answer);
-
-      // Signal done
-      callbacks?.onDone?.();
+      callbacks.onToken?.(answer);
     }
   );
 }
 
-/**
- * Helper to create a mock that never resolves (hangs forever).
- */
+/** A stream that never finishes (until it is aborted). */
 function mockStreamHanging() {
-  return (apiClient.askQuestionStream as jest.Mock).mockImplementation(
-    () => new Promise(() => {}) // Never resolves
-  );
+  return mockStream.mockImplementation(() => new Promise(() => {}));
 }
 
-/**
- * Helper to create a mock that calls onError.
- */
-function mockStreamError(errorMessage: string) {
-  return (apiClient.askQuestionStream as jest.Mock).mockImplementation(
-    async (_request: any, _subject: any, callbacks: any) => {
-      callbacks?.onError?.(errorMessage);
-    }
-  );
+/** A stream that fails with an API error. */
+function mockStreamError(message: string) {
+  return mockStream.mockRejectedValue(new ApiError('http', message, { status: 503 }));
 }
 
-/**
- * Helper to create a mock that throws an exception.
- */
-function mockStreamThrow(error: Error) {
-  return (apiClient.askQuestionStream as jest.Mock).mockRejectedValue(error);
+const questionInput = () => screen.getByRole('textbox', { name: 'Your question' });
+
+/** Run an interaction that starts a stream and let the stream settle inside act(). */
+const settle = (interaction: () => void) =>
+  act(async () => {
+    interaction();
+  });
+
+async function ask(question: string) {
+  await userEvent.type(questionInput(), question);
+  await settle(() => fireEvent.submit(questionInput().closest('form')!));
 }
 
 describe('ChatPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStream.mockReset();
     useAppStore.setState(initialStoreState);
     mockSearchParams.delete('question');
   });
@@ -115,7 +109,7 @@ describe('ChatPage', () => {
     it('renders the chat page header', () => {
       render(<ChatPage />);
 
-      expect(screen.getByText('AI Tutor Chat')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: 'AI Tutor Chat' })).toBeInTheDocument();
       expect(screen.getByText(/Ask questions about your selected subject/i)).toBeInTheDocument();
     });
 
@@ -134,35 +128,33 @@ describe('ChatPage', () => {
       expect(screen.getByText('What was the impact of Industrialization?')).toBeInTheDocument();
     });
 
-    it('renders chat input form', () => {
+    it('renders example questions of the current subject', () => {
+      useAppStore.setState({ currentSubject: 'economics' });
+
       render(<ChatPage />);
 
-      expect(screen.getByPlaceholderText(/Ask a question/i)).toBeInTheDocument();
+      expect(screen.getByText('How do supply and demand determine prices?')).toBeInTheDocument();
+    });
+
+    it('renders a labelled chat input', () => {
+      render(<ChatPage />);
+
+      expect(questionInput()).toHaveAttribute('placeholder', 'Ask a question...');
       expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
     });
 
-    it('renders back button', () => {
+    it('renders a labelled KG expansion toggle', () => {
       render(<ChatPage />);
 
-      expect(screen.getByRole('button', { name: /back to home/i })).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'KG Expansion' })).toBeInTheDocument();
     });
 
-    it('renders KG expansion toggle', () => {
+    it('renders the conversation as a polite live region', () => {
       render(<ChatPage />);
 
-      expect(screen.getByText('KG Expansion')).toBeInTheDocument();
-      expect(screen.getByRole('checkbox')).toBeInTheDocument();
-    });
-  });
-
-  describe('Navigation', () => {
-    it('navigates back to home when back button is clicked', () => {
-      render(<ChatPage />);
-
-      const backButton = screen.getByRole('button', { name: /back to home/i });
-      fireEvent.click(backButton);
-
-      expect(mockPush).toHaveBeenCalledWith('/');
+      const log = screen.getByRole('log', { name: 'Conversation' });
+      expect(log).toHaveAttribute('aria-live', 'polite');
+      expect(log).toHaveAttribute('aria-busy', 'false');
     });
   });
 
@@ -170,42 +162,40 @@ describe('ChatPage', () => {
     it('has KG expansion enabled by default', () => {
       render(<ChatPage />);
 
-      const toggle = screen.getByRole('checkbox');
-      expect(toggle).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'KG Expansion' })).toBeChecked();
     });
 
-    it('toggles KG expansion when clicked', () => {
+    it('toggles KG expansion from its label', () => {
       render(<ChatPage />);
 
-      const toggle = screen.getByRole('checkbox');
-      fireEvent.click(toggle);
+      fireEvent.click(screen.getByText('KG Expansion'));
 
-      expect(toggle).not.toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'KG Expansion' })).not.toBeChecked();
+    });
+
+    it('sends the KG expansion setting with the question', async () => {
+      mockStreamResponse({ answer: 'Answer' });
+      render(<ChatPage />);
+      fireEvent.click(screen.getByRole('checkbox', { name: 'KG Expansion' }));
+
+      await ask('Why?');
+
+      await waitFor(() => expect(mockStream).toHaveBeenCalled());
+      expect(mockStream.mock.calls[0][0]).toEqual({ question: 'Why?', use_kg_expansion: false, top_k: 5 });
     });
   });
 
   describe('Sending Messages', () => {
     it('sends message when form is submitted', async () => {
-      mockStreamResponse({
-        question: 'What is history?',
-        answer: 'Test answer',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax US History',
-      });
+      mockStreamResponse({ answer: 'Test answer' });
 
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      const sendButton = screen.getByRole('button', { name: /send/i });
-
-      await userEvent.type(input, 'What is history?');
-      fireEvent.click(sendButton);
+      await userEvent.type(questionInput(), 'What is history?');
+      await settle(() => fireEvent.click(screen.getByRole('button', { name: /send/i })));
 
       await waitFor(() => {
-        expect(apiClient.askQuestionStream).toHaveBeenCalledWith(
+        expect(mockStream).toHaveBeenCalledWith(
           {
             question: 'What is history?',
             use_kg_expansion: true,
@@ -218,98 +208,42 @@ describe('ChatPage', () => {
       });
     });
 
-    it('displays user message after sending', async () => {
-      mockStreamResponse({
-        question: 'My question',
-        answer: 'Test answer',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax US History',
-      });
+    it('displays the question and the streamed answer', async () => {
+      mockStreamResponse({ answer: 'This is the assistant response' });
 
       render(<ChatPage />);
+      await ask('My question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'My question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText('My question')).toBeInTheDocument();
-      });
-    });
-
-    it('displays assistant response after receiving', async () => {
-      mockStreamResponse({
-        question: 'My question',
-        answer: 'This is the assistant response',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax US History',
-      });
-
-      render(<ChatPage />);
-
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'My question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText('This is the assistant response')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('This is the assistant response')).toBeInTheDocument();
+      expect(screen.getByText('My question')).toBeInTheDocument();
     });
 
     it('clears input after sending', async () => {
-      mockStreamResponse({
-        question: 'My question',
-        answer: 'Test answer',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax US History',
-      });
+      mockStreamResponse({ answer: 'Test answer' });
 
       render(<ChatPage />);
+      await ask('My question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i) as HTMLInputElement;
-      await userEvent.type(input, 'My question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(input.value).toBe('');
-      });
+      await waitFor(() => expect(questionInput()).toHaveValue(''));
     });
 
-    it('disables input while loading', async () => {
+    it('disables input and marks the conversation busy while loading', async () => {
       mockStreamHanging();
 
       render(<ChatPage />);
+      await ask('My question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'My question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(input).toBeDisabled();
-      });
+      await waitFor(() => expect(questionInput()).toBeDisabled());
+      expect(screen.getByRole('log')).toHaveAttribute('aria-busy', 'true');
     });
 
     it('shows thinking indicator while waiting for response', async () => {
       mockStreamHanging();
 
       render(<ChatPage />);
+      await ask('My question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'My question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText('Thinking...')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Thinking...')).toBeInTheDocument();
     });
 
     it('does not send empty messages', async () => {
@@ -317,42 +251,70 @@ describe('ChatPage', () => {
 
       const sendButton = screen.getByRole('button', { name: /send/i });
       expect(sendButton).toBeDisabled();
+      fireEvent.submit(questionInput().closest('form')!);
 
-      fireEvent.click(sendButton);
-
-      expect(apiClient.askQuestionStream).not.toHaveBeenCalled();
+      expect(mockStream).not.toHaveBeenCalled();
     });
 
     it('does not send whitespace-only messages', async () => {
       render(<ChatPage />);
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, '   ');
+      await userEvent.type(questionInput(), '   ');
 
-      const sendButton = screen.getByRole('button', { name: /send/i });
-      expect(sendButton).toBeDisabled();
+      expect(screen.getByRole('button', { name: /send/i })).toBeDisabled();
+    });
+
+    it('cancels the stream when the page is left', async () => {
+      mockStreamHanging();
+      const { unmount } = render(<ChatPage />);
+      await ask('My question');
+      await waitFor(() => expect(mockStream).toHaveBeenCalled());
+      const signal: AbortSignal = mockStream.mock.calls[0][3];
+
+      unmount();
+
+      expect(signal.aborted).toBe(true);
+    });
+  });
+
+  describe('Question in the URL', () => {
+    it('asks the question once on load', async () => {
+      mockSearchParams.set('question', 'Explain the Constitution');
+      mockStreamResponse({ answer: 'The Constitution is...' });
+
+      render(<ChatPage />);
+
+      expect(await screen.findByText('The Constitution is...')).toBeInTheDocument();
+      expect(screen.getByText('Explain the Constitution')).toBeInTheDocument();
+      expect(mockStream).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not ask when the page is left right away', () => {
+      jest.useFakeTimers();
+      try {
+        mockSearchParams.set('question', 'Explain the Constitution');
+        const { unmount } = render(<ChatPage />);
+
+        unmount();
+        act(() => jest.runOnlyPendingTimers());
+
+        expect(mockStream).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
   describe('Example Questions', () => {
     it('sends example question when clicked', async () => {
-      mockStreamResponse({
-        question: 'What caused the American Revolution?',
-        answer: 'The American Revolution was caused by...',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax US History',
-      });
+      mockStreamResponse({ answer: 'The American Revolution was caused by...' });
 
       render(<ChatPage />);
 
-      const exampleButton = screen.getByText('What caused the American Revolution?');
-      fireEvent.click(exampleButton);
+      await settle(() => fireEvent.click(screen.getByText('What caused the American Revolution?')));
 
       await waitFor(() => {
-        expect(apiClient.askQuestionStream).toHaveBeenCalledWith(
+        expect(mockStream).toHaveBeenCalledWith(
           {
             question: 'What caused the American Revolution?',
             use_kg_expansion: true,
@@ -367,265 +329,146 @@ describe('ChatPage', () => {
   });
 
   describe('Error Handling', () => {
-    it('displays error message when streaming calls onError', async () => {
-      mockStreamError('Server error');
+    it('shows the backend error with a retry action', async () => {
+      mockStreamError('LLM service temporarily unavailable');
 
       render(<ChatPage />);
+      await ask('My question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'My question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Sorry, I encountered an error/i)).toBeInTheDocument();
-      });
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(
+        'Sorry, I encountered an error: LLM service temporarily unavailable.'
+      );
+      expect(questionInput()).toBeEnabled();
     });
 
-    it('handles exception thrown by askQuestionStream', async () => {
-      mockStreamThrow(new Error('Network error'));
+    it('answers the question again on retry', async () => {
+      mockStreamError('LLM service temporarily unavailable');
+      render(<ChatPage />);
+      await ask('My question');
+      await screen.findByRole('alert');
+
+      mockStreamResponse({ answer: 'Second time lucky' });
+      await settle(() => fireEvent.click(screen.getByRole('button', { name: 'Retry' })));
+
+      expect(await screen.findByText('Second time lucky')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(mockStream).toHaveBeenCalledTimes(2);
+      expect(mockStream.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ question: 'My question' })
+      );
+      // The question is not repeated in the conversation
+      expect(screen.getAllByText('My question')).toHaveLength(1);
+    });
+
+    it('keeps a partial answer when the stream fails midway', async () => {
+      mockStream.mockImplementation(
+        async (_request: unknown, _subject: unknown, callbacks: StreamCallbacks) => {
+          callbacks.onToken?.('Partial answer');
+          throw new ApiError('stream', 'An error occurred during streaming');
+        }
+      );
 
       render(<ChatPage />);
+      await ask('My question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'My question');
-      fireEvent.submit(input.closest('form')!);
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Sorry, I encountered an error: An error occurred during streaming.'
+      );
+      expect(screen.getByText('Partial answer')).toBeInTheDocument();
+    });
 
-      await waitFor(() => {
-        expect(screen.getByText(/Sorry, I encountered an error/i)).toBeInTheDocument();
-      });
+    it('describes unexpected errors generically', async () => {
+      mockStream.mockRejectedValue(new TypeError('boom'));
+
+      render(<ChatPage />);
+      await ask('My question');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Sorry, I encountered an error: Something went wrong. Please try again.'
+      );
     });
   });
 
   describe('Response Display', () => {
     it('displays expanded concepts when present', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [],
-        expanded_concepts: ['Concept 1', 'Concept 2', 'Concept 3'],
-        retrieved_count: 3,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax US History',
-      });
+      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1', 'Concept 2', 'Concept 3'] });
 
       render(<ChatPage />);
+      await ask('Question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText('KG Expansion: 3 related concepts')).toBeInTheDocument();
-        expect(screen.getByText('Concept 1')).toBeInTheDocument();
-        expect(screen.getByText('Concept 2')).toBeInTheDocument();
-        expect(screen.getByText('Concept 3')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('KG Expansion: 3 related concepts')).toBeInTheDocument();
+      expect(screen.getByText('Concept 1')).toBeInTheDocument();
+      expect(screen.getByText('Concept 2')).toBeInTheDocument();
+      expect(screen.getByText('Concept 3')).toBeInTheDocument();
     });
 
-    it('displays attribution', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax US History',
-      });
+    it('displays attribution and model', async () => {
+      mockStreamResponse({ answer: 'Answer', attribution: 'OpenStax US History' });
 
       render(<ChatPage />);
+      await ask('Question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText('OpenStax US History')).toBeInTheDocument();
-      });
-    });
-
-    it('displays model name', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax',
-      });
-
-      render(<ChatPage />);
-
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Model: llama3.1:8b/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText('OpenStax US History')).toBeInTheDocument();
+      expect(screen.getByText(/Model: llama3.1:8b/i)).toBeInTheDocument();
     });
   });
 
   describe('Sources Display', () => {
-    it('shows sources toggle button when sources exist', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [
-          {
-            text: 'Source text',
-            score: 0.95,
-            metadata: { chapter: 'Chapter 1', section: 'Section A' },
-          },
-        ],
-        expanded_concepts: [],
-        retrieved_count: 1,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax',
-      });
-
-      render(<ChatPage />);
-
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Show Sources/i)).toBeInTheDocument();
-      });
-    });
+    const sources: Source[] = [
+      {
+        text: 'Source content here',
+        score: 0.95,
+        metadata: { chapter: 'Chapter 1', section: 'Section A' },
+      },
+    ];
 
     it('toggles sources visibility', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [
-          {
-            text: 'Source content here',
-            score: 0.95,
-            metadata: { chapter: 'Chapter 1', section: 'Section A' },
-          },
-        ],
-        expanded_concepts: [],
-        retrieved_count: 1,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax',
-      });
+      mockStreamResponse({ answer: 'Answer', sources, retrieved_count: 1 });
 
       render(<ChatPage />);
+      await ask('Question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
+      const toggle = await screen.findByRole('button', { name: 'Show Sources (1)' });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Show Sources/i)).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText(/Show Sources/i));
-
-      await waitFor(() => {
-        expect(screen.getByText('Source content here')).toBeInTheDocument();
-        expect(screen.getByText('Hide Sources (1)')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Source content here')).toBeInTheDocument();
+      expect(screen.getByText('Chapter 1')).toBeInTheDocument();
+      expect(screen.getByText('Score: 95%')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Hide Sources (1)' })).toHaveAttribute(
+        'aria-expanded',
+        'true'
+      );
     });
   });
 
   describe('View on Graph', () => {
-    it('shows View on Graph button when concepts exist', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [],
-        expanded_concepts: ['Concept 1'],
-        retrieved_count: 1,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax',
-      });
+    it('navigates to graph page with the expanded concepts highlighted', async () => {
+      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1'] });
 
       render(<ChatPage />);
+      await ask('Question');
 
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText('View on Graph')).toBeInTheDocument();
-      });
-    });
-
-    it('navigates to graph page when View on Graph is clicked', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [],
-        expanded_concepts: ['Concept 1'],
-        retrieved_count: 1,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax',
-      });
-
-      render(<ChatPage />);
-
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        expect(screen.getByText('View on Graph')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('View on Graph'));
+      fireEvent.click(await screen.findByRole('button', { name: 'View on Graph' }));
 
       expect(mockPush).toHaveBeenCalledWith('/graph');
+      expect(useAppStore.getState().highlightedConcepts).toEqual(['Concept 1']);
     });
   });
 
   describe('Store Integration', () => {
-    it('updates highlighted concepts in store', async () => {
-      mockStreamResponse({
-        question: 'Question',
-        answer: 'Answer',
-        sources: [],
-        expanded_concepts: ['Concept A', 'Concept B'],
-        retrieved_count: 2,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax',
-      });
+    it('updates highlighted concepts and the last query in store', async () => {
+      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept A', 'Concept B'] });
 
       render(<ChatPage />);
-
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'Question');
-      fireEvent.submit(input.closest('form')!);
+      await ask('My test query');
 
       await waitFor(() => {
-        const state = useAppStore.getState();
-        expect(state.highlightedConcepts).toEqual(['Concept A', 'Concept B']);
-      });
-    });
-
-    it('updates last query in store', async () => {
-      mockStreamResponse({
-        question: 'My test query',
-        answer: 'Answer',
-        sources: [],
-        expanded_concepts: [],
-        retrieved_count: 0,
-        model: 'llama3.1:8b',
-        attribution: 'OpenStax',
-      });
-
-      render(<ChatPage />);
-
-      const input = screen.getByPlaceholderText(/Ask a question/i);
-      await userEvent.type(input, 'My test query');
-      fireEvent.submit(input.closest('form')!);
-
-      await waitFor(() => {
-        const state = useAppStore.getState();
-        expect(state.lastQuery).toBe('My test query');
+        expect(useAppStore.getState()).toMatchObject({
+          highlightedConcepts: ['Concept A', 'Concept B'],
+          lastQuery: 'My test query',
+        });
       });
     });
   });

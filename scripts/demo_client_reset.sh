@@ -4,10 +4,14 @@
 
 set -euo pipefail
 
+# lib.sh also picks up API_PORT from the repository .env when the environment lacks it
+# shellcheck source=lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-API_URL="${API_URL:-http://localhost:8000}"
+API_URL="${API_URL:-http://localhost:${API_PORT:-8000}}"
 API_KEY="${API_KEY:-}"
 
 echo "== Client demo reset =="
@@ -38,7 +42,7 @@ else
     echo "API is not running; reseeding SQLite profile for the next API start."
     poetry run python scripts/seed_student_profile.py \
         --student-id default \
-        --output data/processed/student_profiles.sqlite3
+        --output "${STUDENT_PROFILES_DB:-data/processed/student_profiles.sqlite3}"
 fi
 
 echo "Demo learner state reset."

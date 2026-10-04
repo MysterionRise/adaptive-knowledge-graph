@@ -1,0 +1,46 @@
+name: Docker Build
+
+# Advisory: builds the CPU API image when something it depends on changes.
+# The paths filter means this check does not run on every PR, so it must not
+# become a required status check while the filter is in place.
+on:
+  pull_request:
+    branches: [main]
+    # Everything the CPU image COPYs (see infra/docker/api.cpu.Dockerfile), plus the
+    # build inputs themselves. The image does not copy data/.
+    paths:
+      - "infra/docker/**"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - "README.md"
+      - "backend/**"
+      - "config/**"
+      - "scripts/**"
+      - ".dockerignore"
+      - ".github/workflows/docker-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One group per PR (superseded runs are cancelled); a manual dispatch gets its
+# own group so it is never dropped while pending.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-api-cpu:
+    name: Build API image (CPU, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build infra/docker/api.cpu.Dockerfile (no push)
+        run: docker build --file infra/docker/api.cpu.Dockerfile --tag adaptive-kg-api:ci .
+
+      - name: Show image size
+        run: docker image ls adaptive-kg-api:ci
