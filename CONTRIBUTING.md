@@ -218,8 +218,8 @@ to know about it.
 
 **Add a subject.** Add an entry to `config/subjects.yaml`, then build its data
 with `make ingest-books SUBJECT=<id>`, `make build-kg SUBJECT=<id>` and
-`make index-rag SUBJECT=<id>`. A step-by-step tutorial is tracked in
-[#84](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/84).
+`make index-rag SUBJECT=<id>`. [docs/ADDING_A_SUBJECT.md](docs/ADDING_A_SUBJECT.md)
+walks through each step, including attribution and verification.
 
 **Change the knowledge-graph schema.** Update `backend/app/kg/schema.py`, the
 builder in `backend/app/kg/builder.py` and the queries in

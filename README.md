@@ -355,6 +355,7 @@ This is a proof of concept and pilot prototype. Known limitations:
 | Document | Contents |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Request flows, data boundaries, security model, trade-offs |
+| [docs/ADDING_A_SUBJECT.md](docs/ADDING_A_SUBJECT.md) | Adding a subject: configuration, ingestion, indexing and verification |
 | [docs/TESTING.md](docs/TESTING.md) | Test suites, markers and commands |
 | [docs/COMPLIANCE.md](docs/COMPLIANCE.md) | Content licensing, privacy and data handling |
 | [docs/evals/README.md](docs/evals/README.md) | Evaluation harness and report format |

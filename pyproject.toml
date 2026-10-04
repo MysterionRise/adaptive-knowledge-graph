@@ -41,9 +41,9 @@ slowapi = "^0.1.10"
 
 # NLP & Embeddings
 transformers = ">=4.57.6,<5"  # 5.x together with sentence-transformers 6: #71
-sentence-transformers = "^2.7.0"
+sentence-transformers = ">=2.7,<6.0"
 torch = ">=2.10.0,<2.11"  # 2.11+ switches the Linux wheels to CUDA 13; upgrade deliberately (#79)
-yake = "^0.4.8"
+yake = ">=0.4.8,<0.8.0"
 spacy = "^3.7.2"
 
 # Knowledge Graph

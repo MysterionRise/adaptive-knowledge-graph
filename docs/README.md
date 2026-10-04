@@ -7,6 +7,9 @@ configuration.
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): request flows, data boundaries, security
   model, observability and trade-offs.
+- [ADDING_A_SUBJECT.md](ADDING_A_SUBJECT.md): add a subject, from the
+  `config/subjects.yaml` entry through ingestion, graph build, indexing and
+  verification.
 - [TESTING.md](TESTING.md): backend and frontend test suites, markers and the
   commands CI runs.
 - [COMPLIANCE.md](COMPLIANCE.md): OpenStax licensing, privacy modes and what

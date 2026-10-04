@@ -438,13 +438,29 @@ describe('KnowledgeGraph Component', () => {
   });
 
   describe('Edge Types', () => {
-    it('displays all edge types in legend', () => {
+    it('displays edge types present in graph data', () => {
       render(<KnowledgeGraph data={mockGraphData} />);
 
       const legend = screen.getByText('Legend').parentElement;
       expect(legend).toContainElement(screen.getByText('Prerequisite'));
       expect(legend).toContainElement(screen.getByText('Covers'));
       expect(legend).toContainElement(screen.getByText('Related'));
+    });
+
+    it('does not display Covers when graph data has no COVERS edges', () => {
+      const graphDataWithoutCovers = {
+        ...mockGraphData,
+        edges: mockGraphData.edges.filter((edge) => edge.data.type !== 'COVERS'),
+      };
+      render(<KnowledgeGraph data={graphDataWithoutCovers} />);
+
+      expect(screen.queryByText('Covers')).not.toBeInTheDocument();
+    });
+
+    it('uses the highlighted node color for the legend swatch', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+
+      expect(screen.getByText('Highlighted').previousElementSibling).toHaveClass('bg-amber-500');
     });
   });
 });
