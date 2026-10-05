@@ -3012,14 +3012,14 @@ files = [
 
 [[package]]
 name = "neo4j"
-version = "5.28.6"
+version = "5.28.7"
 description = "Neo4j Bolt driver for Python"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "neo4j-5.28.6-py3-none-any.whl", hash = "sha256:5454b51e0a1de870e7d0cc233b8897bb8b3a273fe32458ccbcde9d5a604f7437"},
-    {file = "neo4j-5.28.6.tar.gz", hash = "sha256:224020cb649517cba1b76bf94129ccf84de30e7005932b5ab0cdd9cb566d55b2"},
+    {file = "neo4j-5.28.7-py3-none-any.whl", hash = "sha256:e118db8e13d49639b85ec778412b0be2147be3f12593f579f52cf4fb960f7e8d"},
+    {file = "neo4j-5.28.7.tar.gz", hash = "sha256:5acc6c83870c9c2f35395e16d3d14193cf59b34c961a4c6fd4c2d7de258e51a3"},
 ]
 
 [package.dependencies]
