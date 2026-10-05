@@ -38,7 +38,7 @@ ideas on top of that structure:
 
 Everything runs **local-first**. With the default `PRIVACY_LOCAL_ONLY=true`,
 questions and textbook excerpts go only to your own Ollama server, and learner
-data stays in a local SQLite file. That matters for education data.
+data stays in a local SQLite file.
 
 ## Features
 
@@ -372,15 +372,9 @@ This is a proof of concept and pilot prototype. Known limitations:
 | [docs/evals/README.md](docs/evals/README.md) | Evaluation harness and report format |
 | [docs/demo/README.md](docs/demo/README.md) | Scripted demo workflow, presenter scripts and slides |
 | [docs/archive/tribunal-2026-02/](docs/archive/tribunal-2026-02/README.md) | Archived adversarial code review |
-| [ROADMAP.md](ROADMAP.md) | What is planned next |
+| [ROADMAP.md](ROADMAP.md) | What is planned next, tracked in [GitHub issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues) |
 | [CHANGELOG.md](CHANGELOG.md) | Notable changes |
 | [SECURITY.md](SECURITY.md) | Reporting vulnerabilities, threat model, hardening |
-
-## Roadmap
-
-Planned work, from evidence and hardening to identity and assessment
-integrity, is described in [ROADMAP.md](ROADMAP.md) and tracked in
-[GitHub issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues).
 
 ## Contributing
 
@@ -397,15 +391,6 @@ expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 If you use this project in research or teaching material, please cite it. The
 metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this
 repository" button produces APA and BibTeX from it.
-
-```bibtex
-@software{perikov_adaptive_knowledge_graph,
-  author  = {Perikov, Konstantin},
-  title   = {Adaptive Knowledge Graph},
-  url     = {https://github.com/MysterionRise/adaptive-knowledge-graph},
-  license = {MIT}
-}
-```
 
 ## License and attribution
 
