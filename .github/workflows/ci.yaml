@@ -21,6 +21,9 @@ concurrency:
 env:
   PYTHON_VERSION: "3.11"
 
+# Every job runs on a pinned runner image (ubuntu-24.04, as in the other
+# workflows), so a runner OS upgrade arrives as a reviewed change instead of a
+# silent move of ubuntu-latest.
 jobs:
   # ---------------------------------------------------------------------------
   # Required gates: every job in this section is listed in `All Checks Passed`.
@@ -28,7 +31,7 @@ jobs:
   # ---------------------------------------------------------------------------
   lint:
     name: Lint & Format Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -50,7 +53,7 @@ jobs:
 
   type-check:
     name: Type Check (mypy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -69,7 +72,7 @@ jobs:
 
   test:
     name: Tests (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -105,7 +108,7 @@ jobs:
 
   frontend:
     name: Frontend (lint, types, tests, build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: "1"
@@ -145,7 +148,7 @@ jobs:
 
   docker-compose-validate:
     name: Docker Compose Validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -189,7 +192,7 @@ jobs:
 
   docs-check:
     name: Documentation Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -208,7 +211,7 @@ jobs:
 
   security:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -250,7 +253,7 @@ jobs:
   # ---------------------------------------------------------------------------
   tribunal:
     name: Tribunal Tests (advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     continue-on-error: true
     steps:
@@ -272,7 +275,7 @@ jobs:
 
   dependency-audit:
     name: Dependency Audit (osv-scanner, advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
     permissions:
@@ -335,7 +338,7 @@ jobs:
 
   link-check:
     name: Link Check (advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
@@ -355,7 +358,7 @@ jobs:
 
   shellcheck:
     name: Shellcheck (advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     continue-on-error: true
     steps:
@@ -378,7 +381,7 @@ jobs:
   # ---------------------------------------------------------------------------
   e2e-tests:
     name: E2E Tests (Playwright, advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     continue-on-error: true
     env:
@@ -415,7 +418,7 @@ jobs:
   # ---------------------------------------------------------------------------
   all-checks:
     name: All Checks Passed
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     needs:
       - lint

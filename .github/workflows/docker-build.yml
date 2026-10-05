@@ -32,7 +32,7 @@ concurrency:
 jobs:
   build-api-cpu:
     name: Build API image (CPU, advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
