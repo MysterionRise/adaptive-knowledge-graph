@@ -18,6 +18,19 @@ is compiled in the release pull request
   `LLM_MODE=local`. The API refuses to start with `LLM_MODE=remote` or
   `LLM_MODE=hybrid` unless you also set `PRIVACY_LOCAL_ONLY=false`
   ([#89](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/89)).
+- **Breaking:** `PRIVACY_LOCAL_ONLY=true` now also refuses to start when a
+  LangSmith tracing variable (`LANGSMITH_TRACING`, `LANGSMITH_TRACING_V2`,
+  `LANGCHAIN_TRACING`, `LANGCHAIN_TRACING_V2`) is on, when `LLM_OLLAMA_HOST`
+  is not a loopback or private address (`localhost`, `ollama`,
+  `host.docker.internal`, `host.containers.internal`, a private IP, or a name
+  that resolves only to those), or when `LLM_LOCAL_MODEL` is an Ollama cloud
+  model (`-cloud`, `:cloud`). The error names the setting: unset the tracing
+  variable, point `LLM_OLLAMA_HOST` at a local Ollama, pick a local model, or
+  set `PRIVACY_LOCAL_ONLY=false` if that traffic is approved. The API also
+  disables LangSmith tracing at runtime, sets `HF_HUB_DISABLE_TELEMETRY=1`,
+  runs the Hugging Face Hub offline (`HF_HUB_OFFLINE=1`) once its models are
+  cached, and Compose turns Neo4j usage reporting off
+  ([#159](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/159)).
 - The Docker Compose project is now named `adaptive-kg`, so volumes from an
   older checkout (`compose_*`) are no longer used automatically. Set
   `COMPOSE_PROJECT_NAME=compose` to keep them, or re-seed with `make seed`
