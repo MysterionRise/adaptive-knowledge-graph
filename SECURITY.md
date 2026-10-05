@@ -100,8 +100,12 @@ If anyone other than you can reach the API, run it in production mode:
 - **Advisories that need a disruptive upgrade.** A small number of published
   advisories can only be fixed by a major-version upgrade or a change of the
   wheel set. They are allowlisted, each with an expiry date and a reason, in
-  [`osv-scanner.toml`](osv-scanner.toml), which is the source of truth for
-  exactly which advisories are accepted. Each upgrade has its own issue:
+  [`osv-scanner.toml`](osv-scanner.toml) (Python) and
+  [`frontend/osv-scanner.toml`](frontend/osv-scanner.toml) (npm), which are the
+  source of truth for exactly which advisories are accepted. Every entry
+  expires within 90 days and names its issue; a weekly dependency audit flags
+  entries 30 days before they expire, and pull requests fail on any advisory
+  they add. Each upgrade has its own issue:
   - `transformers` 4.x, including remote-code-execution advisories, until the
     move to transformers 5 and sentence-transformers 6
     ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
@@ -116,6 +120,10 @@ If anyone other than you can reach the API, run it in production mode:
     not use (`torch.jit.script` and loading `.pt2` archives). The fixed
     releases switch the Linux wheels to CUDA 13, which is deferred to
     [#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79).
+  - `braces` 3.0.3, a dev-only dependency of the frontend build and test
+    tooling that is not in the production bundle, until a fixed release
+    exists
+    ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166)).
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
   read that key. An API key therefore only gates non-browser clients such as

@@ -15,7 +15,9 @@ Questions", …) using the shared vocabulary in ``backend.app.kg.stopwords``.
 """
 
 import re
+from collections.abc import Set
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Literal
 
 import yake
@@ -32,6 +34,17 @@ _NON_CONCEPT_ENTITY_LABELS = frozenset(
 def _contains_phrase(text: str, phrase: str) -> bool:
     """True when ``phrase`` occurs in ``text`` as whole words."""
     return re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text) is not None
+
+
+@lru_cache(maxsize=32)
+def _filter_known_cached(concepts: frozenset[str]) -> frozenset[str]:
+    """
+    Drop stop concepts from a frozen known-concept set, memoised per set.
+
+    Callers that reuse one frozenset per subject (the KG expansion cache) pay for
+    the filtering once; the lookup is by identity after that.
+    """
+    return frozenset(concept for concept in concepts if not is_stop_concept(concept))
 
 
 @dataclass
@@ -130,7 +143,12 @@ class ConceptExtractor:
         return self._embedding_model
 
     def set_known_concepts(self, concepts: set[str]):
-        """Update the set of known concepts (stop concepts are ignored)."""
+        """
+        Update the set of known concepts (stop concepts are ignored).
+
+        This mutates the extractor. Code that shares one extractor between
+        subjects passes ``known_concepts`` to ``extract_concepts`` instead.
+        """
         self.known_concepts = self._filter_known(concepts)
         # Clear cached embeddings
         self._concept_embeddings = {}
@@ -140,6 +158,7 @@ class ConceptExtractor:
         text: str,
         strategy: Literal["ner", "embedding", "yake", "fulltext", "ensemble"] = "ensemble",
         top_k: int = 10,
+        known_concepts: Set[str] | None = None,
     ) -> list[ConceptMatch]:
         """
         Extract concepts from text using specified strategy.
@@ -148,6 +167,11 @@ class ConceptExtractor:
             text: Input text to extract concepts from
             strategy: Extraction strategy to use
             top_k: Maximum number of concepts to return
+            known_concepts: Concept names to match against for this call only
+                (stop concepts are ignored). The extractor is not modified, so one
+                extractor can serve several subjects at once. None = the
+                extractor's own ``known_concepts``. Pass a frozenset that is
+                reused across calls to filter it only once.
 
         Returns:
             List of ConceptMatch objects sorted by score
@@ -155,16 +179,17 @@ class ConceptExtractor:
         if not text:
             return []
 
+        concepts = self._resolve_known(known_concepts)
         if strategy == "ner":
-            matches = self._extract_ner(text)
+            matches = self._extract_ner(text, concepts)
         elif strategy == "embedding":
-            matches = self._extract_embedding(text)
+            matches = self._extract_embedding(text, concepts=concepts)
         elif strategy == "yake":
-            matches = self._extract_yake(text)
+            matches = self._extract_yake(text, concepts)
         elif strategy == "fulltext":
             matches = self._extract_fulltext(text)
         elif strategy == "ensemble":
-            matches = self._extract_ensemble(text)
+            matches = self._extract_ensemble(text, concepts)
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
 
@@ -173,7 +198,13 @@ class ConceptExtractor:
         matches.sort(key=lambda m: m.score, reverse=True)
         return matches[:top_k]
 
-    def _extract_ner(self, text: str) -> list[ConceptMatch]:
+    def _resolve_known(self, known_concepts: Set[str] | None) -> Set[str]:
+        """The concepts to match against: the given ones (filtered) or the extractor's."""
+        if known_concepts is None:
+            return self.known_concepts
+        return _filter_known_cached(frozenset(known_concepts))
+
+    def _extract_ner(self, text: str, concepts: Set[str] | None = None) -> list[ConceptMatch]:
         """Extract concepts using spaCy NER."""
         matches: list[ConceptMatch] = []
 
@@ -193,7 +224,7 @@ class ConceptExtractor:
             ent_text = ent.text.strip()
             if is_stop_concept(ent_text):
                 continue
-            matched_concept = self._match_to_known(ent_text)
+            matched_concept = self._match_to_known(ent_text, concepts)
 
             if matched_concept:
                 matches.append(
@@ -211,7 +242,7 @@ class ConceptExtractor:
             if len(chunk_text) < 3 or is_stop_concept(chunk_text):
                 continue
 
-            matched_concept = self._match_to_known(chunk_text)
+            matched_concept = self._match_to_known(chunk_text, concepts)
             if matched_concept:
                 matches.append(
                     ConceptMatch(
@@ -224,7 +255,7 @@ class ConceptExtractor:
 
         return self._deduplicate(matches)
 
-    def _extract_yake(self, text: str) -> list[ConceptMatch]:
+    def _extract_yake(self, text: str, concepts: Set[str] | None = None) -> list[ConceptMatch]:
         """Extract concepts using YAKE keyword extraction."""
         matches = []
 
@@ -238,7 +269,7 @@ class ConceptExtractor:
                 normalized_score = 1.0 / (1.0 + yake_score)
 
                 # Check if keyword matches a known concept
-                matched_concept = self._match_to_known(keyword)
+                matched_concept = self._match_to_known(keyword, concepts)
                 if matched_concept:
                     matches.append(
                         ConceptMatch(
@@ -256,17 +287,38 @@ class ConceptExtractor:
         return self._deduplicate(matches)
 
     def _extract_embedding(
-        self, text: str, similarity_threshold: float = 0.5
+        self,
+        text: str,
+        similarity_threshold: float = 0.5,
+        concepts: Set[str] | None = None,
     ) -> list[ConceptMatch]:
-        """Extract concepts using embedding similarity."""
+        """
+        Extract concepts using embedding similarity.
+
+        Embeddings of the extractor's own known concepts are cached; concepts
+        passed for a single call are encoded for that call only.
+        """
         matches: list[ConceptMatch] = []
 
-        if not self.known_concepts:
+        if concepts is None:
+            concepts = self.known_concepts
+        if not concepts:
             return matches
 
         try:
-            # Ensure concept embeddings are cached
-            self._ensure_concept_embeddings()
+            if concepts is self.known_concepts:
+                # Ensure concept embeddings are cached
+                self._ensure_concept_embeddings()
+                concept_embeddings = self._concept_embeddings
+            else:
+                concept_list = list(concepts)
+                concept_embeddings = dict(
+                    zip(
+                        concept_list,
+                        self.embedding_model.encode_batch(concept_list),
+                        strict=False,
+                    )
+                )
 
             # Encode query text
             query_embedding = self.embedding_model.encode_query(text)
@@ -276,7 +328,7 @@ class ConceptExtractor:
 
             query_vec = np.array(query_embedding)
 
-            for concept_name, concept_embedding in self._concept_embeddings.items():
+            for concept_name, concept_embedding in concept_embeddings.items():
                 concept_vec = np.array(concept_embedding)
 
                 # Cosine similarity
@@ -332,7 +384,7 @@ class ConceptExtractor:
 
         return self._deduplicate(matches)
 
-    def _extract_ensemble(self, text: str) -> list[ConceptMatch]:
+    def _extract_ensemble(self, text: str, concepts: Set[str] | None = None) -> list[ConceptMatch]:
         """
         Fuse the NER and YAKE strategies.
 
@@ -344,7 +396,7 @@ class ConceptExtractor:
         # Run the NER and YAKE strategies
         for strategy_fn in [self._extract_ner, self._extract_yake]:
             try:
-                for match in strategy_fn(text):
+                for match in strategy_fn(text, concepts):
                     if match.name not in all_matches:
                         all_matches[match.name] = []
                     all_matches[match.name].append(match)
@@ -370,9 +422,11 @@ class ConceptExtractor:
 
         return fused_matches
 
-    def _match_to_known(self, text: str) -> str | None:
+    def _match_to_known(self, text: str, concepts: Set[str] | None = None) -> str | None:
         """
         Match a text span to a known concept (case-insensitive, whole words).
+
+        ``concepts`` overrides the extractor's ``known_concepts`` for this call.
 
         An exact match wins; otherwise the longest known concept contained in the
         span ("the Stamp Act of 1765" -> "Stamp Act"), then the shortest known
@@ -386,7 +440,7 @@ class ConceptExtractor:
 
         contained: list[str] = []
         containing: list[str] = []
-        for concept in self.known_concepts:
+        for concept in self.known_concepts if concepts is None else concepts:
             concept_lower = concept.lower()
             if concept_lower == text_lower:
                 return concept

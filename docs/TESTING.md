@@ -138,13 +138,16 @@ for merging into `main`):
 | Docker Compose Validation | Starts Neo4j and OpenSearch, waits until they are healthy and checks that they respond |
 | Documentation Check | markdownlint on `*.md`, `docs/**`, `frontend/*.md`, `infra/**` and `.github/*.md` |
 | Security Scan | bandit, with results uploaded to code scanning |
+| Dependency Audit (new advisories) | When a pull request changes a lockfile or an `osv-scanner.toml`: osv-scanner on the change and on the base branch; fails only on advisories the change adds |
 
 Advisory jobs (they report but do not block yet; the v0.3.0 release makes them
-required):
+required, except the full dependency scan):
 
 - **Tribunal Tests:** `pytest -m tribunal`.
-- **Dependency Audit:** osv-scanner over `poetry.lock` and
-  `frontend/package-lock.json`.
+- **Dependency Audit (full scan):** osv-scanner over `poetry.lock` and
+  `frontend/package-lock.json`, with results uploaded to code scanning. It
+  stays advisory, because a newly published advisory would otherwise block
+  unrelated pull requests; the required gate is the new-advisories job above.
 - **Link Check:** lychee in offline mode over the same Markdown files as the
   documentation check.
 - **npm audit:** part of the frontend job.
@@ -154,7 +157,16 @@ required):
 
 The live-stack integration suite runs locally with `make test-integration`.
 Separate workflows run CodeQL analysis, build the Docker images when their
-inputs change, and publish a GitHub Release for `vX.Y.Z` tags on `main`.
+inputs change, and publish a GitHub Release for `vX.Y.Z` tags on `main`. A
+weekly dependency audit scans `main` and keeps one tracking issue up to date
+with the advisories outside the allowlists and the allowlist entries that
+expire within 30 days.
+
+The allowlists are `osv-scanner.toml` (Python) and `frontend/osv-scanner.toml`
+(npm): osv-scanner applies the file next to each lockfile. Every entry needs a
+reason that names an issue and an `ignoreUntil` date at most 90 days out;
+`backend/tests/test_osv_audit.py` enforces both and checks that the
+transformers and torch features the reasons call unused stay unused.
 
 ## Evaluation
 
