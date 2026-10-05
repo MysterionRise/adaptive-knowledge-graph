@@ -1,0 +1,89 @@
+name: Dependency Audit
+
+# Weekly full osv-scanner run over main's lockfiles, plus a check for allowlist
+# entries that have expired or expire within 30 days. The results go to one
+# tracking issue, which each run opens, updates or closes. Pull requests are
+# gated separately by the `Dependency Audit (new advisories)` job in ci.yaml.
+on:
+  schedule:
+    - cron: "23 6 * * 1" # Mondays, 06:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Weekly dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write # open, update or close the audit issue
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up osv-scanner
+        uses: ./.github/actions/setup-osv-scanner
+
+      - name: Scan lockfiles and check allowlist expiry
+        id: audit
+        run: |
+          set +e
+          osv-scanner scan source --lockfile poetry.lock --lockfile frontend/package-lock.json \
+            --format markdown --output-file osv-report.md
+          scan_rc=$?
+          python3 scripts/osv_audit.py expiring --within-days 30 --exit-code \
+            osv-scanner.toml frontend/osv-scanner.toml > expiring.md
+          expiring_rc=$?
+          set -e
+          # osv-scanner: 0 = clean, 1 = vulnerabilities found, anything else = error.
+          if [ "${scan_rc}" -gt 1 ] || [ "${expiring_rc}" -gt 1 ]; then
+            echo "::error::The audit failed (osv-scanner ${scan_rc}, expiry check ${expiring_rc})"
+            exit 1
+          fi
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "Weekly osv-scanner audit of \`main\` on $(date -u +%Y-%m-%d) ([run](${run_url}))."
+            echo
+            echo "## Advisories outside the allowlists"
+            echo
+            if [ "${scan_rc}" -eq 1 ]; then cat osv-report.md; else echo "None."; fi
+            echo
+            echo "## Allowlist entries"
+            echo
+            cat expiring.md
+          } > audit.md
+          cat audit.md >> "${GITHUB_STEP_SUMMARY}"
+          if [ "${scan_rc}" -eq 1 ] || [ "${expiring_rc}" -eq 1 ]; then
+            echo "attention=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "attention=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Open, update or close the audit issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ATTENTION: ${{ steps.audit.outputs.attention }}
+        run: |
+          title="Dependency audit: open advisories and expiring allowlist entries"
+          number="$(gh issue list --state open --label dependencies --limit 200 \
+            --json number,title --jq "map(select(.title == \"${title}\")) | .[0].number // empty")"
+          if [ "${ATTENTION}" = "true" ]; then
+            if [ -n "${number}" ]; then
+              gh issue edit "${number}" --body-file audit.md
+            else
+              gh issue create --title "${title}" --label dependencies --label security \
+                --body-file audit.md
+            fi
+          elif [ -n "${number}" ]; then
+            gh issue close "${number}" --comment \
+              "The weekly audit is clean: no advisories outside the allowlists, and no allowlist entry expires within 30 days."
+          fi
