@@ -317,6 +317,8 @@ class TestQueryConceptNeighbors:
         cypher_call = mock_session.run.call_args
         assert "bio_Concept" in cypher_call[0][0]
         assert cypher_call[1]["name"] == "Photosynthesis"
+        # Ties on importance are broken by name, so the LIMIT keeps the same neighbours
+        assert "ORDER BY importance_score DESC, name" in cypher_call[0][0]
 
     def test_empty_results(self):
         adapter, mock_session = _make_adapter(label_prefix="bio")
@@ -1018,6 +1020,7 @@ class TestChunkOperations:
             start_char=100,
             end_char=200,
             module_id="mod1",
+            chapter="Chapter A",
             section="Section A",
             text_embedding=[1.0, 2.0],
         )
@@ -1031,8 +1034,10 @@ class TestChunkOperations:
         assert chunk_data["start_char"] == 100
         assert chunk_data["end_char"] == 200
         assert chunk_data["module_id"] == "mod1"
+        assert chunk_data["chapter"] == "Chapter A"
         assert chunk_data["section"] == "Section A"
         assert chunk_data["text_embedding"] == [1.0, 2.0]
+        assert "c.chapter = chunk.chapter" in mock_session.run.call_args[0][0]
 
 
 @pytest.mark.unit
@@ -1455,6 +1460,7 @@ class TestChunkWindowSizes:
         query = mock_session.run.call_args[0][0]
         assert "us_history_Module" in query
         assert "module.title AS module_title" in query
+        assert "chunk.chapter AS chapter" in query
         assert chunk["module_title"] == "The Civil War"
 
     def test_negative_window_rejected(self):

@@ -266,7 +266,7 @@ class Neo4jAdapter:
             RETURN DISTINCT neighbor.name as name,
                    neighbor.importance_score as importance_score,
                    neighbor.key_term as key_term
-            ORDER BY importance_score DESC
+            ORDER BY importance_score DESC, name
             LIMIT 20
             """
             result = session.run(query, name=concept_name)
@@ -279,6 +279,13 @@ class Neo4jAdapter:
         with self._get_session() as session:
             result = session.run(f"MATCH (c:{concept_label}) RETURN c.name AS name")
             return {record["name"] for record in result if record["name"]}
+
+    def count_concepts(self) -> int:
+        """Number of concepts in this adapter's (subject's) graph (one count query)."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            record = session.run(f"MATCH (c:{concept_label}) RETURN count(c) AS count").single()
+        return int(record["count"]) if record else 0
 
     def concept_exists(self, name: str) -> bool:
         """
@@ -381,6 +388,7 @@ class Neo4jAdapter:
                     c.startChar = chunk.start_char,
                     c.endChar = chunk.end_char,
                     c.moduleId = chunk.module_id,
+                    c.chapter = chunk.chapter,
                     c.section = chunk.section,
                     c.textEmbedding = chunk.text_embedding
                 """
@@ -393,6 +401,7 @@ class Neo4jAdapter:
                         "start_char": c.start_char,
                         "end_char": c.end_char,
                         "module_id": c.module_id,
+                        "chapter": c.chapter,
                         "section": c.section,
                         "text_embedding": c.text_embedding,
                     }
@@ -687,6 +696,7 @@ class Neo4jAdapter:
                    chunk.text AS text,
                    chunk.moduleId AS module_id,
                    module.title AS module_title,
+                   chunk.chapter AS chapter,
                    chunk.section AS section,
                    chunk.chunkIndex AS chunk_index
             ORDER BY chunk_index

@@ -101,7 +101,10 @@ class EmbeddingModel:
         logger.info(f"Loading embedding model: {self.model_name} on {self.device}")
 
         try:
-            self.model = SentenceTransformer(self.model_name, device=self.device)
+            # Pin the Hugging Face revision only when one is configured
+            revision = settings.embedding_model_revision
+            kwargs = {"revision": revision} if revision else {}
+            self.model = SentenceTransformer(self.model_name, device=self.device, **kwargs)
             self.embedding_dim = self.model.get_sentence_embedding_dimension()
 
             logger.success(
@@ -207,3 +210,9 @@ def get_embedding_model() -> EmbeddingModel:
                 _embedding_model = model
 
     return _embedding_model
+
+
+def loaded_embedding_device() -> str | None:
+    """The device of the loaded embedding model, or None when it has not been loaded yet."""
+    model = _embedding_model
+    return model.device if model is not None else None

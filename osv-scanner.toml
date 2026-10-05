@@ -11,6 +11,11 @@
 
 # --- transformers 4.57.x: fixed only in 5.x (migration with sentence-transformers 6: #71)
 [[IgnoredVulns]]
+id = "GHSA-x9r9-c232-4q39"
+ignoreUntil = 2026-12-31
+reason = "transformers 4.49-5.8.1 (custom generate code cached before the trust_remote_code check, also PYSEC-2026-4174): the app never calls generate() or load_custom_generate; configured BAAI bge-m3 / bge-reranker-v2-m3 only; not flagged from 5.9; transformers 5 migration #71"
+
+[[IgnoredVulns]]
 id = "GHSA-29pf-2h5f-8g72"
 ignoreUntil = 2026-12-31
 reason = "transformers 4.x (remote code execution): configured BAAI bge-m3 / bge-reranker-v2-m3 only; no trust_remote_code/save_pretrained/Trainer usage; `kernels` package not installed; transformers 5 migration #71"

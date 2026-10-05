@@ -126,7 +126,15 @@ class TestStreamingProtocol:
         """Sources in metadata should be truncated to 200 chars."""
         long_retriever = MagicMock()
         long_retriever.retrieve.return_value = [
-            {"text": "A" * 500, "module_id": "m1", "section": "S1", "score": 0.9, "id": "c1"},
+            {
+                "text": "A" * 500,
+                "module_id": "m1",
+                "module_title": "Ch1 - S1",
+                "chapter": "Ch1",
+                "section": "S1",
+                "score": 0.9,
+                "id": "c1",
+            },
         ]
         mock_llm = self._mock_stream(["answer"])
 
@@ -146,6 +154,9 @@ class TestStreamingProtocol:
         events = _parse_sse_events(response.text)
         metadata = events[0]
         assert len(metadata["sources"][0]["text"]) == 203  # 200 + "..."
+        assert metadata["sources"][0]["module_title"] == "Ch1 - S1"
+        assert metadata["sources"][0]["chapter"] == "Ch1"
+        assert metadata["sources"][0]["section"] == "S1"
 
     def test_stream_empty_tokens(self, client, mock_retriever):
         """A stream with no tokens reports an empty-answer error before [DONE]."""
@@ -354,7 +365,7 @@ class TestStreamingWithKGExpansion:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis", "chloroplast"],
             ),
         ):

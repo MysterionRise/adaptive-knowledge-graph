@@ -9,6 +9,10 @@ API_HOST ?= 127.0.0.1
 API_PORT ?= $(or $(shell bash -c '. scripts/lib.sh && printf %s "$${API_PORT:-}"' 2> /dev/null),8000)
 API_URL ?= http://localhost:$(API_PORT)
 EVAL_ARGS ?=
+BASE ?=
+HEAD ?=
+# Commit reported by /api/v1/demo/provenance (evaluation reports); the environment wins
+GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 
 .DEFAULT_GOAL := help
 
@@ -19,7 +23,7 @@ EVAL_ARGS ?=
 	docker-build docker-up docker-down docker-logs docker-ps \
 	ingest-books build-kg index-rag pipeline-all \
 	run-api run-frontend dev-setup \
-	eval-rag eval-rag-api \
+	eval-rag eval-rag-api eval-compare \
 	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval
 
 help: ## Show this help message
@@ -118,7 +122,7 @@ pipeline-all: ## Rebuild from scratch: re-ingest, rebuild graph, recreate index 
 
 # Run services
 run-api: ## Run the FastAPI backend locally with reload (API_HOST=127.0.0.1, API_PORT=8000)
-	poetry run uvicorn backend.app.main:app --reload --host $(API_HOST) --port $(API_PORT)
+	GIT_SHA=$(GIT_SHA) poetry run uvicorn backend.app.main:app --reload --host $(API_HOST) --port $(API_PORT)
 
 run-frontend: ## Run the Next.js dev server (frontend/)
 	cd frontend && npm run dev
@@ -131,6 +135,13 @@ eval-rag: ## Run the live API KG-RAG evaluation (paced to the /ask rate limit)
 	poetry run python scripts/evaluate_rag.py --api-url $(API_URL) $(EVAL_ARGS)
 
 eval-rag-api: eval-rag ## Alias for eval-rag
+
+eval-compare: ## Compare two eval reports: make eval-compare BASE=old.json HEAD=new.json (exit 1 on regression)
+	@if [ -z "$(BASE)" ] || [ -z "$(HEAD)" ]; then \
+		echo "Usage: make eval-compare BASE=docs/evals/history/<file>.json HEAD=docs/evals/latest.json"; \
+		exit 2; \
+	fi
+	poetry run python scripts/compare_evals.py "$(BASE)" "$(HEAD)"
 
 # Demo acceptance
 demo-seed: ## Seed local demo data into Neo4j and OpenSearch (same as make seed)

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Component, ReactNode } from 'react';
+import { reloadPage } from '@/lib/browser';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -138,7 +139,7 @@ export function ErrorFallback({ error, onRetry }: ErrorFallbackProps) {
           )}
 
           <button
-            onClick={() => window.location.reload()}
+            onClick={reloadPage}
             className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200
                      rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors
                      focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"

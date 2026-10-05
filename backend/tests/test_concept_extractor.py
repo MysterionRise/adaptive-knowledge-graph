@@ -53,6 +53,65 @@ class TestKnownConcepts:
 
 
 @pytest.mark.unit
+class TestPerCallKnownConcepts:
+    """``known_concepts`` passed to one call is used for that call only."""
+
+    def test_given_concepts_are_matched_without_changing_the_extractor(self):
+        extractor = extractor_with_nlp(fake_nlp(noun_chunks=["the Stamp Act", "inflation"]))
+
+        matches = extractor.extract_concepts(
+            "...", strategy="ner", known_concepts=frozenset({"Inflation", "Summary"})
+        )
+
+        assert [m.name for m in matches] == ["Inflation"]
+        assert extractor.known_concepts == KNOWN
+        assert [m.name for m in extractor.extract_concepts("...", strategy="ner")] == ["Stamp Act"]
+
+    def test_given_concepts_drop_stop_concepts(self):
+        extractor = ConceptExtractor()
+        extractor._yake_extractor = MagicMock()
+        extractor._yake_extractor.extract_keywords.return_value = [
+            ("review questions", 0.01),
+            ("inflation", 0.5),
+        ]
+
+        matches = extractor.extract_concepts(
+            "...", strategy="yake", known_concepts={"Inflation", "Review Questions"}
+        )
+
+        assert [m.name for m in matches] == ["Inflation"]
+        assert extractor.known_concepts == set()
+
+    def test_a_reused_frozenset_is_filtered_once(self):
+        concepts = frozenset({"Inflation", "Summary"})
+        concept_extractor_module._filter_known_cached.cache_clear()
+
+        extractor = ConceptExtractor()
+        extractor._yake_extractor = MagicMock()
+        extractor._yake_extractor.extract_keywords.return_value = [("inflation", 0.5)]
+        for _ in range(3):
+            extractor.extract_concepts("...", strategy="yake", known_concepts=concepts)
+
+        info = concept_extractor_module._filter_known_cached.cache_info()
+        assert (info.misses, info.hits) == (1, 2)
+
+    def test_embedding_with_given_concepts_does_not_touch_the_cache(self):
+        vectors = {"Stamp Act": [1.0, 0.0], "Slavery": [0.0, 1.0]}
+        model = MagicMock()
+        model.encode_batch.side_effect = lambda names: [vectors[name] for name in names]
+        model.encode_query.return_value = [0.9, 0.1]
+        extractor = ConceptExtractor(embedding_model=model)
+
+        matches = extractor.extract_concepts(
+            "a tax on paper", strategy="embedding", known_concepts={"Stamp Act", "Slavery"}
+        )
+
+        assert [m.name for m in matches] == ["Stamp Act"]
+        assert extractor._concept_embeddings == {}
+        assert extractor.known_concepts == set()
+
+
+@pytest.mark.unit
 class TestMatchToKnown:
     @pytest.mark.parametrize(
         ("span", "expected"),
@@ -69,6 +128,10 @@ class TestMatchToKnown:
     )
     def test_matching(self, span, expected):
         assert ConceptExtractor(known_concepts=set(KNOWN))._match_to_known(span) == expected
+
+    def test_exact_matches_differing_in_case_resolve_the_same_way(self):
+        concepts = {"federal reserve", "Federal Reserve", "Reserve"}
+        assert ConceptExtractor()._match_to_known("FEDERAL RESERVE", concepts) == "Federal Reserve"
 
 
 @pytest.mark.unit

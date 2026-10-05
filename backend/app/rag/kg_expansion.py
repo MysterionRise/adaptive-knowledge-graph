@@ -10,9 +10,15 @@ How it works:
   falling back to plain substring matching
 - Each extracted concept is expanded with its neighbours in the subject's
   graph, up to RAG_KG_EXPANSION_HOPS hops
+
+A subject's concept names are cached per subject (``get_known_concepts``) and
+passed to the shared extractor on each call, so concurrent requests for
+different subjects never see each other's concepts.
 """
 
 import threading
+import time
+from collections.abc import Set
 from typing import Literal
 
 from loguru import logger
@@ -68,7 +74,7 @@ class KGExpander:
         """Release the adapter; shared adapters are closed by clear_neo4j_adapters()."""
         self.neo4j_adapter = None
 
-    def extract_concepts_from_query(self, query: str, all_concepts: set[str]) -> list[str]:
+    def extract_concepts_from_query(self, query: str, all_concepts: Set[str]) -> list[str]:
         """
         Extract concept names from query.
 
@@ -76,7 +82,8 @@ class KGExpander:
 
         Args:
             query: User query text
-            all_concepts: Set of all known concept names
+            all_concepts: Set of all known concept names (a frozenset reused
+                across calls, as ``get_known_concepts`` returns, is filtered once)
 
         Returns:
             List of concept names found in query
@@ -88,13 +95,15 @@ class KGExpander:
         try:
             extractor = self.concept_extractor
             if extractor:
-                extractor.set_known_concepts(all_concepts)
+                # The extractor is shared by every subject: pass this subject's
+                # concepts to the call instead of storing them on the extractor.
                 matches = extractor.extract_concepts(
                     query,
                     strategy=self.extraction_strategy
                     if self.extraction_strategy in ("ner", "yake")
                     else "ensemble",
                     top_k=5,
+                    known_concepts=all_concepts,
                 )
                 found_concepts = [m.name for m in matches]
 
@@ -111,19 +120,15 @@ class KGExpander:
         # Fallback to simple extraction
         return self._extract_simple(query, all_concepts)
 
-    def _extract_simple(self, query: str, all_concepts: set[str]) -> list[str]:
-        """Original simple substring matching."""
+    def _extract_simple(self, query: str, all_concepts: Set[str]) -> list[str]:
+        """Original simple substring matching.
+
+        Longer (more specific) matches come first, and ties are broken by name, so the
+        result does not depend on the set's iteration order, which differs per process.
+        """
         query_lower = query.lower()
-        found_concepts = []
-
-        for concept in all_concepts:
-            # Simple substring matching
-            if concept.lower() in query_lower:
-                found_concepts.append(concept)
-
-        # Sort by length (prefer longer, more specific matches)
-        found_concepts.sort(key=len, reverse=True)
-
+        found_concepts = [concept for concept in all_concepts if concept.lower() in query_lower]
+        found_concepts.sort(key=lambda concept: (-len(concept), concept))
         return found_concepts[:5]  # Max 5 concepts from query
 
     def expand_with_kg(self, concepts: list[str]) -> list[str]:
@@ -136,11 +141,22 @@ class KGExpander:
         Returns:
             Expanded list of concepts
         """
+        return self._expand_with_kg(concepts)[0]
+
+    def _expand_with_kg(self, concepts: list[str]) -> tuple[list[str], int]:
+        """Expand concepts; also return how many graph lookups failed (Neo4j errors).
+
+        The order is reproducible: the query's concepts first, then each one's neighbours
+        in the order Neo4j returns them (``ORDER BY importance_score DESC, name``). The
+        joined terms are embedded for retrieval, so a set's per-process order here would
+        make the same question retrieve differently after a restart.
+        """
         if not self.neo4j_adapter:
             logger.warning("Neo4j not connected, cannot expand with KG")
-            return concepts
+            return concepts, len(concepts)
 
-        expanded = set(concepts)
+        expanded = dict.fromkeys(concepts)  # an ordered set
+        failures = 0
 
         for concept in concepts:
             try:
@@ -150,16 +166,17 @@ class KGExpander:
                 )
 
                 for neighbor in neighbors:
-                    expanded.add(neighbor["name"])
+                    expanded.setdefault(neighbor["name"])
 
             except Exception as e:
+                failures += 1
                 logger.warning(f"Failed to expand concept '{concept}': {e}")
                 continue
 
         logger.info(f"Expanded {len(concepts)} concepts to {len(expanded)} using KG")
-        return list(expanded)
+        return list(expanded), failures
 
-    def expand_query(self, query: str, all_concepts: set[str]) -> dict:
+    def expand_query(self, query: str, all_concepts: Set[str]) -> dict:
         """
         Full query expansion pipeline.
 
@@ -168,13 +185,14 @@ class KGExpander:
             all_concepts: Set of all known concepts
 
         Returns:
-            Dict with original_query, extracted_concepts, expanded_concepts
+            Dict with original_query, extracted_concepts, expanded_concepts, expanded_query,
+            expansion_count and failed_lookups (graph lookups that raised)
         """
         # Extract concepts from query
         extracted = self.extract_concepts_from_query(query, all_concepts)
 
         # Expand using KG
-        expanded = self.expand_with_kg(extracted)
+        expanded, failed_lookups = self._expand_with_kg(extracted)
 
         # Build expanded query
         if expanded:
@@ -189,6 +207,7 @@ class KGExpander:
             "expanded_concepts": expanded,
             "expanded_query": expanded_query,
             "expansion_count": len(expanded) - len(extracted),
+            "failed_lookups": failed_lookups,
         }
 
 
@@ -247,6 +266,56 @@ def get_all_concepts_from_neo4j(subject_id: str | None = None) -> set[str]:
     except Exception as e:
         logger.error(f"Failed to load concepts from Neo4j: {e}")
         return set()
+
+
+# Concept names change only when a subject is re-seeded, so they are cached per
+# subject instead of being loaded from Neo4j on every question.
+KNOWN_CONCEPTS_CACHE_TTL_SECONDS = 300.0
+_known_concepts_cache: dict[str, tuple[float, frozenset[str]]] = {}
+_known_concepts_locks: dict[str, threading.Lock] = {}
+_known_concepts_registry_lock = threading.Lock()
+
+
+def get_known_concepts(subject_id: str | None = None) -> frozenset[str]:
+    """
+    Get a subject's concept names, cached for KNOWN_CONCEPTS_CACHE_TTL_SECONDS.
+
+    Each subject has its own entry and its own load lock, so concurrent requests
+    for one subject load it once and other subjects are not blocked. An empty
+    result (Neo4j unavailable or the subject not seeded yet) is not cached, so
+    the next request tries again.
+
+    Args:
+        subject_id: Subject identifier (None = default_subject from config/subjects.yaml)
+
+    Returns:
+        Frozen set of concept names (the same object until the entry expires)
+    """
+    resolved_id = get_subject(subject_id).id
+
+    cached = _known_concepts_cache.get(resolved_id)
+    if cached is not None and time.monotonic() - cached[0] < KNOWN_CONCEPTS_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    with _known_concepts_registry_lock:
+        lock = _known_concepts_locks.setdefault(resolved_id, threading.Lock())
+
+    with lock:
+        # Another request may have loaded the subject while this one waited.
+        cached = _known_concepts_cache.get(resolved_id)
+        if cached is not None and time.monotonic() - cached[0] < KNOWN_CONCEPTS_CACHE_TTL_SECONDS:
+            return cached[1]
+
+        concepts = frozenset(get_all_concepts_from_neo4j(resolved_id))
+        if concepts:
+            _known_concepts_cache[resolved_id] = (time.monotonic(), concepts)
+            logger.info(f"Cached {len(concepts)} concept names for subject {resolved_id}")
+        return concepts
+
+
+def clear_known_concepts_cache() -> None:
+    """Clear cached concept names (used in tests and after reseeding)."""
+    _known_concepts_cache.clear()
 
 
 def clear_kg_expanders() -> None:

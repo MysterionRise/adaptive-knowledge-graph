@@ -57,7 +57,17 @@ Follow the README's development setup first. Make sure the local Neo4j and OpenS
 make ingest-books SUBJECT=my_subject
 ```
 
-The command writes subject-specific processed records. Check its output for failed source or chapter downloads before continuing.
+The command writes one record per module to `data/processed/books_my_subject.jsonl`:
+
+| Field | Content |
+| --- | --- |
+| `module_id` | The module's file name (`m49990`) or OpenStax page slug |
+| `section` | The module's title: the `title` in its front matter (GitHub sources) or its page title (OpenStax web) |
+| `chapter` | The enclosing chapter: the `{: .chapter}` entry in `SUMMARY.md`, or the page's parent in the OpenStax table of contents; `null` for the preface, parts and appendices |
+| `module_title` | `"<chapter> - <section>"`, or the section alone without a chapter |
+| `book_title`, `subject_id`, `text`, `key_terms` | The book, the subject and the cleaned module text |
+
+The chapter is part of `module_title` because section titles repeat: most chapters open with an "Introduction". Retrieval boosts `module_title`, and the chat cites each source by chapter and section, so check a few records for sensible titles. For a GitHub source, `SUMMARY.md` must list chapters as numbered `{: .chapter} [Title](contents/m….md)` items with their sections indented below them, as the OpenStax mirrors on `raw.githubusercontent.com/philschatz` do. Check the command's output for failed source or chapter downloads before continuing.
 
 ## 3. Build the knowledge graph and index retrieval content
 
