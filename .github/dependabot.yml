@@ -51,6 +51,12 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # Deliberate upgrades tracked in issues; keep them out of the weekly PRs.
+      - dependency-name: "tailwindcss" # 4.x needs a CSS migration with screenshot baselines (#164, #143)
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node" # stays on the Node 24 line in .node-version (#144)
+        update-types: ["version-update:semver-major"]
 
   # API images (infra/docker/*.Dockerfile)
   - package-ecosystem: "docker"

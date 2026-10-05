@@ -1,0 +1,34 @@
+name: Set up osv-scanner
+description: >-
+  Download a pinned osv-scanner release binary for Linux x86-64, verify it
+  against its published SHA-256 and put it on PATH.
+
+inputs:
+  version:
+    description: osv-scanner release, without the leading "v".
+    required: false
+    default: "2.6.0"
+  sha256:
+    description: >-
+      SHA-256 of osv-scanner_linux_amd64 for that release, from the release's
+      osv-scanner_SHA256SUMS file. Change it together with the version.
+    required: false
+    default: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+
+runs:
+  using: composite
+  steps:
+    - name: Install osv-scanner ${{ inputs.version }} (checksum-verified)
+      shell: bash
+      env:
+        OSV_SCANNER_VERSION: ${{ inputs.version }}
+        OSV_SCANNER_SHA256: ${{ inputs.sha256 }}
+      run: |
+        install_dir="${RUNNER_TEMP}/osv-scanner"
+        mkdir -p "${install_dir}"
+        curl --fail --silent --show-error --location --retry 3 \
+          --output "${install_dir}/osv-scanner" \
+          "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+        echo "${OSV_SCANNER_SHA256}  ${install_dir}/osv-scanner" | sha256sum --check --strict
+        chmod +x "${install_dir}/osv-scanner"
+        echo "${install_dir}" >> "${GITHUB_PATH}"

@@ -7,12 +7,17 @@ Tests cover:
 - KG-based concept expansion with mock Neo4j
 - Full expand_query pipeline
 - Edge cases: no concepts, no Neo4j, extraction failure
+- Per-subject known-concept cache, and concurrent requests for different subjects
 """
 
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+import backend.app.nlp.concept_extractor as concept_extractor_module
+import backend.app.rag.kg_expansion as kg_expansion_module
+from backend.app.nlp.concept_extractor import ConceptExtractor
 from backend.app.rag.kg_expansion import KGExpander
 
 
@@ -111,7 +116,9 @@ class TestExtractEnhanced:
         concepts = {"photosynthesis", "chloroplast"}
         result = expander.extract_concepts_from_query("Explain photosynthesis", concepts)
         assert result == ["photosynthesis"]
-        mock_extractor.set_known_concepts.assert_called_once_with(concepts)
+        # The shared extractor gets the concepts per call and is never mutated
+        mock_extractor.set_known_concepts.assert_not_called()
+        assert mock_extractor.extract_concepts.call_args.kwargs["known_concepts"] is concepts
 
 
 @pytest.mark.unit
@@ -354,3 +361,156 @@ class TestFactories:
             side_effect=RuntimeError("Neo4j down"),
         ):
             assert get_all_concepts_from_neo4j("us_history") == set()
+
+
+def _adapter_with_concepts(names: set[str]) -> MagicMock:
+    adapter = MagicMock()
+    adapter.get_all_concept_names.return_value = set(names)
+    adapter.query_concept_neighbors.return_value = []
+    return adapter
+
+
+SUBJECT_CONCEPTS = {
+    "us_history": {"Stamp Act", "Civil War"},
+    "economics": {"Inflation", "Supply and Demand"},
+}
+
+
+@pytest.mark.unit
+class TestKnownConceptsCache:
+    """get_known_concepts caches each subject's concept names with a TTL."""
+
+    @pytest.fixture
+    def adapters(self):
+        adapters = {sid: _adapter_with_concepts(names) for sid, names in SUBJECT_CONCEPTS.items()}
+        with patch(
+            "backend.app.rag.kg_expansion.get_neo4j_adapter",
+            side_effect=lambda subject_id: adapters[subject_id],
+        ):
+            yield adapters
+
+    def test_loads_once_per_subject_within_the_ttl(self, adapters):
+        first = kg_expansion_module.get_known_concepts("us_history")
+        second = kg_expansion_module.get_known_concepts("us_history")
+        economics = kg_expansion_module.get_known_concepts("economics")
+
+        assert first == frozenset(SUBJECT_CONCEPTS["us_history"])
+        assert second is first  # the same frozenset, so the extractor filters it once
+        assert economics == frozenset(SUBJECT_CONCEPTS["economics"])
+        adapters["us_history"].get_all_concept_names.assert_called_once()
+        adapters["economics"].get_all_concept_names.assert_called_once()
+
+    def test_none_resolves_the_default_subject(self, adapters):
+        from backend.app.core.subjects import get_default_subject_id
+
+        default_id = get_default_subject_id()
+        assert kg_expansion_module.get_known_concepts() is (
+            kg_expansion_module.get_known_concepts(default_id)
+        )
+        adapters[default_id].get_all_concept_names.assert_called_once()
+
+    def test_reloads_after_the_ttl(self, adapters):
+        kg_expansion_module.get_known_concepts("economics")
+        loaded_at, concepts = kg_expansion_module._known_concepts_cache["economics"]
+        kg_expansion_module._known_concepts_cache["economics"] = (
+            loaded_at - kg_expansion_module.KNOWN_CONCEPTS_CACHE_TTL_SECONDS - 1,
+            concepts,
+        )
+        adapters["economics"].get_all_concept_names.return_value = {"Inflation", "GDP"}
+
+        assert kg_expansion_module.get_known_concepts("economics") == {"Inflation", "GDP"}
+        assert adapters["economics"].get_all_concept_names.call_count == 2
+
+    def test_clear_forces_a_reload(self, adapters):
+        kg_expansion_module.get_known_concepts("us_history")
+        kg_expansion_module.clear_known_concepts_cache()
+        kg_expansion_module.get_known_concepts("us_history")
+
+        assert adapters["us_history"].get_all_concept_names.call_count == 2
+
+    def test_empty_result_is_not_cached(self, adapters):
+        adapters["us_history"].get_all_concept_names.side_effect = [
+            RuntimeError("Neo4j down"),
+            {"Stamp Act"},
+        ]
+
+        assert kg_expansion_module.get_known_concepts("us_history") == frozenset()
+        assert kg_expansion_module.get_known_concepts("us_history") == {"Stamp Act"}
+
+    def test_unknown_subject_raises(self):
+        with pytest.raises(KeyError):
+            kg_expansion_module.get_known_concepts("no_such_subject")
+
+    def test_concurrent_first_calls_load_once(self, adapters):
+        barrier = threading.Barrier(8)
+        results: list[frozenset[str]] = []
+
+        def request():
+            barrier.wait(timeout=5)
+            results.append(kg_expansion_module.get_known_concepts("us_history"))
+
+        threads = [threading.Thread(target=request) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        assert len(results) == 8
+        assert all(result is results[0] for result in results)
+        adapters["us_history"].get_all_concept_names.assert_called_once()
+
+
+@pytest.mark.unit
+class TestConcurrentSubjects:
+    """Concurrent questions for different subjects match only their own concepts (#157)."""
+
+    def test_requests_held_at_a_barrier_do_not_leak_concepts(self, monkeypatch):
+        from backend.app.api.routes.ask import _expand_query
+        from backend.app.rag.kg_expansion import clear_kg_expanders
+
+        # One shared extractor, as in production; YAKE is real, spaCy is skipped.
+        extractor = ConceptExtractor()
+        extractor._spacy_unavailable = True
+        monkeypatch.setattr(concept_extractor_module, "_concept_extractor", extractor)
+
+        # Hold both requests at the start of extraction and release them together.
+        # Storing the concepts on the shared extractor before this point (the old
+        # set_known_concepts call) would let the second request overwrite the first.
+        barrier = threading.Barrier(2)
+        original_extract = extractor.extract_concepts
+
+        def held_extract(*args, **kwargs):
+            barrier.wait(timeout=5)
+            return original_extract(*args, **kwargs)
+
+        monkeypatch.setattr(extractor, "extract_concepts", held_extract)
+
+        adapters = {sid: _adapter_with_concepts(names) for sid, names in SUBJECT_CONCEPTS.items()}
+        question = "How did the Stamp Act cause inflation?"
+        results: dict[str, list[str]] = {}
+        errors: list[BaseException] = []
+
+        def ask(subject_id: str):
+            try:
+                results[subject_id], _ = _expand_query(subject_id, question)
+            except BaseException as e:  # surfaced below
+                errors.append(e)
+
+        clear_kg_expanders()
+        try:
+            with patch(
+                "backend.app.rag.kg_expansion.get_neo4j_adapter",
+                side_effect=lambda subject_id: adapters[subject_id],
+            ):
+                threads = [threading.Thread(target=ask, args=(sid,)) for sid in SUBJECT_CONCEPTS]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join(timeout=10)
+        finally:
+            clear_kg_expanders()
+
+        assert errors == []
+        assert results == {"us_history": ["Stamp Act"], "economics": ["Inflation"]}
+        assert not barrier.broken  # both requests really were in extraction together
+        assert extractor.known_concepts == set()  # the shared extractor was not mutated
