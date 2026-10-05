@@ -129,9 +129,9 @@ without an API key and logs a warning at startup. `APP_ENV=production` refuses
 to start without `API_KEY` or with `*` in any CORS allow-list
 (`CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS`), and disables
 `/docs`, `/redoc` and `/openapi.json` unless `API_DOCS_ENABLED=true`. The
-protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations` and
-`/graph/query`)
-require the `X-API-Key` header whenever a key is configured.
+protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`,
+`/graph/query` and `/demo/provenance`) require the `X-API-Key` header whenever a key
+is configured.
 
 `PRIVACY_LOCAL_ONLY=true` (the default) makes the API refuse to start unless
 `LLM_MODE=local`, so no prompt can reach a remote provider.

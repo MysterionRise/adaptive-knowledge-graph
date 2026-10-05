@@ -280,6 +280,13 @@ class Neo4jAdapter:
             result = session.run(f"MATCH (c:{concept_label}) RETURN c.name AS name")
             return {record["name"] for record in result if record["name"]}
 
+    def count_concepts(self) -> int:
+        """Number of concepts in this adapter's (subject's) graph (one count query)."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            record = session.run(f"MATCH (c:{concept_label}) RETURN count(c) AS count").single()
+        return int(record["count"]) if record else 0
+
     def concept_exists(self, name: str) -> bool:
         """
         Check whether a concept exists in this adapter's (subject's) graph.

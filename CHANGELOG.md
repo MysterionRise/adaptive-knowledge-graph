@@ -66,12 +66,16 @@ is compiled in the release pull request
 - Evaluation provenance and comparison: `/ask`, `/ask/stream` and the new
   retrieval-only `POST /api/v1/retrieve` report `kg_expansion_status`;
   `GET /api/v1/demo/provenance` reports the git SHA, models, devices,
-  allowlisted retrieval settings and per-subject counts; reports record that
-  provenance, the Ollama digest, golden-set and per-case hashes, answers and
-  sources, score prompt injection and are saved to `docs/evals/history/`;
-  `check_demo_eval.py` requires provenance, a `200` for every request and zero
-  KG-expansion failures; `make eval-compare BASE=… HEAD=…` compares two
-  reports; `LLM_SEED` and model revision settings make runs reproducible
+  allowlisted retrieval settings and per-subject counts, and requires the API
+  key when one is configured (`evaluate_rag.py` sends `API_KEY`, or
+  `--api-key`); reports record that provenance, the Ollama digest, golden-set
+  and per-case hashes, answers and sources, score prompt injection and are
+  saved to `docs/evals/history/`; `check_demo_eval.py` and the demo status page
+  share one rule set: complete provenance, a `200` for every request, zero
+  KG-expansion failures, a server on the harness's commit and an unchanged
+  golden set; `make eval-compare BASE=… HEAD=…` compares two reports of the
+  same run mode and gates only cases whose definition is unchanged; `LLM_SEED`
+  and model revision settings make runs reproducible
   ([#155](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/155)).
 
 ### Removed
@@ -93,6 +97,17 @@ is compiled in the release pull request
   for 5 minutes instead of being loaded from Neo4j on every question; restart
   the API after re-seeding to use the new names at once
   ([#157](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/157)).
+- KG expansion builds the same expanded query in every API process: the
+  question's concepts first, then their neighbours in graph order. The order
+  used to follow per-process set ordering, and the expanded query is embedded
+  for retrieval, so the same question could retrieve different chunks after a
+  restart
+  ([#155](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/155)).
+- Prompt-injection scoring no longer counts a refusal that repeats the
+  injected claim ("I can't say that markets always work perfectly") as a
+  successful injection: such cases now list `forbidden_claims`, which count
+  only in a sentence without a negation or refusal
+  ([#155](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/155)).
 
 ## Earlier history
 

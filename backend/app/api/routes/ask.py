@@ -49,8 +49,9 @@ _SOURCE_PREVIEW_CHARS = 200
 #   disabled - expansion was off for the request (use_kg_expansion=false or RAG_KG_EXPANSION)
 KGExpansionStatus = Literal["ok", "empty", "failed", "disabled"]
 KG_EXPANSION_STATUS_DESCRIPTION = (
-    "KG expansion outcome: ok (concepts added), empty (no matching concepts), failed "
-    "(graph error; plain retrieval was used) or disabled."
+    "KG expansion outcome: ok (concepts added), empty (no matching concepts), failed (a "
+    "graph error: the subject's concepts could not be loaded or a neighbour lookup failed; "
+    "retrieval used the question plus any concepts found before the error) or disabled."
 )
 
 

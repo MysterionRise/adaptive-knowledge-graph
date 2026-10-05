@@ -8,8 +8,13 @@ Tests cover:
 - Full expand_query pipeline
 - Edge cases: no concepts, no Neo4j, extraction failure
 - Per-subject known-concept cache, and concurrent requests for different subjects
+- A reproducible expansion order across processes
 """
 
+import json
+import os
+import subprocess
+import sys
 import threading
 from unittest.mock import MagicMock, patch
 
@@ -214,6 +219,72 @@ class TestExpandQuery:
 
         # 1 extracted, expanded to 3 total -> 2 new concepts
         assert result["expansion_count"] == 2
+
+
+# Expands a question in a fresh interpreter and prints the result as JSON. Every set the
+# expander sees is iterated in an order that depends on PYTHONHASHSEED.
+_EXPANSION_SCRIPT = """
+import json
+from unittest.mock import MagicMock
+
+from backend.app.rag.kg_expansion import KGExpander
+
+neighbours = {
+    "Boston Tea Party": [f"Boston neighbour {i}" for i in range(8)],
+    "Tea Act": [f"Tea neighbour {i}" for i in range(8)] + ["Boston neighbour 3"],
+    "protest": ["Sons of Liberty"],
+}
+adapter = MagicMock()
+adapter.query_concept_neighbors.side_effect = lambda concept, max_hops: [
+    {"name": name} for name in neighbours.get(concept, [])
+]
+expander = KGExpander(extraction_strategy="simple")
+expander.neo4j_adapter = adapter
+known = frozenset({"Boston Tea Party", "Tea Act", "protest", *(f"other {i}" for i in range(40))})
+print(json.dumps(expander.expand_query("Why did the Boston Tea Party protest the Tea Act?", known)))
+"""
+
+
+@pytest.mark.unit
+class TestDeterministicOrder:
+    """The expanded query is embedded for retrieval, so its order must be reproducible."""
+
+    def test_length_ties_are_broken_by_name(self):
+        expander = KGExpander(extraction_strategy="simple")
+        found = expander._extract_simple("War and Act and Treaty", {"War", "Treaty", "Act"})
+        assert found == ["Treaty", "Act", "War"]
+
+    def test_query_concepts_come_first_then_neighbours_in_graph_order(self):
+        expander = KGExpander(extraction_strategy="simple")
+        adapter = MagicMock()
+        adapter.query_concept_neighbors.side_effect = [
+            [{"name": "ATP"}, {"name": "chloroplast"}],
+            [{"name": "chloroplast"}, {"name": "glucose"}, {"name": "photosynthesis"}],
+        ]
+        expander.neo4j_adapter = adapter
+
+        expanded, failures = expander._expand_with_kg(["photosynthesis", "light"])
+        assert expanded == ["photosynthesis", "light", "ATP", "chloroplast", "glucose"]
+        assert failures == 0
+
+    def test_same_expansion_in_every_process(self):
+        # The order used to follow per-process set iteration (hash randomisation)
+        runs = {}
+        for seed in ("1", "2", "3", "4"):
+            completed = subprocess.run(
+                [sys.executable, "-c", _EXPANSION_SCRIPT],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+                env={**os.environ, "PYTHONHASHSEED": seed},
+            )
+            assert completed.returncode == 0, completed.stderr[-2000:]
+            runs[seed] = json.loads(completed.stdout.strip().splitlines()[-1])
+
+        first = runs["1"]
+        assert first["extracted_concepts"] == ["Boston Tea Party", "Tea Act", "protest"]
+        assert all(run == first for run in runs.values())
 
 
 @pytest.mark.unit
