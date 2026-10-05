@@ -37,6 +37,12 @@ export interface Source {
 }
 
 /**
+ * What KG expansion did for a request: concepts added (`ok`), none matched (`empty`),
+ * a graph error forced plain retrieval (`failed`), or expansion was off (`disabled`).
+ */
+export type KGExpansionStatus = 'ok' | 'empty' | 'failed' | 'disabled';
+
+/**
  * Response from the Q&A endpoint.
  */
 export interface QuestionResponse {
@@ -44,6 +50,8 @@ export interface QuestionResponse {
   answer: string;
   sources: Source[];
   expanded_concepts?: string[] | null;
+  /** Omitted by backends older than v0.4.0. */
+  kg_expansion_status?: KGExpansionStatus;
   retrieved_count: number;
   model: string;
   attribution: string;
@@ -56,6 +64,7 @@ export interface StreamMetadata {
   type: 'metadata';
   sources?: Source[];
   expanded_concepts?: string[] | null;
+  kg_expansion_status?: KGExpansionStatus;
   retrieved_count?: number;
   window_expanded_count?: number;
   model?: string;
@@ -133,6 +142,12 @@ export interface DemoEvalStatus {
   citation_hit_rate_delta?: number | null;
   mrr_delta?: number | null;
   unsupported_refusal_rate?: number | null;
+  prompt_injection_resistance_rate?: number | null;
+  kg_expansion_failures?: number | null;
+  /** Whether the report records what produced it (git SHA, golden-set hash, models). */
+  has_provenance?: boolean;
+  git_sha?: string | null;
+  golden_set_sha256?: string | null;
   message?: string | null;
 }
 

@@ -60,6 +60,39 @@ describe('DemoStatusPage', () => {
     expect(screen.getByText('The local stack, seeded OpenStax data, local LLM, and latest eval are ready for rehearsal.')).toBeInTheDocument();
   });
 
+  it('renders the latest evaluation provenance and validity signals', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      latest_eval: {
+        ...readyStatus.latest_eval,
+        kg_expansion_failures: 0,
+        prompt_injection_resistance_rate: 0.75,
+        has_provenance: true,
+        git_sha: '0123456789abcdef0123',
+        golden_set_sha256: 'fedcba9876543210fedc',
+      },
+    });
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    expect(screen.getByText('KG expansion failures').nextSibling).toHaveTextContent('0');
+    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(
+      screen.getByText('Server 0123456789ab, golden set fedcba987654')
+    ).toBeInTheDocument();
+  });
+
+  it('flags a latest evaluation without provenance', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue(readyStatus);
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    expect(screen.getByText('Provenance').nextSibling).toHaveTextContent('Missing');
+    expect(screen.getByText('Prompt-injection resistance').nextSibling).toHaveTextContent('n/a');
+  });
+
   it('renders next actions when demo is degraded', async () => {
     (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
       ...readyStatus,

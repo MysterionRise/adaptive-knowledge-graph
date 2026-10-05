@@ -53,6 +53,7 @@ class TestRouteLimitsComeFromSettings:
         [
             ("ask.ask_question", "rate_limit_ask"),
             ("ask.ask_question_stream", "rate_limit_ask"),
+            ("ask.retrieve_sources", "rate_limit_ask"),
             ("quiz.generate_quiz", "rate_limit_quiz"),
             ("quiz.generate_adaptive_quiz", "rate_limit_quiz"),
             ("graph.get_graph_stats", "rate_limit_graph"),
