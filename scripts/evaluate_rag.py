@@ -20,7 +20,8 @@ import argparse
 import json
 import re
 import time
-from collections.abc import Callable
+import unicodedata
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -43,15 +44,39 @@ def _contains_all_terms(answer: str, terms: list[str]) -> float:
     return hits / len(terms)
 
 
+# The title fields of an /ask source (and of an ingested record) that expected sources match.
+# The text preview is deliberately not one of them: a citation counts only when it names the
+# expected section, not when its first 200 characters happen to mention the topic.
+SOURCE_TITLE_FIELDS = ("chapter", "section", "module_title")
+_TITLE_TRANSLATION = str.maketrans(
+    {"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "-", "\u2014": "-"}
+)
+
+
+def normalize_title(title: object) -> str:
+    """Case-, quote-, dash- and whitespace-insensitive form of a title for comparison."""
+    text = unicodedata.normalize("NFKC", str(title or "")).translate(_TITLE_TRANSLATION)
+    return " ".join(text.casefold().split())
+
+
+def source_matches(source: Mapping[str, Any], expected: str) -> bool:
+    """Whether a source's chapter, section or module title is the expected title.
+
+    Matching is exact after :func:`normalize_title`; the golden-set test checks that every
+    expected source names 1-3 ingested modules.
+    """
+    wanted = normalize_title(expected)
+    return bool(wanted) and any(
+        normalize_title(source.get(field)) == wanted for field in SOURCE_TITLE_FIELDS
+    )
+
+
 def _source_match_rank(sources: list[dict[str, Any]], expected_sources: list[str]) -> int | None:
+    """1-based rank of the first source that matches any expected source title, else None."""
     if not expected_sources:
         return None
-    expected_lower = [source.lower() for source in expected_sources]
     for index, source in enumerate(sources, start=1):
-        haystack = " ".join(
-            str(source.get(field) or "") for field in ("module_title", "section", "text")
-        ).lower()
-        if any(expected in haystack for expected in expected_lower):
+        if any(source_matches(source, expected) for expected in expected_sources):
             return index
     return None
 
