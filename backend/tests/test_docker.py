@@ -15,6 +15,7 @@ LINUX_OVERRIDE = Path("infra/compose/compose.linux.yaml")
 CPU_DOCKERFILE = Path("infra/docker/api.cpu.Dockerfile")
 GPU_DOCKERFILE = Path("infra/docker/api.gpu.Dockerfile")
 FRONTEND_DOCKERFILE = Path("infra/docker/frontend.Dockerfile")
+SETUP_POETRY_ACTION = Path(".github/actions/setup-python-poetry/action.yml")
 
 # Host port variables and their defaults (documented in the compose header and the README)
 PORT_VARIABLES = {
@@ -165,7 +166,6 @@ def test_compose_config_is_valid(profile, linux):
 def test_cpu_dockerfile():
     content = CPU_DOCKERFILE.read_text()
     assert "ARG PYTHON_IMAGE=python:3.12-slim" in content
-    assert "ARG POETRY_VERSION=2.4.1" in content
     assert 'pip install "poetry==${POETRY_VERSION}"' in content
     assert "install.python-poetry.org" not in content
     assert "poetry install --only main --no-root" in content
@@ -196,6 +196,14 @@ def test_gpu_dockerfile():
     assert "CUDA_VISIBLE_DEVICES" in content
     assert "EXPOSE 8000" in content
     _assert_dependency_layer_is_cleaned(content)
+
+
+@pytest.mark.parametrize("dockerfile", [CPU_DOCKERFILE, GPU_DOCKERFILE], ids=["cpu", "gpu"])
+def test_dockerfiles_install_the_poetry_version_ci_uses(dockerfile):
+    # One Poetry version for CI and the images, so both read poetry.lock the same way
+    action = yaml.safe_load(SETUP_POETRY_ACTION.read_text())
+    ci_version = action["inputs"]["poetry-version"]["default"]
+    assert f"ARG POETRY_VERSION={ci_version}" in dockerfile.read_text()
 
 
 def test_frontend_dockerfile():

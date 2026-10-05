@@ -24,7 +24,7 @@ The label-prefix isolation pattern (`backend/app/kg/neo4j_adapter.py:45-49`) is 
 
 The APOC and GDS plugin configuration in `infra/compose/compose.yaml:11` unlocks graph algorithms (PageRank, community detection) that directly power the importance scoring in `backend/app/kg/builder.py:385-408`, where NetworkX PageRank computes concept importance scores. This is graph-native thinking that validates the choice.
 
-**The Context**: For an educational knowledge graph with PREREQ, RELATED, and COVERS relationships where graph traversal is the primary query pattern, Neo4j is the standard choice across industry (e.g., Microsoft Academic Graph, Google Knowledge Graph, educational platforms like Khan Academy's mastery system).
+**The Context**: For an educational knowledge graph with PREREQ, RELATED, and COVERS relationships where graph traversal is the primary query pattern, a native graph database such as Neo4j is a common choice.
 
 **The Tradeoff**: Neo4j Community Edition limits multi-tenancy options. The label-prefix approach adds slight overhead but is a well-documented pattern for the Community tier and avoids enterprise licensing costs entirely -- appropriate for a PoC.
 
@@ -142,7 +142,7 @@ This means a student asking "What caused the American Revolution?" does not just
 
 The fallback architecture is robust: if NER fails, YAKE still works (line 298-306). If enhanced extraction fails entirely, simple substring matching takes over (line 115). If Neo4j is unreachable, expansion degrades gracefully (line 142-143) and the system continues with unaugmented retrieval.
 
-**The Context**: KG-augmented RAG is an active research area (GraphRAG, Microsoft 2024). This implementation predates the mainstream adoption and demonstrates first-principles understanding of why knowledge graphs improve retrieval.
+**The Context**: KG-augmented RAG is an active research area (for example GraphRAG, 2024). This implementation demonstrates a first-principles understanding of why knowledge graphs improve retrieval.
 
 **The Tradeoff**: Graph expansion adds latency (one Neo4j round-trip per concept). But for educational Q&A where response quality outweighs sub-second latency, this is the right tradeoff. The caching via the `_kg_expanders` registry pattern (line 202) amortizes connection overhead.
 
@@ -161,7 +161,7 @@ The RRF implementation at lines 308-348 is correct and standard: for each result
 
 The field boosting in the BM25 query (`text^3, module_title^2, section, key_terms^2`) at line 280 shows domain awareness: a match in the chunk text itself is worth 3x a match in the section name, but key terms from the textbook glossary get 2x weight as educational signal.
 
-**The Context**: Hybrid search is now considered best practice in production RAG systems (Anthropic's RAG recommendations, OpenAI's retrieval guide, Pinecone's documentation all recommend it). This implementation uses the standard algorithm without over-engineering.
+**The Context**: Hybrid search is widely recommended for production RAG systems. This implementation uses the standard algorithm without over-engineering.
 
 **The Tradeoff**: Two search queries instead of one doubles the OpenSearch load. At PoC scale this is negligible, and at production scale the queries can be parallelized (they are independent). The quality improvement from hybrid search consistently outweighs the cost in IR benchmarks.
 
@@ -228,7 +228,7 @@ The `ConceptMastery` model (lines 14-28) tracks attempts, correct attempts, and 
 
 The temperature setting of 0.3 (line 72) balances creativity (varied questions) with reliability (valid JSON structure). Lower would produce repetitive questions; higher would break the structured output.
 
-**The Context**: LLM-based assessment generation is used by Duolingo (for language learning), Khan Academy (Khanmigo), and major test prep platforms. The approach of grounding questions in retrieved textbook content ensures factual accuracy without requiring a hand-authored item bank.
+**The Context**: LLM-based assessment generation is increasingly common in educational software. The approach of grounding questions in retrieved textbook content ensures factual accuracy without requiring a hand-authored item bank.
 
 **The Tradeoff**: LLM-generated questions may occasionally have quality issues. But the source grounding (questions come from retrieved chunks), the structured difficulty scoring, and the explanation field provide transparency and self-correction mechanisms.
 
@@ -249,7 +249,7 @@ The temperature setting of 0.3 (line 72) balances creativity (varied questions) 
 
 This creates a complete learning loop: Quiz -> Score -> Identify Gaps -> Find Prerequisites (KG) -> Provide Reading Material (RAG) -> Generate Extensions (LLM) -> Next Quiz. Every component of the architecture contributes.
 
-**The Context**: Adaptive learning platforms (Knewton, ALEKS, Smart Sparrow) use similar multi-signal recommendation engines. This implementation achieves comparable functionality with open-source components.
+**The Context**: Multi-signal recommendation is a common pattern in adaptive learning systems. This implementation builds it from open-source components.
 
 **The Tradeoff**: The deep dive generation via LLM adds latency. The `asyncio.wait_for` timeout at line 265 bounds this, and failure returns `None` rather than blocking the entire recommendation flow.
 

@@ -1,0 +1,81 @@
+Adaptive Knowledge Graph
+Copyright (c) 2025 Adaptive Knowledge Graph Contributors
+
+The source code in this repository is licensed under the MIT License; see the
+LICENSE file. This NOTICE describes third-party material that the project
+fetches, processes or redistributes. That material is NOT covered by the MIT
+License and keeps its own license terms.
+
+
+OpenStax textbook content
+=========================
+
+Textbook content produced by OpenStax (Rice University) is licensed under the
+Creative Commons Attribution 4.0 International License (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+
+The books below are the ones configured in config/subjects.yaml. Each subject's
+attribution line from that file is returned with every answer from
+/api/v1/ask and /api/v1/ask/stream and is shown in the chat UI.
+
+Seeded by default (US History and Economics)
+
+  * US History, OpenStax
+    Book page:  https://openstax.org/details/books/us-history
+    Fetched from the community mirror https://github.com/philschatz/us-history-book
+
+  * Principles of Economics, OpenStax (configured book title: "Economics")
+    Book page:  https://openstax.org/details/books/principles-economics-3e
+    Fetched from the community mirror https://github.com/philschatz/economics-book
+
+Configured but not seeded by default
+
+  * Biology 2e, OpenStax
+    Book page:  https://openstax.org/details/books/biology-2e
+    Fetched from the community mirror https://github.com/philschatz/biology-book
+
+  * Concepts of Biology, OpenStax
+    Fetched from the community mirror https://github.com/philschatz/biology-concepts-book
+
+  * World History, Volume 1 and Volume 2, OpenStax
+    Attribution link: https://openstax.org/subjects/humanities
+    Fetched from https://openstax.org/books/world-history-volume-1 and
+    https://openstax.org/books/world-history-volume-2
+
+OpenStax material included in this repository
+
+  * data/raw/us_history/ holds US History modules in Markdown, as published by
+    the mirror listed above.
+  * data/processed/ holds sections normalized to JSON Lines and knowledge
+    graphs extracted from US History and Economics.
+
+Changes made to the material: the text was converted to Markdown and JSON,
+split into sections and retrieval chunks, embedded for vector search, and used
+to extract concepts and the relationships between them. Generated answers and
+quiz questions quote or paraphrase retrieved passages.
+
+Access the original books for free at https://openstax.org/.
+
+
+Trademarks and affiliation
+==========================
+
+OpenStax is a trademark of Rice University. The OpenStax name, OpenStax logo
+and OpenStax book covers are not subject to the Creative Commons license and
+may not be reproduced without the prior and express written consent of Rice
+University.
+
+This project is not affiliated with, sponsored by or endorsed by OpenStax or
+Rice University.
+
+
+Models downloaded at runtime
+============================
+
+Model weights are not included in this repository. They are downloaded on
+first use and are subject to their own licenses; see each model card:
+
+  * llama3.1:8b-instruct-q4_K_M through Ollama: https://ollama.com/library/llama3.1
+  * BAAI/bge-m3 (embeddings): https://huggingface.co/BAAI/bge-m3
+  * BAAI/bge-reranker-v2-m3 (optional reranker):
+    https://huggingface.co/BAAI/bge-reranker-v2-m3
