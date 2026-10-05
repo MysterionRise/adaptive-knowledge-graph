@@ -1,5 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorBoundary, ErrorFallback } from '@/components/ErrorBoundary';
+import { reloadPage } from '@/lib/browser';
+
+// jsdom 26 can't redefine window.location, so mock the reload wrapper instead.
+jest.mock('@/lib/browser', () => ({ reloadPage: jest.fn() }));
 
 // Component that throws an error
 const ThrowingComponent = ({ shouldThrow = true }: { shouldThrow?: boolean }) => {
@@ -253,17 +257,11 @@ describe('ErrorFallback', () => {
   });
 
   it('reloads page when Refresh Page is clicked', () => {
-    const reloadMock = jest.fn();
-    Object.defineProperty(window, 'location', {
-      value: { reload: reloadMock },
-      writable: true,
-    });
-
     render(<ErrorFallback error={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: /refresh page/i }));
 
-    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(reloadPage).toHaveBeenCalledTimes(1);
   });
 
   it('renders error icon', () => {
