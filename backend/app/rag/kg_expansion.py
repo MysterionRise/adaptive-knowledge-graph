@@ -121,18 +121,14 @@ class KGExpander:
         return self._extract_simple(query, all_concepts)
 
     def _extract_simple(self, query: str, all_concepts: Set[str]) -> list[str]:
-        """Original simple substring matching."""
+        """Original simple substring matching.
+
+        Longer (more specific) matches come first, and ties are broken by name, so the
+        result does not depend on the set's iteration order, which differs per process.
+        """
         query_lower = query.lower()
-        found_concepts = []
-
-        for concept in all_concepts:
-            # Simple substring matching
-            if concept.lower() in query_lower:
-                found_concepts.append(concept)
-
-        # Sort by length (prefer longer, more specific matches)
-        found_concepts.sort(key=len, reverse=True)
-
+        found_concepts = [concept for concept in all_concepts if concept.lower() in query_lower]
+        found_concepts.sort(key=lambda concept: (-len(concept), concept))
         return found_concepts[:5]  # Max 5 concepts from query
 
     def expand_with_kg(self, concepts: list[str]) -> list[str]:
@@ -148,12 +144,18 @@ class KGExpander:
         return self._expand_with_kg(concepts)[0]
 
     def _expand_with_kg(self, concepts: list[str]) -> tuple[list[str], int]:
-        """Expand concepts; also return how many graph lookups failed (Neo4j errors)."""
+        """Expand concepts; also return how many graph lookups failed (Neo4j errors).
+
+        The order is reproducible: the query's concepts first, then each one's neighbours
+        in the order Neo4j returns them (``ORDER BY importance_score DESC, name``). The
+        joined terms are embedded for retrieval, so a set's per-process order here would
+        make the same question retrieve differently after a restart.
+        """
         if not self.neo4j_adapter:
             logger.warning("Neo4j not connected, cannot expand with KG")
             return concepts, len(concepts)
 
-        expanded = set(concepts)
+        expanded = dict.fromkeys(concepts)  # an ordered set
         failures = 0
 
         for concept in concepts:
@@ -164,7 +166,7 @@ class KGExpander:
                 )
 
                 for neighbor in neighbors:
-                    expanded.add(neighbor["name"])
+                    expanded.setdefault(neighbor["name"])
 
             except Exception as e:
                 failures += 1

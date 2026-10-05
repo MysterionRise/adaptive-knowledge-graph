@@ -129,6 +129,10 @@ class TestMatchToKnown:
     def test_matching(self, span, expected):
         assert ConceptExtractor(known_concepts=set(KNOWN))._match_to_known(span) == expected
 
+    def test_exact_matches_differing_in_case_resolve_the_same_way(self):
+        concepts = {"federal reserve", "Federal Reserve", "Reserve"}
+        assert ConceptExtractor()._match_to_known("FEDERAL RESERVE", concepts) == "Federal Reserve"
+
 
 @pytest.mark.unit
 class TestSpacyLoading:

@@ -61,6 +61,11 @@ pull the Ollama model first.
    make demo-client-check
    ```
 
+   If the API has an `API_KEY`, the evaluation sends it (from `.env` or the
+   environment), because `/api/v1/demo/provenance` requires it. Restart the
+   API after a commit: the gate rejects a report whose server commit differs
+   from the checkout's.
+
 5. Between rehearsals, reset the synthetic learner state:
 
    ```bash

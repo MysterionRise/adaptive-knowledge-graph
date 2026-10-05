@@ -4,13 +4,13 @@ Evaluation provenance and determinism on the API side.
 - /ask, /ask/stream and /retrieve report a KG-expansion status (ok/empty/failed/disabled)
 - /api/v1/retrieve runs retrieval without the LLM
 - /api/v1/demo/provenance reports models, an allowlist of settings and data counts, never
-  secrets
-- the demo status reads the new report schema
+  secrets, and requires the API key when one is configured
+- the demo status applies the demo gate's rules (backend/app/core/eval_report.py)
 - LLM_SEED reaches Ollama; revisions reach the model loaders
 """
 
+import asyncio
 import json
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -19,6 +19,7 @@ import pytest
 from backend.app.api.routes import demo
 from backend.app.core.settings import Settings, settings
 from backend.app.rag.kg_expansion import KGExpander
+from backend.tests.eval_report_builders import SERVER_SHA, build_report, write_report
 
 pytestmark = pytest.mark.unit
 
@@ -202,11 +203,11 @@ SECRETS = {
 
 class TestProvenanceEndpoint:
     @staticmethod
-    def _get(client, adapter=None, opensearch=None):
+    def _get(client, adapter=None, opensearch=None, headers=None):
         """GET /demo/provenance with a mocked Neo4j adapter and OpenSearch `_count`."""
         if adapter is None:
             adapter = MagicMock()
-            adapter.get_graph_stats.return_value = {"Concept_count": 42}
+            adapter.count_concepts.return_value = 42
         if opensearch is None:
 
             async def opensearch(url, auth=None):
@@ -218,8 +219,9 @@ class TestProvenanceEndpoint:
             patch.object(httpx.AsyncClient, "get", AsyncMock(side_effect=opensearch)),
             patch("backend.app.rag.retriever.get_retriever", retriever_factory),
         ):
-            response = client.get("/api/v1/demo/provenance")
+            response = client.get("/api/v1/demo/provenance", headers=headers)
         retriever_factory.assert_not_called()  # it would load the embedding model
+        adapter.get_graph_stats.assert_not_called()  # one count query, not the full stats
         return response
 
     def test_reports_models_settings_counts_and_git_sha(self, client, monkeypatch):
@@ -245,6 +247,38 @@ class TestProvenanceEndpoint:
         assert {s["id"] for s in data["subjects"]} >= {"us_history", "economics"}
         assert all(s["concept_count"] == 42 and s["chunk_count"] == 314 for s in data["subjects"])
 
+    def test_requires_the_api_key_when_one_is_configured(
+        self, production_client, production_settings
+    ):
+        missing = self._get(production_client)
+        wrong = self._get(production_client, headers={"X-API-Key": "wrong"})
+        right = self._get(production_client, headers={"X-API-Key": production_settings.api_key})
+        assert missing.status_code == 401
+        assert wrong.status_code == 401
+        assert "git_sha" not in missing.text
+        assert right.status_code == 200
+        assert right.json()["subjects"]
+
+    def test_open_in_development_without_a_key(self, development_client):
+        assert self._get(development_client).status_code == 200
+
+    def test_subject_counts_are_read_concurrently(self, client):
+        # Each count waits until the second one has started: read one after another, the
+        # first would time out and report null.
+        started: list[str] = []
+        both_started = asyncio.Event()
+
+        async def count(url, auth=None):
+            started.append(url)
+            if len(started) >= 2:
+                both_started.set()
+            await asyncio.wait_for(both_started.wait(), timeout=5)
+            return httpx.Response(200, json={"count": 7}, request=httpx.Request("GET", url))
+
+        data = self._get(client, opensearch=count).json()
+        assert len(data["subjects"]) >= 2
+        assert all(s["chunk_count"] == 7 for s in data["subjects"])
+
     def test_allowlist_holds_no_secret_fields(self):
         secretish = ("password", "key", "secret", "token", "user", "host", "uri", "url")
         for name in demo.PROVENANCE_RETRIEVAL_SETTINGS:
@@ -262,7 +296,7 @@ class TestProvenanceEndpoint:
 
     def test_unreadable_stores_give_null_counts(self, client, captured_logs):
         adapter = MagicMock()
-        adapter.get_graph_stats.side_effect = RuntimeError("bolt://neo4j:hunter2@db refused")
+        adapter.count_concepts.side_effect = RuntimeError("bolt://neo4j:hunter2@db refused")
         opensearch = AsyncMock(side_effect=httpx.ConnectError("http://admin:pw@os refused"))
         response = self._get(client, adapter, opensearch)
         assert response.status_code == 200
@@ -289,62 +323,88 @@ class TestProvenanceEndpoint:
         self._get(client, opensearch=count)
         assert any(url.endswith("/textbook_chunks_us_history/_count") for url in urls), urls
 
-    def test_resolved_embedding_device_once_loaded(self, client):
-        with patch("backend.app.nlp.embeddings.loaded_embedding_device", return_value="cpu"):
+    def test_resolved_devices_once_loaded(self, client):
+        with (
+            patch("backend.app.nlp.embeddings.loaded_embedding_device", return_value="cpu"),
+            patch("backend.app.rag.reranker.loaded_reranker_device", return_value="cuda"),
+        ):
             data = self._get(client).json()
         assert data["embedding"]["resolved_device"] == "cpu"
-
-
-def _write_report(tmp_path: Path, **overrides) -> Path:
-    report = {
-        "schema_version": 2,
-        "generated_at": "2026-10-05T00:00:00+00:00",
-        "environment_valid": True,
-        "provenance": {
-            "server": {"git_sha": "abc123"},
-            "golden_set": {"sha256": "f" * 64},
-        },
-        "run_config": {"retrieval_only": False},
-        "summary": {
-            "cases": 2,
-            "kg_successful_cases": 2,
-            "plain_successful_cases": 2,
-            "kg_expansion_failures": 0,
-            "kg_prompt_injection_resistance_rate": 1.0,
-        },
-    }
-    report.update(overrides)
-    path = tmp_path / "latest.json"
-    path.write_text(json.dumps(report), encoding="utf-8")
-    return path
+        assert data["reranker"]["resolved_device"] == "cuda"
 
 
 class TestDemoLatestEvalSchema:
-    def test_report_with_provenance_is_ok(self, tmp_path):
-        status = demo._latest_eval_status(_write_report(tmp_path))
-        assert status.status == "ok"
+    """The demo page calls a report ready only if scripts/check_demo_eval.py would."""
+
+    def test_complete_report_is_ok(self, tmp_path):
+        status = demo._latest_eval_status(write_report(tmp_path, build_report()))
+        assert status.status == "ok", status.message
+        assert status.message is None
         assert status.has_provenance is True
-        assert status.git_sha == "abc123"
-        assert status.golden_set_sha256 == "f" * 64
+        assert status.git_sha == SERVER_SHA
+        assert status.golden_set_sha256 == build_report()["provenance"]["golden_set"]["sha256"]
         assert status.kg_expansion_failures == 0
-        assert status.prompt_injection_resistance_rate == 1.0
+        assert status.kg_successful_cases == 2
 
     def test_report_without_provenance_is_an_error(self, tmp_path):
-        status = demo._latest_eval_status(_write_report(tmp_path, provenance=None))
+        report = build_report()
+        report["provenance"] = None
+        status = demo._latest_eval_status(write_report(tmp_path, report))
         assert status.status == "error"
         assert status.has_provenance is False
-        assert "provenance" in (status.message or "")
+        assert "no provenance" in (status.message or "")
 
     def test_invalid_report_is_an_error(self, tmp_path):
-        status = demo._latest_eval_status(_write_report(tmp_path, environment_valid=False))
+        report = build_report()
+        report["environment_valid"] = False
+        status = demo._latest_eval_status(write_report(tmp_path, report))
         assert status.status == "error"
-        assert "invalid" in (status.message or "")
+        assert "environment_valid is false" in (status.message or "")
 
     def test_retrieval_only_report_is_an_error(self, tmp_path):
-        path = _write_report(tmp_path, run_config={"retrieval_only": True})
-        status = demo._latest_eval_status(path)
+        status = demo._latest_eval_status(write_report(tmp_path, build_report(retrieval_only=True)))
         assert status.status == "error"
         assert "retrieval-only" in (status.message or "")
+
+    @pytest.mark.parametrize(
+        ("mutate", "message"),
+        [
+            (lambda r: r["provenance"]["llm"].update(ollama_digest=None), "Ollama model digest"),
+            (lambda r: r["provenance"]["server"].update(git_sha="unknown"), "git_sha"),
+            (lambda r: r["provenance"]["server"]["subjects"].pop(), "economics"),
+            (lambda r: r["run_config"].update(limit=3), "partial run"),
+            (lambda r: r["results"][0]["plain"].update(status_code=503), "did not return 200"),
+        ],
+    )
+    def test_reports_the_gate_rejects_are_errors(self, tmp_path, mutate, message):
+        # These used to show "ok" on the page while make demo-client-check failed
+        report = build_report()
+        mutate(report)
+        status = demo._latest_eval_status(write_report(tmp_path, report))
+        assert status.status == "error"
+        assert message in (status.message or "")
+
+    def test_report_from_another_server_build_is_an_error(self, tmp_path, monkeypatch):
+        path = write_report(tmp_path, build_report())
+        monkeypatch.setattr(settings, "git_sha", "c" * 40)
+        status = demo._latest_eval_status(path)
+        assert status.status == "error"
+        assert "different server build" in (status.message or "")
+
+        monkeypatch.setattr(settings, "git_sha", SERVER_SHA)
+        assert demo._latest_eval_status(path).status == "ok"
+        monkeypatch.setattr(settings, "git_sha", "unknown")  # cannot tell: not compared
+        assert demo._latest_eval_status(path).status == "ok"
+
+    def test_message_lists_at_most_three_errors(self, tmp_path):
+        report = build_report()
+        report.update(schema_version=1, environment_valid=False)
+        report["run_config"].update(retrieval_only=True, limit=3)
+        status = demo._latest_eval_status(write_report(tmp_path, report))
+        message = status.message or ""
+        assert message.startswith("Latest eval is not demo-ready: ")
+        assert message.count("; ") == 2
+        assert "more)" in message
 
 
 class TestDeterminismSettings:
@@ -402,3 +462,20 @@ class TestDeterminismSettings:
         encoder_cls.assert_called_once_with(
             settings.reranker_model, device="cpu", revision="def456"
         )
+
+    def test_reranker_reports_its_device_once_loaded(self):
+        from backend.app.rag import reranker as reranker_module
+
+        reranker = reranker_module.Reranker()
+        with patch.object(reranker_module, "_reranker", reranker):
+            assert reranker.device is None
+            assert reranker_module.loaded_reranker_device() is None
+            with (
+                patch("sentence_transformers.CrossEncoder"),
+                patch("backend.app.rag.reranker.resolve_device", return_value="mps"),
+            ):
+                reranker.load()
+            assert reranker.device == "mps"
+            assert reranker_module.loaded_reranker_device() == "mps"
+        with patch.object(reranker_module, "_reranker", None):
+            assert reranker_module.loaded_reranker_device() is None
