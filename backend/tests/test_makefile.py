@@ -46,6 +46,7 @@ REQUIRED_TARGETS = [
     "dev-setup",
     "eval-rag",
     "eval-rag-api",
+    "eval-compare",
     "demo-seed",
     "demo-check",
     "demo-client-prep",

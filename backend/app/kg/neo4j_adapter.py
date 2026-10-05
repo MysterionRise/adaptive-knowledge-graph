@@ -266,7 +266,7 @@ class Neo4jAdapter:
             RETURN DISTINCT neighbor.name as name,
                    neighbor.importance_score as importance_score,
                    neighbor.key_term as key_term
-            ORDER BY importance_score DESC
+            ORDER BY importance_score DESC, name
             LIMIT 20
             """
             result = session.run(query, name=concept_name)
