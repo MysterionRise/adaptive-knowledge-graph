@@ -32,6 +32,7 @@ from backend.app.core.auth import get_request_settings
 from backend.app.core.exceptions import ConfigurationError, request_validation_exception_handler
 from backend.app.core.logging import setup_logging
 from backend.app.core.middleware import RequestIDMiddleware
+from backend.app.core.privacy import configure_huggingface_hub, disable_langsmith_tracing
 from backend.app.core.rate_limit import (
     DefaultRateLimitExceeded,
     default_rate_limit_exceeded_handler,
@@ -124,6 +125,7 @@ async def lifespan(app: FastAPI):
     )
     logger.info(f"LLM Mode: {app_settings.llm_mode}")
     logger.info(f"Privacy Local-Only: {app_settings.privacy_local_only}")
+    logger.info(f"Hugging Face Hub: {HF_HUB_STATUS}")
     logger.info(f"Rate Limiting: {'enabled' if limiter.enabled else 'disabled'}")
     logger.info(f"API docs: {'enabled' if docs_enabled(app_settings) else 'disabled'}")
     if app_settings.api_key:
@@ -434,6 +436,10 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     """
     app_settings = app_settings or settings
     validate_settings(app_settings)
+    if app_settings.privacy_local_only:
+        # The settings validator refuses the tracing variables; this also covers anything
+        # that switches tracing on later.
+        disable_langsmith_tracing()
     show_docs = docs_enabled(app_settings)
 
     app = FastAPI(
@@ -485,4 +491,6 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     return app
 
 
+# The served process only, before any model loads: offline once the models are cached.
+HF_HUB_STATUS = configure_huggingface_hub(settings)
 app = create_app()

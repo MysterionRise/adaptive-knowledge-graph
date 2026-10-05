@@ -7,8 +7,10 @@ Provides:
 - Mock factories for Neo4j, retrieval, LLM, quiz generation and Cypher QA
 """
 
+import ipaddress
 import os
 import signal
+import socket
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,6 +21,10 @@ from backend.app.main import app, create_app
 
 # API key configured on production-mode test apps (production requires 16+ characters).
 TEST_API_KEY = "test-api-key-for-production"
+
+
+class BlockedNetworkAccess(OSError):
+    """Raised by ``network_guard`` for a non-loopback connection or DNS lookup."""
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +45,61 @@ def per_test_timeout():
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _is_loopback_host(host: object) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(str(host).split("%", 1)[0]).is_loopback
+    except ValueError:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def network_guard(monkeypatch):
+    """Fail the test on any non-loopback connection attempt or DNS lookup.
+
+    ``socket.connect``/``connect_ex`` to a non-loopback address and ``getaddrinfo`` for a
+    non-loopback name raise ``BlockedNetworkAccess``; because library code (or a background
+    thread) may swallow that error, every attempt is also recorded and fails the test at
+    teardown. Tests read the attempts as ``network_guard`` (a list of strings).
+    """
+    attempts: list[str] = []
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+    real_getaddrinfo = socket.getaddrinfo
+
+    def _check_address(sock: socket.socket, address) -> None:
+        if sock.family in (socket.AF_INET, socket.AF_INET6) and not _is_loopback_host(address[0]):
+            attempts.append(f"connect {address!r}")
+            raise BlockedNetworkAccess(f"Test tried to connect to {address!r}")
+
+    def guarded_connect(sock, address):
+        _check_address(sock, address)
+        return real_connect(sock, address)
+
+    def guarded_connect_ex(sock, address):
+        _check_address(sock, address)
+        return real_connect_ex(sock, address)
+
+    def guarded_getaddrinfo(host, *args, **kwargs):
+        name = host.decode() if isinstance(host, bytes) else host
+        if name is not None and not _is_loopback_host(name) and name not in ("", "0.0.0.0", "::"):
+            attempts.append(f"getaddrinfo {name!r}")
+            raise BlockedNetworkAccess(f"Test tried to resolve {name!r}")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    # A proxy on loopback would tunnel remote traffic past the checks: go direct instead.
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.lower(), raising=False)
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", guarded_connect_ex)
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+    yield attempts
+    if attempts:
+        pytest.fail(f"Non-loopback network access attempted: {attempts}", pytrace=False)
 
 
 @pytest.fixture

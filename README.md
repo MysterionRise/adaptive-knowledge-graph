@@ -256,6 +256,11 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
 - **The API refuses to start with "PRIVACY_LOCAL_ONLY=true requires
   LLM_MODE=local".** Remote LLM modes need `PRIVACY_LOCAL_ONLY=false`. See
   [Configuration](#configuration).
+- **The API refuses to start with "PRIVACY_LOCAL_ONLY=true refuses LangSmith
+  tracing", "requires a local Ollama" or "refuses Ollama cloud models".**
+  Unset the tracing variable it names, point `LLM_OLLAMA_HOST` at a loopback or
+  private address, or pick a local model. Set `PRIVACY_LOCAL_ONLY=false` only if
+  that traffic is approved.
 - **`npm ci` fails with an engine error.** Switch to Node 24, for example with
   `fnm use` (it reads `.node-version`) or `nvm install 24`.
 - **A port is already in use.** The stack uses 3000 (frontend), 8000 (API),
@@ -275,7 +280,7 @@ need:
 | `API_DOCS_ENABLED` | unset | Unset or empty means on in development and off in production; `true` or `false` forces either. |
 | `CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS` | `http://localhost:3000,http://localhost:3001`; `GET,POST,OPTIONS`; `Content-Type,X-API-Key,X-Request-ID` | Comma-separated CORS allow-lists. |
 | `TRUST_PROXY_HEADERS` | `false` | Keys rate limits on the right-most `X-Forwarded-For` hop. Enable it only behind a proxy that appends the client IP. |
-| `PRIVACY_LOCAL_ONLY` | `true` | Keeps every LLM call on the local Ollama. While it is `true` the API refuses to start unless `LLM_MODE=local`. |
+| `PRIVACY_LOCAL_ONLY` | `true` | Keeps questions, textbook context and usage data local. While it is `true` the API refuses to start unless `LLM_MODE=local`, `LLM_OLLAMA_HOST` is loopback or private (`localhost`, `ollama`, `host.docker.internal`, `host.containers.internal`, a private IP, or a name resolving only to those), `LLM_LOCAL_MODEL` is not an Ollama cloud model (`-cloud`, `:cloud`) and no LangSmith tracing variable (`LANGSMITH_TRACING`, `LANGCHAIN_TRACING_V2`, ...) is on. The API also runs the Hugging Face Hub offline once its models are cached. |
 | `LLM_MODE` | `local` | `local` uses Ollama. `remote` uses OpenRouter (`OPENROUTER_API_KEY`). `hybrid` tries Ollama and falls back to OpenRouter. Both remote modes send questions and retrieved excerpts to the provider and require `PRIVACY_LOCAL_ONLY=false`. |
 | `EMBEDDING_DEVICE` | `auto` | `auto` picks `cuda`, then `mps`, then `cpu`. Set a device to override. |
 | `LLM_LOCAL_MODEL` | `llama3.1:8b-instruct-q4_K_M` | Ollama model tag. |

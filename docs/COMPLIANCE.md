@@ -61,16 +61,35 @@ LLM_MODE=local            # default, and required while PRIVACY_LOCAL_ONLY=true
   `LLM_MODE=remote` or `LLM_MODE=hybrid`, and while the flag is on no code
   path calls OpenRouter, including the hybrid fallback.
 - Every LLM call (answers, quizzes, recommendations and natural-language graph
-  queries) goes to the Ollama server at `LLM_OLLAMA_HOST`.
-- Neo4j, OpenSearch and the SQLite learner store run on your machine.
-- The application code sends no telemetry or analytics.
+  queries) goes to the Ollama server at `LLM_OLLAMA_HOST`, which must be local:
+  the API refuses to start unless it is `localhost`, the Compose service
+  `ollama`, `host.docker.internal`, `host.containers.internal`, a loopback or
+  private IP address (RFC 1918, IPv6 ULA; not link-local or carrier-grade NAT)
+  or a host name that resolves only to such addresses. It also refuses Ollama
+  cloud models (`LLM_LOCAL_MODEL` ending in `-cloud` or `:cloud`), which run on
+  ollama.com.
+- LangSmith tracing would send questions and textbook context to LangSmith.
+  The API refuses to start while `LANGSMITH_TRACING`, `LANGSMITH_TRACING_V2`,
+  `LANGCHAIN_TRACING` or `LANGCHAIN_TRACING_V2` is on (in the environment or in
+  `.env`), and disables tracing at runtime as well. A CI test sets these
+  variables and checks that startup, `/ask` and `/graph/query` (through the
+  real LangChain Cypher chain) make no non-loopback connection.
+- Neo4j, OpenSearch and the SQLite learner store run on your machine, and the
+  Compose file turns Neo4j usage reporting off
+  (`dbms.usage_report.enabled=false`).
+- The application code sends no telemetry or analytics, and it sets
+  `HF_HUB_DISABLE_TELEMETRY=1`.
 
 Third-party tools keep their own network behaviour:
 
 - The embedding model, and the reranker when enabled, are downloaded from
-  Hugging Face on first use. Ollama downloads the LLM when you run
-  `ollama pull`. After that the stack works offline; you can set
-  `HF_HUB_OFFLINE=1` to stop Hugging Face lookups.
+  Hugging Face on first use (`make seed` downloads the embedding model). Ollama
+  downloads the LLM when you run `ollama pull`. Once the models the API loads
+  are in the Hugging Face cache, the API sets `HF_HUB_OFFLINE=1` at startup and
+  makes no Hugging Face requests; until then it stays online so the first
+  download works. An `HF_HUB_OFFLINE` you set yourself takes precedence. The
+  containerised API has its own cache volume, so its first question downloads
+  the embedding model unless you pre-populate that volume.
 - The Next.js command-line tool collects anonymous usage telemetry unless you
   run `npx next telemetry disable` or set `NEXT_TELEMETRY_DISABLED=1`.
 - The optional presentation in `demo-slides/` loads reveal.js from a CDN.

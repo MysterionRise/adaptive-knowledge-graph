@@ -15,7 +15,7 @@ Ollama or model downloads.
 | Area | Modules |
 | --- | --- |
 | API routes and contracts | `test_api_ask.py`, `test_api_graph.py`, `test_api_quiz.py`, `test_api_student.py`, `test_api_subjects.py`, `test_api_subjects_availability.py`, `test_api_validators.py`, `test_api_error_logging.py`, `test_streaming.py`, `test_demo_status.py`, `test_main.py` |
-| Security and rate limits | `test_auth.py`, `test_exceptions.py`, `test_rate_limit.py`, `test_api_rate_limits.py` |
+| Security and rate limits | `test_auth.py`, `test_exceptions.py`, `test_privacy.py`, `test_rate_limit.py`, `test_api_rate_limits.py` |
 | Retrieval, embeddings and graph | `test_retriever.py`, `test_window_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_embeddings.py`, `test_neo4j_adapter.py`, `test_cypher_qa.py`, `test_chunker.py` |
 | Knowledge-graph building and concept extraction | `test_kg_builder.py`, `test_kg_schema.py`, `test_concept_extractor.py` |
 | LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_recommendation_service.py` |
@@ -52,6 +52,16 @@ Markers are registered in [`pyproject.toml`](../pyproject.toml):
 An autouse fixture in `conftest.py` fails any test that runs longer than
 `PYTEST_TEST_TIMEOUT_SECONDS` (60 seconds by default; `0` turns it off). It
 uses `SIGALRM`, so it has no effect on Windows.
+
+### Network guard
+
+Another autouse fixture, `network_guard`, fails any test that tries to connect
+to a non-loopback address or to resolve a non-loopback host name. It removes
+the proxy variables for the test (a proxy on loopback would tunnel past it),
+and it records every attempt, so a test also fails when library code or a
+background thread swallows the error. Request the fixture to read the
+attempts; `test_privacy.py` uses it to prove `PRIVACY_LOCAL_ONLY` keeps
+startup, `/ask` and `/graph/query` local.
 
 ### Coverage
 
