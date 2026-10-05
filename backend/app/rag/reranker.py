@@ -20,11 +20,17 @@ class Reranker:
 
     def __init__(self) -> None:
         self._model = None
+        self._device: str | None = None
         self._load_lock = threading.Lock()
 
     @property
     def is_loaded(self) -> bool:
         return self._model is not None
+
+    @property
+    def device(self) -> str | None:
+        """The device the model was loaded on (cuda, mps or cpu), or None before loading."""
+        return self._device if self._model is not None else None
 
     def load(self) -> None:
         """Load the cross-encoder model (thread-safe; concurrent callers load it once)."""
@@ -39,7 +45,10 @@ class Reranker:
 
             device = resolve_device(settings.reranker_device)
             logger.info(f"Loading reranker model {settings.reranker_model} on {device}")
-            self._model = CrossEncoder(settings.reranker_model, device=device)
+            revision = settings.reranker_model_revision
+            kwargs = {"revision": revision} if revision else {}
+            self._model = CrossEncoder(settings.reranker_model, device=device, **kwargs)
+            self._device = device
             logger.info("Reranker model loaded")
 
     def rerank(self, query: str, chunks: list[dict], top_k: int) -> list[dict]:
@@ -88,3 +97,9 @@ def get_reranker() -> Reranker:
             if _reranker is None:
                 _reranker = Reranker()
     return _reranker
+
+
+def loaded_reranker_device() -> str | None:
+    """The device of the loaded reranker, or None when it has not been loaded (yet)."""
+    reranker = _reranker
+    return reranker.device if reranker is not None else None

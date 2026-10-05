@@ -3,21 +3,27 @@ Client-demo readiness endpoints.
 
 These endpoints expose a bounded, read-only summary of local demo health without
 leaking secrets, file paths, or raw driver errors: failures are reported with fixed
-messages, and the underlying error is only logged.
+messages, and the underlying error is only logged. /demo/provenance, which names the exact
+build, models and settings, requires the API key when one is configured.
 """
 
+import asyncio
 import json
 import time
 from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from loguru import logger
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
+from backend.app.api.validators import error_responses
+from backend.app.core.auth import verify_api_key
+from backend.app.core.eval_report import as_dict, is_set, provenance_errors, report_errors
 from backend.app.core.settings import settings
-from backend.app.core.subjects import get_all_subjects
+from backend.app.core.subjects import SubjectConfig, get_all_subjects
 
 router = APIRouter(prefix="/demo", tags=["Demo Readiness"])
 
@@ -57,6 +63,11 @@ class DemoEvalStatus(BaseModel):
     citation_hit_rate_delta: float | None = None
     mrr_delta: float | None = None
     unsupported_refusal_rate: float | None = None
+    prompt_injection_resistance_rate: float | None = None
+    kg_expansion_failures: int | None = None
+    has_provenance: bool = False
+    git_sha: str | None = None
+    golden_set_sha256: str | None = None
     message: str | None = None
 
 
@@ -94,23 +105,24 @@ async def _check_neo4j() -> DemoServiceStatus:
         return DemoServiceStatus(status="error", message="Neo4j unavailable")
 
 
+async def _opensearch_get(path: str) -> httpx.Response:
+    """GET ``path`` from OpenSearch with the configured TLS settings and credentials."""
+    protocol = "https" if settings.opensearch_use_ssl else "http"
+    url = f"{protocol}://{settings.opensearch_host}:{settings.opensearch_port}/{path}"
+    auth = (
+        (settings.opensearch_user, settings.opensearch_password)
+        if settings.opensearch_password
+        else None
+    )
+    async with httpx.AsyncClient(verify=settings.opensearch_verify_certs, timeout=5.0) as client:
+        return await client.get(url, auth=auth)
+
+
 async def _check_opensearch() -> DemoServiceStatus:
     """Check OpenSearch cluster health."""
     start = time.perf_counter()
-    protocol = "https" if settings.opensearch_use_ssl else "http"
-    url = f"{protocol}://{settings.opensearch_host}:{settings.opensearch_port}/_cluster/health"
-
     try:
-        async with httpx.AsyncClient(
-            verify=settings.opensearch_verify_certs,
-            timeout=5.0,
-        ) as client:
-            auth = (
-                (settings.opensearch_user, settings.opensearch_password)
-                if settings.opensearch_password
-                else None
-            )
-            response = await client.get(url, auth=auth)
+        response = await _opensearch_get("_cluster/health")
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
         if response.status_code != 200:
@@ -221,33 +233,56 @@ def _subject_statuses() -> list[DemoSubjectStatus]:
     return statuses
 
 
+# Error messages shown on the demo page for an invalid report (the rest are counted).
+MAX_EVAL_ERRORS_SHOWN = 3
+
+
 def _latest_eval_status(path: Path = Path("docs/evals/latest.json")) -> DemoEvalStatus:
-    """Read latest eval summary without exposing local paths."""
+    """Read latest eval summary without exposing local paths.
+
+    A report counts ("ok") only when it passes the demo gate's rules (shared with
+    scripts/check_demo_eval.py in backend/app/core/eval_report.py) and, when both SHAs are
+    known, was produced by this server's build.
+    """
     if not path.exists():
         return DemoEvalStatus(status="missing", message="No latest eval report found.")
 
     try:
-        report = json.loads(path.read_text(encoding="utf-8"))
-        summary = report.get("summary", {})
+        report = as_dict(json.loads(path.read_text(encoding="utf-8")))
+        summary = as_dict(report.get("summary"))
+        provenance = as_dict(report.get("provenance"))
+        server = as_dict(provenance.get("server"))
+        golden_set = as_dict(provenance.get("golden_set"))
         environment_valid = bool(report.get("environment_valid"))
-        kg_successful = int(summary.get("kg_successful_cases", 0) or 0)
-        plain_successful = int(summary.get("plain_successful_cases", 0) or 0)
-        status: DemoStatus = (
-            "ok" if environment_valid and kg_successful > 0 and plain_successful > 0 else "error"
-        )
+        kg_failures = summary.get("kg_expansion_failures")
+
+        errors = report_errors(report)
+        report_sha = server.get("git_sha")
+        if is_set(report_sha) and is_set(settings.git_sha) and report_sha != settings.git_sha:
+            errors.append("it was produced by a different server build")
+        message = None
+        if errors:
+            shown = "; ".join(errors[:MAX_EVAL_ERRORS_SHOWN])
+            if len(errors) > MAX_EVAL_ERRORS_SHOWN:
+                shown += f" (and {len(errors) - MAX_EVAL_ERRORS_SHOWN} more)"
+            message = f"Latest eval is not demo-ready: {shown}. Re-run make demo-eval."
+        status: DemoStatus = "ok" if message is None else "error"
         return DemoEvalStatus(
             status=status,
             environment_valid=environment_valid,
             generated_at=report.get("generated_at"),
             cases=int(summary.get("cases", 0) or 0),
-            kg_successful_cases=kg_successful,
-            plain_successful_cases=plain_successful,
+            kg_successful_cases=int(summary.get("kg_successful_cases", 0) or 0),
+            plain_successful_cases=int(summary.get("plain_successful_cases", 0) or 0),
             citation_hit_rate_delta=summary.get("citation_hit_rate_delta"),
             mrr_delta=summary.get("mrr_delta"),
             unsupported_refusal_rate=summary.get("kg_unsupported_refusal_rate"),
-            message=None
-            if status == "ok"
-            else "Latest eval is missing successful live KG/plain cases.",
+            prompt_injection_resistance_rate=summary.get("kg_prompt_injection_resistance_rate"),
+            kg_expansion_failures=int(kg_failures) if kg_failures is not None else None,
+            has_provenance=not provenance_errors(report),
+            git_sha=str(server["git_sha"]) if server.get("git_sha") else None,
+            golden_set_sha256=str(golden_set["sha256"]) if golden_set.get("sha256") else None,
+            message=message,
         )
     except Exception:
         logger.opt(exception=True).warning("Demo status: latest eval report could not be read")
@@ -311,4 +346,159 @@ async def get_demo_status():
         latest_eval=latest_eval,
         script_readiness=script_readiness,
         next_actions=next_actions,
+    )
+
+
+# Retrieval settings reported by /demo/provenance. This is an explicit allowlist: settings
+# also hold passwords and API keys, so they are never dumped wholesale.
+PROVENANCE_RETRIEVAL_SETTINGS: tuple[str, ...] = (
+    "retrieval_mode",
+    "vector_backend",
+    "rag_retrieval_top_k",
+    "rag_kg_expansion",
+    "rag_kg_expansion_hops",
+    "rag_chunk_size",
+    "rag_chunk_overlap",
+    "rag_window_retrieval",
+    "rag_window_size",
+    "reranker_enabled",
+    "embedding_batch_size",
+    "neo4j_vector_dimension",
+)
+
+
+class ModelProvenance(BaseModel):
+    """A model the retrieval pipeline loads."""
+
+    model: str
+    revision: str | None = None  # None: the model's default branch (not pinned)
+    device: str  # configured device (auto, cuda, mps or cpu)
+    resolved_device: str | None = None  # the device in use, once the model is loaded
+    enabled: bool = True
+
+
+class LLMProvenance(BaseModel):
+    """The configured answer model and its sampling settings."""
+
+    mode: str
+    model: str
+    temperature: float
+    seed: int | None = None
+
+
+class SubjectProvenance(BaseModel):
+    """Data counts for one configured subject (None: the store could not be read)."""
+
+    id: str
+    concept_count: int | None = None
+    chunk_count: int | None = None
+
+
+class ProvenanceResponse(BaseModel):
+    """What produced this server's answers: code, models, retrieval settings and data."""
+
+    app_version: str
+    git_sha: str
+    embedding: ModelProvenance
+    reranker: ModelProvenance
+    llm: LLMProvenance
+    retrieval: dict[str, str | int | float | bool | None]
+    subjects: list[SubjectProvenance]
+
+
+def _retrieval_settings() -> dict[str, str | int | float | bool | None]:
+    """The allowlisted retrieval settings, by name."""
+    return {name: getattr(settings, name) for name in PROVENANCE_RETRIEVAL_SETTINGS}
+
+
+def _concept_count(subject_id: str) -> int | None:
+    """Concepts in the subject's graph (blocking: Neo4j); None when Neo4j fails."""
+    try:
+        from backend.app.kg.neo4j_adapter import get_neo4j_adapter
+
+        return get_neo4j_adapter(subject_id).count_concepts()
+    except Exception:
+        logger.opt(exception=True).warning(
+            "Provenance: concept count failed for subject {}", subject_id
+        )
+        return None
+
+
+async def _chunk_count(index: str) -> int | None:
+    """Documents in an OpenSearch index (0 when it does not exist); None when it fails.
+
+    Queries ``_count`` directly: the retriever would load the embedding model.
+    """
+    try:
+        response = await _opensearch_get(f"{index}/_count")
+        if response.status_code == 404:
+            return 0
+        response.raise_for_status()
+        return int(response.json()["count"])
+    except Exception:
+        logger.opt(exception=True).warning("Provenance: chunk count failed for index {}", index)
+        return None
+
+
+async def _subject_provenance(subject: SubjectConfig) -> SubjectProvenance:
+    """A subject's concept and chunk counts, read concurrently."""
+    concept_count, chunk_count = await asyncio.gather(
+        run_in_threadpool(_concept_count, subject.id),
+        _chunk_count(subject.database.opensearch_index),
+    )
+    return SubjectProvenance(id=subject.id, concept_count=concept_count, chunk_count=chunk_count)
+
+
+@router.get(
+    "/provenance",
+    response_model=ProvenanceResponse,
+    dependencies=[Depends(verify_api_key)],
+    responses=error_responses(401, 429),
+)
+async def get_provenance():
+    """
+    Report what produces this server's answers, for evaluation reports.
+
+    Covers the server's git SHA (`GIT_SHA`), the embedding and reranker models with their
+    revisions and devices, the LLM and its sampling settings, an allowlist of retrieval
+    settings and per-subject concept and chunk counts. It never includes credentials,
+    hosts or file paths. Requires `X-API-Key` when an API key is configured. Read by
+    `scripts/evaluate_rag.py`.
+    """
+    from backend.app.nlp.embeddings import loaded_embedding_device
+    from backend.app.rag.reranker import loaded_reranker_device
+
+    try:
+        configured = get_all_subjects()
+    except Exception:
+        logger.opt(exception=True).warning("Provenance: subject configuration failed to load")
+        configured = []
+    subjects = list(await asyncio.gather(*(_subject_provenance(s) for s in configured)))
+
+    return ProvenanceResponse(
+        app_version=settings.app_version,
+        git_sha=settings.git_sha,
+        embedding=ModelProvenance(
+            model=settings.embedding_model,
+            revision=settings.embedding_model_revision,
+            device=settings.embedding_device,
+            resolved_device=loaded_embedding_device(),
+        ),
+        reranker=ModelProvenance(
+            model=settings.reranker_model,
+            revision=settings.reranker_model_revision,
+            device=settings.reranker_device,
+            resolved_device=loaded_reranker_device(),
+            enabled=settings.reranker_enabled,
+        ),
+        llm=LLMProvenance(
+            mode=settings.llm_mode,
+            model=settings.openrouter_model
+            if settings.llm_mode == "remote"
+            else settings.llm_local_model,
+            temperature=settings.llm_temperature,
+            seed=settings.llm_seed,
+        ),
+        retrieval=_retrieval_settings(),
+        subjects=subjects,
     )

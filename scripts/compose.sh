@@ -11,4 +11,7 @@ set -euo pipefail
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 cd "$AKG_ROOT"
+# Commit the containerised API reports in /api/v1/demo/provenance (evaluation reports)
+GIT_SHA="${GIT_SHA:-$(git rev-parse HEAD 2> /dev/null || echo unknown)}"
+export GIT_SHA
 compose "$@"

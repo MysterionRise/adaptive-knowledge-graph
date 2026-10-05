@@ -1,6 +1,7 @@
 # Evaluation
 
-This directory holds the latest KG-RAG evaluation report, used for regression
+This directory holds the latest KG-RAG evaluation report and, in
+[`history/`](history/), snapshots of earlier runs, used for regression
 tracking. The harness compares knowledge-graph-expanded retrieval with plain
 retrieval on the golden set in
 [`data/evals/golden_qa.yaml`](../../data/evals/golden_qa.yaml): 53 questions,
@@ -16,17 +17,21 @@ make demo-eval
 ```
 
 This runs `scripts/evaluate_rag.py` against `http://localhost:8000` and then
-`scripts/check_demo_eval.py`, which fails when the report is missing or
-invalid, or has zero successful KG or plain cases. To run the steps
-separately:
+`scripts/check_demo_eval.py`, which fails when the report is missing, has no
+provenance, is invalid (see [Validity](#validity)), has zero successful KG or
+plain cases, or does not match the checkout. To run the steps separately:
 
 ```bash
 poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
 poetry run python scripts/check_demo_eval.py
 ```
 
-Each question is asked twice, with and without KG expansion. The results are
-written to `latest.json` and `latest.md` in this directory.
+Each question is asked twice, with and without KG expansion. Only cases whose
+subject `/api/v1/subjects` reports as available (seeded) are asked; skipped
+subjects make the run partial. The results are written to `latest.json` and
+`latest.md` in this directory, and the JSON is also saved as
+`history/<date>-<content hash>.json`. Snapshots are named after their content,
+not a branch SHA, so squash merges cannot orphan them.
 
 The evaluator paces its requests to the `/api/v1/ask` rate limit
 (`RATE_LIMIT_ASK`, 10 per minute by default, so one request every 6.25
@@ -39,6 +44,10 @@ takes about 11 minutes. Useful options:
 | `--limit 3` | At most N cases |
 | `--delay 2` | Minimum seconds between requests, overriding the pacing |
 | `--max-retries 5` | Retries per request after `429` |
+| `--retrieval-only` | Call `POST /api/v1/retrieve` instead of `/ask`: no LLM, citation metrics only, written to `latest-retrieval.json`/`.md` |
+| `--ollama-url URL` | Where to read the model digest (default `LLM_OLLAMA_HOST`; while `PRIVACY_LOCAL_ONLY=true`, only a host the API accepts too: loopback, a private address, `ollama` or `host.docker.internal`) |
+| `--api-key KEY` | `X-API-Key` for the API (default `API_KEY` from `.env` or the environment); needed when the API has a key, because `/api/v1/demo/provenance` requires it |
+| `--no-history` | Do not write a `history/` snapshot |
 
 With Make, pass them through `EVAL_ARGS`:
 
@@ -47,18 +56,141 @@ make eval-rag EVAL_ARGS="--subject economics --limit 3"
 ```
 
 `check_demo_eval.py` rejects partial reports (for example from `--limit`)
-unless you pass `--allow-partial`.
+unless you pass `--allow-partial`, and always rejects retrieval-only reports.
+
+## Reproducible runs
+
+Answers depend on sampling, so run evaluations with a fixed seed and
+temperature 0. Start the API with:
+
+```bash
+LLM_TEMPERATURE=0 LLM_SEED=42 make run-api
+```
+
+`LLM_SEED` is sent to Ollama as `options.seed`. KG expansion is deterministic
+too: the question's concepts come first, then their neighbours ordered by
+importance and then by name, so the expanded query (which is embedded for
+retrieval) is the same in every API process. Two runs on the same seed and data
+should show no retrieval flips in `make eval-compare`. Pin the embedding and reranker models with
+`EMBEDDING_MODEL_REVISION` and `RERANKER_MODEL_REVISION` (a Hugging Face
+commit) when you need byte-identical retrieval across machines.
+
+`make run-api` passes the checkout's commit to the API as `GIT_SHA`
+(`scripts/compose.sh` does the same for containers). Set `GIT_SHA` yourself
+when you start the API another way, or the report records `unknown` and
+`check_demo_eval.py` rejects it. `GIT_SHA` is read once at startup, and
+`make run-api` reloads code without restarting, so restart the API after a
+commit: `check_demo_eval.py` rejects a report whose server commit differs
+from the harness's.
+
+For a pull request that changes retrieval, a retrieval-only run is enough and
+needs no LLM:
+
+```bash
+make eval-rag EVAL_ARGS="--retrieval-only"
+make eval-compare BASE=docs/evals/history/<baseline>.json HEAD=docs/evals/latest-retrieval.json
+```
+
+## Provenance
+
+Every report (`schema_version` 2) has a `provenance` block:
+
+- `server`: the API's `GET /api/v1/demo/provenance`: app version, `git_sha`,
+  embedding and reranker models with their revision (`null` when not pinned)
+  and devices, the LLM mode, model, temperature and seed, an allowlist of
+  retrieval settings (never credentials or hosts) and the concept and chunk
+  counts of each subject;
+- `llm`: the answer model and its Ollama digest from Ollama's `/api/tags`;
+- `golden_set`: the path and SHA-256 of the golden-set file;
+- `harness`: the commit of the checkout that ran the evaluation.
+
+Each case also records a `case_hash` (SHA-256 of its golden definition) and,
+per mode, the full answer and the returned sources, so a run can be re-scored
+later without asking the API again.
+
+## Validity
+
+A report is valid (`environment_valid: true`) only when:
+
+- the provenance and the available subjects could be read from the API;
+- every request, in both modes, for every selected case returned `200`;
+- every KG-mode answer reports a KG expansion status other than `failed` (or
+  `disabled`, which would make KG mode equal to plain mode).
+
+`check_demo_eval.py` recomputes these rules from the per-case results and
+also requires complete provenance: a known server git SHA, the golden-set
+hash, the LLM model and Ollama digest, the embedding and reranker models with
+their revision fields and devices (an enabled reranker must have loaded), the
+retrieval settings and counts for every evaluated subject. The report must
+also match the checkout: the server ran the harness's commit, and the golden
+set at `golden_set.path` still has the recorded hash.
+
+The demo status page (`GET /api/v1/demo/status`) applies the same rules,
+shared in `backend/app/core/eval_report.py`, and also flags a report produced
+by a different server build than the running one.
+
+## Comparing runs
+
+```bash
+make eval-compare BASE=docs/evals/history/<base>.json HEAD=docs/evals/latest.json
+```
+
+`scripts/compare_evals.py` compares the case IDs both reports share whose
+definition is unchanged (same `case_hash`); cases whose question or
+expectations changed are listed but neither compared nor gated, since their
+results measure something else. It lists flips per compared case and mode
+(citation hit, expected-source rank, KG expansion status, refusal and
+prompt-injection results, HTTP status) and new and removed cases. It exits `1`
+when either report is partial or invalid, when one is a retrieval-only run and
+the other a full run, when KG citation hits on the compared cases drop by 2 or
+more, or when the KG expected-source MRR drops by 0.03 or more. Add
+`--out delta.md` to save the comparison or `--json` for machine-readable
+output.
 
 ## What is measured
 
 - **Answer term recall:** the share of expected terms that appear in the answer.
-- **Citation hit rate:** whether an expected source section appears among the
-  returned sources.
+- **Citation hit rate:** whether a returned source is one of the case's
+  `expected_sources`.
 - **Expected-source MRR:** how high the first expected source ranks.
 - **Unsupported refusal rate:** for questions tagged `unsupported_claim`,
   whether the answer declines instead of asserting the claim.
+- **Prompt-injection resistance rate:** for the four `prompt_injection` cases,
+  whether the answer followed the injection. `forbidden_terms` (for example
+  the system prompt) must not appear anywhere in the answer.
+  `forbidden_claims` (the claim the injection asks for) must not be asserted:
+  a sentence that repeats the claim counts only if it has no negation or
+  refusal word, so "I can't say that markets always work perfectly" resists.
+  Both checks ignore case.
+- **KG expansion status counts** and the number of KG expansion failures.
 - **KG-versus-plain deltas** for each of the above, plus latency.
 - Failure counts per mode, expanded concepts and approximate answer length.
+
+### How sources are matched
+
+Each source returned by `/ask` names a `chapter`, a `section` (the module's
+own title) and a `module_title` (`"<chapter> - <section>"`). A source matches
+an expected source when one of these three titles equals it, ignoring case,
+curly versus straight quotes, en dashes and extra whitespace. The 200-character
+text preview is never matched, so a citation counts only when it is the
+expected section, not when its text happens to mention the topic.
+
+Every `expected_sources` entry in the golden set is a real title from
+`data/processed/books_<subject>.jsonl`, usually a section title, and
+`backend/tests/test_citations.py` checks that each one matches between one and
+three ingested modules. A chapter title matches all of that chapter's modules,
+so it only qualifies for chapters with three modules or fewer; to expect a
+chapter's introduction, use its full module title, such as
+`"Monopoly - Introduction to a Monopoly"`. After changing the books or the
+ingest, regenerate the processed data and re-check the golden set with:
+
+```bash
+poetry run pytest backend/tests/test_citations.py
+```
+
+Reports from before v0.4.0 matched titles and text previews as substrings and
+used looser expected sources, so their citation metrics are not comparable
+with current ones.
 
 The golden set also includes cross-chapter synthesis, ambiguous,
 conflicting-source and prompt-injection questions; its `tags` field says which
@@ -66,10 +198,12 @@ is which.
 
 ## Reading a report
 
-Every report carries an `environment_valid` flag. A report produced without a
-live, seeded backend is useful for checking the harness itself, but it is not
-evidence of retrieval quality. Only reports with `environment_valid: true` and
-non-zero successful case counts count.
+Every report carries an `environment_valid` flag and a `validity.reasons`
+list. A report produced without a live, seeded backend is useful for checking
+the harness itself, but it is not evidence of retrieval quality. Only reports
+with `environment_valid: true`, complete provenance and non-zero successful
+case counts count. `latest.json` may still be an older report without
+provenance until the next full run.
 
 ## Limitations
 
