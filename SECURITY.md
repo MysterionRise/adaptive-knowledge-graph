@@ -76,8 +76,7 @@ If anyone other than you can reach the API, run it in production mode:
    production mode the API refuses to start without a key of at least 16
    printable ASCII characters (no surrounding whitespace), and the protected
    routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`,
-   `/graph/query`) require it
-   in the `X-API-Key` header.
+   `/graph/query`, `/demo/provenance`) require it in the `X-API-Key` header.
 2. Keep the interactive API docs off. In production mode `/docs`, `/redoc` and
    `/openapi.json` are disabled unless you set `API_DOCS_ENABLED=true`.
 3. Set `CORS_ORIGINS` to your frontend origin. `CORS_ALLOW_METHODS` and

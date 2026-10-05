@@ -1,14 +1,16 @@
 """
 Compare two KG-RAG evaluation reports (scripts/evaluate_rag.py) case by case.
 
-Only the case IDs both reports share are compared. The output lists metric flips per case
-and mode (citation hit, expected-source rank, KG expansion status, refusal and
-prompt-injection results, HTTP status), new and removed cases, and cases whose golden
-definition changed (different case hash).
+Only the case IDs both reports share are compared, and of those only the ones whose golden
+definition is unchanged (same case hash): the output lists the others as changed
+definitions, outside the gate. It lists metric flips per compared case and mode (citation
+hit, expected-source rank, KG expansion status, refusal and prompt-injection results, HTTP
+status), and new and removed cases.
 
 Exit status 1 (regression) when either report is partial (--subject/--limit or an
-unavailable subject) or invalid, when KG citation hits on the shared cases drop by 2 or
-more, or when the KG expected-source MRR on the shared cases drops by 0.03 or more.
+unavailable subject) or invalid, when one is a retrieval-only run and the other a full run,
+when KG citation hits on the compared cases drop by 2 or more, or when the KG
+expected-source MRR on the compared cases drops by 0.03 or more.
 
 Usage:
     poetry run python scripts/compare_evals.py BASE.json HEAD.json
@@ -20,6 +22,8 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any, cast
+
+from backend.app.core.eval_report import as_dict, is_partial
 
 KG_CITATION_HIT_DROP_LIMIT = 2
 KG_MRR_DROP_LIMIT = 0.03
@@ -47,9 +51,8 @@ def load_report(path: Path) -> dict[str, Any]:
 
 def run_problems(report: dict[str, Any]) -> list[str]:
     """Why a report cannot serve as one side of a comparison (partial or invalid run)."""
-    run_config = report.get("run_config") or {}
     problems: list[str] = []
-    if run_config.get("partial") or run_config.get("subjects") or run_config.get("limit"):
+    if is_partial(report):
         problems.append("partial run")
     if not report.get("environment_valid"):
         problems.append("invalid run (environment_valid is false)")
@@ -58,6 +61,10 @@ def run_problems(report: dict[str, Any]) -> list[str]:
 
 def _cases(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(r["id"]): r for r in report.get("results") or [] if "id" in r}
+
+
+def _run_mode(report: dict[str, Any]) -> str:
+    return "retrieval-only" if as_dict(report.get("run_config")).get("retrieval_only") else "full"
 
 
 def _kg_citation_stats(
@@ -83,16 +90,20 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
     new = sorted(head_cases.keys() - base_cases.keys())
     removed = sorted(base_cases.keys() - head_cases.keys())
 
+    # A case whose question or expectations changed is a different case: its flips are not
+    # regressions, so it is listed but left out of the flips and the gate.
+    changed_definitions = [
+        case_id
+        for case_id in shared
+        if base_cases[case_id].get("case_hash")
+        and head_cases[case_id].get("case_hash")
+        and base_cases[case_id]["case_hash"] != head_cases[case_id]["case_hash"]
+    ]
+    compared = [case_id for case_id in shared if case_id not in changed_definitions]
+
     flips: list[dict[str, Any]] = []
-    changed_definitions: list[str] = []
-    for case_id in shared:
+    for case_id in compared:
         base_case, head_case = base_cases[case_id], head_cases[case_id]
-        if (
-            base_case.get("case_hash")
-            and head_case.get("case_hash")
-            and base_case["case_hash"] != head_case["case_hash"]
-        ):
-            changed_definitions.append(case_id)
         for mode in MODES:
             base_mode, head_mode = base_case.get(mode) or {}, head_case.get(mode) or {}
             for field in FLIP_FIELDS:
@@ -111,8 +122,8 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
                         }
                     )
 
-    base_hits, base_mrr = _kg_citation_stats(base_cases, shared)
-    head_hits, head_mrr = _kg_citation_stats(head_cases, shared)
+    base_hits, base_mrr = _kg_citation_stats(base_cases, compared)
+    head_hits, head_mrr = _kg_citation_stats(head_cases, compared)
     hit_drop = base_hits - head_hits
     mrr_drop = (
         round(base_mrr - head_mrr, 4) if base_mrr is not None and head_mrr is not None else None
@@ -121,6 +132,11 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
     failures: list[str] = []
     for side, report in (("base", base), ("head", head)):
         failures.extend(f"{side}: {problem}" for problem in run_problems(report))
+    if _run_mode(base) != _run_mode(head):
+        failures.append(
+            f"run modes differ (base {_run_mode(base)}, head {_run_mode(head)}); "
+            "compare two runs of the same mode"
+        )
     if hit_drop >= KG_CITATION_HIT_DROP_LIMIT:
         failures.append(
             f"KG citation hits dropped by {hit_drop} ({base_hits} -> {head_hits}), "
@@ -133,6 +149,7 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "shared_cases": len(shared),
+        "compared_cases": len(compared),
         "new_cases": new,
         "removed_cases": removed,
         "changed_definitions": changed_definitions,
@@ -150,9 +167,8 @@ def _provenance_line(label: str, report: dict[str, Any]) -> str:
     golden_set = provenance.get("golden_set") or {}
     llm = provenance.get("llm") or {}
     golden_sha = str(golden_set.get("sha256") or "n/a")[:12]
-    mode = "retrieval-only" if (report.get("run_config") or {}).get("retrieval_only") else "full"
     return (
-        f"- {label}: generated `{report.get('generated_at', 'n/a')}`, {mode}, server "
+        f"- {label}: generated `{report.get('generated_at', 'n/a')}`, {_run_mode(report)}, server "
         f"`{server.get('git_sha', 'n/a')}`, golden set `{golden_sha}`, LLM "
         f"`{llm.get('model', 'n/a')}`"
     )
@@ -166,13 +182,14 @@ def format_markdown(base: dict[str, Any], head: dict[str, Any], result: dict[str
         _provenance_line("Base", base),
         _provenance_line("Head", head),
         "",
-        f"- Shared cases: {result['shared_cases']}",
+        f"- Shared cases: {result['shared_cases']} ({result['compared_cases']} compared)",
         f"- KG citation hits: {hits['base']} -> {hits['head']} (drop {hits['drop']})",
         f"- KG MRR: {mrr['base']} -> {mrr['head']} (drop {mrr['drop']})",
         f"- Retrieval flips: {result['retrieval_flips']}; all flips: {len(result['flips'])}",
         f"- New cases: {', '.join(result['new_cases']) or 'none'}",
         f"- Removed cases: {', '.join(result['removed_cases']) or 'none'}",
-        f"- Changed case definitions: {', '.join(result['changed_definitions']) or 'none'}",
+        "- Changed case definitions (not compared): "
+        f"{', '.join(result['changed_definitions']) or 'none'}",
         "",
         "## Result",
         "",
