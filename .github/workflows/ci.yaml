@@ -247,6 +247,81 @@ jobs:
           sarif_file: bandit.sarif
           category: bandit
 
+  # Fails a pull request only on advisories it adds: its lockfiles are scanned
+  # and compared with the base branch's, so an advisory published against code
+  # that is already on `main` does not turn unrelated pull requests red. The
+  # advisory full scan below and the weekly dependency-audit workflow report
+  # everything on `main`.
+  dependency-diff:
+    name: Dependency Audit (new advisories)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Find lockfile and allowlist changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "${EVENT_NAME}" != "pull_request" ]; then
+            echo "Not a pull request: nothing to compare." | tee -a "${GITHUB_STEP_SUMMARY}"
+            echo "scan=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "${BASE_SHA}"
+          if git diff --quiet "${BASE_SHA}" HEAD -- \
+            poetry.lock frontend/package-lock.json osv-scanner.toml frontend/osv-scanner.toml; then
+            echo "No lockfile or osv-scanner.toml changed, so no advisory can be new." \
+              | tee -a "${GITHUB_STEP_SUMMARY}"
+            echo "scan=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "scan=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Set up osv-scanner
+        if: steps.changes.outputs.scan == 'true'
+        uses: ./.github/actions/setup-osv-scanner
+
+      - name: Fail on advisories this change adds
+        if: steps.changes.outputs.scan == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Rebuild the base branch's lockfiles and allowlists side by side, so
+          # osv-scanner applies each osv-scanner.toml to the lockfile next to it.
+          base_dir="${RUNNER_TEMP}/base"
+          mkdir -p "${base_dir}/frontend"
+          for path in poetry.lock frontend/package-lock.json osv-scanner.toml frontend/osv-scanner.toml; do
+            if git cat-file -e "${BASE_SHA}:${path}" 2> /dev/null; then
+              git show "${BASE_SHA}:${path}" > "${base_dir}/${path}"
+            fi
+          done
+          scan() { # scan <directory> <report.json>
+            local args=()
+            for lockfile in poetry.lock frontend/package-lock.json; do
+              if [ -f "$1/${lockfile}" ]; then args+=(--lockfile "${lockfile}"); fi
+            done
+            # Exit code 1 means "vulnerabilities found"; anything else is an error.
+            (cd "$1" && osv-scanner scan source "${args[@]}" --format json --output-file "$2") \
+              || [ "$?" -eq 1 ]
+          }
+          scan "${base_dir}" "${RUNNER_TEMP}/osv-base.json"
+          scan "${GITHUB_WORKSPACE}" "${RUNNER_TEMP}/osv-head.json"
+          set +e
+          python3 scripts/osv_audit.py new "${RUNNER_TEMP}/osv-base.json" "${RUNNER_TEMP}/osv-head.json" \
+            > osv-new.md
+          rc=$?
+          set -e
+          cat osv-new.md
+          { echo "## New advisories"; echo; cat osv-new.md; } >> "${GITHUB_STEP_SUMMARY}"
+          exit "${rc}"
+
   # ---------------------------------------------------------------------------
   # Advisory gates: not in `All Checks Passed` yet. Release PR #104 promotes
   # them by adding them to its `needs` and dropping `continue-on-error`.
@@ -273,6 +348,8 @@ jobs:
         # must not trip a coverage threshold.
         run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m tribunal -rxX --no-cov
 
+  # The full scan stays advisory for good: the required gate is
+  # `dependency-diff` above, which only fails on advisories a change adds.
   dependency-audit:
     name: Dependency Audit (osv-scanner, advisory)
     runs-on: ubuntu-24.04
@@ -281,25 +358,13 @@ jobs:
     permissions:
       contents: read
       security-events: write # upload the osv-scanner SARIF to code scanning
-    env:
-      OSV_SCANNER_VERSION: "2.6.0"
-      # SHA-256 of osv-scanner_linux_amd64 from the release's osv-scanner_SHA256SUMS.
-      OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Install osv-scanner ${{ env.OSV_SCANNER_VERSION }} (checksum-verified)
-        run: |
-          install_dir="${RUNNER_TEMP}/osv-scanner"
-          mkdir -p "${install_dir}"
-          curl --fail --silent --show-error --location --retry 3 \
-            --output "${install_dir}/osv-scanner" \
-            "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
-          echo "${OSV_SCANNER_SHA256}  ${install_dir}/osv-scanner" | sha256sum --check --strict
-          chmod +x "${install_dir}/osv-scanner"
-          echo "${install_dir}" >> "${GITHUB_PATH}"
+      - name: Set up osv-scanner
+        uses: ./.github/actions/setup-osv-scanner
 
       # osv-scanner applies the osv-scanner.toml found next to each scanned
       # lockfile (the repository root for poetry.lock, frontend/ for
@@ -428,6 +493,7 @@ jobs:
       - docker-compose-validate
       - docs-check
       - security
+      - dependency-diff
     if: always()
     steps:
       - name: Show required job results

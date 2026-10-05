@@ -33,7 +33,7 @@ from backend.app.core.rate_limit import limiter
 from backend.app.core.settings import settings
 from backend.app.core.subjects import SubjectConfig
 from backend.app.nlp.llm_client import get_llm_client
-from backend.app.rag.kg_expansion import get_all_concepts_from_neo4j, get_kg_expander
+from backend.app.rag.kg_expansion import get_kg_expander, get_known_concepts
 from backend.app.rag.retriever import get_retriever
 
 router = APIRouter(tags=["Q&A"])
@@ -272,7 +272,7 @@ def _sse_event(payload: dict) -> str:
 
 def _expand_query(subject_id: str, question: str) -> tuple[list[str], str, KGExpansionStatus]:
     """Expand the question with related KG concepts (blocking: Neo4j + NLP)."""
-    all_concepts = get_all_concepts_from_neo4j(subject_id)
+    all_concepts = get_known_concepts(subject_id)
     if not all_concepts:
         # Neo4j was unreachable or the subject's graph is empty: expansion could not run
         logger.warning("KG expansion failed: no concepts loaded for subject {}", subject_id)
