@@ -78,7 +78,7 @@ def mock_services():
         patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
         patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_expander),
         patch(
-            "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+            "backend.app.api.routes.ask.get_known_concepts",
             return_value=["concept_a", "concept_b"],
         ),
     ):
@@ -916,7 +916,7 @@ class TestErrorLeakage:
                 ),
             ),
             # Keep the test hermetic: KG expansion would otherwise query a real Neo4j.
-            patch("backend.app.api.routes.ask.get_all_concepts_from_neo4j", return_value=set()),
+            patch("backend.app.api.routes.ask.get_known_concepts", return_value=set()),
         ):
             resp = client.post(
                 "/api/v1/ask",
@@ -1234,7 +1234,7 @@ class TestResponseSchemaConsistency:
                 side_effect=RuntimeError("Something broke"),
             ),
             # Keep the test hermetic: KG expansion would otherwise query a real Neo4j.
-            patch("backend.app.api.routes.ask.get_all_concepts_from_neo4j", return_value=set()),
+            patch("backend.app.api.routes.ask.get_known_concepts", return_value=set()),
         ):
             resp = client.post(
                 "/api/v1/ask",

@@ -1,0 +1,14 @@
+# osv-scanner configuration for frontend/package-lock.json
+# (https://google.github.io/osv-scanner/configuration/).
+#
+# osv-scanner applies the osv-scanner.toml next to each lockfile, so the root
+# file does not cover this one. Same rules as the root file: each entry is
+# time-boxed (ignoreUntil at most 90 days out), gives a reason and names the
+# issue that removes it. Do not extend ignoreUntil without re-checking the
+# advisory.
+
+# --- braces 3.0.3: no fixed release yet; dev-only (#166)
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-12-31
+reason = "braces 3.0.3 is a dev-only dependency (via chokidar and micromatch in the build and test tooling: tailwindcss 3, jest 29, the Next.js ESLint plugin) and is not in the production bundle; no fixed release yet; tracked in #166"

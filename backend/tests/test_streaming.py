@@ -365,7 +365,7 @@ class TestStreamingWithKGExpansion:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis", "chloroplast"],
             ),
         ):
