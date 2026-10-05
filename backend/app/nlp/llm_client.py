@@ -226,12 +226,15 @@ class LLMClient:
         stream: bool,
     ) -> dict[str, Any]:
         """Build an Ollama /api/generate payload; sampling parameters go in ``options``."""
+        options: dict[str, Any] = {"temperature": temperature, "num_predict": max_tokens}
+        if settings.llm_seed is not None:
+            options["seed"] = settings.llm_seed  # reproducible sampling (evaluations)
         return {
             "model": self.local_model,
             "prompt": prompt,
             "system": system_prompt or "",
             "stream": stream,
-            "options": {"temperature": temperature, "num_predict": max_tokens},
+            "options": options,
         }
 
     async def _generate_ollama(
@@ -471,7 +474,7 @@ class LLMClient:
         result = await self.generate_result(
             prompt=prompts["user_prompt"],
             system_prompt=prompts["system_prompt"],
-            temperature=0.1,  # Low temperature for factual accuracy
+            temperature=settings.llm_temperature,  # low (0.1) by default for factual answers
         )
 
         return {
@@ -500,7 +503,7 @@ class LLMClient:
         async for token in self.generate_stream(
             prompt=prompts["user_prompt"],
             system_prompt=prompts["system_prompt"],
-            temperature=0.1,
+            temperature=settings.llm_temperature,
             stream_info=stream_info,
         ):
             yield token

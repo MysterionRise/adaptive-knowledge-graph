@@ -12,6 +12,7 @@ runs in the threadpool to keep the event loop free.
 
 import json
 from dataclasses import dataclass
+from typing import Literal
 
 import aiohttp
 from fastapi import APIRouter, HTTPException, Request
@@ -39,6 +40,18 @@ router = APIRouter(tags=["Q&A"])
 
 EMPTY_ANSWER_DETAIL = "The language model returned an empty answer"
 _SOURCE_PREVIEW_CHARS = 200
+
+# What KG expansion did for a request:
+#   ok       - related concepts were found and added to the retrieval query
+#   empty    - the graph was queried, but no concept in the question matched or had neighbours
+#   failed   - a Neo4j error (or a graph with no concepts) stopped expansion; the request
+#              continues with plain retrieval
+#   disabled - expansion was off for the request (use_kg_expansion=false or RAG_KG_EXPANSION)
+KGExpansionStatus = Literal["ok", "empty", "failed", "disabled"]
+KG_EXPANSION_STATUS_DESCRIPTION = (
+    "KG expansion outcome: ok (concepts added), empty (no matching concepts), failed "
+    "(graph error; plain retrieval was used) or disabled."
+)
 
 
 def _maybe_rerank(query: str, chunks: list[dict], top_k: int) -> list[dict]:
@@ -122,6 +135,7 @@ class QuestionResponse(BaseModel):
                         "Boston Tea Party",
                         "Continental Congress",
                     ],
+                    "kg_expansion_status": "ok",
                     "retrieved_count": 5,
                     "model": "llama3.1:8b-instruct-q4_K_M",
                     "attribution": "Content from OpenStax US History, CC BY 4.0",
@@ -134,10 +148,22 @@ class QuestionResponse(BaseModel):
     answer: str
     sources: list[dict]
     expanded_concepts: list[str] | None = None
+    kg_expansion_status: KGExpansionStatus = Field(description=KG_EXPANSION_STATUS_DESCRIPTION)
     retrieved_count: int
     window_expanded_count: int | None = None  # Chunks after window expansion
     model: str
     attribution: str
+
+
+class RetrieveResponse(BaseModel):
+    """Response from the retrieval-only endpoint (no LLM call)."""
+
+    question: str
+    sources: list[dict]
+    expanded_concepts: list[str] | None = None
+    kg_expansion_status: KGExpansionStatus = Field(description=KG_EXPANSION_STATUS_DESCRIPTION)
+    retrieved_count: int
+    window_expanded_count: int | None = None
 
 
 @router.post(
@@ -188,6 +214,7 @@ async def ask_question(body: QuestionRequest, request: Request):
             answer=answer,
             sources=_format_sources(ctx.retrieved_chunks),
             expanded_concepts=ctx.expanded_concepts or None,
+            kg_expansion_status=ctx.kg_expansion_status,
             retrieved_count=ctx.initial_count,
             window_expanded_count=ctx.window_expanded_count,
             model=answer_result["model"],
@@ -217,6 +244,7 @@ class _RetrievalContext:
 
     subject_config: SubjectConfig
     expanded_concepts: list[str]
+    kg_expansion_status: KGExpansionStatus
     retrieved_chunks: list[dict]
     initial_count: int
     window_expanded_count: int | None
@@ -242,11 +270,13 @@ def _sse_event(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-def _expand_query(subject_id: str, question: str) -> tuple[list[str], str]:
+def _expand_query(subject_id: str, question: str) -> tuple[list[str], str, KGExpansionStatus]:
     """Expand the question with related KG concepts (blocking: Neo4j + NLP)."""
     all_concepts = get_all_concepts_from_neo4j(subject_id)
     if not all_concepts:
-        return [], question
+        # Neo4j was unreachable or the subject's graph is empty: expansion could not run
+        logger.warning("KG expansion failed: no concepts loaded for subject {}", subject_id)
+        return [], question, "failed"
 
     expander = get_kg_expander(subject_id)
     expansion_result = expander.expand_query(question, all_concepts)
@@ -255,7 +285,14 @@ def _expand_query(subject_id: str, question: str) -> tuple[list[str], str]:
         f"KG Expansion: {len(expansion_result['extracted_concepts'])} -> "
         f"{len(expanded_concepts)} concepts"
     )
-    return expanded_concepts, expansion_result["expanded_query"]
+    status: KGExpansionStatus
+    if expansion_result.get("failed_lookups", 0):
+        status = "failed"
+    elif expanded_concepts:
+        status = "ok"
+    else:
+        status = "empty"
+    return expanded_concepts, expansion_result["expanded_query"], status
 
 
 def _retrieve_chunks(subject_id: str, query: str, top_k: int) -> list[dict]:
@@ -306,13 +343,15 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
     # Step 1: Knowledge Graph Expansion
     expanded_concepts: list[str] = []
     query = body.question
+    kg_status: KGExpansionStatus = "disabled"
 
     if body.use_kg_expansion and settings.rag_kg_expansion:
         try:
-            expanded_concepts, query = await run_in_threadpool(
+            expanded_concepts, query, kg_status = await run_in_threadpool(
                 _expand_query, subject_id, body.question
             )
         except Exception as e:
+            kg_status = "failed"
             logger.warning("KG expansion failed, continuing without it: {}", e)
 
     # Step 2: Retrieve chunks
@@ -349,9 +388,61 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
     return _RetrievalContext(
         subject_config=subject_config,
         expanded_concepts=expanded_concepts,
+        kg_expansion_status=kg_status,
         retrieved_chunks=retrieved_chunks,
         initial_count=initial_count,
         window_expanded_count=window_expanded_count,
+    )
+
+
+async def _retrieve_context_or_http_error(body: QuestionRequest, label: str) -> _RetrievalContext:
+    """Run retrieval and map its failures to HTTP errors (streaming and retrieval-only)."""
+    try:
+        return await _retrieve_context(body)
+    except HTTPException:
+        raise
+    except ContentNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="No relevant content found for this question"
+        ) from None
+    except (LLMGenerationError, LLMConnectionError) as e:
+        logger.exception("LLM error in {}: {}", label, e)
+        raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e
+    except aiohttp.ClientError as e:
+        logger.exception("Service connection error in {}: {}", label, e)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
+    except Exception as e:
+        logger.exception("Error in {}: {}", label, e)
+        raise HTTPException(status_code=500, detail="An internal error occurred") from e
+
+
+@router.post(
+    "/retrieve",
+    response_model=RetrieveResponse,
+    responses=error_responses(404, 429, 503),
+)
+@limiter.limit(settings.rate_limit_ask)
+async def retrieve_sources(body: QuestionRequest, request: Request):
+    """
+    Run the /ask retrieval pipeline without calling the LLM.
+
+    KG expansion, OpenSearch retrieval, window expansion and reranking behave exactly as in
+    /ask, and the response carries the same sources. Used by
+    `scripts/evaluate_rag.py --retrieval-only` for cheap retrieval comparisons; it shares
+    the /ask rate limit (RATE_LIMIT_ASK) and access rules.
+
+    Errors: 404 unknown subject or no relevant content, 422 invalid input (including
+    HTML markup), 503 search backend unavailable.
+    """
+    ensure_no_markup(body.question, field="question")
+    ctx = await _retrieve_context_or_http_error(body, "retrieval-only request")
+    return RetrieveResponse(
+        question=body.question,
+        sources=_format_sources(ctx.retrieved_chunks),
+        expanded_concepts=ctx.expanded_concepts or None,
+        kg_expansion_status=ctx.kg_expansion_status,
+        retrieved_count=ctx.initial_count,
+        window_expanded_count=ctx.window_expanded_count,
     )
 
 
@@ -380,23 +471,7 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
     `error` event is sent before [DONE].
     """
     ensure_no_markup(body.question, field="question")
-    try:
-        ctx = await _retrieve_context(body)
-    except HTTPException:
-        raise
-    except ContentNotFoundError:
-        raise HTTPException(
-            status_code=404, detail="No relevant content found for this question"
-        ) from None
-    except (LLMGenerationError, LLMConnectionError) as e:
-        logger.exception("LLM error in streaming ask retrieval: {}", e)
-        raise HTTPException(status_code=503, detail="LLM service temporarily unavailable") from e
-    except aiohttp.ClientError as e:
-        logger.exception("Service connection error in streaming ask retrieval: {}", e)
-        raise HTTPException(status_code=503, detail="Service temporarily unavailable") from e
-    except Exception as e:
-        logger.exception("Error in streaming ask retrieval: {}", e)
-        raise HTTPException(status_code=500, detail="An internal error occurred") from e
+    ctx = await _retrieve_context_or_http_error(body, "streaming ask retrieval")
 
     subject_config = ctx.subject_config
     sources = _format_sources(ctx.retrieved_chunks)
@@ -410,6 +485,7 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
                 "type": "metadata",
                 "sources": sources,
                 "expanded_concepts": ctx.expanded_concepts or None,
+                "kg_expansion_status": ctx.kg_expansion_status,
                 "retrieved_count": ctx.initial_count,
                 "window_expanded_count": ctx.window_expanded_count,
                 "model": llm_client.model_name,

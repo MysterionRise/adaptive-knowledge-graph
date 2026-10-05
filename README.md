@@ -118,7 +118,9 @@ pipeline:
    recognition and YAKE keyword extraction find concepts in the question. They
    are matched against the subject's concepts in Neo4j, and neighbours within
    `RAG_KG_EXPANSION_HOPS` (default 1) are added to the query. If Neo4j is
-   unavailable, the pipeline continues without expansion.
+   unavailable, the pipeline continues without expansion. The response's
+   `kg_expansion_status` says what happened: `ok`, `empty` (nothing matched),
+   `failed` or `disabled`.
 3. **Retrieve with hybrid search.** OpenSearch runs a BM25 query over chunk
    text, titles and key terms and a kNN query over BGE-M3 embeddings, then
    merges both rankings with reciprocal rank fusion (RRF). Set
@@ -229,6 +231,7 @@ then generate a quiz in **Assessment**.
 | `make docker-up PROFILE=full` | Run the API and frontend in containers as well ([infra/compose/README.md](infra/compose/README.md)) |
 | `make test` | Run the backend test suite with coverage |
 | `make demo-eval` | Run the evaluation against the running API |
+| `make eval-compare BASE=… HEAD=…` | Compare two evaluation reports; exits 1 on a KG citation regression |
 | `make help` | List every target |
 
 Local service URLs: Neo4j Browser <http://localhost:7474> (development login
@@ -318,9 +321,12 @@ prompt-injection attempts.
 make demo-eval   # run the evaluator, then check that the report is valid
 ```
 
-The report is written to [`docs/evals/`](docs/evals/). It only counts as
-evidence when `environment_valid` is `true`, that is, when it ran against a
-live, seeded stack.
+The report is written to [`docs/evals/`](docs/evals/), with a snapshot in
+`docs/evals/history/`. It records its provenance (server git SHA, models,
+retrieval settings, data counts, golden-set hash) and only counts as evidence
+when `environment_valid` is `true`: every request returned `200` and KG
+expansion never failed. `make eval-compare BASE=… HEAD=…` compares two
+reports case by case.
 
 <!-- eval table: filled in the release PR (#104) -->
 

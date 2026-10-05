@@ -37,6 +37,8 @@ x-api-environment: &api-environment
   OPENSEARCH_VERIFY_CERTS: "false"
   # Ollama on the host by default; http://ollama:11434 with --profile ollama.
   LLM_OLLAMA_HOST: ${CONTAINER_OLLAMA_HOST:-http://host.docker.internal:11434}
+  # Commit reported by /api/v1/demo/provenance; scripts/compose.sh exports it from git.
+  GIT_SHA: ${GIT_SHA:-unknown}
 
 x-api-service: &api-service
   env_file:

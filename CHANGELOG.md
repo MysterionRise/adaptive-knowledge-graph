@@ -37,6 +37,16 @@ is compiled in the release pull request
   issue forms, citation metadata, `CODEOWNERS`, `.editorconfig` and
   `.gitattributes`
   ([#99](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/99)).
+- Evaluation provenance and comparison: `/ask`, `/ask/stream` and the new
+  retrieval-only `POST /api/v1/retrieve` report `kg_expansion_status`;
+  `GET /api/v1/demo/provenance` reports the git SHA, models, devices,
+  allowlisted retrieval settings and per-subject counts; reports record that
+  provenance, the Ollama digest, golden-set and per-case hashes, answers and
+  sources, score prompt injection and are saved to `docs/evals/history/`;
+  `check_demo_eval.py` requires provenance, a `200` for every request and zero
+  KG-expansion failures; `make eval-compare BASE=… HEAD=…` compares two
+  reports; `LLM_SEED` and model revision settings make runs reproducible
+  ([#155](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/155)).
 
 ### Removed
 

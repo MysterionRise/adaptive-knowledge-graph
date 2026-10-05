@@ -19,8 +19,9 @@ FastAPI (all routes under /api/v1 except health)
   - /ask and /ask/stream
   - /quiz/* and /student/*
   - /graph/*, /concepts/* and /learning-path/*
+  - /retrieve (retrieval only, for evaluations)
   - /subjects/*
-  - /demo/status
+  - /demo/status and /demo/provenance
   - /health, /health/ready and /health/live
 
 Data and model services
@@ -46,7 +47,9 @@ helper, so blocking and streaming answers cannot drift apart.
    `default_subject` when none is given. An unknown subject returns `404`.
 3. Extract concepts from the question (spaCy NER and YAKE) and expand them with
    their Neo4j neighbours, up to `RAG_KG_EXPANSION_HOPS`. If Neo4j fails, the
-   request continues without expansion.
+   request continues without expansion. `kg_expansion_status` in the response
+   (and in the stream's `metadata` event) is `ok`, `empty`, `failed` or
+   `disabled`, so evaluations can tell a failed expansion from an empty one.
 4. Retrieve chunks from the subject's OpenSearch index. The default
    `RETRIEVAL_MODE=hybrid` runs BM25 and kNN queries and fuses them with
    reciprocal rank fusion; `knn` uses vectors only.
@@ -179,8 +182,11 @@ once without, and tracks:
 - KG-versus-plain deltas
 - latency, expanded concepts and approximate answer length
 
-`make demo-eval` runs it and validates the report. The metrics are heuristic;
-see [evals/README.md](evals/README.md).
+`make demo-eval` runs it and validates the report. Reports carry the
+provenance from `GET /api/v1/demo/provenance`, and `make eval-compare` compares
+two of them. `POST /api/v1/retrieve` runs the same retrieval without the LLM
+for cheap retrieval-only runs. The metrics are heuristic; see
+[evals/README.md](evals/README.md).
 
 ## Key trade-offs
 
