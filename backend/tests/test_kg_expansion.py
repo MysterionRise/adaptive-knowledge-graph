@@ -492,7 +492,7 @@ class TestConcurrentSubjects:
 
         def ask(subject_id: str):
             try:
-                results[subject_id], _ = _expand_query(subject_id, question)
+                results[subject_id], _, _ = _expand_query(subject_id, question)
             except BaseException as e:  # surfaced below
                 errors.append(e)
 

@@ -4094,1063 +4094,1063 @@
   "modules": {
     "m49468": {
       "module_id": "m49468",
-      "title": "Economics - m49468",
+      "title": "Preface",
       "type": "Module",
       "key_terms": []
     },
     "m48590": {
       "module_id": "m48590",
-      "title": "Economics - m48590",
+      "title": "Welcome to Economics! - Introduction",
       "type": "Module",
       "key_terms": []
     },
     "m48591": {
       "module_id": "m48591",
-      "title": "Economics - m48591",
+      "title": "Welcome to Economics! - What Is Economics, and Why Is It Important?",
       "type": "Module",
       "key_terms": []
     },
     "m48592": {
       "module_id": "m48592",
-      "title": "Economics - m48592",
+      "title": "Welcome to Economics! - Microeconomics and Macroeconomics",
       "type": "Module",
       "key_terms": []
     },
     "m48593": {
       "module_id": "m48593",
-      "title": "Economics - m48593",
+      "title": "Welcome to Economics! - How Economists Use Theories and Models to Understand Economic Issues",
       "type": "Module",
       "key_terms": []
     },
     "m48594": {
       "module_id": "m48594",
-      "title": "Economics - m48594",
+      "title": "Welcome to Economics! - How Economies Can Be Organized: An Overview of Economic Systems",
       "type": "Module",
       "key_terms": []
     },
     "m48602": {
       "module_id": "m48602",
-      "title": "Economics - m48602",
+      "title": "Choice in a World of Scarcity - Introduction to Choice in a World of Scarcity",
       "type": "Module",
       "key_terms": []
     },
     "m48605": {
       "module_id": "m48605",
-      "title": "Economics - m48605",
+      "title": "Choice in a World of Scarcity - How Individuals Make Choices Based on Their Budget Constraint",
       "type": "Module",
       "key_terms": []
     },
     "m48607": {
       "module_id": "m48607",
-      "title": "Economics - m48607",
+      "title": "Choice in a World of Scarcity - The Production Possibilities Frontier and Social Choices",
       "type": "Module",
       "key_terms": []
     },
     "m48608": {
       "module_id": "m48608",
-      "title": "Economics - m48608",
+      "title": "Choice in a World of Scarcity - Confronting Objections to the Economic Approach",
       "type": "Module",
       "key_terms": []
     },
     "m48628": {
       "module_id": "m48628",
-      "title": "Economics - m48628",
+      "title": "Demand and Supply - Introduction to Demand and Supply",
       "type": "Module",
       "key_terms": []
     },
     "m48629": {
       "module_id": "m48629",
-      "title": "Economics - m48629",
+      "title": "Demand and Supply - Demand, Supply, and Equilibrium in Markets for Goods and Services",
       "type": "Module",
       "key_terms": []
     },
     "m48630": {
       "module_id": "m48630",
-      "title": "Economics - m48630",
+      "title": "Demand and Supply - Shifts in Demand and Supply for Goods and Services",
       "type": "Module",
       "key_terms": []
     },
     "m48631": {
       "module_id": "m48631",
-      "title": "Economics - m48631",
+      "title": "Demand and Supply - Changes in Equilibrium Price and Quantity: The Four-Step Process",
       "type": "Module",
       "key_terms": []
     },
     "m48632": {
       "module_id": "m48632",
-      "title": "Economics - m48632",
+      "title": "Demand and Supply - Price Ceilings and Price Floors",
       "type": "Module",
       "key_terms": []
     },
     "m50323": {
       "module_id": "m50323",
-      "title": "Economics - m50323",
+      "title": "Demand and Supply - Demand, Supply, and Efficiency",
       "type": "Module",
       "key_terms": []
     },
     "m48636": {
       "module_id": "m48636",
-      "title": "Economics - m48636",
+      "title": "Labor and Financial Markets - Introduction to Labor and Financial Markets",
       "type": "Module",
       "key_terms": []
     },
     "m48637": {
       "module_id": "m48637",
-      "title": "Economics - m48637",
+      "title": "Labor and Financial Markets - Demand and Supply at Work in Labor Markets",
       "type": "Module",
       "key_terms": []
     },
     "m48638": {
       "module_id": "m48638",
-      "title": "Economics - m48638",
+      "title": "Labor and Financial Markets - Demand and Supply in Financial Markets",
       "type": "Module",
       "key_terms": []
     },
     "m48639": {
       "module_id": "m48639",
-      "title": "Economics - m48639",
+      "title": "Labor and Financial Markets - The Market System as an Efficient Mechanism for Information",
       "type": "Module",
       "key_terms": []
     },
     "m48611": {
       "module_id": "m48611",
-      "title": "Economics - m48611",
+      "title": "Elasticity - Introduction to Elasticity",
       "type": "Module",
       "key_terms": []
     },
     "m48614": {
       "module_id": "m48614",
-      "title": "Economics - m48614",
+      "title": "Elasticity - Price Elasticity of Demand and Price Elasticity of Supply",
       "type": "Module",
       "key_terms": []
     },
     "m48616": {
       "module_id": "m48616",
-      "title": "Economics - m48616",
+      "title": "Elasticity - Polar Cases of Elasticity and Constant Elasticity",
       "type": "Module",
       "key_terms": []
     },
     "m48618": {
       "module_id": "m48618",
-      "title": "Economics - m48618",
+      "title": "Elasticity - Elasticity and Pricing",
       "type": "Module",
       "key_terms": []
     },
     "m48619": {
       "module_id": "m48619",
-      "title": "Economics - m48619",
+      "title": "Elasticity - Elasticity in Areas Other Than Price",
       "type": "Module",
       "key_terms": []
     },
     "m48640": {
       "module_id": "m48640",
-      "title": "Economics - m48640",
+      "title": "Consumer Choices - Introduction to Consumer Choices",
       "type": "Module",
       "key_terms": []
     },
     "m48641": {
       "module_id": "m48641",
-      "title": "Economics - m48641",
+      "title": "Consumer Choices - Consumption Choices",
       "type": "Module",
       "key_terms": []
     },
     "m48642": {
       "module_id": "m48642",
-      "title": "Economics - m48642",
+      "title": "Consumer Choices - How Changes in Income and Prices Affect Consumption Choices",
       "type": "Module",
       "key_terms": []
     },
     "m48643": {
       "module_id": "m48643",
-      "title": "Economics - m48643",
+      "title": "Consumer Choices - Labor-Leisure Choices",
       "type": "Module",
       "key_terms": []
     },
     "m48644": {
       "module_id": "m48644",
-      "title": "Economics - m48644",
+      "title": "Consumer Choices - Intertemporal Choices in Financial Capital Markets",
       "type": "Module",
       "key_terms": []
     },
     "m48620": {
       "module_id": "m48620",
-      "title": "Economics - m48620",
+      "title": "Cost and Industry Structure - Introduction to Cost and Industry Structure",
       "type": "Module",
       "key_terms": []
     },
     "m48621": {
       "module_id": "m48621",
-      "title": "Economics - m48621",
+      "title": "Cost and Industry Structure - Explicit and Implicit Costs, and Accounting and Economic Profit",
       "type": "Module",
       "key_terms": []
     },
     "m48625": {
       "module_id": "m48625",
-      "title": "Economics - m48625",
+      "title": "Cost and Industry Structure - The Structure of Costs in the Short Run",
       "type": "Module",
       "key_terms": []
     },
     "m48626": {
       "module_id": "m48626",
-      "title": "Economics - m48626",
+      "title": "Cost and Industry Structure - The Structure of Costs in the Long Run",
       "type": "Module",
       "key_terms": []
     },
     "m48645": {
       "module_id": "m48645",
-      "title": "Economics - m48645",
+      "title": "Perfect Competition - Introduction to Perfect Competition",
       "type": "Module",
       "key_terms": []
     },
     "m48646": {
       "module_id": "m48646",
-      "title": "Economics - m48646",
+      "title": "Perfect Competition - Perfect Competition and Why It Matters",
       "type": "Module",
       "key_terms": []
     },
     "m48647": {
       "module_id": "m48647",
-      "title": "Economics - m48647",
+      "title": "Perfect Competition - How Perfectly Competitive Firms Make Output Decisions",
       "type": "Module",
       "key_terms": []
     },
     "m48648": {
       "module_id": "m48648",
-      "title": "Economics - m48648",
+      "title": "Perfect Competition - Entry and Exit Decisions in the Long Run",
       "type": "Module",
       "key_terms": []
     },
     "m48649": {
       "module_id": "m48649",
-      "title": "Economics - m48649",
+      "title": "Perfect Competition - Efficiency in Perfectly Competitive Markets",
       "type": "Module",
       "key_terms": []
     },
     "m48650": {
       "module_id": "m48650",
-      "title": "Economics - m48650",
+      "title": "Monopoly - Introduction to a Monopoly",
       "type": "Module",
       "key_terms": []
     },
     "m48651": {
       "module_id": "m48651",
-      "title": "Economics - m48651",
+      "title": "Monopoly - How Monopolies Form: Barriers to Entry",
       "type": "Module",
       "key_terms": []
     },
     "m48652": {
       "module_id": "m48652",
-      "title": "Economics - m48652",
+      "title": "Monopoly - How a Profit-Maximizing Monopoly Chooses Output and Price",
       "type": "Module",
       "key_terms": []
     },
     "m48658": {
       "module_id": "m48658",
-      "title": "Economics - m48658",
+      "title": "Monopolistic Competition and Oligopoly - Introduction to Monopolistic Competition and Oligopoly",
       "type": "Module",
       "key_terms": []
     },
     "m48659": {
       "module_id": "m48659",
-      "title": "Economics - m48659",
+      "title": "Monopolistic Competition and Oligopoly - Monopolistic Competition",
       "type": "Module",
       "key_terms": []
     },
     "m48660": {
       "module_id": "m48660",
-      "title": "Economics - m48660",
+      "title": "Monopolistic Competition and Oligopoly - Oligopoly",
       "type": "Module",
       "key_terms": []
     },
     "m48661": {
       "module_id": "m48661",
-      "title": "Economics - m48661",
+      "title": "Monopoly and Antitrust Policy - Introduction to Monopoly and Antitrust Policy",
       "type": "Module",
       "key_terms": []
     },
     "m48662": {
       "module_id": "m48662",
-      "title": "Economics - m48662",
+      "title": "Monopoly and Antitrust Policy - Corporate Mergers",
       "type": "Module",
       "key_terms": []
     },
     "m48663": {
       "module_id": "m48663",
-      "title": "Economics - m48663",
+      "title": "Monopoly and Antitrust Policy - Regulating Anticompetitive Behavior",
       "type": "Module",
       "key_terms": []
     },
     "m48666": {
       "module_id": "m48666",
-      "title": "Economics - m48666",
+      "title": "Monopoly and Antitrust Policy - Regulating Natural Monopolies",
       "type": "Module",
       "key_terms": []
     },
     "m48667": {
       "module_id": "m48667",
-      "title": "Economics - m48667",
+      "title": "Monopoly and Antitrust Policy - The Great Deregulation Experiment",
       "type": "Module",
       "key_terms": []
     },
     "m48668": {
       "module_id": "m48668",
-      "title": "Economics - m48668",
+      "title": "Environmental Protection and Negative Externalities - Introduction to Environmental Protection and Negative Externalities",
       "type": "Module",
       "key_terms": []
     },
     "m48669": {
       "module_id": "m48669",
-      "title": "Economics - m48669",
+      "title": "Environmental Protection and Negative Externalities - The Economics of Pollution",
       "type": "Module",
       "key_terms": []
     },
     "m48670": {
       "module_id": "m48670",
-      "title": "Economics - m48670",
+      "title": "Environmental Protection and Negative Externalities - Command-and-Control Regulation",
       "type": "Module",
       "key_terms": []
     },
     "m48671": {
       "module_id": "m48671",
-      "title": "Economics - m48671",
+      "title": "Environmental Protection and Negative Externalities - Market-Oriented Environmental Tools",
       "type": "Module",
       "key_terms": []
     },
     "m48672": {
       "module_id": "m48672",
-      "title": "Economics - m48672",
+      "title": "Environmental Protection and Negative Externalities - The Benefits and Costs of U.S. Environmental Laws",
       "type": "Module",
       "key_terms": []
     },
     "m48673": {
       "module_id": "m48673",
-      "title": "Economics - m48673",
+      "title": "Environmental Protection and Negative Externalities - International Environmental Issues",
       "type": "Module",
       "key_terms": []
     },
     "m48674": {
       "module_id": "m48674",
-      "title": "Economics - m48674",
+      "title": "Environmental Protection and Negative Externalities - The Tradeoff between Economic Output and Environmental Protection",
       "type": "Module",
       "key_terms": []
     },
     "m48675": {
       "module_id": "m48675",
-      "title": "Economics - m48675",
+      "title": "Positive Externalities and Public Goods - Introduction to Positive Externalities and Public Goods",
       "type": "Module",
       "key_terms": []
     },
     "m48676": {
       "module_id": "m48676",
-      "title": "Economics - m48676",
+      "title": "Positive Externalities and Public Goods - Why the Private Sector Under Invests in Innovation",
       "type": "Module",
       "key_terms": []
     },
     "m48678": {
       "module_id": "m48678",
-      "title": "Economics - m48678",
+      "title": "Positive Externalities and Public Goods - How Governments Can Encourage Innovation",
       "type": "Module",
       "key_terms": []
     },
     "m48680": {
       "module_id": "m48680",
-      "title": "Economics - m48680",
+      "title": "Positive Externalities and Public Goods - Public Goods",
       "type": "Module",
       "key_terms": []
     },
     "m48681": {
       "module_id": "m48681",
-      "title": "Economics - m48681",
+      "title": "Poverty and Economic Inequality - Introduction to Poverty and Economic Inequality",
       "type": "Module",
       "key_terms": []
     },
     "m48683": {
       "module_id": "m48683",
-      "title": "Economics - m48683",
+      "title": "Poverty and Economic Inequality - Drawing the Poverty Line",
       "type": "Module",
       "key_terms": []
     },
     "m48684": {
       "module_id": "m48684",
-      "title": "Economics - m48684",
+      "title": "Poverty and Economic Inequality - The Poverty Trap",
       "type": "Module",
       "key_terms": []
     },
     "m48685": {
       "module_id": "m48685",
-      "title": "Economics - m48685",
+      "title": "Poverty and Economic Inequality - The Safety Net",
       "type": "Module",
       "key_terms": []
     },
     "m48686": {
       "module_id": "m48686",
-      "title": "Economics - m48686",
+      "title": "Poverty and Economic Inequality - Income Inequality: Measurement and Causes",
       "type": "Module",
       "key_terms": []
     },
     "m48687": {
       "module_id": "m48687",
-      "title": "Economics - m48687",
+      "title": "Poverty and Economic Inequality - Government Policies to Reduce Income Inequality",
       "type": "Module",
       "key_terms": []
     },
     "m48689": {
       "module_id": "m48689",
-      "title": "Economics - m48689",
+      "title": "Issues in Labor Markets: Unions, Discrimination, Immigration - Introduction to Issues in Labor Markets: Unions, Discrimination, Immigration",
       "type": "Module",
       "key_terms": []
     },
     "m48691": {
       "module_id": "m48691",
-      "title": "Economics - m48691",
+      "title": "Issues in Labor Markets: Unions, Discrimination, Immigration - Unions",
       "type": "Module",
       "key_terms": []
     },
     "m48692": {
       "module_id": "m48692",
-      "title": "Economics - m48692",
+      "title": "Issues in Labor Markets: Unions, Discrimination, Immigration - Employment Discrimination",
       "type": "Module",
       "key_terms": []
     },
     "m48693": {
       "module_id": "m48693",
-      "title": "Economics - m48693",
+      "title": "Issues in Labor Markets: Unions, Discrimination, Immigration - Immigration",
       "type": "Module",
       "key_terms": []
     },
     "m48694": {
       "module_id": "m48694",
-      "title": "Economics - m48694",
+      "title": "Information, Risk, and Insurance - Introduction to Information, Risk, and Insurance",
       "type": "Module",
       "key_terms": []
     },
     "m48695": {
       "module_id": "m48695",
-      "title": "Economics - m48695",
+      "title": "Information, Risk, and Insurance - The Problem of Imperfect Information and Asymmetric Information",
       "type": "Module",
       "key_terms": []
     },
     "m48696": {
       "module_id": "m48696",
-      "title": "Economics - m48696",
+      "title": "Information, Risk, and Insurance - Insurance and Imperfect Information",
       "type": "Module",
       "key_terms": []
     },
     "m48697": {
       "module_id": "m48697",
-      "title": "Economics - m48697",
+      "title": "Financial Markets - Introduction to Financial Markets",
       "type": "Module",
       "key_terms": []
     },
     "m48698": {
       "module_id": "m48698",
-      "title": "Economics - m48698",
+      "title": "Financial Markets - How Businesses Raise Financial Capital",
       "type": "Module",
       "key_terms": []
     },
     "m48699": {
       "module_id": "m48699",
-      "title": "Economics - m48699",
+      "title": "Financial Markets - How Households Supply Financial Capital",
       "type": "Module",
       "key_terms": []
     },
     "m48700": {
       "module_id": "m48700",
-      "title": "Economics - m48700",
+      "title": "Financial Markets - How to Accumulate Personal Wealth",
       "type": "Module",
       "key_terms": []
     },
     "m48701": {
       "module_id": "m48701",
-      "title": "Economics - m48701",
+      "title": "Public Economy - Introduction to Public Economy",
       "type": "Module",
       "key_terms": []
     },
     "m48702": {
       "module_id": "m48702",
-      "title": "Economics - m48702",
+      "title": "Public Economy - Voter Participation and Costs of Elections",
       "type": "Module",
       "key_terms": []
     },
     "m48703": {
       "module_id": "m48703",
-      "title": "Economics - m48703",
+      "title": "Public Economy - Special Interest Politics",
       "type": "Module",
       "key_terms": []
     },
     "m48704": {
       "module_id": "m48704",
-      "title": "Economics - m48704",
+      "title": "Public Economy - Flaws in the Democratic System of Government",
       "type": "Module",
       "key_terms": []
     },
     "m48705": {
       "module_id": "m48705",
-      "title": "Economics - m48705",
+      "title": "The Macroeconomic Perspective - Introduction to the Macroeconomic Perspective",
       "type": "Module",
       "key_terms": []
     },
     "m48708": {
       "module_id": "m48708",
-      "title": "Economics - m48708",
+      "title": "The Macroeconomic Perspective - Measuring the Size of the Economy: Gross Domestic Product",
       "type": "Module",
       "key_terms": []
     },
     "m48709": {
       "module_id": "m48709",
-      "title": "Economics - m48709",
+      "title": "The Macroeconomic Perspective - Adjusting Nominal Values to Real Values",
       "type": "Module",
       "key_terms": []
     },
     "m48710": {
       "module_id": "m48710",
-      "title": "Economics - m48710",
+      "title": "The Macroeconomic Perspective - Tracking Real GDP over Time",
       "type": "Module",
       "key_terms": []
     },
     "m48711": {
       "module_id": "m48711",
-      "title": "Economics - m48711",
+      "title": "The Macroeconomic Perspective - Comparing GDP among Countries",
       "type": "Module",
       "key_terms": []
     },
     "m48712": {
       "module_id": "m48712",
-      "title": "Economics - m48712",
+      "title": "The Macroeconomic Perspective - How Well GDP Measures the Well-Being of Society",
       "type": "Module",
       "key_terms": []
     },
     "m48713": {
       "module_id": "m48713",
-      "title": "Economics - m48713",
+      "title": "Economic Growth - Introduction to Economic Growth",
       "type": "Module",
       "key_terms": []
     },
     "m48714": {
       "module_id": "m48714",
-      "title": "Economics - m48714",
+      "title": "Economic Growth - The Relatively Recent Arrival of Economic Growth",
       "type": "Module",
       "key_terms": []
     },
     "m48715": {
       "module_id": "m48715",
-      "title": "Economics - m48715",
+      "title": "Economic Growth - Labor Productivity and Economic Growth",
       "type": "Module",
       "key_terms": []
     },
     "m48716": {
       "module_id": "m48716",
-      "title": "Economics - m48716",
+      "title": "Economic Growth - Components of Economic Growth",
       "type": "Module",
       "key_terms": []
     },
     "m48718": {
       "module_id": "m48718",
-      "title": "Economics - m48718",
+      "title": "Economic Growth - Economic Convergence",
       "type": "Module",
       "key_terms": []
     },
     "m48719": {
       "module_id": "m48719",
-      "title": "Economics - m48719",
+      "title": "Unemployment - Introduction to Unemployment",
       "type": "Module",
       "key_terms": []
     },
     "m48720": {
       "module_id": "m48720",
-      "title": "Economics - m48720",
+      "title": "Unemployment - How the Unemployment Rate is Defined and Computed",
       "type": "Module",
       "key_terms": []
     },
     "m48721": {
       "module_id": "m48721",
-      "title": "Economics - m48721",
+      "title": "Unemployment - Patterns of Unemployment",
       "type": "Module",
       "key_terms": []
     },
     "m48722": {
       "module_id": "m48722",
-      "title": "Economics - m48722",
+      "title": "Unemployment - What Causes Changes in Unemployment over the Short Run",
       "type": "Module",
       "key_terms": []
     },
     "m48723": {
       "module_id": "m48723",
-      "title": "Economics - m48723",
+      "title": "Unemployment - What Causes Changes in Unemployment over the Long Run",
       "type": "Module",
       "key_terms": []
     },
     "m48724": {
       "module_id": "m48724",
-      "title": "Economics - m48724",
+      "title": "Inflation - Introduction to Inflation",
       "type": "Module",
       "key_terms": []
     },
     "m48725": {
       "module_id": "m48725",
-      "title": "Economics - m48725",
+      "title": "Inflation - Tracking Inflation",
       "type": "Module",
       "key_terms": []
     },
     "m48726": {
       "module_id": "m48726",
-      "title": "Economics - m48726",
+      "title": "Inflation - How Changes in the Cost of Living are Measured",
       "type": "Module",
       "key_terms": []
     },
     "m48727": {
       "module_id": "m48727",
-      "title": "Economics - m48727",
+      "title": "Inflation - How the U.S. and Other Countries Experience Inflation",
       "type": "Module",
       "key_terms": []
     },
     "m48729": {
       "module_id": "m48729",
-      "title": "Economics - m48729",
+      "title": "Inflation - The Confusion Over Inflation",
       "type": "Module",
       "key_terms": []
     },
     "m48730": {
       "module_id": "m48730",
-      "title": "Economics - m48730",
+      "title": "Inflation - Indexing and Its Limitations",
       "type": "Module",
       "key_terms": []
     },
     "m48731": {
       "module_id": "m48731",
-      "title": "Economics - m48731",
+      "title": "The International Trade and Capital Flows - Introduction to the International Trade and Capital Flows",
       "type": "Module",
       "key_terms": []
     },
     "m48732": {
       "module_id": "m48732",
-      "title": "Economics - m48732",
+      "title": "The International Trade and Capital Flows - Measuring Trade Balances",
       "type": "Module",
       "key_terms": []
     },
     "m48733": {
       "module_id": "m48733",
-      "title": "Economics - m48733",
+      "title": "The International Trade and Capital Flows - Trade Balances in Historical and International Context",
       "type": "Module",
       "key_terms": []
     },
     "m48734": {
       "module_id": "m48734",
-      "title": "Economics - m48734",
+      "title": "The International Trade and Capital Flows - Trade Balances and Flows of Financial Capital",
       "type": "Module",
       "key_terms": []
     },
     "m48736": {
       "module_id": "m48736",
-      "title": "Economics - m48736",
+      "title": "The International Trade and Capital Flows - The National Saving and Investment Identity",
       "type": "Module",
       "key_terms": []
     },
     "m48737": {
       "module_id": "m48737",
-      "title": "Economics - m48737",
+      "title": "The International Trade and Capital Flows - The Pros and Cons of Trade Deficits and Surpluses",
       "type": "Module",
       "key_terms": []
     },
     "m48738": {
       "module_id": "m48738",
-      "title": "Economics - m48738",
+      "title": "The International Trade and Capital Flows - The Difference between Level of Trade and the Trade Balance",
       "type": "Module",
       "key_terms": []
     },
     "m48739": {
       "module_id": "m48739",
-      "title": "Economics - m48739",
+      "title": "The Aggregate Demand/Aggregate Supply Model - Introduction to the Aggregate Demand/Aggregate Supply Model",
       "type": "Module",
       "key_terms": []
     },
     "m48740": {
       "module_id": "m48740",
-      "title": "Economics - m48740",
+      "title": "The Aggregate Demand/Aggregate Supply Model - Macroeconomic Perspectives on Demand and Supply",
       "type": "Module",
       "key_terms": []
     },
     "m48741": {
       "module_id": "m48741",
-      "title": "Economics - m48741",
+      "title": "The Aggregate Demand/Aggregate Supply Model - Building a Model of Aggregate Demand and Aggregate Supply",
       "type": "Module",
       "key_terms": []
     },
     "m48742": {
       "module_id": "m48742",
-      "title": "Economics - m48742",
+      "title": "The Aggregate Demand/Aggregate Supply Model - Shifts in Aggregate Supply",
       "type": "Module",
       "key_terms": []
     },
     "m48745": {
       "module_id": "m48745",
-      "title": "Economics - m48745",
+      "title": "The Aggregate Demand/Aggregate Supply Model - Shifts in Aggregate Demand",
       "type": "Module",
       "key_terms": []
     },
     "m48747": {
       "module_id": "m48747",
-      "title": "Economics - m48747",
+      "title": "The Aggregate Demand/Aggregate Supply Model - How the AD/AS Model Incorporates Growth, Unemployment, and Inflation",
       "type": "Module",
       "key_terms": []
     },
     "m48748": {
       "module_id": "m48748",
-      "title": "Economics - m48748",
+      "title": "The Aggregate Demand/Aggregate Supply Model - Keynes’ Law and Say’s Law in the AD/AS Model",
       "type": "Module",
       "key_terms": []
     },
     "m48749": {
       "module_id": "m48749",
-      "title": "Economics - m48749",
+      "title": "The Keynesian Perspective - Introduction to the Keynesian Perspective",
       "type": "Module",
       "key_terms": []
     },
     "m48750": {
       "module_id": "m48750",
-      "title": "Economics - m48750",
+      "title": "The Keynesian Perspective - Aggregate Demand in Keynesian Analysis",
       "type": "Module",
       "key_terms": []
     },
     "m48751": {
       "module_id": "m48751",
-      "title": "Economics - m48751",
+      "title": "The Keynesian Perspective - The Building Blocks of Keynesian Analysis",
       "type": "Module",
       "key_terms": []
     },
     "m48753": {
       "module_id": "m48753",
-      "title": "Economics - m48753",
+      "title": "The Keynesian Perspective - The Phillips Curve",
       "type": "Module",
       "key_terms": []
     },
     "m48754": {
       "module_id": "m48754",
-      "title": "Economics - m48754",
+      "title": "The Keynesian Perspective - The Keynesian Perspective on Market Forces",
       "type": "Module",
       "key_terms": []
     },
     "m48756": {
       "module_id": "m48756",
-      "title": "Economics - m48756",
+      "title": "The Neoclassical Perspective - Introduction to the Neoclassical Perspective",
       "type": "Module",
       "key_terms": []
     },
     "m48758": {
       "module_id": "m48758",
-      "title": "Economics - m48758",
+      "title": "The Neoclassical Perspective - The Building Blocks of Neoclassical Analysis",
       "type": "Module",
       "key_terms": []
     },
     "m48759": {
       "module_id": "m48759",
-      "title": "Economics - m48759",
+      "title": "The Neoclassical Perspective - The Policy Implications of the Neoclassical Perspective",
       "type": "Module",
       "key_terms": []
     },
     "m48760": {
       "module_id": "m48760",
-      "title": "Economics - m48760",
+      "title": "The Neoclassical Perspective - Balancing Keynesian and Neoclassical Models",
       "type": "Module",
       "key_terms": []
     },
     "m48761": {
       "module_id": "m48761",
-      "title": "Economics - m48761",
+      "title": "Money and Banking - Introduction to Money and Banking",
       "type": "Module",
       "key_terms": []
     },
     "m48762": {
       "module_id": "m48762",
-      "title": "Economics - m48762",
+      "title": "Money and Banking - Defining Money by Its Functions",
       "type": "Module",
       "key_terms": []
     },
     "m48763": {
       "module_id": "m48763",
-      "title": "Economics - m48763",
+      "title": "Money and Banking - Measuring Money: Currency, M1, and M2",
       "type": "Module",
       "key_terms": []
     },
     "m48766": {
       "module_id": "m48766",
-      "title": "Economics - m48766",
+      "title": "Money and Banking - The Role of Banks",
       "type": "Module",
       "key_terms": []
     },
     "m48767": {
       "module_id": "m48767",
-      "title": "Economics - m48767",
+      "title": "Money and Banking - How Banks Create Money",
       "type": "Module",
       "key_terms": []
     },
     "m48768": {
       "module_id": "m48768",
-      "title": "Economics - m48768",
+      "title": "Monetary Policy and Bank Regulation - Introduction to Monetary Policy and Bank Regulation",
       "type": "Module",
       "key_terms": []
     },
     "m48770": {
       "module_id": "m48770",
-      "title": "Economics - m48770",
+      "title": "Monetary Policy and Bank Regulation - The Federal Reserve Banking System and Central Banks",
       "type": "Module",
       "key_terms": []
     },
     "m48771": {
       "module_id": "m48771",
-      "title": "Economics - m48771",
+      "title": "Monetary Policy and Bank Regulation - Bank Regulation",
       "type": "Module",
       "key_terms": []
     },
     "m48772": {
       "module_id": "m48772",
-      "title": "Economics - m48772",
+      "title": "Monetary Policy and Bank Regulation - How a Central Bank Executes Monetary Policy",
       "type": "Module",
       "key_terms": []
     },
     "m48773": {
       "module_id": "m48773",
-      "title": "Economics - m48773",
+      "title": "Monetary Policy and Bank Regulation - Monetary Policy and Economic Outcomes",
       "type": "Module",
       "key_terms": []
     },
     "m48774": {
       "module_id": "m48774",
-      "title": "Economics - m48774",
+      "title": "Monetary Policy and Bank Regulation - Pitfalls for Monetary Policy",
       "type": "Module",
       "key_terms": []
     },
     "m48776": {
       "module_id": "m48776",
-      "title": "Economics - m48776",
+      "title": "Exchange Rates and International Capital Flows - Introduction to Exchange Rates and International Capital Flows",
       "type": "Module",
       "key_terms": []
     },
     "m48784": {
       "module_id": "m48784",
-      "title": "Economics - m48784",
+      "title": "Exchange Rates and International Capital Flows - How the Foreign Exchange Market Works",
       "type": "Module",
       "key_terms": []
     },
     "m48785": {
       "module_id": "m48785",
-      "title": "Economics - m48785",
+      "title": "Exchange Rates and International Capital Flows - Demand and Supply Shifts in Foreign Exchange Markets",
       "type": "Module",
       "key_terms": []
     },
     "m48788": {
       "module_id": "m48788",
-      "title": "Economics - m48788",
+      "title": "Exchange Rates and International Capital Flows - Macroeconomic Effects of Exchange Rates",
       "type": "Module",
       "key_terms": []
     },
     "m48790": {
       "module_id": "m48790",
-      "title": "Economics - m48790",
+      "title": "Exchange Rates and International Capital Flows - Exchange Rate Policies",
       "type": "Module",
       "key_terms": []
     },
     "m48791": {
       "module_id": "m48791",
-      "title": "Economics - m48791",
+      "title": "Government Budgets and Fiscal Policy - Introduction to Government Budgets and Fiscal Policy",
       "type": "Module",
       "key_terms": []
     },
     "m48792": {
       "module_id": "m48792",
-      "title": "Economics - m48792",
+      "title": "Government Budgets and Fiscal Policy - Government Spending",
       "type": "Module",
       "key_terms": []
     },
     "m48793": {
       "module_id": "m48793",
-      "title": "Economics - m48793",
+      "title": "Government Budgets and Fiscal Policy - Taxation",
       "type": "Module",
       "key_terms": []
     },
     "m48794": {
       "module_id": "m48794",
-      "title": "Economics - m48794",
+      "title": "Government Budgets and Fiscal Policy - Federal Deficits and the National Debt",
       "type": "Module",
       "key_terms": []
     },
     "m48795": {
       "module_id": "m48795",
-      "title": "Economics - m48795",
+      "title": "Government Budgets and Fiscal Policy - Using Fiscal Policy to Fight Recession, Unemployment, and Inflation",
       "type": "Module",
       "key_terms": []
     },
     "m48797": {
       "module_id": "m48797",
-      "title": "Economics - m48797",
+      "title": "Government Budgets and Fiscal Policy - Automatic Stabilizers",
       "type": "Module",
       "key_terms": []
     },
     "m48798": {
       "module_id": "m48798",
-      "title": "Economics - m48798",
+      "title": "Government Budgets and Fiscal Policy - Practical Problems with Discretionary Fiscal Policy",
       "type": "Module",
       "key_terms": []
     },
     "m48799": {
       "module_id": "m48799",
-      "title": "Economics - m48799",
+      "title": "Government Budgets and Fiscal Policy - The Question of a Balanced Budget",
       "type": "Module",
       "key_terms": []
     },
     "m48800": {
       "module_id": "m48800",
-      "title": "Economics - m48800",
+      "title": "The Impacts of Government Borrowing - Introduction to the Impacts of Government Borrowing",
       "type": "Module",
       "key_terms": []
     },
     "m48802": {
       "module_id": "m48802",
-      "title": "Economics - m48802",
+      "title": "The Impacts of Government Borrowing - How Government Borrowing Affects Investment and the Trade Balance",
       "type": "Module",
       "key_terms": []
     },
     "m48807": {
       "module_id": "m48807",
-      "title": "Economics - m48807",
+      "title": "The Impacts of Government Borrowing - Fiscal Policy, Investment, and Economic Growth",
       "type": "Module",
       "key_terms": []
     },
     "m48808": {
       "module_id": "m48808",
-      "title": "Economics - m48808",
+      "title": "The Impacts of Government Borrowing - How Government Borrowing Affects Private Saving",
       "type": "Module",
       "key_terms": []
     },
     "m48809": {
       "module_id": "m48809",
-      "title": "Economics - m48809",
+      "title": "The Impacts of Government Borrowing - Fiscal Policy and the Trade Balance",
       "type": "Module",
       "key_terms": []
     },
     "m48811": {
       "module_id": "m48811",
-      "title": "Economics - m48811",
+      "title": "Macroeconomic Policy Around the World - Introduction to Macroeconomic Policy around the World",
       "type": "Module",
       "key_terms": []
     },
     "m48812": {
       "module_id": "m48812",
-      "title": "Economics - m48812",
+      "title": "Macroeconomic Policy Around the World - The Diversity of Countries and Economies across the World",
       "type": "Module",
       "key_terms": []
     },
     "m48813": {
       "module_id": "m48813",
-      "title": "Economics - m48813",
+      "title": "Macroeconomic Policy Around the World - Improving Countries’ Standards of Living",
       "type": "Module",
       "key_terms": []
     },
     "m48814": {
       "module_id": "m48814",
-      "title": "Economics - m48814",
+      "title": "Macroeconomic Policy Around the World - Causes of Unemployment around the World",
       "type": "Module",
       "key_terms": []
     },
     "m48815": {
       "module_id": "m48815",
-      "title": "Economics - m48815",
+      "title": "Macroeconomic Policy Around the World - Causes of Inflation in Various Countries and Regions",
       "type": "Module",
       "key_terms": []
     },
     "m48816": {
       "module_id": "m48816",
-      "title": "Economics - m48816",
+      "title": "Macroeconomic Policy Around the World - Balance of Trade Concerns",
       "type": "Module",
       "key_terms": []
     },
     "m48818": {
       "module_id": "m48818",
-      "title": "Economics - m48818",
+      "title": "International Trade - Introduction to International Trade",
       "type": "Module",
       "key_terms": []
     },
     "m48819": {
       "module_id": "m48819",
-      "title": "Economics - m48819",
+      "title": "International Trade - Absolute and Comparative Advantage",
       "type": "Module",
       "key_terms": []
     },
     "m48820": {
       "module_id": "m48820",
-      "title": "Economics - m48820",
+      "title": "International Trade - What Happens When a Country Has an Absolute Advantage in All Goods",
       "type": "Module",
       "key_terms": []
     },
     "m48822": {
       "module_id": "m48822",
-      "title": "Economics - m48822",
+      "title": "International Trade - Intra-industry Trade between Similar Economies",
       "type": "Module",
       "key_terms": []
     },
     "m48823": {
       "module_id": "m48823",
-      "title": "Economics - m48823",
+      "title": "International Trade - The Benefits of Reducing Barriers to International Trade",
       "type": "Module",
       "key_terms": []
     },
     "m48824": {
       "module_id": "m48824",
-      "title": "Economics - m48824",
+      "title": "Globalization and Protectionism - Introduction to Globalization and Protectionism",
       "type": "Module",
       "key_terms": []
     },
     "m48825": {
       "module_id": "m48825",
-      "title": "Economics - m48825",
+      "title": "Globalization and Protectionism - Protectionism: An Indirect Subsidy from Consumers to Producers",
       "type": "Module",
       "key_terms": []
     },
     "m48827": {
       "module_id": "m48827",
-      "title": "Economics - m48827",
+      "title": "Globalization and Protectionism - International Trade and Its Effects on Jobs, Wages, and Working Conditions",
       "type": "Module",
       "key_terms": []
     },
     "m48828": {
       "module_id": "m48828",
-      "title": "Economics - m48828",
+      "title": "Globalization and Protectionism - Arguments in Support of Restricting Imports",
       "type": "Module",
       "key_terms": []
     },
     "m48829": {
       "module_id": "m48829",
-      "title": "Economics - m48829",
+      "title": "Globalization and Protectionism - How Trade Policy Is Enacted: Globally, Regionally, and Nationally",
       "type": "Module",
       "key_terms": []
     },
     "m48830": {
       "module_id": "m48830",
-      "title": "Economics - m48830",
+      "title": "Globalization and Protectionism - The Tradeoffs of Trade Policy",
       "type": "Module",
       "key_terms": []
     },
     "m48831": {
       "module_id": "m48831",
-      "title": "Economics - m48831",
+      "title": "The Use of Mathematics in Principles of Economics",
       "type": "Module",
       "key_terms": []
     },
     "m48833": {
       "module_id": "m48833",
-      "title": "Economics - m48833",
+      "title": "Indifference Curves",
       "type": "Module",
       "key_terms": []
     },
     "m48834": {
       "module_id": "m48834",
-      "title": "Economics - m48834",
+      "title": "Present Discounted Value",
       "type": "Module",
       "key_terms": []
     },
     "m48835": {
       "module_id": "m48835",
-      "title": "Economics - m48835",
+      "title": "The Expenditure-Output Model",
       "type": "Module",
       "key_terms": []
     }
