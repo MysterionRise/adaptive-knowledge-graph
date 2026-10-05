@@ -18,6 +18,11 @@ learning experiences easier to review and more useful.
   learner cohort.
 - **Deployment:** local or private staging, no public launch.
 - **LLM mode:** local-only (`PRIVACY_LOCAL_ONLY=true`) by default.
+- **Learner IDs:** pseudonymous only (for example `pilot-017`), never names,
+  emails or student numbers, until per-learner identity lands
+  ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)).
+  Until then anyone who can load the frontend can read or change any learner
+  profile, because the frontend's API key is public.
 
 ## Workstreams
 

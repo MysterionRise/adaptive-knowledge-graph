@@ -11,7 +11,13 @@ The full data-handling description is in
 - Demo learner profiles are synthetic.
 - No real student data is needed.
 - Local-only LLM mode is the default: with `PRIVACY_LOCAL_ONLY=true` the API
-  refuses to start in a remote LLM mode.
+  refuses to start in a remote LLM mode, with a remote or cloud Ollama, or with
+  LangSmith tracing on.
+- **Pseudonymous learner IDs only** until per-learner identity lands
+  ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)).
+  The frontend's API key is public, so anyone who can load the frontend can
+  read or change any learner profile. Never use names, emails or student
+  numbers as learner IDs.
 - Remote LLM providers are not part of the demo.
 
 ## Data flow
