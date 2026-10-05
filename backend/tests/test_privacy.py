@@ -417,8 +417,8 @@ def _ask(client: TestClient, mocks) -> None:
         patch("backend.app.api.routes.ask.get_llm_client", return_value=llm_client),
         patch("backend.app.api.routes.ask.get_kg_expander", return_value=kg_expander),
         patch(
-            "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
-            return_value=["photosynthesis"],
+            "backend.app.api.routes.ask.get_known_concepts",
+            return_value=frozenset({"photosynthesis"}),
         ),
     ):
         response = client.post(
