@@ -38,7 +38,7 @@ class TestAskEndpoint:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis", "chloroplast"],
             ),
         ):
@@ -230,7 +230,7 @@ class TestAskEndpoint:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=failing_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis"],
             ),
         ):
@@ -277,7 +277,7 @@ class TestAskEndpoint:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis"],
             ),
         ):
@@ -688,7 +688,7 @@ class TestAskKeepsEventLoopFree:
 
         with (
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 side_effect=recorder("all_concepts", {"photosynthesis", "chlorophyll"}),
             ),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=expander),
