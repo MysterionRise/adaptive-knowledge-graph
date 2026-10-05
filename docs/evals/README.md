@@ -18,8 +18,8 @@ make demo-eval
 
 This runs `scripts/evaluate_rag.py` against `http://localhost:8000` and then
 `scripts/check_demo_eval.py`, which fails when the report is missing, has no
-provenance, is invalid (see [Validity](#validity)) or has zero successful KG or
-plain cases. To run the steps separately:
+provenance, is invalid (see [Validity](#validity)), has zero successful KG or
+plain cases, or does not match the checkout. To run the steps separately:
 
 ```bash
 poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000
@@ -45,7 +45,8 @@ takes about 11 minutes. Useful options:
 | `--delay 2` | Minimum seconds between requests, overriding the pacing |
 | `--max-retries 5` | Retries per request after `429` |
 | `--retrieval-only` | Call `POST /api/v1/retrieve` instead of `/ask`: no LLM, citation metrics only, written to `latest-retrieval.json`/`.md` |
-| `--ollama-url URL` | Where to read the model digest (default `LLM_OLLAMA_HOST`; only a loopback URL while `PRIVACY_LOCAL_ONLY=true`) |
+| `--ollama-url URL` | Where to read the model digest (default `LLM_OLLAMA_HOST`; while `PRIVACY_LOCAL_ONLY=true`, only a host the API accepts too: loopback, a private address, `ollama` or `host.docker.internal`) |
+| `--api-key KEY` | `X-API-Key` for the API (default `API_KEY` from `.env` or the environment); needed when the API has a key, because `/api/v1/demo/provenance` requires it |
 | `--no-history` | Do not write a `history/` snapshot |
 
 With Make, pass them through `EVAL_ARGS`:
@@ -66,17 +67,21 @@ temperature 0. Start the API with:
 LLM_TEMPERATURE=0 LLM_SEED=42 make run-api
 ```
 
-`LLM_SEED` is sent to Ollama as `options.seed`. Knowledge-graph neighbours are
-ordered by importance and then by name, so expansion is deterministic too. Two
-runs on the same seed and data should show no retrieval flips in
-`make eval-compare`. Pin the embedding and reranker models with
+`LLM_SEED` is sent to Ollama as `options.seed`. KG expansion is deterministic
+too: the question's concepts come first, then their neighbours ordered by
+importance and then by name, so the expanded query (which is embedded for
+retrieval) is the same in every API process. Two runs on the same seed and data
+should show no retrieval flips in `make eval-compare`. Pin the embedding and reranker models with
 `EMBEDDING_MODEL_REVISION` and `RERANKER_MODEL_REVISION` (a Hugging Face
 commit) when you need byte-identical retrieval across machines.
 
 `make run-api` passes the checkout's commit to the API as `GIT_SHA`
 (`scripts/compose.sh` does the same for containers). Set `GIT_SHA` yourself
 when you start the API another way, or the report records `unknown` and
-`check_demo_eval.py` rejects it.
+`check_demo_eval.py` rejects it. `GIT_SHA` is read once at startup, and
+`make run-api` reloads code without restarting, so restart the API after a
+commit: `check_demo_eval.py` rejects a report whose server commit differs
+from the harness's.
 
 For a pull request that changes retrieval, a retrieval-only run is enough and
 needs no LLM:
@@ -115,8 +120,14 @@ A report is valid (`environment_valid: true`) only when:
 `check_demo_eval.py` recomputes these rules from the per-case results and
 also requires complete provenance: a known server git SHA, the golden-set
 hash, the LLM model and Ollama digest, the embedding and reranker models with
-their revision fields and devices, the retrieval settings and counts for every
-evaluated subject.
+their revision fields and devices (an enabled reranker must have loaded), the
+retrieval settings and counts for every evaluated subject. The report must
+also match the checkout: the server ran the harness's commit, and the golden
+set at `golden_set.path` still has the recorded hash.
+
+The demo status page (`GET /api/v1/demo/status`) applies the same rules,
+shared in `backend/app/core/eval_report.py`, and also flags a report produced
+by a different server build than the running one.
 
 ## Comparing runs
 
@@ -124,11 +135,14 @@ evaluated subject.
 make eval-compare BASE=docs/evals/history/<base>.json HEAD=docs/evals/latest.json
 ```
 
-`scripts/compare_evals.py` compares the case IDs both reports share. It lists
-flips per case and mode (citation hit, expected-source rank, KG expansion
-status, refusal and prompt-injection results, HTTP status), new and removed
-cases and cases whose definition changed. It exits `1` when either report is
-partial or invalid, when KG citation hits on the shared cases drop by 2 or
+`scripts/compare_evals.py` compares the case IDs both reports share whose
+definition is unchanged (same `case_hash`); cases whose question or
+expectations changed are listed but neither compared nor gated, since their
+results measure something else. It lists flips per compared case and mode
+(citation hit, expected-source rank, KG expansion status, refusal and
+prompt-injection results, HTTP status) and new and removed cases. It exits `1`
+when either report is partial or invalid, when one is a retrieval-only run and
+the other a full run, when KG citation hits on the compared cases drop by 2 or
 more, or when the KG expected-source MRR drops by 0.03 or more. Add
 `--out delta.md` to save the comparison or `--json` for machine-readable
 output.
@@ -141,10 +155,13 @@ output.
 - **Expected-source MRR:** how high the first expected source ranks.
 - **Unsupported refusal rate:** for questions tagged `unsupported_claim`,
   whether the answer declines instead of asserting the claim.
-- **Prompt-injection resistance rate:** for cases with `forbidden_terms` (the
-  four `prompt_injection` cases), whether the answer contains none of them
-  (case-insensitive), for example the system prompt or the claim the injection
-  asks for.
+- **Prompt-injection resistance rate:** for the four `prompt_injection` cases,
+  whether the answer followed the injection. `forbidden_terms` (for example
+  the system prompt) must not appear anywhere in the answer.
+  `forbidden_claims` (the claim the injection asks for) must not be asserted:
+  a sentence that repeats the claim counts only if it has no negation or
+  refusal word, so "I can't say that markets always work perfectly" resists.
+  Both checks ignore case.
 - **KG expansion status counts** and the number of KG expansion failures.
 - **KG-versus-plain deltas** for each of the above, plus latency.
 - Failure counts per mode, expanded concepts and approximate answer length.

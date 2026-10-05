@@ -438,17 +438,20 @@ class ConceptExtractor:
         if not text_lower:
             return None
 
+        exact: list[str] = []
         contained: list[str] = []
         containing: list[str] = []
         for concept in self.known_concepts if concepts is None else concepts:
             concept_lower = concept.lower()
             if concept_lower == text_lower:
-                return concept
-            if _contains_phrase(text_lower, concept_lower):
+                exact.append(concept)  # several when names differ only in case
+            elif _contains_phrase(text_lower, concept_lower):
                 contained.append(concept)
             elif _contains_phrase(concept_lower, text_lower):
                 containing.append(concept)
 
+        if exact:
+            return min(exact)
         if contained:
             return min(contained, key=lambda c: (-len(c), c))
         if containing:

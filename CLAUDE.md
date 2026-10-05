@@ -92,9 +92,9 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 
 Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key variables:
 
-- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/graph/query`) need `X-API-Key` when a key is set. `API_KEY` must be printable ASCII without surrounding whitespace (and at least 16 characters in production), or startup fails; a whitespace-only key counts as no key. `API_DOCS_ENABLED` unset or empty follows the `APP_ENV` default; `true`/`false` force it
+- `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/graph/query`, `/demo/provenance`) need `X-API-Key` when a key is set. `API_KEY` must be printable ASCII without surrounding whitespace (and at least 16 characters in production), or startup fails; a whitespace-only key counts as no key. `API_DOCS_ENABLED` unset or empty follows the `APP_ENV` default; `true`/`false` force it
 - `TRUST_PROXY_HEADERS=true` keys rate limits on the right-most `X-Forwarded-For` hop; only behind a proxy that appends the client IP
-- `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`; startup fails otherwise
+- `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`, a loopback/private `LLM_OLLAMA_HOST` and a non-cloud `LLM_LOCAL_MODEL`, and refuses LangSmith tracing variables; startup fails otherwise (checks in `backend/app/core/privacy.py`). The API also disables LangSmith tracing at runtime and sets `HF_HUB_OFFLINE=1` once its models are cached
 - `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
 - `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values); `EMBEDDING_MODEL_REVISION` / `RERANKER_MODEL_REVISION` pin Hugging Face revisions
 - `LLM_SEED` - sampling seed sent to Ollama (unset by default); evaluations use `LLM_TEMPERATURE=0` and a fixed seed
@@ -107,7 +107,7 @@ Removed backend settings (ignored if still present in an old `.env`): `API_HOST`
 
 ## Test Configuration
 
-Backend tests are in `backend/tests/` with shared mocks in `conftest.py`; see `docs/TESTING.md`. Markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`, `@pytest.mark.tribunal`.
+Backend tests are in `backend/tests/` with shared mocks in `conftest.py`; see `docs/TESTING.md`. An autouse `network_guard` fixture fails any non-loopback connection or DNS lookup. Markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`, `@pytest.mark.tribunal`.
 
 The tribunal suite (`backend/tests/test_tribunal_prosecution.py`) encodes the findings of the archived adversarial review in `docs/archive/tribunal-2026-02/`. `xfail_strict = true`: when a known defect is fixed, remove its `xfail` marker in the same change. The remaining strict xfails are linked to #73 (per-learner identity) and #74 (server-side grading). CI runs the regular suite on Python 3.11-3.13 with `-m "not tribunal"` and the tribunal suite in its own job (advisory until the v0.3.0 release makes it required). The required status check on `main` is `All Checks Passed`; see `docs/TESTING.md` for the job list.
 

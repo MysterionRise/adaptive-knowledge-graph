@@ -96,6 +96,13 @@ def test_neo4j_apoc_is_restricted_and_gds_dropped(services):
     assert "graph-data-science" not in COMPOSE_FILE.read_text()
 
 
+def test_no_usage_reporting_from_the_stack(services):
+    """PRIVACY_LOCAL_ONLY: Neo4j usage statistics and Hugging Face telemetry are off (#159)."""
+    assert services["neo4j"]["environment"]["NEO4J_dbms_usage__report_enabled"] == "false"
+    for name in ("api-cpu", "api-gpu"):
+        assert services[name]["environment"]["HF_HUB_DISABLE_TELEMETRY"] == "1"
+
+
 def test_passwords_are_shared_between_databases_and_api(services):
     neo4j_env = services["neo4j"]["environment"]
     opensearch_env = services["opensearch"]["environment"]

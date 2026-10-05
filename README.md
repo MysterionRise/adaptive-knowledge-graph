@@ -38,7 +38,7 @@ ideas on top of that structure:
 
 Everything runs **local-first**. With the default `PRIVACY_LOCAL_ONLY=true`,
 questions and textbook excerpts go only to your own Ollama server, and learner
-data stays in a local SQLite file. That matters for education data.
+data stays in a local SQLite file.
 
 ## Features
 
@@ -259,6 +259,11 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
 - **The API refuses to start with "PRIVACY_LOCAL_ONLY=true requires
   LLM_MODE=local".** Remote LLM modes need `PRIVACY_LOCAL_ONLY=false`. See
   [Configuration](#configuration).
+- **The API refuses to start with "PRIVACY_LOCAL_ONLY=true refuses LangSmith
+  tracing", "requires a local Ollama" or "refuses Ollama cloud models".**
+  Unset the tracing variable it names, point `LLM_OLLAMA_HOST` at a loopback or
+  private address, or pick a local model. Set `PRIVACY_LOCAL_ONLY=false` only if
+  that traffic is approved.
 - **`npm ci` fails with an engine error.** Switch to Node 24, for example with
   `fnm use` (it reads `.node-version`) or `nvm install 24`.
 - **A port is already in use.** The stack uses 3000 (frontend), 8000 (API),
@@ -274,11 +279,11 @@ need:
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `APP_ENV` | `development` | `development` runs without an API key and logs a warning at startup. `production` refuses to start without `API_KEY` or with a `*` in any CORS setting, and turns off `/docs`, `/redoc` and `/openapi.json` unless `API_DOCS_ENABLED=true`. |
-| `API_KEY` | empty | Required in production, where it must be at least 16 characters. In both modes it must be printable ASCII without leading or trailing whitespace, or the API refuses to start; a whitespace-only key counts as no key. Clients send it in the `X-API-Key` header to reach the protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/graph/query`). |
+| `API_KEY` | empty | Required in production, where it must be at least 16 characters. In both modes it must be printable ASCII without leading or trailing whitespace, or the API refuses to start; a whitespace-only key counts as no key. Clients send it in the `X-API-Key` header to reach the protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/graph/query`, `/demo/provenance`). |
 | `API_DOCS_ENABLED` | unset | Unset or empty means on in development and off in production; `true` or `false` forces either. |
 | `CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS` | `http://localhost:3000,http://localhost:3001`; `GET,POST,OPTIONS`; `Content-Type,X-API-Key,X-Request-ID` | Comma-separated CORS allow-lists. |
 | `TRUST_PROXY_HEADERS` | `false` | Keys rate limits on the right-most `X-Forwarded-For` hop. Enable it only behind a proxy that appends the client IP. |
-| `PRIVACY_LOCAL_ONLY` | `true` | Keeps every LLM call on the local Ollama. While it is `true` the API refuses to start unless `LLM_MODE=local`. |
+| `PRIVACY_LOCAL_ONLY` | `true` | Keeps questions, textbook context and usage data local. While it is `true` the API refuses to start unless `LLM_MODE=local`, `LLM_OLLAMA_HOST` is loopback or private (`localhost`, `ollama`, `host.docker.internal`, `host.containers.internal`, a private IP, or a name resolving only to those), `LLM_LOCAL_MODEL` is not an Ollama cloud model (`-cloud`, `:cloud`) and no LangSmith tracing variable (`LANGSMITH_TRACING`, `LANGCHAIN_TRACING_V2`, ...) is on. The API also runs the Hugging Face Hub offline once its models are cached. |
 | `LLM_MODE` | `local` | `local` uses Ollama. `remote` uses OpenRouter (`OPENROUTER_API_KEY`). `hybrid` tries Ollama and falls back to OpenRouter. Both remote modes send questions and retrieved excerpts to the provider and require `PRIVACY_LOCAL_ONLY=false`. |
 | `EMBEDDING_DEVICE` | `auto` | `auto` picks `cuda`, then `mps`, then `cpu`. Set a device to override. |
 | `LLM_LOCAL_MODEL` | `llama3.1:8b-instruct-q4_K_M` | Ollama model tag. |
@@ -367,15 +372,9 @@ This is a proof of concept and pilot prototype. Known limitations:
 | [docs/evals/README.md](docs/evals/README.md) | Evaluation harness and report format |
 | [docs/demo/README.md](docs/demo/README.md) | Scripted demo workflow, presenter scripts and slides |
 | [docs/archive/tribunal-2026-02/](docs/archive/tribunal-2026-02/README.md) | Archived adversarial code review |
-| [ROADMAP.md](ROADMAP.md) | What is planned next |
+| [ROADMAP.md](ROADMAP.md) | What is planned next, tracked in [GitHub issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues) |
 | [CHANGELOG.md](CHANGELOG.md) | Notable changes |
 | [SECURITY.md](SECURITY.md) | Reporting vulnerabilities, threat model, hardening |
-
-## Roadmap
-
-Planned work, from evidence and hardening to identity and assessment
-integrity, is described in [ROADMAP.md](ROADMAP.md) and tracked in
-[GitHub issues](https://github.com/MysterionRise/adaptive-knowledge-graph/issues).
 
 ## Contributing
 
@@ -392,15 +391,6 @@ expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 If you use this project in research or teaching material, please cite it. The
 metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this
 repository" button produces APA and BibTeX from it.
-
-```bibtex
-@software{perikov_adaptive_knowledge_graph,
-  author  = {Perikov, Konstantin},
-  title   = {Adaptive Knowledge Graph},
-  url     = {https://github.com/MysterionRise/adaptive-knowledge-graph},
-  license = {MIT}
-}
-```
 
 ## License and attribution
 

@@ -18,6 +18,19 @@ is compiled in the release pull request
   `LLM_MODE=local`. The API refuses to start with `LLM_MODE=remote` or
   `LLM_MODE=hybrid` unless you also set `PRIVACY_LOCAL_ONLY=false`
   ([#89](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/89)).
+- **Breaking:** `PRIVACY_LOCAL_ONLY=true` now also refuses to start when a
+  LangSmith tracing variable (`LANGSMITH_TRACING`, `LANGSMITH_TRACING_V2`,
+  `LANGCHAIN_TRACING`, `LANGCHAIN_TRACING_V2`) is on, when `LLM_OLLAMA_HOST`
+  is not a loopback or private address (`localhost`, `ollama`,
+  `host.docker.internal`, `host.containers.internal`, a private IP, or a name
+  that resolves only to those), or when `LLM_LOCAL_MODEL` is an Ollama cloud
+  model (`-cloud`, `:cloud`). The error names the setting: unset the tracing
+  variable, point `LLM_OLLAMA_HOST` at a local Ollama, pick a local model, or
+  set `PRIVACY_LOCAL_ONLY=false` if that traffic is approved. The API also
+  disables LangSmith tracing at runtime, sets `HF_HUB_DISABLE_TELEMETRY=1`,
+  runs the Hugging Face Hub offline (`HF_HUB_OFFLINE=1`) once its models are
+  cached, and Compose turns Neo4j usage reporting off
+  ([#159](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/159)).
 - The Docker Compose project is now named `adaptive-kg`, so volumes from an
   older checkout (`compose_*`) are no longer used automatically. Set
   `COMPOSE_PROJECT_NAME=compose` to keep them, or re-seed with `make seed`
@@ -53,12 +66,16 @@ is compiled in the release pull request
 - Evaluation provenance and comparison: `/ask`, `/ask/stream` and the new
   retrieval-only `POST /api/v1/retrieve` report `kg_expansion_status`;
   `GET /api/v1/demo/provenance` reports the git SHA, models, devices,
-  allowlisted retrieval settings and per-subject counts; reports record that
-  provenance, the Ollama digest, golden-set and per-case hashes, answers and
-  sources, score prompt injection and are saved to `docs/evals/history/`;
-  `check_demo_eval.py` requires provenance, a `200` for every request and zero
-  KG-expansion failures; `make eval-compare BASE=… HEAD=…` compares two
-  reports; `LLM_SEED` and model revision settings make runs reproducible
+  allowlisted retrieval settings and per-subject counts, and requires the API
+  key when one is configured (`evaluate_rag.py` sends `API_KEY`, or
+  `--api-key`); reports record that provenance, the Ollama digest, golden-set
+  and per-case hashes, answers and sources, score prompt injection and are
+  saved to `docs/evals/history/`; `check_demo_eval.py` and the demo status page
+  share one rule set: complete provenance, a `200` for every request, zero
+  KG-expansion failures, a server on the harness's commit and an unchanged
+  golden set; `make eval-compare BASE=… HEAD=…` compares two reports of the
+  same run mode and gates only cases whose definition is unchanged; `LLM_SEED`
+  and model revision settings make runs reproducible
   ([#155](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/155)).
 
 ### Removed
@@ -80,6 +97,17 @@ is compiled in the release pull request
   for 5 minutes instead of being loaded from Neo4j on every question; restart
   the API after re-seeding to use the new names at once
   ([#157](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/157)).
+- KG expansion builds the same expanded query in every API process: the
+  question's concepts first, then their neighbours in graph order. The order
+  used to follow per-process set ordering, and the expanded query is embedded
+  for retrieval, so the same question could retrieve different chunks after a
+  restart
+  ([#155](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/155)).
+- Prompt-injection scoring no longer counts a refusal that repeats the
+  injected claim ("I can't say that markets always work perfectly") as a
+  successful injection: such cases now list `forbidden_claims`, which count
+  only in a sentence without a negation or refusal
+  ([#155](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/155)).
 
 ## Earlier history
 
