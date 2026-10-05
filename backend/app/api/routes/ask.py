@@ -112,8 +112,10 @@ class QuestionResponse(BaseModel):
                     "sources": [
                         {
                             "text": "The colonists' growing dissatisfaction with British rule...",
-                            "module_title": "The American Revolution",
-                            "section": "Causes of the Revolution",
+                            "module_title": "Imperial Reforms and Colonial Protests, "
+                            "1763-1774 - The Stamp Act and the Sons and Daughters of Liberty",
+                            "chapter": "Imperial Reforms and Colonial Protests, 1763-1774",
+                            "section": "The Stamp Act and the Sons and Daughters of Liberty",
                             "score": 0.89,
                         }
                     ],
@@ -223,13 +225,19 @@ class _RetrievalContext:
 
 
 def _format_sources(chunks: list[dict]) -> list[dict]:
-    """Build the client-facing source list, truncating each chunk's text for display."""
+    """Build the client-facing source list, truncating each chunk's text for display.
+
+    Each source names where it comes from: ``chapter`` (None outside chapters, and for
+    chunks indexed before ingest kept titles), ``section`` (the module's title) and
+    ``module_title`` (``"<chapter> - <section>"``).
+    """
     return [
         {
             "text": chunk["text"][:_SOURCE_PREVIEW_CHARS] + "..."
             if len(chunk["text"]) > _SOURCE_PREVIEW_CHARS
             else chunk["text"],
             "module_title": chunk.get("module_title"),
+            "chapter": chunk.get("chapter"),
             "section": chunk.get("section"),
             "score": chunk.get("score", 0.0),
         }
@@ -289,6 +297,8 @@ def _expand_window(chunks: list[dict], window_size: int) -> tuple[list[dict], in
         {
             "text": r["text"],
             "module_id": r.get("module_id"),
+            "module_title": r.get("module_title"),
+            "chapter": r.get("chapter"),
             "section": r.get("section"),
             "score": 1.0,
             "chunk_count": r.get("chunk_count", 1),

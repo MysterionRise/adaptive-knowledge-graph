@@ -419,7 +419,9 @@ describe('ChatPage', () => {
       {
         text: 'Source content here',
         score: 0.95,
-        metadata: { chapter: 'Chapter 1', section: 'Section A' },
+        module_title: 'Imperial Reforms and Colonial Protests, 1763-1774 - The Stamp Act',
+        chapter: 'Imperial Reforms and Colonial Protests, 1763-1774',
+        section: 'The Stamp Act',
       },
     ];
 
@@ -434,12 +436,54 @@ describe('ChatPage', () => {
       fireEvent.click(toggle);
 
       expect(screen.getByText('Source content here')).toBeInTheDocument();
-      expect(screen.getByText('Chapter 1')).toBeInTheDocument();
+      expect(
+        screen.getByText('Imperial Reforms and Colonial Protests, 1763-1774')
+      ).toBeInTheDocument();
+      expect(screen.getByText('The Stamp Act')).toBeInTheDocument();
       expect(screen.getByText('Score: 95%')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Hide Sources (1)' })).toHaveAttribute(
         'aria-expanded',
         'true'
       );
+    });
+  });
+
+  describe('Source titles', () => {
+    it('shows the section alone for a source outside any chapter', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        sources: [
+          {
+            text: 'Preface text',
+            module_title: 'Preface',
+            chapter: null,
+            section: 'Preface',
+            score: 0.5,
+          },
+        ],
+        retrieved_count: 1,
+      });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Show Sources (1)' }));
+      expect(screen.getByText('Preface')).toBeInTheDocument();
+      expect(screen.queryByText('•')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the module title when a source has no chapter or section', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        sources: [{ text: 'Old index text', module_title: 'US History - m49990', score: 0.5 }],
+        retrieved_count: 1,
+      });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Show Sources (1)' }));
+      expect(screen.getByText('US History - m49990')).toBeInTheDocument();
     });
   });
 

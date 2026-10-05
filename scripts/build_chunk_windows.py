@@ -117,6 +117,7 @@ def to_chunk_nodes(
             start_char=chunk.get("start_char", 0),
             end_char=chunk.get("end_char", len(chunk["text"])),
             module_id=chunk.get("module_id"),
+            chapter=chunk.get("chapter"),
             section=chunk.get("section"),
             text_embedding=embeddings.get(chunk["id"]),
             previous_chunk_id=chunk.get("previous_chunk_id"),
