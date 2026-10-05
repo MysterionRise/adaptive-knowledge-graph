@@ -12,13 +12,6 @@ The full list of changes from the v0.3.0 open-source quality sprint
 is compiled in the release pull request
 ([#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104)).
 
-### Fixed
-
-- GitHub book-content downloads now use a 30-second request timeout and an
-  identifying User-Agent, with at most three attempts and 1/2-second backoff
-  for HTTP 429/5xx, timeouts and connection failures. Other HTTP failures are
-  not retried.
-
 ### Changed
 
 - **Breaking:** `PRIVACY_LOCAL_ONLY=true`, the default, now requires
@@ -98,6 +91,11 @@ is compiled in the release pull request
 
 ### Fixed
 
+- GitHub book-content downloads now use a 30-second request timeout and an
+  identifying User-Agent, with at most three attempts and 1/2-second backoff
+  for HTTP 429/5xx, timeouts and connection failures. Other HTTP failures are
+  not retried
+  ([#161](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/161)).
 - KG expansion no longer stores each request's concept names on the shared
   concept extractor, so concurrent questions for different subjects cannot be
   matched against each other's concepts. Concept names are cached per subject
