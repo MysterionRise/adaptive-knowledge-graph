@@ -86,6 +86,7 @@ class ChunkNode(BaseModel):
 
     # Source metadata
     module_id: str | None = Field(None, description="Parent module ID")
+    chapter: str | None = Field(None, description="Chapter title")
     section: str | None = Field(None, description="Section title")
 
     # Embedding for Neo4j native vector search

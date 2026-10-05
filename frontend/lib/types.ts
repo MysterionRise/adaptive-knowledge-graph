@@ -22,18 +22,18 @@ export interface QuestionRequest {
 }
 
 /**
- * Source metadata from retrieved chunks.
+ * A retrieved chunk cited by `/ask` and `/ask/stream`.
  */
 export interface Source {
+  /** Preview of the chunk text (first 200 characters). */
   text: string;
-  module_title?: string;
-  section?: string;
+  /** "<chapter> - <section>", or the section alone outside chapters. */
+  module_title?: string | null;
+  /** Chapter title; null for the preface and appendices. */
+  chapter?: string | null;
+  /** Section (module) title. */
+  section?: string | null;
   score?: number;
-  metadata?: {
-    chapter?: string;
-    section?: string;
-    [key: string]: unknown;
-  };
 }
 
 /**

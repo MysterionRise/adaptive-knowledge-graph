@@ -136,8 +136,8 @@ output.
 ## What is measured
 
 - **Answer term recall:** the share of expected terms that appear in the answer.
-- **Citation hit rate:** whether an expected source section appears among the
-  returned sources.
+- **Citation hit rate:** whether a returned source is one of the case's
+  `expected_sources`.
 - **Expected-source MRR:** how high the first expected source ranks.
 - **Unsupported refusal rate:** for questions tagged `unsupported_claim`,
   whether the answer declines instead of asserting the claim.
@@ -148,6 +148,32 @@ output.
 - **KG expansion status counts** and the number of KG expansion failures.
 - **KG-versus-plain deltas** for each of the above, plus latency.
 - Failure counts per mode, expanded concepts and approximate answer length.
+
+### How sources are matched
+
+Each source returned by `/ask` names a `chapter`, a `section` (the module's
+own title) and a `module_title` (`"<chapter> - <section>"`). A source matches
+an expected source when one of these three titles equals it, ignoring case,
+curly versus straight quotes, en dashes and extra whitespace. The 200-character
+text preview is never matched, so a citation counts only when it is the
+expected section, not when its text happens to mention the topic.
+
+Every `expected_sources` entry in the golden set is a real title from
+`data/processed/books_<subject>.jsonl`, usually a section title, and
+`backend/tests/test_citations.py` checks that each one matches between one and
+three ingested modules. A chapter title matches all of that chapter's modules,
+so it only qualifies for chapters with three modules or fewer; to expect a
+chapter's introduction, use its full module title, such as
+`"Monopoly - Introduction to a Monopoly"`. After changing the books or the
+ingest, regenerate the processed data and re-check the golden set with:
+
+```bash
+poetry run pytest backend/tests/test_citations.py
+```
+
+Reports from before v0.4.0 matched titles and text previews as substrings and
+used looser expected sources, so their citation metrics are not comparable
+with current ones.
 
 The golden set also includes cross-chapter synthesis, ambiguous,
 conflicting-source and prompt-injection questions; its `tags` field says which

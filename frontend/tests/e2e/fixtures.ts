@@ -91,14 +91,18 @@ export const tutorAnswer = {
   sources: [
     {
       text: 'Colonial resistance grew after Parliament passed the Stamp Act in 1765.',
-      module_title: 'The American Revolution',
-      section: 'Colonial Resistance',
+      module_title:
+        'Imperial Reforms and Colonial Protests, 1763-1774 - The Stamp Act and the Sons and Daughters of Liberty',
+      chapter: 'Imperial Reforms and Colonial Protests, 1763-1774',
+      section: 'The Stamp Act and the Sons and Daughters of Liberty',
       score: 0.91,
     },
     {
       text: 'The Boston Tea Party of 1773 protested the Tea Act.',
-      module_title: 'The American Revolution',
-      section: 'The Road to Revolution',
+      module_title:
+        'Imperial Reforms and Colonial Protests, 1763-1774 - The Destruction of the Tea and the Coercive Acts',
+      chapter: 'Imperial Reforms and Colonial Protests, 1763-1774',
+      section: 'The Destruction of the Tea and the Coercive Acts',
       score: 0.84,
     },
   ],
