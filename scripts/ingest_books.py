@@ -49,13 +49,36 @@ def get_books_for_subject(subject_id: str) -> list[BookConfig]:
 
 
 def fetch_text(url: str) -> str | None:
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.text
-    except Exception as e:
-        logger.warning(f"Failed to fetch {url}: {e}")
-        return None
+    """Fetch a chapter with bounded inactivity and capped transient-failure retries."""
+    headers = {
+        "User-Agent": (
+            "adaptive-knowledge-graph-ingest "
+            "(+https://github.com/MysterionRise/adaptive-knowledge-graph)"
+        )
+    }
+    for attempt in range(3):
+        try:
+            response = requests.get(url, timeout=30, headers=headers)
+            response.raise_for_status()
+            return response.text
+        except requests.HTTPError as exc:
+            error: Exception = exc
+            retryable = exc.response is not None and (
+                exc.response.status_code == 429 or 500 <= exc.response.status_code < 600
+            )
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            error = exc
+            retryable = True
+        except Exception as exc:
+            logger.warning(f"Failed to fetch {url}: {exc}")
+            return None
+        if not retryable or attempt == 2:
+            logger.warning(f"Failed to fetch {url}: {error}")
+            return None
+        delay = 2**attempt
+        logger.warning(f"Transient failure fetching {url}: {error}; retrying in {delay}s")
+        time.sleep(delay)
+    return None
 
 
 def parse_summary(summary_text: str) -> list[str]:
