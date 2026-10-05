@@ -387,7 +387,9 @@ class TestTextChunker:
 
     def test_sequential_ids_links_and_metadata(self):
         chunker = TextChunker(chunk_size=200, chunk_overlap=20)
-        chunks = chunker.chunk_text(self.SENTENCES, metadata={"module_id": "m1", "section": "s"})
+        chunks = chunker.chunk_text(
+            self.SENTENCES, metadata={"module_id": "m1", "chapter": "c", "section": "s"}
+        )
 
         assert [c["id"] for c in chunks] == [f"m1_{i}" for i in range(len(chunks))]
         assert [c["chunk_index"] for c in chunks] == list(range(len(chunks)))
@@ -396,7 +398,9 @@ class TestTextChunker:
         for previous, current in zip(chunks, chunks[1:], strict=False):
             assert previous["next_chunk_id"] == current["id"]
             assert current["previous_chunk_id"] == previous["id"]
-        assert all(c["module_id"] == "m1" and c["section"] == "s" for c in chunks)
+        assert all(
+            c["module_id"] == "m1" and c["chapter"] == "c" and c["section"] == "s" for c in chunks
+        )
 
     def test_id_prefix_prefers_id_then_module_then_default(self):
         chunker = TextChunker(chunk_size=500, chunk_overlap=0)

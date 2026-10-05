@@ -128,7 +128,7 @@ class WindowRetriever:
 
         Each result is a complete chunk dict in the retriever's format, so callers
         can use it as a retrieval result as-is: ``id`` (the group's first original
-        hit), ``text``, ``module_id``, ``module_title``, ``section`` and ``score``
+        hit), ``text``, ``module_id``, ``module_title``, ``chapter``, ``section`` and ``score``
         (best score of the group's original hits taken from ``scores``; None if no
         score is known), plus ``chunk_count``, ``original_hit_count`` and ``chunk_ids``.
 
@@ -166,6 +166,7 @@ class WindowRetriever:
                     "module_title": next(
                         (c["module_title"] for c in module_chunks if c.get("module_title")), None
                     ),
+                    "chapter": module_chunks[0].get("chapter"),
                     "section": module_chunks[0].get("section"),
                     "score": max(hit_scores) if hit_scores else None,
                     "chunk_count": len(module_chunks),
