@@ -39,7 +39,9 @@ class Reranker:
 
             device = resolve_device(settings.reranker_device)
             logger.info(f"Loading reranker model {settings.reranker_model} on {device}")
-            self._model = CrossEncoder(settings.reranker_model, device=device)
+            revision = settings.reranker_model_revision
+            kwargs = {"revision": revision} if revision else {}
+            self._model = CrossEncoder(settings.reranker_model, device=device, **kwargs)
             logger.info("Reranker model loaded")
 
     def rerank(self, query: str, chunks: list[dict], top_k: int) -> list[dict]:
