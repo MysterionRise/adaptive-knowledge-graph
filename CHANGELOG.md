@@ -30,6 +30,19 @@ is compiled in the release pull request
   `docs/archive/tribunal-2026-02/`, and `TESTING.md` and `COMPLIANCE.md` to
   `docs/`. `ROADMAP_2026.md` is now `ROADMAP.md`
   ([#98](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/98)).
+- **Re-seed required:** ingestion now keeps each module's real title and
+  chapter (`chapter`, `section`, and `module_title` as
+  `"<chapter> - <section>"`) instead of `"<book> - <module id>"`. Retrieval
+  boosts these titles, `/ask` and `/ask/stream` sources carry `chapter` and
+  `section`, and the chat shows them. Rebuild existing data with
+  `make pipeline-all` (it re-ingests, rebuilds the graph and recreates the
+  index; `make seed` keeps a graph and index that already exist), then
+  `make build-windows` if you use window retrieval. Data seeded before this
+  change has no chapters and only module IDs as titles. The evaluation
+  harness matches expected sources on titles only (no longer on the text
+  preview), and the golden set's `expected_sources` now name real sections,
+  so citation hit rate and MRR are not comparable with earlier reports
+  ([#154](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/154)).
 
 ### Added
 

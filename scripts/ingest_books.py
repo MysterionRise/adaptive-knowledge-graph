@@ -1,13 +1,16 @@
 import argparse
 import asyncio
+import html
 import json
 import os
 import re
 import sys
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import requests
+import yaml
 from bs4 import BeautifulSoup
 from loguru import logger
 from pydantic import BaseModel
@@ -58,11 +61,120 @@ def fetch_text(url: str) -> str | None:
         return None
 
 
+@dataclass(frozen=True)
+class SummaryEntry:
+    """One module linked from a book's SUMMARY.md."""
+
+    filename: str  # e.g. "m49990.md"
+    link_title: str  # The link text in SUMMARY.md
+    chapter: str | None  # Title of the enclosing chapter; None for preface, parts and appendices
+
+
+# A numbered list item: "<indent>3.  {: .chapter} [Title](contents/m123.md)". The class marker
+# and the link are both optional ("{: .part} Unit 1. The Chemistry of Life" has no link).
+_SUMMARY_ITEM_RE = re.compile(
+    r"^(?P<indent>[ \t]*)\d+\.\s+(?:\{:\s*\.(?P<kind>[\w-]+)\s*\}\s*)?(?P<rest>.*)$"
+)
+_MARKDOWN_ESCAPE_RE = re.compile(r"\\([\\`*_{}\[\]()#+\-.!'\"])")
+_SUMMARY_LINK_RE = re.compile(r"\[(?P<title>[^\]]*)\]\(contents/(?P<file>m[^)]*?\.md)\)")
+
+
+def parse_summary_entries(summary_text: str) -> list[SummaryEntry]:
+    """Parse SUMMARY.md into modules with their link titles and chapters.
+
+    The philschatz mirrors list a chapter as ``{: .chapter} [Chapter title](contents/m….md)``
+    (that module is the chapter's introduction) with its sections indented below it. Parts
+    (``{: .part}``), the preface and appendices are not chapters. Duplicate links keep the
+    first occurrence.
+    """
+    entries: dict[str, SummaryEntry] = {}
+    chapter: str | None = None
+    chapter_indent = -1
+    for line in summary_text.splitlines():
+        item = _SUMMARY_ITEM_RE.match(line)
+        if not item:
+            continue
+        indent = len(item["indent"].expandtabs(4))
+        kind = item["kind"]
+        link = _SUMMARY_LINK_RE.search(item["rest"])
+        link_title = clean_title(_MARKDOWN_ESCAPE_RE.sub(r"\1", link["title"])) if link else ""
+
+        if kind == "chapter":
+            chapter, chapter_indent = (link_title or None), indent
+            entry_chapter = chapter
+        elif kind is None and chapter is not None and indent > chapter_indent:
+            entry_chapter = chapter
+        else:
+            # A preface, part or appendix, or an item outside the current chapter
+            chapter, chapter_indent = None, -1
+            entry_chapter = None
+
+        if link and link["file"] not in entries:
+            entries[link["file"]] = SummaryEntry(link["file"], link_title, entry_chapter)
+    return list(entries.values())
+
+
 def parse_summary(summary_text: str) -> list[str]:
-    """Extract chapter filenames from SUMMARY.md"""
-    # Look for links like (contents/m12345.md)
-    matches = re.findall(r"\(contents/(m.*?\.md)\)", summary_text)
-    return list(dict.fromkeys(matches))  # Dedupe
+    """Extract module filenames from SUMMARY.md, in book order."""
+    return [entry.filename for entry in parse_summary_entries(summary_text)]
+
+
+def clean_title(title: str) -> str:
+    """Normalise a title: drop markup, unescape entities and collapse whitespace."""
+    text = re.sub(r"<[^>]+>", "", html.unescape(title))
+    return " ".join(text.split())
+
+
+def parse_front_matter_title(text: str) -> str | None:
+    """Return the ``title`` from a module's YAML front matter, if it has one."""
+    match = re.match(r"^---[ \t]*\r?\n([\s\S]*?)\r?\n---", text)
+    if not match:
+        return None
+    try:
+        front_matter = yaml.safe_load(match[1])
+    except yaml.YAMLError:
+        front_matter = None
+    if isinstance(front_matter, dict):
+        title = front_matter.get("title")
+    else:
+        title_line = re.search(r"^title:\s*(.+?)\s*$", match[1], re.MULTILINE)
+        title = title_line[1].strip("\"'") if title_line else None
+    if title is None:
+        return None
+    return clean_title(str(title)) or None
+
+
+def format_module_title(chapter: str | None, section: str) -> str:
+    """The stored module title: the section title, prefixed with its chapter when it has one.
+
+    Section titles alone are not unique ("Introduction" opens every chapter), so the chapter
+    is part of the title the index boosts and the API cites.
+    """
+    if chapter and chapter != section:
+        return f"{chapter} - {section}"
+    return section
+
+
+def build_record(
+    *,
+    module_id: str,
+    book_title: str,
+    chapter: str | None,
+    section: str,
+    text: str,
+    subject_id: str,
+) -> dict[str, Any]:
+    """One normalised module record, as written to ``books_<subject>.jsonl``."""
+    return {
+        "module_id": module_id,
+        "module_title": format_module_title(chapter, section),
+        "book_title": book_title,
+        "chapter": chapter,
+        "section": section,
+        "text": text,
+        "key_terms": [],
+        "subject_id": subject_id,
+    }
 
 
 def clean_markdown(text: str) -> str:
@@ -100,30 +212,51 @@ def _extract_preloaded_state(html: str) -> dict[str, Any] | None:
     return None
 
 
-def _collect_leaf_pages(node: dict) -> list[dict[str, str]]:
-    """Recursively collect leaf pages (actual content pages) from the book tree."""
-    pages: list[dict[str, str]] = []
+def _toc_title(raw_title: str) -> str:
+    """Plain text of an OpenStax ToC title.
+
+    Numbered titles are marked up as ``<span class="os-number">1.1</span>…
+    <span class="os-text">Title</span>``; the ``os-text`` span holds the title itself.
+    """
+    soup = BeautifulSoup(raw_title, "html.parser")
+    text_span = soup.select_one(".os-text")
+    return clean_title((text_span or soup).get_text(" ", strip=True))
+
+
+def _collect_leaf_pages(node: dict, chapter: str | None = None) -> list[dict[str, Any]]:
+    """Recursively collect leaf pages (actual content pages) from the book tree.
+
+    Each page carries the title of its innermost enclosing node (its chapter); pages directly
+    under the book root (preface, appendices) have no chapter.
+    """
+    pages: list[dict[str, Any]] = []
     contents = node.get("contents", [])
     if not contents:
         # Leaf node = actual page
         slug = node.get("slug", "")
-        raw_title = node.get("title", slug)
-        # Titles may contain HTML markup — strip it
-        clean_title = BeautifulSoup(raw_title, "html.parser").get_text(strip=True)
-        pages.append({"page_slug": slug, "title": clean_title})
+        pages.append(
+            {
+                "page_slug": slug,
+                "title": _toc_title(node.get("title", slug)) or slug,
+                "chapter": chapter,
+            }
+        )
     else:
         for child in contents:
-            pages.extend(_collect_leaf_pages(child))
+            child_chapter = _toc_title(child.get("title", "")) or None
+            pages.extend(
+                _collect_leaf_pages(child, child_chapter if child.get("contents") else chapter)
+            )
     return pages
 
 
-def fetch_openstax_toc(slug: str) -> list[dict[str, str]]:
+def fetch_openstax_toc(slug: str) -> list[dict[str, Any]]:
     """Fetch table of contents from an OpenStax book.
 
     Uses the embedded __PRELOADED_STATE__ JSON which contains the full book tree
     on every page. Fetches the 'preface' page as a reliable entry point.
 
-    Returns list of {"page_slug": ..., "title": ...} dicts.
+    Returns list of {"page_slug": ..., "title": ..., "chapter": ...} dicts.
     """
     url = f"{OPENSTAX_BASE_URL}/{slug}/pages/preface"
     logger.info(f"Fetching OpenStax ToC from {url}")
@@ -218,34 +351,35 @@ def _process_github_raw_book(
         logger.error(f"Could not fetch summary for {book.title}")
         return
 
-    chapters = parse_summary(summary_text)
-    logger.info(f"Found {len(chapters)} chapters in {book.title}")
+    entries = parse_summary_entries(summary_text)
+    logger.info(f"Found {len(entries)} modules in {book.title}")
 
     if limit and limit > 0:
-        chapters = chapters[:limit]
-        logger.info(f"Limiting to first {limit} chapters for verification.")
+        entries = entries[:limit]
+        logger.info(f"Limiting to first {limit} modules for verification.")
 
-    for filename in chapters:
-        file_url = f"{book.repo_url_raw}/{book.content_path}/{filename}"
+    for entry in entries:
+        file_url = f"{book.repo_url_raw}/{book.content_path}/{entry.filename}"
         content = fetch_text(file_url)
 
         if not content:
             continue
 
+        # Read the title before clean_markdown strips the front matter
+        section = parse_front_matter_title(content) or entry.link_title
         clean_content = clean_markdown(content)
-        module_id = filename.replace(".md", "")
+        module_id = entry.filename.removesuffix(".md")
 
         if clean_content.split():
             all_records.append(
-                {
-                    "module_id": module_id,
-                    "module_title": f"{book.title} - {module_id}",
-                    "book_title": book.title,
-                    "section": module_id,
-                    "text": clean_content,
-                    "key_terms": [],
-                    "subject_id": subject_id,
-                }
+                build_record(
+                    module_id=module_id,
+                    book_title=book.title,
+                    chapter=entry.chapter,
+                    section=section or module_id,
+                    text=clean_content,
+                    subject_id=subject_id,
+                )
             )
 
 
@@ -288,15 +422,14 @@ def _process_openstax_web_book(
 
         if content.split():
             all_records.append(
-                {
-                    "module_id": module_id,
-                    "module_title": f"{book.title} - {page_title}",
-                    "book_title": book.title,
-                    "section": module_id,
-                    "text": content,
-                    "key_terms": [],
-                    "subject_id": subject_id,
-                }
+                build_record(
+                    module_id=module_id,
+                    book_title=book.title,
+                    chapter=entry.get("chapter"),
+                    section=page_title or module_id,
+                    text=content,
+                    subject_id=subject_id,
+                )
             )
 
 

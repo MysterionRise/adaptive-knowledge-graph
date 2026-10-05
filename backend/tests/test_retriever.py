@@ -32,7 +32,8 @@ class TestReciprocalRankFusion:
                 "text": text,
                 "id": doc_id,
                 "module_id": "mod_1",
-                "module_title": "Test Module",
+                "module_title": "Test Chapter - Section 1",
+                "chapter": "Test Chapter",
                 "section": "Section 1",
                 "key_terms": ["term1"],
                 "attribution": "Test",
@@ -89,7 +90,8 @@ class TestReciprocalRankFusion:
 
         assert result[0]["text"] == "Sample text"
         assert result[0]["module_id"] == "mod_1"
-        assert result[0]["module_title"] == "Test Module"
+        assert result[0]["module_title"] == "Test Chapter - Section 1"
+        assert result[0]["chapter"] == "Test Chapter"
         assert result[0]["section"] == "Section 1"
         assert result[0]["key_terms"] == ["term1"]
         assert result[0]["attribution"] == "Test"
@@ -205,6 +207,8 @@ class TestCreateCollection:
         assert body["settings"]["index"]["number_of_replicas"] == 0
         assert body["settings"]["index"]["knn"] is True
         assert body["mappings"]["properties"]["embedding"]["dimension"] == 1024
+        for field in ("module_title", "chapter", "section"):
+            assert body["mappings"]["properties"][field] == {"type": "text"}
 
     def test_replicas_follow_setting(self, monkeypatch):
         from backend.app.core.settings import settings
