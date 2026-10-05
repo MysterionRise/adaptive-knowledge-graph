@@ -18,12 +18,13 @@ from backend.app.rag.window_retriever import (
 )
 
 
-def _chunk(chunk_id, index, module="m1", title="Module One", section="S1"):
+def _chunk(chunk_id, index, module="m1", title="Module One", section="S1", chapter="Ch1"):
     return {
         "chunk_id": chunk_id,
         "text": f"text {chunk_id}",
         "module_id": module,
         "module_title": title,
+        "chapter": chapter,
         "section": section,
         "chunk_index": index,
     }
@@ -151,6 +152,7 @@ class TestRetrieveWindowText:
             "text": "text m1_1\n\ntext m1_2\n\ntext m1_3",
             "module_id": "m1",
             "module_title": "Module One",
+            "chapter": "Ch1",
             "section": "S1",
             "score": pytest.approx(0.87),
             "chunk_count": 3,

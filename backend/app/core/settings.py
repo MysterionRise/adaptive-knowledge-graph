@@ -8,9 +8,33 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from backend.app.core.privacy import (
+    TRACING_ENV_VARS,
+    disable_hf_telemetry,
+    flag_is_on,
+    is_cloud_model,
+    ollama_host_problem,
+)
+
+# Before anything can import huggingface_hub (it reads the variable once, at import).
+disable_hf_telemetry()
+
 PRIVACY_LLM_MODE_ERROR = (
     "PRIVACY_LOCAL_ONLY=true requires LLM_MODE=local "
     "(set LLM_MODE=local or PRIVACY_LOCAL_ONLY=false)"
+)
+PRIVACY_TRACING_ERROR = (
+    "PRIVACY_LOCAL_ONLY=true refuses LangSmith tracing, which would send questions and "
+    "textbook context to LangSmith (unset {names} or set PRIVACY_LOCAL_ONLY=false)"
+)
+PRIVACY_OLLAMA_HOST_ERROR = (
+    "PRIVACY_LOCAL_ONLY=true requires a local Ollama: {problem} (point LLM_OLLAMA_HOST at "
+    "localhost, the Compose service, host.docker.internal or a loopback/private IP address, "
+    "or set PRIVACY_LOCAL_ONLY=false)"
+)
+PRIVACY_CLOUD_MODEL_ERROR = (
+    "PRIVACY_LOCAL_ONLY=true refuses Ollama cloud models, which run on ollama.com: "
+    "LLM_LOCAL_MODEL={model!r} (choose a local model or set PRIVACY_LOCAL_ONLY=false)"
 )
 
 
@@ -42,11 +66,29 @@ class Settings(BaseSettings):
     api_docs_enabled: bool | None = None
     debug: bool = False
     log_level: str = "INFO"
+    # Commit the server runs, reported by /api/v1/demo/provenance. Set at launch or build time
+    # (make run-api and scripts/compose.sh pass `git rev-parse HEAD`).
+    git_sha: str = "unknown"
+
+    @field_validator("git_sha", mode="before")
+    @classmethod
+    def _empty_git_sha_means_unknown(cls, value: object) -> object:
+        return (
+            "unknown" if value is None or (isinstance(value, str) and not value.strip()) else value
+        )
 
     @field_validator("api_docs_enabled", mode="before")
     @classmethod
     def _empty_docs_flag_means_unset(cls, value: object) -> object:
         """``API_DOCS_ENABLED=`` (empty, as in a copied .env) falls back to the APP_ENV default."""
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator(
+        "llm_seed", "embedding_model_revision", "reranker_model_revision", mode="before"
+    )
+    @classmethod
+    def _empty_optional_means_unset(cls, value: object) -> object:
+        """An empty value (``LLM_SEED=`` in a copied .env) means unset."""
         return None if isinstance(value, str) and not value.strip() else value
 
     # API
@@ -104,6 +146,9 @@ class Settings(BaseSettings):
     llm_ollama_host: str = "http://localhost:11434"
     llm_local_model: str = "llama3.1:8b-instruct-q4_K_M"
     llm_temperature: float = 0.1
+    # Sampling seed sent to Ollama (options.seed); unset lets Ollama pick one per request.
+    # Evaluations use LLM_TEMPERATURE=0 with a fixed LLM_SEED (docs/evals/README.md).
+    llm_seed: int | None = None
     llm_timeout: int = 60  # Non-streaming timeout (seconds)
     llm_stream_timeout: int = 120  # Streaming timeout (seconds)
     llm_retry_attempts: int = 3  # Max retries for non-streaming calls
@@ -118,6 +163,8 @@ class Settings(BaseSettings):
 
     # Embeddings
     embedding_model: str = "BAAI/bge-m3"
+    # Hugging Face revision (commit, tag or branch) to pin; unset loads the default branch.
+    embedding_model_revision: str | None = None
     embedding_device: str = Field(
         default="auto",
         description="auto (CUDA, then Apple MPS, then CPU), cuda, mps or cpu.",
@@ -127,6 +174,7 @@ class Settings(BaseSettings):
     # Reranker
     reranker_enabled: bool = False
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_model_revision: str | None = None
     reranker_device: str = Field(
         default="cuda",
         description="auto, cuda, mps or cpu; an unavailable accelerator falls back to CPU.",
@@ -202,10 +250,18 @@ class Settings(BaseSettings):
     privacy_local_only: bool = Field(
         default=True,
         description=(
-            "Never send prompts to a remote LLM provider. Requires LLM_MODE=local; any other "
-            "combination fails at startup."
+            "Keep questions, textbook context and usage data on this machine or network. "
+            "Requires LLM_MODE=local, a loopback or private LLM_OLLAMA_HOST and a non-cloud "
+            "LLM_LOCAL_MODEL, and refuses LangSmith tracing; anything else fails at startup. "
+            "The API also runs the Hugging Face Hub offline once its models are cached."
         ),
     )
+    # LangSmith/LangChain tracing switches, read only to refuse them while
+    # PRIVACY_LOCAL_ONLY=true (declared so values in .env are seen, not only the environment).
+    langsmith_tracing: str = ""
+    langsmith_tracing_v2: str = ""
+    langchain_tracing: str = ""
+    langchain_tracing_v2: str = ""
     attribution_openstax: str = (
         "Content adapted from OpenStax (various), "
         "licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)"
@@ -222,10 +278,28 @@ class Settings(BaseSettings):
         return not self.privacy_local_only and self.llm_mode != "local"
 
     @model_validator(mode="after")
-    def _require_local_llm_when_private(self) -> "Settings":
-        """Fail fast when PRIVACY_LOCAL_ONLY is combined with a remote-capable LLM mode."""
-        if self.privacy_local_only and self.llm_mode != "local":
-            raise ValueError(PRIVACY_LLM_MODE_ERROR)
+    def _enforce_privacy_local_only(self) -> "Settings":
+        """Fail fast on anything PRIVACY_LOCAL_ONLY forbids.
+
+        A remote-capable LLM mode, LangSmith tracing, an Ollama host that is not loopback
+        or private, and Ollama cloud models. A host name outside the built-in list is
+        resolved once, here, and must resolve only to loopback or private addresses.
+        """
+        if not self.privacy_local_only:
+            return self
+        problems = []
+        if self.llm_mode != "local":
+            problems.append(PRIVACY_LLM_MODE_ERROR)
+        tracing = [name for name in TRACING_ENV_VARS if flag_is_on(getattr(self, name.lower()))]
+        if tracing:
+            problems.append(PRIVACY_TRACING_ERROR.format(names=", ".join(tracing)))
+        host_problem = ollama_host_problem(self.llm_ollama_host)
+        if host_problem:
+            problems.append(PRIVACY_OLLAMA_HOST_ERROR.format(problem=host_problem))
+        if is_cloud_model(self.llm_local_model):
+            problems.append(PRIVACY_CLOUD_MODEL_ERROR.format(model=self.llm_local_model))
+        if problems:
+            raise ValueError("; ".join(problems))
         return self
 
 

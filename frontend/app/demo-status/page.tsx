@@ -59,6 +59,14 @@ function OverallBadge({ status }: { status: DemoStatusResponse['status'] }) {
   return <span className={`rounded-md px-3 py-1.5 text-sm font-semibold ${className}`}>{label}</span>;
 }
 
+function formatRate(rate?: number | null): string {
+  return rate === null || rate === undefined ? 'n/a' : `${Math.round(rate * 100)}%`;
+}
+
+function shortHash(hash?: string | null): string {
+  return hash ? hash.slice(0, 12) : 'unknown';
+}
+
 export default function DemoStatusPage() {
   const demoStatus = useApiQuery('demo-status', (signal) => apiClient.getDemoStatus({ signal }));
   const { isLoading, error } = demoStatus;
@@ -203,6 +211,28 @@ export default function DemoStatusPage() {
                   <div>
                     <dt className="text-gray-500">Plain successful</dt>
                     <dd className="font-semibold text-gray-900">{status.latest_eval.plain_successful_cases}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">KG expansion failures</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {status.latest_eval.kg_expansion_failures ?? 'n/a'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Prompt-injection resistance</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {formatRate(status.latest_eval.prompt_injection_resistance_rate)}
+                    </dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-gray-500">Provenance</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {status.latest_eval.has_provenance
+                        ? `Server ${shortHash(status.latest_eval.git_sha)}, golden set ${shortHash(
+                            status.latest_eval.golden_set_sha256
+                          )}`
+                        : 'Missing'}
+                    </dd>
                   </div>
                 </dl>
                 {status.latest_eval.message && (

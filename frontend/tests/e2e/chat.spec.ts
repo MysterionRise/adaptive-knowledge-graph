@@ -50,6 +50,8 @@ test.describe('Chat Page', () => {
 
     await page.getByRole('button', { name: 'Show Sources (2)' }).click();
     await expect(page.getByText(tutorAnswer.sources[0].text)).toBeVisible();
+    await expect(page.getByText(tutorAnswer.sources[0].section)).toBeVisible();
+    await expect(page.getByText(tutorAnswer.sources[1].section)).toBeVisible();
 
     const [request] = api.calls('POST /ask/stream');
     expect(request.postDataJSON()).toEqual({

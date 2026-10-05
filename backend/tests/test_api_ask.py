@@ -38,7 +38,7 @@ class TestAskEndpoint:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis", "chloroplast"],
             ),
         ):
@@ -215,6 +215,41 @@ class TestAskEndpoint:
         # Source should be truncated to 200 chars + "..."
         assert len(data["sources"][0]["text"]) == 203
 
+    def test_ask_sources_name_chapter_and_section(self, client, mock_llm_client):
+        """Each source carries its module title, chapter and section; never the module id."""
+        retriever = MagicMock()
+        retriever.retrieve.return_value = [
+            {
+                "text": "The Stamp Act taxed printed paper.",
+                "module_id": "m50023",
+                "module_title": "Imperial Reforms and Colonial Protests, 1763-1774 - The Stamp Act",
+                "chapter": "Imperial Reforms and Colonial Protests, 1763-1774",
+                "section": "The Stamp Act",
+                "score": 0.9,
+            },
+            {"text": "Indexed before titles were kept.", "module_id": "m1", "score": 0.5},
+        ]
+
+        with (
+            patch("backend.app.api.routes.ask.get_retriever", return_value=retriever),
+            patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
+        ):
+            response = client.post(
+                "/api/v1/ask",
+                json={"question": "What was the Stamp Act?", "use_kg_expansion": False},
+            )
+
+        assert response.status_code == 200
+        first, second = response.json()["sources"]
+        assert first == {
+            "text": "The Stamp Act taxed printed paper.",
+            "module_title": "Imperial Reforms and Colonial Protests, 1763-1774 - The Stamp Act",
+            "chapter": "Imperial Reforms and Colonial Protests, 1763-1774",
+            "section": "The Stamp Act",
+            "score": 0.9,
+        }
+        assert second["chapter"] is None and second["section"] is None
+
     def test_ask_kg_expansion_failure_continues(
         self,
         client,
@@ -230,7 +265,7 @@ class TestAskEndpoint:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=failing_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis"],
             ),
         ):
@@ -277,7 +312,7 @@ class TestAskEndpoint:
             patch("backend.app.api.routes.ask.get_llm_client", return_value=mock_llm_client),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=mock_kg_expander),
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 return_value=["photosynthesis"],
             ),
         ):
@@ -555,7 +590,14 @@ class TestAskWindowRetrieval:
         monkeypatch.setattr(settings, "vector_backend", "neo4j")
         window_retriever = MagicMock()
         window_retriever.retrieve_window_text.return_value = [
-            {"module_id": "mod_001", "section": "5.1", "text": "Merged window.", "chunk_count": 3},
+            {
+                "module_id": "mod_001",
+                "module_title": "Photosynthesis - 5.1",
+                "chapter": "Photosynthesis",
+                "section": "5.1",
+                "text": "Merged window.",
+                "chunk_count": 3,
+            },
             {"module_id": "mod_002", "section": "6.1", "text": "Second window.", "chunk_count": 2},
         ]
         with patch(
@@ -584,6 +626,9 @@ class TestAskWindowRetrieval:
             "Merged window.",
             "Second window.",
         ]
+        assert data["sources"][0]["module_title"] == "Photosynthesis - 5.1"
+        assert data["sources"][0]["chapter"] == "Photosynthesis"
+        assert data["sources"][0]["section"] == "5.1"
         answer_kwargs = ask_services.llm.answer_question.await_args.kwargs
         assert answer_kwargs["context"] == ["Merged window.", "Second window."]
 
@@ -688,7 +733,7 @@ class TestAskKeepsEventLoopFree:
 
         with (
             patch(
-                "backend.app.api.routes.ask.get_all_concepts_from_neo4j",
+                "backend.app.api.routes.ask.get_known_concepts",
                 side_effect=recorder("all_concepts", {"photosynthesis", "chlorophyll"}),
             ),
             patch("backend.app.api.routes.ask.get_kg_expander", return_value=expander),

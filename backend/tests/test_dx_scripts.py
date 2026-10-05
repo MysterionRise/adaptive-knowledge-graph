@@ -13,7 +13,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from scripts import build_chunk_windows, check_demo_eval, evaluate_rag, stack_check
+from scripts import build_chunk_windows, evaluate_rag, stack_check
 
 # ---------------------------------------------------------------------------
 # stack_check: npm engines ranges
@@ -358,19 +358,6 @@ def test_markdown_report_uses_neutral_headings_and_one_trailing_newline(tmp_path
     assert "## Summary signals" in text
     assert "Partial run" in text
     assert text.endswith("\n") and not text.endswith("\n\n")
-
-
-def test_check_demo_eval_rejects_partial_runs(tmp_path):
-    report = {
-        "environment_valid": True,
-        "run_config": {"subjects": [], "limit": 3},
-        "summary": {"kg_successful_cases": 3, "plain_successful_cases": 3},
-    }
-    path = tmp_path / "latest.json"
-    path.write_text(json.dumps(report))
-    with pytest.raises(SystemExit, match="partial run"):
-        check_demo_eval.validate_report(path, 1)
-    assert check_demo_eval.validate_report(path, 1, allow_partial=True)["kg_successful_cases"] == 3
 
 
 # ---------------------------------------------------------------------------

@@ -45,8 +45,17 @@ The project is local-first:
   synthetic profiles. There is no user identity or tenancy model yet
   ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)).
 - With `PRIVACY_LOCAL_ONLY=true` (the default) the API refuses to start unless
-  `LLM_MODE=local`, so questions, retrieved passages and prompts go only to the
-  local Ollama server.
+  `LLM_MODE=local`, `LLM_OLLAMA_HOST` is a loopback or private address and
+  `LLM_LOCAL_MODEL` is not an Ollama cloud model, and it refuses LangSmith
+  tracing variables. Questions, retrieved passages and prompts go only to an
+  Ollama server on your machine or private network. It also disables LangSmith
+  tracing at runtime, turns Hugging Face Hub telemetry off and runs the Hub
+  offline once the models are cached; Compose turns Neo4j usage reporting off.
+  A CI test checks that startup, `/ask` and `/graph/query` make no
+  non-loopback connection with the tracing variables set. A host name other
+  than `localhost`, `ollama`, `host.docker.internal` and
+  `host.containers.internal` is resolved once at startup; prefer an IP literal
+  if your DNS is not trusted.
 - `APP_ENV=development` (the default) runs without an API key and logs a
   warning at startup. It is meant for a single developer machine.
 
@@ -67,8 +76,7 @@ If anyone other than you can reach the API, run it in production mode:
    production mode the API refuses to start without a key of at least 16
    printable ASCII characters (no surrounding whitespace), and the protected
    routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`,
-   `/graph/query`) require it
-   in the `X-API-Key` header.
+   `/graph/query`, `/demo/provenance`) require it in the `X-API-Key` header.
 2. Keep the interactive API docs off. In production mode `/docs`, `/redoc` and
    `/openapi.json` are disabled unless you set `API_DOCS_ENABLED=true`.
 3. Set `CORS_ORIGINS` to your frontend origin. `CORS_ALLOW_METHODS` and
@@ -91,8 +99,12 @@ If anyone other than you can reach the API, run it in production mode:
 - **Advisories that need a disruptive upgrade.** A small number of published
   advisories can only be fixed by a major-version upgrade or a change of the
   wheel set. They are allowlisted, each with an expiry date and a reason, in
-  [`osv-scanner.toml`](osv-scanner.toml), which is the source of truth for
-  exactly which advisories are accepted. Each upgrade has its own issue:
+  [`osv-scanner.toml`](osv-scanner.toml) (Python) and
+  [`frontend/osv-scanner.toml`](frontend/osv-scanner.toml) (npm), which are the
+  source of truth for exactly which advisories are accepted. Every entry
+  expires within 90 days and names its issue; a weekly dependency audit flags
+  entries 30 days before they expire, and pull requests fail on any advisory
+  they add. Each upgrade has its own issue:
   - `transformers` 4.x, including remote-code-execution advisories, until the
     move to transformers 5 and sentence-transformers 6
     ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
@@ -107,6 +119,10 @@ If anyone other than you can reach the API, run it in production mode:
     not use (`torch.jit.script` and loading `.pt2` archives). The fixed
     releases switch the Linux wheels to CUDA 13, which is deferred to
     [#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79).
+  - `braces` 3.0.3, a dev-only dependency of the frontend build and test
+    tooling that is not in the production bundle, until a fixed release
+    exists
+    ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166)).
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
   read that key. An API key therefore only gates non-browser clients such as
@@ -121,6 +137,10 @@ vulnerabilities:
 - No per-learner identity: a caller that passes the API key can read or change
   any learner profile by `student_id`
   ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)).
+  The frontend sends the key from `NEXT_PUBLIC_API_KEY`, which is compiled into
+  the JavaScript bundle and therefore public: until #73 is fixed, anyone who can
+  load the frontend can read or change any learner profile. Use pseudonymous
+  learner IDs only, never names, emails or student numbers.
 - Quiz answers are sent to the browser and graded client-side, so quiz results
   are not tamper-proof
   ([#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74)).
