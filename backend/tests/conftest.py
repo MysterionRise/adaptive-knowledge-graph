@@ -2,7 +2,7 @@
 Pytest configuration and shared fixtures.
 
 Provides:
-- Per-test timeout, rate-limiter and graph-cache isolation (autouse)
+- Per-test timeout, rate-limiter, graph-cache and concept-cache isolation (autouse)
 - TestClient fixtures for the default app and for explicit development/production apps
 - Mock factories for Neo4j, retrieval, LLM, quiz generation and Cypher QA
 """
@@ -96,6 +96,11 @@ def setup_test_env(monkeypatch):
     from backend.app.api.routes.graph import clear_graph_cache
 
     clear_graph_cache()
+
+    # Clear the per-subject concept-name cache used by KG expansion
+    from backend.app.rag.kg_expansion import clear_known_concepts_cache
+
+    clear_known_concepts_cache()
 
     yield
 

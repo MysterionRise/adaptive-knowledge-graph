@@ -49,6 +49,15 @@ is compiled in the release pull request
 - `.env.demo` is no longer tracked. Copy `.env.demo.example` instead
   ([#99](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/99)).
 
+### Fixed
+
+- KG expansion no longer stores each request's concept names on the shared
+  concept extractor, so concurrent questions for different subjects cannot be
+  matched against each other's concepts. Concept names are cached per subject
+  for 5 minutes instead of being loaded from Neo4j on every question; restart
+  the API after re-seeding to use the new names at once
+  ([#157](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/157)).
+
 ## Earlier history
 
 No versions were tagged before 0.3.0. These are the main milestones in the Git
