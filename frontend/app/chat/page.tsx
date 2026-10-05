@@ -489,12 +489,13 @@ function AssistantMessage({
                       className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          {source.metadata?.chapter && (
-                            <span className="font-medium">{source.metadata.chapter}</span>
+                        <div className="flex flex-wrap items-center gap-x-2 text-xs text-gray-600">
+                          {source.chapter && (
+                            <span className="font-medium">{source.chapter}</span>
                           )}
-                          {source.metadata?.section && (
-                            <span>• {source.metadata.section}</span>
+                          {source.chapter && source.section && <span aria-hidden="true">•</span>}
+                          {(source.section || (!source.chapter && source.module_title)) && (
+                            <span>{source.section || source.module_title}</span>
                           )}
                         </div>
                         <span className="text-xs text-gray-500">

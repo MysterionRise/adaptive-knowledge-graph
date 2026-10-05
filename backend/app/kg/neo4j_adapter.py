@@ -381,6 +381,7 @@ class Neo4jAdapter:
                     c.startChar = chunk.start_char,
                     c.endChar = chunk.end_char,
                     c.moduleId = chunk.module_id,
+                    c.chapter = chunk.chapter,
                     c.section = chunk.section,
                     c.textEmbedding = chunk.text_embedding
                 """
@@ -393,6 +394,7 @@ class Neo4jAdapter:
                         "start_char": c.start_char,
                         "end_char": c.end_char,
                         "module_id": c.module_id,
+                        "chapter": c.chapter,
                         "section": c.section,
                         "text_embedding": c.text_embedding,
                     }
@@ -687,6 +689,7 @@ class Neo4jAdapter:
                    chunk.text AS text,
                    chunk.moduleId AS module_id,
                    module.title AS module_title,
+                   chunk.chapter AS chapter,
                    chunk.section AS section,
                    chunk.chunkIndex AS chunk_index
             ORDER BY chunk_index
