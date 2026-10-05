@@ -50,6 +50,7 @@ def llm_settings():
         mock_settings.openrouter_verify_ssl = True
         mock_settings.privacy_local_only = False
         mock_settings.llm_temperature = 0.1
+        mock_settings.llm_seed = None
         mock_settings.llm_timeout = 60
         mock_settings.llm_stream_timeout = 120
         mock_settings.llm_retry_attempts = 1  # fast tests, no real retries

@@ -66,11 +66,29 @@ class Settings(BaseSettings):
     api_docs_enabled: bool | None = None
     debug: bool = False
     log_level: str = "INFO"
+    # Commit the server runs, reported by /api/v1/demo/provenance. Set at launch or build time
+    # (make run-api and scripts/compose.sh pass `git rev-parse HEAD`).
+    git_sha: str = "unknown"
+
+    @field_validator("git_sha", mode="before")
+    @classmethod
+    def _empty_git_sha_means_unknown(cls, value: object) -> object:
+        return (
+            "unknown" if value is None or (isinstance(value, str) and not value.strip()) else value
+        )
 
     @field_validator("api_docs_enabled", mode="before")
     @classmethod
     def _empty_docs_flag_means_unset(cls, value: object) -> object:
         """``API_DOCS_ENABLED=`` (empty, as in a copied .env) falls back to the APP_ENV default."""
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator(
+        "llm_seed", "embedding_model_revision", "reranker_model_revision", mode="before"
+    )
+    @classmethod
+    def _empty_optional_means_unset(cls, value: object) -> object:
+        """An empty value (``LLM_SEED=`` in a copied .env) means unset."""
         return None if isinstance(value, str) and not value.strip() else value
 
     # API
@@ -128,6 +146,9 @@ class Settings(BaseSettings):
     llm_ollama_host: str = "http://localhost:11434"
     llm_local_model: str = "llama3.1:8b-instruct-q4_K_M"
     llm_temperature: float = 0.1
+    # Sampling seed sent to Ollama (options.seed); unset lets Ollama pick one per request.
+    # Evaluations use LLM_TEMPERATURE=0 with a fixed LLM_SEED (docs/evals/README.md).
+    llm_seed: int | None = None
     llm_timeout: int = 60  # Non-streaming timeout (seconds)
     llm_stream_timeout: int = 120  # Streaming timeout (seconds)
     llm_retry_attempts: int = 3  # Max retries for non-streaming calls
@@ -142,6 +163,8 @@ class Settings(BaseSettings):
 
     # Embeddings
     embedding_model: str = "BAAI/bge-m3"
+    # Hugging Face revision (commit, tag or branch) to pin; unset loads the default branch.
+    embedding_model_revision: str | None = None
     embedding_device: str = Field(
         default="auto",
         description="auto (CUDA, then Apple MPS, then CPU), cuda, mps or cpu.",
@@ -151,6 +174,7 @@ class Settings(BaseSettings):
     # Reranker
     reranker_enabled: bool = False
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_model_revision: str | None = None
     reranker_device: str = Field(
         default="cuda",
         description="auto, cuda, mps or cpu; an unavailable accelerator falls back to CPU.",

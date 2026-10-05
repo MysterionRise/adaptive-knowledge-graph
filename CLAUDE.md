@@ -44,6 +44,7 @@ make build-kg SUBJECT=economics       # Build that subject's knowledge graph in 
 make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch
 make build-windows SUBJECT=economics  # Chunk NEXT edges in Neo4j for one subject (only for opt-in window retrieval)
 make demo-eval                        # Golden-set evaluation against the running API
+make eval-compare BASE=a.json HEAD=b.json  # Compare two eval reports (exit 1 on a KG citation regression)
 ```
 
 The scripted demo uses `make demo-client-prep`, `make demo-client-check` and `make demo-client-reset` (see `docs/demo/README.md`).
@@ -64,7 +65,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 **Key flow for Q&A (`POST /api/v1/ask`, streaming `POST /api/v1/ask/stream`):**
 
 1. Validate input (markup in questions or invalid fields: 422, without echoing input) and resolve the subject from `config/subjects.yaml` (no subject: `default_subject`; unknown subject: 404).
-2. KG expansion: extract concepts (spaCy NER + YAKE), match them in Neo4j, add neighbours within `RAG_KG_EXPANSION_HOPS`.
+2. KG expansion: extract concepts (spaCy NER + YAKE), match them in Neo4j, add neighbours within `RAG_KG_EXPANSION_HOPS`. The response's `kg_expansion_status` is `ok`, `empty`, `failed` (Neo4j error; the request continues) or `disabled`.
 3. OpenSearch retrieval: hybrid BM25 + kNN fused with reciprocal rank fusion (`RETRIEVAL_MODE=hybrid`, default) or kNN only.
 4. Optional window retrieval: opt-in, needs `VECTOR_BACKEND=neo4j` or `hybrid` and NEXT edges between chunks (built by `make build-windows`, not by the standard seed).
 5. Optional reranking: `backend/app/rag/reranker.py` (cross-encoder `BAAI/bge-reranker-v2-m3`), opt-in via `RERANKER_ENABLED=true`; retrieves `RAG_RETRIEVAL_TOP_K` candidates and keeps `top_k`.
@@ -73,10 +74,10 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 ## Key Modules
 
 - `backend/app/api/routes/` - REST endpoints package, mounted under `/api/v1`:
-  - `ask.py` - `/ask`, `/ask/stream`
+  - `ask.py` - `/ask`, `/ask/stream`, `/retrieve` (retrieval only, no LLM; for `evaluate_rag.py --retrieval-only`)
   - `quiz.py` - `/quiz/generate`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/student/*`
   - `graph.py` - `/graph/stats`, `/graph/data`, `/graph/query`, `/graph/schema`, `/concepts/*`
-  - `learning_path.py`, `subjects.py`, `demo.py` (`/demo/status`)
+  - `learning_path.py`, `subjects.py`, `demo.py` (`/demo/status`, `/demo/provenance`)
 - `backend/app/main.py` - app setup, middleware, `/health`, `/health/ready`, `/health/live`
 - `backend/app/core/settings.py` - all settings (pydantic-settings, reads `.env`)
 - `backend/app/core/subjects.py` - loads `config/subjects.yaml`
@@ -85,7 +86,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 - `backend/app/nlp/llm_client.py` - Ollama + OpenRouter client
 - `backend/app/student/` - quiz generator, student service (BKT mastery, SQLite storage), recommendations
 - `frontend/components/KnowledgeGraph.tsx` - Cytoscape.js visualization
-- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml`
+- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two
 
 ## Environment Setup
 
@@ -95,7 +96,9 @@ Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key v
 - `TRUST_PROXY_HEADERS=true` keys rate limits on the right-most `X-Forwarded-For` hop; only behind a proxy that appends the client IP
 - `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`, a loopback/private `LLM_OLLAMA_HOST` and a non-cloud `LLM_LOCAL_MODEL`, and refuses LangSmith tracing variables; startup fails otherwise (checks in `backend/app/core/privacy.py`). The API also disables LangSmith tracing at runtime and sets `HF_HUB_OFFLINE=1` once its models are cached
 - `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
-- `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values)
+- `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values); `EMBEDDING_MODEL_REVISION` / `RERANKER_MODEL_REVISION` pin Hugging Face revisions
+- `LLM_SEED` - sampling seed sent to Ollama (unset by default); evaluations use `LLM_TEMPERATURE=0` and a fixed seed
+- `GIT_SHA` - commit reported by `/api/v1/demo/provenance` (`make run-api` and `scripts/compose.sh` set it from git; default `unknown`)
 - `RERANKER_ENABLED=false` - set `true` to enable the cross-encoder reranker
 - `STUDENT_PROFILES_DB` - SQLite learner store (the only backend); `STUDENT_VALIDATE_CONCEPTS=true` rejects mastery updates for concepts not in the subject's graph
 - `RATE_LIMIT_DEFAULT` (`100/minute`, `;`-separated for several) - every route except the health checks, per client and endpoint, counted before auth; `RATE_LIMIT_ASK`, `RATE_LIMIT_QUIZ`, `RATE_LIMIT_GRAPH`, `RATE_LIMIT_GRAPH_QUERY`, `RATE_LIMIT_STUDENT_WRITE`, `RATE_LIMIT_RECOMMENDATIONS` - stricter per-route limits

@@ -145,11 +145,16 @@ class KGExpander:
         Returns:
             Expanded list of concepts
         """
+        return self._expand_with_kg(concepts)[0]
+
+    def _expand_with_kg(self, concepts: list[str]) -> tuple[list[str], int]:
+        """Expand concepts; also return how many graph lookups failed (Neo4j errors)."""
         if not self.neo4j_adapter:
             logger.warning("Neo4j not connected, cannot expand with KG")
-            return concepts
+            return concepts, len(concepts)
 
         expanded = set(concepts)
+        failures = 0
 
         for concept in concepts:
             try:
@@ -162,11 +167,12 @@ class KGExpander:
                     expanded.add(neighbor["name"])
 
             except Exception as e:
+                failures += 1
                 logger.warning(f"Failed to expand concept '{concept}': {e}")
                 continue
 
         logger.info(f"Expanded {len(concepts)} concepts to {len(expanded)} using KG")
-        return list(expanded)
+        return list(expanded), failures
 
     def expand_query(self, query: str, all_concepts: Set[str]) -> dict:
         """
@@ -177,13 +183,14 @@ class KGExpander:
             all_concepts: Set of all known concepts
 
         Returns:
-            Dict with original_query, extracted_concepts, expanded_concepts
+            Dict with original_query, extracted_concepts, expanded_concepts, expanded_query,
+            expansion_count and failed_lookups (graph lookups that raised)
         """
         # Extract concepts from query
         extracted = self.extract_concepts_from_query(query, all_concepts)
 
         # Expand using KG
-        expanded = self.expand_with_kg(extracted)
+        expanded, failed_lookups = self._expand_with_kg(extracted)
 
         # Build expanded query
         if expanded:
@@ -198,6 +205,7 @@ class KGExpander:
             "expanded_concepts": expanded,
             "expanded_query": expanded_query,
             "expansion_count": len(expanded) - len(extracted),
+            "failed_lookups": failed_lookups,
         }
 
 
