@@ -20,7 +20,7 @@ inputs:
   poetry-version:
     description: Poetry version installed with pipx.
     required: false
-    default: "2.4.1"
+    default: "2.5.1"
   cache:
     description: >-
       "true" restores the .venv cache (and saves it on a miss, except on

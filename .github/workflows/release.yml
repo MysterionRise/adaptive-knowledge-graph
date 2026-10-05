@@ -21,7 +21,7 @@ concurrency:
 jobs:
   release:
     name: Publish GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write # create or publish the release

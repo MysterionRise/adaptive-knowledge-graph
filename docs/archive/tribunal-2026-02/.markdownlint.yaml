@@ -1,0 +1,10 @@
+# The archived review transcripts are kept as they were written, so the
+# blank-line and emphasis rules that would force reformatting them are
+# relaxed here. Everything else follows the repository configuration.
+extends: ../../../.markdownlint.yaml
+
+MD022: false
+MD031: false
+MD032: false
+MD036: false
+MD058: false

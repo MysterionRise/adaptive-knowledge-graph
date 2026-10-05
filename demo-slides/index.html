@@ -10,24 +10,29 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" />
 
   <style>
-    /* ── EPAM theme adaptation ── */
+    /* ── Neutral dark theme (shared palette with theme.css) ── */
     :root {
-      --color-bg: #000000;
-      --color-bg-code: #0d0f14;
-      --color-accent: #00F6FF;
-      --color-accent-green: #00F4AB;
-      --color-accent-purple: #B896FF;
-      --color-accent-blue: #428DFF;
-      --color-text: #ffffff;
+      --color-bg: #111827;
+      --color-bg-code: #1f2937;
+      --color-accent: #60a5fa;
+      --color-accent-green: #34d399;
+      --color-accent-purple: #a78bfa;
+      --color-accent-blue: #93c5fd;
+      --color-text: #f9fafb;
       --color-text-muted: #9ca3af;
-      --color-warning: #FF4B9B;
-      --color-danger: #FF4D40;
+      --color-warning: #fbbf24;
+      --color-danger: #f87171;
       --bg-card: rgba(255,255,255,0.06);
       --radius: 4px;
     }
 
+    body,
+    .reveal-viewport {
+      background: var(--color-bg);
+    }
+
     .reveal {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       font-size: 28px;
       color: var(--color-text);
     }
@@ -47,7 +52,7 @@
       color: var(--color-accent);
       font-size: 34px;
       margin-bottom: 15px;
-      border-bottom: 2px solid rgba(0, 246, 255, 0.4);
+      border-bottom: 2px solid rgba(96, 165, 250, 0.4);
       padding-bottom: 10px;
     }
 
@@ -81,7 +86,7 @@
     }
 
     .reveal blockquote {
-      background: rgba(0, 246, 255, 0.06);
+      background: rgba(96, 165, 250, 0.06);
       border-left: 3px solid var(--color-accent);
       padding: 15px 20px;
       margin: 15px 0;
@@ -148,7 +153,7 @@
     }
 
     .flow-box.kg .flow-step {
-      background: rgba(0, 244, 171, 0.12);
+      background: rgba(52, 211, 153, 0.12);
     }
 
     .flow-arrow {
@@ -215,8 +220,8 @@
     }
 
     .badge {
-      background: rgba(0, 246, 255, 0.08);
-      border: 1px solid rgba(0, 246, 255, 0.3);
+      background: rgba(96, 165, 250, 0.08);
+      border: 1px solid rgba(96, 165, 250, 0.3);
       border-radius: 4px;
       padding: 0.25em 0.65em;
       font-size: 0.65em;
@@ -227,7 +232,7 @@
     .arch-connector {
       text-align: center;
       font-size: 0.8em;
-      color: rgba(0, 246, 255, 0.4);
+      color: rgba(96, 165, 250, 0.4);
       margin: -0.15em 0;
       line-height: 1;
     }
@@ -391,10 +396,10 @@
         </div>
 
         <div class="arch-badges fragment fade-up">
-          <span class="badge">400 Concepts</span>
-          <span class="badge">37K Relationships</span>
-          <span class="badge">19K Chunks</span>
           <span class="badge">2 Subjects</span>
+          <span class="badge">~19K Chunks</span>
+          <span class="badge">Hybrid BM25 + kNN</span>
+          <span class="badge">Cited Answers</span>
           <span class="badge">Runs Locally</span>
         </div>
       </section>
@@ -417,7 +422,7 @@
             <div class="step-num">2</div>
             <div class="step-desc">
               <strong>Explore the Knowledge Graph</strong><br/>
-              <span class="step-detail">Interactive Cytoscape.js &mdash; 400 concepts, 37K relationships</span>
+              <span class="step-detail">Interactive Cytoscape.js view of concepts and their relationships</span>
             </div>
           </div>
           <div class="demo-step fragment fade-right">
@@ -456,7 +461,7 @@
             <strong>More Subjects</strong> &mdash; Pluggable knowledge graph configs per domain
           </div>
           <div class="roadmap-item fragment fade-up">
-            <strong>Evaluation</strong> &mdash; RAGAS benchmarks to measure actual retrieval quality
+            <strong>Evaluation</strong> &mdash; Golden-set KG vs plain comparison today; deeper benchmarks next
           </div>
         </div>
 

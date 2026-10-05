@@ -1,0 +1,26 @@
+# EditorConfig: https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Python: 4 spaces, line length matches ruff (pyproject.toml).
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+[*.sh]
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+# Generated or third-party data is written by the pipeline, not by hand.
+[data/**]
+trim_trailing_whitespace = false
+insert_final_newline = unset

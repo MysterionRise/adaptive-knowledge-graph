@@ -1,0 +1,82 @@
+name: Bug report
+description: Something is broken or behaves differently from the documentation.
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        - Security vulnerabilities must be reported privately. See [SECURITY.md](https://github.com/MysterionRise/adaptive-knowledge-graph/blob/main/SECURITY.md).
+        - Setup questions are answered faster in [Discussions: Q&A](https://github.com/MysterionRise/adaptive-knowledge-graph/discussions/categories/q-a).
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands, requests or clicks, starting from a fresh `make quickstart` if you can.
+      placeholder: |
+        1. make quickstart
+        2. make run-api
+        3. curl -X POST http://localhost:8000/api/v1/ask -H 'Content-Type: application/json' -d '{"question": "...", "subject": "us_history"}'
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Backend API
+        - Knowledge graph or seeding
+        - Retrieval and answers (RAG)
+        - Quizzes and learner model
+        - LLM or Ollama
+        - Frontend
+        - Docker or local stack
+        - Evaluation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release tag, or the output of `git rev-parse --short HEAD`.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Paste the output of `make doctor`, plus your OS and hardware (CPU/GPU, RAM).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant API, browser console or Docker logs. Remove API keys, passwords and personal data first.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I removed secrets and personal data from everything I pasted.
+          required: true

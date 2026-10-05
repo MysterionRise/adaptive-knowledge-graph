@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and setup help
+    url: https://github.com/MysterionRise/adaptive-knowledge-graph/discussions/categories/q-a
+    about: Ask and answer questions in GitHub Discussions.
+  - name: Ideas and general discussion
+    url: https://github.com/MysterionRise/adaptive-knowledge-graph/discussions
+    about: Share ideas or show what you built before opening a feature request.
+  - name: Report a security vulnerability
+    url: https://github.com/MysterionRise/adaptive-knowledge-graph/security/policy
+    about: Please report vulnerabilities privately as described in the security policy, not in a public issue.
