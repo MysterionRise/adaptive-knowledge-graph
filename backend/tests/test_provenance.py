@@ -41,7 +41,7 @@ def _post_ask(client, mock_retriever, mock_llm_client, expander, concepts, **bod
         patch(f"{ASK}.get_retriever", return_value=mock_retriever),
         patch(f"{ASK}.get_llm_client", return_value=mock_llm_client),
         patch(f"{ASK}.get_kg_expander", return_value=expander),
-        patch(f"{ASK}.get_all_concepts_from_neo4j", return_value=concepts),
+        patch(f"{ASK}.get_known_concepts", return_value=frozenset(concepts)),
     ):
         return client.post(
             "/api/v1/ask",
@@ -109,7 +109,7 @@ class TestKGExpansionStatus:
             patch(f"{ASK}.get_retriever", return_value=mock_retriever),
             patch(f"{ASK}.get_llm_client", return_value=llm),
             patch(f"{ASK}.get_kg_expander", return_value=expander),
-            patch(f"{ASK}.get_all_concepts_from_neo4j", return_value={"A"}),
+            patch(f"{ASK}.get_known_concepts", return_value=frozenset({"A"})),
         ):
             response = client.post("/api/v1/ask/stream", json={"question": "What is it?"})
         first = response.text.split("\n\n")[0]
@@ -147,7 +147,7 @@ class TestRetrieveEndpoint:
             patch(f"{ASK}.get_retriever", return_value=mock_retriever),
             patch(f"{ASK}.get_llm_client", llm_factory),
             patch(f"{ASK}.get_kg_expander", return_value=_expander(["A"])),
-            patch(f"{ASK}.get_all_concepts_from_neo4j", return_value={"A"}),
+            patch(f"{ASK}.get_known_concepts", return_value=frozenset({"A"})),
         ):
             response = client.post(
                 "/api/v1/retrieve",
