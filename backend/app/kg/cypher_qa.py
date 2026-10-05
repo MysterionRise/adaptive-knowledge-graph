@@ -11,7 +11,8 @@ LLM-generated Cypher is untrusted input. This module enforces two controls:
    before anything reaches Neo4j. Every ``CALL`` in the statement is checked.
 2. ``ReadOnlyNeo4jGraph`` runs every statement in a READ transaction
    (``session.execute_read``) with a timeout and a row cap; Neo4j rejects writes in
-   READ transactions.
+   READ transactions. That includes schema introspection, which langchain-neo4j >= 0.4
+   runs through neo4j-graphrag on the raw driver instead of ``query()``.
 
 Defence in depth outside this code: the bundled compose stack restricts Neo4j to the
 ``apoc.meta.*`` procedures (``dbms.security.procedures.allowlist``, see #102). Other
@@ -21,16 +22,23 @@ deployments should set the same allowlist; the two controls above do not depend 
 from __future__ import annotations
 
 import re
-from contextvars import ContextVar
+from types import SimpleNamespace
 from typing import Any
 
 import neo4j
+import ollama
+import openai
 from langchain_core.prompts import PromptTemplate
 from langchain_neo4j import GraphCypherQAChain, Neo4jGraph
-from langchain_neo4j.graphs.neo4j_graph import value_sanitize
 from loguru import logger
+from neo4j_graphrag.schema import _value_sanitize, format_schema, get_structured_schema
+from pydantic import SecretStr
 
-from backend.app.core.exceptions import LLMGenerationError, Neo4jConnectionError
+from backend.app.core.exceptions import (
+    LLMConnectionError,
+    LLMGenerationError,
+    Neo4jConnectionError,
+)
 from backend.app.core.settings import settings
 
 # Transaction timeout for every statement sent through ReadOnlyNeo4jGraph.
@@ -189,21 +197,51 @@ def run_read_transaction(
         return session.execute_read(work)
 
 
-# Set while langchain's own schema introspection runs (refresh_schema). Those fixed
-# statements (CALL apoc.meta.data(), SHOW CONSTRAINTS, ...) skip the validator; they still
-# run in READ transactions. Every other statement, including all generated Cypher, is
-# validated.
-_schema_refresh_in_progress: ContextVar[bool] = ContextVar(
-    "_schema_refresh_in_progress", default=False
-)
+class _ReadOnlyDriver:
+    """The part of ``neo4j.Driver`` that neo4j-graphrag's schema helpers use, READ only.
+
+    ``get_structured_schema`` calls ``driver.execute_query`` (WRITE routing by default);
+    here that runs through ``run_read_transaction``, so introspection gets the same READ
+    transaction and timeout as every other statement. neo4j-graphrag only opens its own
+    session (an auto-commit ``session.run``) when given session parameters, which
+    ``refresh_schema`` never passes; that path is refused. Nothing else is exposed.
+    """
+
+    def __init__(self, driver: neo4j.Driver, *, timeout: float | None) -> None:
+        self._driver = driver
+        self._timeout = timeout
+
+    def execute_query(
+        self,
+        query: neo4j.Query | str,
+        parameters_: dict[str, Any] | None = None,
+        *,
+        database_: str | None = None,
+        **_: Any,
+    ) -> SimpleNamespace:
+        text = query.text if isinstance(query, neo4j.Query) else query
+        records = run_read_transaction(
+            self._driver,
+            str(text),
+            parameters_ or {},
+            database=database_,
+            timeout=self._timeout,
+            max_rows=None,
+        )
+        # Callers read ``result.records`` and call ``.data()`` on each record.
+        return SimpleNamespace(records=[SimpleNamespace(data=r.copy) for r in records])
+
+    def session(self, **_: Any) -> Any:
+        raise RuntimeError("Schema introspection must not open its own sessions")
 
 
 class ReadOnlyNeo4jGraph(Neo4jGraph):
     """``Neo4jGraph`` that can only read.
 
     Every statement runs through ``session.execute_read`` (READ access mode) with the
-    transaction ``timeout``. Statements other than langchain's schema introspection are
-    checked by ``validate_cypher_read_only`` and return at most ``max_rows`` records.
+    transaction ``timeout``, schema introspection included. Statements sent through
+    ``query()`` are checked by ``validate_cypher_read_only`` and return at most
+    ``max_rows`` records.
     """
 
     def __init__(self, *args: Any, max_rows: int = MAX_RESULT_ROWS, **kwargs: Any) -> None:
@@ -211,27 +249,46 @@ class ReadOnlyNeo4jGraph(Neo4jGraph):
         super().__init__(*args, **kwargs)
 
     def refresh_schema(self) -> None:
-        """Refresh the schema; langchain's fixed introspection queries are not validated."""
-        token = _schema_refresh_in_progress.set(True)
-        try:
-            super().refresh_schema()
-        finally:
-            _schema_refresh_in_progress.reset(token)
+        """Refresh the schema with neo4j-graphrag's fixed introspection queries, READ only.
 
-    def query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        """Run ``query`` in a READ transaction (validated unless it is schema introspection).
-
-        Untrusted statements are normalised first (Markdown fences, a bare ``cypher`` tag
-        line), and the normalised text is what gets both validated and executed.
+        The base class passes the raw driver to ``get_structured_schema``, which would run
+        those statements outside ``query()`` with WRITE routing. They are not validated
+        (``SHOW CONSTRAINTS`` is not a generated read query) but run in READ transactions.
         """
-        trusted = _schema_refresh_in_progress.get()
-        if not trusted:
-            query = normalize_generated_cypher(query)
-            try:
-                validate_cypher_read_only(query)
-            except CypherValidationError as e:
-                logger.warning("Rejected generated Cypher ({}): {!r}", e, query[:500])
-                raise
+        self._check_driver_state()
+        self.structured_schema = get_structured_schema(
+            driver=_ReadOnlyDriver(self._driver, timeout=self.timeout),  # type: ignore[arg-type]
+            is_enhanced=self._enhanced_schema,
+            database=self._database,
+            timeout=self.timeout,
+            sanitize=self.sanitize,
+        )
+        self.schema = format_schema(
+            schema=self.structured_schema, is_enhanced=self._enhanced_schema
+        )
+
+    def query(
+        self,
+        query: str,
+        params: dict[str, Any] | None = None,
+        session_params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Validate ``query`` and run it in a READ transaction.
+
+        The statement is normalised first (Markdown fences, a bare ``cypher`` tag line),
+        and the normalised text is what gets both validated and executed.
+        ``session_params`` is accepted for signature compatibility with ``Neo4jGraph`` and
+        ignored: the session is always opened by ``run_read_transaction`` (READ access
+        mode, the configured database), so a caller cannot switch it to WRITE.
+        """
+        if session_params:
+            logger.warning("Ignoring session_params for a read-only graph query")
+        query = normalize_generated_cypher(query)
+        try:
+            validate_cypher_read_only(query)
+        except CypherValidationError as e:
+            logger.warning("Rejected generated Cypher ({}): {!r}", e, query[:500])
+            raise
 
         self._check_driver_state()
         records = run_read_transaction(
@@ -240,10 +297,10 @@ class ReadOnlyNeo4jGraph(Neo4jGraph):
             params or {},
             database=self._database,
             timeout=self.timeout,
-            max_rows=None if trusted else self.max_rows,
+            max_rows=self.max_rows,
         )
         if self.sanitize:
-            records = [value_sanitize(record) for record in records]
+            records = [_value_sanitize(record) for record in records]
         return records
 
 
@@ -388,7 +445,7 @@ class CypherQAService:
         if self._llm is None:
             if settings.llm_mode == "local":
                 # Use Ollama
-                from langchain_community.chat_models import ChatOllama
+                from langchain_ollama import ChatOllama
 
                 self._llm = ChatOllama(
                     base_url=settings.llm_ollama_host,
@@ -396,12 +453,12 @@ class CypherQAService:
                     temperature=0.0,  # Deterministic for Cypher
                 )
             else:
-                # Use OpenRouter via LangChain OpenAI compatibility
-                from langchain_community.chat_models import ChatOpenAI
+                # remote and hybrid: OpenRouter through its OpenAI-compatible API
+                from langchain_openai import ChatOpenAI
 
                 self._llm = ChatOpenAI(
                     base_url=settings.openrouter_base_url,
-                    api_key=settings.openrouter_api_key,
+                    api_key=SecretStr(settings.openrouter_api_key),
                     model=settings.openrouter_model,
                     temperature=0.0,
                 )
@@ -449,9 +506,10 @@ class CypherQAService:
             GeneratedCypherError: Neo4j rejected the generated Cypher as invalid (syntax,
                 types, unknown names): invalid LLM output, answered with 502.
             Neo4jConnectionError: Neo4j is not available or rejects our credentials.
-            LLMGenerationError: Building or running the chain failed with any other
-                ValueError (langchain reports LLM backend and configuration errors, such as
-                an Ollama HTTP error or a missing OpenRouter key, that way).
+            LLMConnectionError: The LLM backend (Ollama or OpenRouter) is unreachable.
+            LLMGenerationError: The LLM backend returned an error, or building or running
+                the chain failed with any other ValueError (langchain reports configuration
+                errors that way).
         """
         # Untrusted text (questions, Cypher, error messages with JSON or Cypher maps) is
         # passed as loguru arguments, never interpolated into the format string.
@@ -472,6 +530,15 @@ class CypherQAService:
             raise GeneratedCypherError("The model generated an invalid query") from e
         except (neo4j.exceptions.ServiceUnavailable, neo4j.exceptions.SessionExpired) as e:
             raise Neo4jConnectionError("Neo4j is not available for graph queries") from e
+        # langchain-ollama and langchain-openai surface their clients' errors unchanged:
+        # the ollama client raises ConnectionError when Ollama is down and ResponseError
+        # for HTTP errors (unknown model, ...); none of them is a ValueError.
+        except (ConnectionError, openai.APIConnectionError) as e:
+            logger.opt(exception=True).error("LLM backend unreachable: {}", e)
+            raise LLMConnectionError("LLM backend is not available") from e
+        except (ollama.ResponseError, ollama.RequestError, openai.APIError) as e:
+            logger.opt(exception=True).error("LLM backend error: {}", e)
+            raise LLMGenerationError("Cypher QA chain failed") from e
         except ValueError as e:
             logger.opt(exception=True).error("CypherQA chain failed: {}", e)
             raise LLMGenerationError("Cypher QA chain failed") from e
