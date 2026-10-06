@@ -215,7 +215,7 @@ services:
   # Optional Ollama in a container (CPU inference; a host install is faster on macOS).
   # Pull the model once: docker compose -f infra/compose/compose.yaml exec ollama ollama pull <model>
   ollama:
-    image: ollama/ollama:0.35.0
+    image: ollama/ollama:0.35.1
     container_name: ${COMPOSE_PROJECT_NAME:-adaptive-kg}-ollama
     ports:
       - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
