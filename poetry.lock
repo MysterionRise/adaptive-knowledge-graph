@@ -2085,14 +2085,14 @@ langchain-core = ">=0.3.75,<2.0.0"
 
 [[package]]
 name = "langsmith"
-version = "0.14.3"
+version = "0.14.4"
 description = "Client library to connect to the LangSmith Observability and Evaluation Platform."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "langsmith-0.14.3-py3-none-any.whl", hash = "sha256:4438b0c5d9ac14d5267d4373d67cfb58f1585c91c501564186b9ce196aad2988"},
-    {file = "langsmith-0.14.3.tar.gz", hash = "sha256:60c42b2c9e3e798ebbab3caa286ac25201b2b1861ed915dfe5851b076d6a9bc4"},
+    {file = "langsmith-0.14.4-py3-none-any.whl", hash = "sha256:ae0d98c2b0f9292ef7e12451d480937d79a0e7dcf2412ba847de6f053391b44a"},
+    {file = "langsmith-0.14.4.tar.gz", hash = "sha256:a340199fcd2af60358f09dd1d7011bf7282f0d46a98aaa101bc7a521746da764"},
 ]
 
 [package.dependencies]
@@ -3397,14 +3397,14 @@ markers = {main = "platform_system == \"Linux\" and platform_machine == \"x86_64
 
 [[package]]
 name = "openai"
-version = "3.23.0"
+version = "3.24.0"
 description = "The official Python library for the openai API"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "openai-3.23.0-py3-none-any.whl", hash = "sha256:7fbec2e50a05ac0fa858629505688e5998fd82245058390ac1b6d98960174bd5"},
-    {file = "openai-3.23.0.tar.gz", hash = "sha256:47381c61622d4dbdc3c8492dad18628fd940b8fbd9cb1f89ed46cf0bb6795bb8"},
+    {file = "openai-3.24.0-py3-none-any.whl", hash = "sha256:b59703a3e3b5df78b269e90049d383a1dda58c90104cc4be59db21078db4b7a4"},
+    {file = "openai-3.24.0.tar.gz", hash = "sha256:1e7463f7d78773ab2ce4fe85710481aa5bd5ffefd54c8de4b067506cd2d42895"},
 ]
 
 [package.dependencies]
