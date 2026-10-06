@@ -14,6 +14,10 @@ is compiled in the release pull request
 
 ### Changed
 
+- `make doctor` now reads the backend Python requirement from `pyproject.toml`
+  and discovers versioned Python executables on PATH, avoiding stale
+  hard-coded bounds when the supported range changes.
+
 - **Breaking:** `PRIVACY_LOCAL_ONLY=true`, the default, now requires
   `LLM_MODE=local`. The API refuses to start with `LLM_MODE=remote` or
   `LLM_MODE=hybrid` unless you also set `PRIVACY_LOCAL_ONLY=false`
@@ -91,6 +95,11 @@ is compiled in the release pull request
 
 ### Fixed
 
+- GitHub book-content downloads now use a 30-second request timeout and an
+  identifying User-Agent, with at most three attempts and 1/2-second backoff
+  for HTTP 429/5xx, timeouts and connection failures. Other HTTP failures are
+  not retried
+  ([#161](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/161)).
 - KG expansion no longer stores each request's concept names on the shared
   concept extractor, so concurrent questions for different subjects cannot be
   matched against each other's concepts. Concept names are cached per subject

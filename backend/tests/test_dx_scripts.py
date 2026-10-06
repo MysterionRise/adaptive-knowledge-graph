@@ -4,6 +4,8 @@ Unit tests for the developer-experience scripts (no services needed).
 
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,8 +16,244 @@ import pytest
 from scripts import build_chunk_windows, evaluate_rag, stack_check
 
 # ---------------------------------------------------------------------------
+# ingest_books: bounded downloads and transient-failure retries
+# ---------------------------------------------------------------------------
+
+
+def _chapter_response(status=200):
+    import requests
+
+    response = requests.Response()
+    response.status_code = status
+    response.url = "https://example.com/chapter.md"
+    response._content = b"synthetic chapter"
+    return response
+
+
+def test_fetch_text_sets_timeout_and_user_agent(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(ingest_books.requests, "get", return_value=_chapter_response())
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") == "synthetic chapter"
+    assert get.call_args.kwargs["timeout"] == 30
+    assert "adaptive-knowledge-graph" in get.call_args.kwargs["headers"]["User-Agent"]
+    sleep.assert_not_called()
+
+
+@pytest.mark.parametrize("status", [429, 500, 503, 599])
+def test_fetch_text_retries_transient_http_failures(mocker, status):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=[_chapter_response(status), _chapter_response()]
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") == "synthetic chapter"
+    assert get.call_count == 2
+    sleep.assert_called_once_with(1)
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+def test_fetch_text_does_not_retry_permanent_http_failures(mocker, status):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(ingest_books.requests, "get", return_value=_chapter_response(status))
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    get.assert_called_once()
+    sleep.assert_not_called()
+
+
+@pytest.mark.parametrize("error_name", ["Timeout", "ConnectionError"])
+def test_fetch_text_retries_transient_network_failures(mocker, error_name):
+    from scripts import ingest_books
+
+    error = getattr(ingest_books.requests, error_name)("synthetic failure")
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=[error, _chapter_response()]
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") == "synthetic chapter"
+    assert get.call_count == 2
+    sleep.assert_called_once_with(1)
+
+
+def test_fetch_text_stops_after_three_attempts(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(ingest_books.requests, "get", return_value=_chapter_response(503))
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    assert get.call_count == 3
+    assert [call.args for call in sleep.call_args_list] == [(1,), (2,)]
+    assert all(call.kwargs["timeout"] == 30 for call in get.call_args_list)
+
+
+def test_fetch_text_stops_after_repeated_timeouts(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=ingest_books.requests.Timeout("synthetic timeout")
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    assert get.call_count == 3
+    assert [call.args for call in sleep.call_args_list] == [(1,), (2,)]
+
+
+def test_fetch_text_preserves_none_for_unexpected_failure(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=RuntimeError("synthetic failure")
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    get.assert_called_once()
+    sleep.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # stack_check: npm engines ranges
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("version", "requirement", "expected"),
+    [
+        ("3.11.0", ">=3.11,<3.14", True),
+        ("3.13.12", ">=3.11,<3.14", True),
+        ("3.10.20", ">=3.11,<3.14", False),
+        ("3.14.0", ">=3.11,<3.14", False),
+        ("3.14.0", ">=3.11,<3.15", True),
+        ("3.11.9", ">=3.12,<3.15", False),
+        ("3.12.1", ">=3.12, !=3.12.1, <3.15", False),
+        ("3.12.0", ">3.12,<=3.13", False),
+        ("3.13.0", ">3.12,<=3.13", True),
+        ("3.12.1", "==3.12.1", True),
+    ],
+)
+def test_python_version_satisfies_declared_range(version, requirement, expected):
+    assert stack_check.satisfies_python(version, requirement) is expected
+
+
+def test_python_range_reads_pyproject_and_rejects_unsupported_version(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(stack_check, "PROJECT_ROOT", tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry.dependencies]\npython = ">=3.12,<3.15" # changed bounds\n'
+    )
+    assert stack_check.main(["python-range"]) == 0
+    assert capsys.readouterr().out.strip() == ">=3.12,<3.15"
+    assert stack_check.main(["python-range", "--version", "3.14.0"]) == 0
+    assert stack_check.main(["python-range", "--version", "3.11.9"]) == 1
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "[invalid",
+        "[tool.poetry.dependencies]\n",
+        '[tool.poetry.dependencies]\npython = "^3.11"\n',
+        '[tool.poetry.dependencies]\npython = ""\n',
+        "[tool.poetry.dependencies]\npython = 3\n",
+    ],
+)
+def test_python_range_reports_bad_metadata_without_traceback(
+    tmp_path, monkeypatch, capsys, contents
+):
+    monkeypatch.setattr(stack_check, "PROJECT_ROOT", tmp_path)
+    (tmp_path / "pyproject.toml").write_text(contents)
+    assert stack_check.main(["python-range"]) == 1
+    output = capsys.readouterr().out
+    assert "Cannot read the Python requirement" in output
+    assert "Traceback" not in output
+
+
+def test_python_range_rejects_invalid_later_clause():
+    with pytest.raises(ValueError, match="unsupported clause"):
+        stack_check.satisfies_python("3.10.0", ">=3.11,not-a-comparison")
+
+
+def test_python_range_reports_missing_metadata(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(stack_check, "PROJECT_ROOT", tmp_path)
+    assert stack_check.main(["python-range"]) == 1
+    assert "Cannot read the Python requirement" in capsys.readouterr().out
+
+
+def _doctor_tools(tmp_path, requirement, installed_version, *, poetry_ready=False):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for name in ("lib.sh", "stack_check.py"):
+        (scripts / name).write_text(Path("scripts", name).read_text())
+    tools = Path("scripts/doctor.sh").read_text().split('section "Resources"')[0]
+    (scripts / "doctor-tools.sh").write_text(tools)
+    (tmp_path / "pyproject.toml").write_text(
+        f'[tool.poetry.dependencies]\npython = "{requirement}"\n'
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name in ("dirname", "grep", "sort", "head"):
+        (bin_dir / name).symlink_to(shutil.which(name))
+    # Simulate version reporting, while running the actual stdlib metadata reader.
+    versioned_name = f"python{installed_version.rsplit('.', 1)[0]}"
+    for name, version in (("python3", "3.10.20"), (versioned_name, installed_version)):
+        executable = bin_dir / name
+        executable.write_text(
+            f'#!/bin/bash\nif [ "$1" = -c ]; then echo {shlex.quote(version)}; '
+            f'else exec {shlex.quote(sys.executable)} "$@"; fi\n'
+        )
+        executable.chmod(0o755)
+    if poetry_ready:
+        poetry = bin_dir / "poetry"
+        poetry.write_text("#!/bin/bash\nexit 0\n")
+        poetry.chmod(0o755)
+    result = subprocess.run(
+        [shutil.which("bash"), str(scripts / "doctor-tools.sh")],
+        cwd=tmp_path,
+        env=_clean_env(PATH=str(bin_dir), SKIP_FRONTEND="1"),
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout
+
+
+@pytest.mark.parametrize(
+    ("requirement", "version", "supported"),
+    [
+        (">=3.11,<3.14", "3.13.12", True),
+        (">=3.11,<3.14", "3.14.0", False),
+        (">=3.14,<3.15", "3.14.0", True),
+        (">=3.15,<3.16", "3.14.0", False),
+    ],
+)
+def test_doctor_python_check_follows_changed_bounds(tmp_path, requirement, version, supported):
+    output = _doctor_tools(tmp_path, requirement, version)
+    if supported:
+        executable = f"python{version.rsplit('.', 1)[0]}"
+        assert (
+            f"Python for the backend: {executable} ({version}) (requires {requirement})" in output
+        )
+    else:
+        assert f"No Python satisfying {requirement} on PATH" in output
+        assert "Python for the backend:" not in output
+
+
+def test_doctor_preserves_existing_environment_warning(tmp_path):
+    output = _doctor_tools(tmp_path, ">=3.11,<3.14", "3.14.0", poetry_ready=True)
+    assert "No Python satisfying >=3.11,<3.14 on PATH (the existing Poetry environment" in output
+    assert "Poetry needs one for the backend" not in output
+
+
+def test_doctor_rejects_unreadable_requirement_even_with_existing_environment(tmp_path):
+    output = _doctor_tools(tmp_path, "^3.11", "3.14.0", poetry_ready=True)
+    assert "Cannot determine the backend Python range from pyproject.toml" in output
+    assert "unsupported clause" in output
+    assert "Python for the backend:" not in output
 
 
 @pytest.mark.parametrize(
