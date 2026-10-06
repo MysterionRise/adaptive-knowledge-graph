@@ -14,6 +14,10 @@ is compiled in the release pull request
 
 ### Changed
 
+- `make doctor` now reads the backend Python requirement from `pyproject.toml`
+  and discovers versioned Python executables on PATH, avoiding stale
+  hard-coded bounds when the supported range changes.
+
 - **Breaking:** `PRIVACY_LOCAL_ONLY=true`, the default, now requires
   `LLM_MODE=local`. The API refuses to start with `LLM_MODE=remote` or
   `LLM_MODE=hybrid` unless you also set `PRIVACY_LOCAL_ONLY=false`
