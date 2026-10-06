@@ -37,6 +37,12 @@ subjects:
 
 For an OpenStax web source, set `source_type: openstax_web` and provide its `openstax_slug` instead of the GitHub repository paths. Copy the matching shape from an existing entry in `config/subjects.yaml`.
 
+GitHub content downloads use a 30-second request timeout and an identifying
+User-Agent. Transient HTTP 429/5xx responses, timeouts and connection failures
+are retried up to three attempts with 1-second then 2-second backoff; other
+HTTP failures are not retried. A failed content fetch is logged and returns
+no text, preserving the existing skip behavior.
+
 Each subject needs a unique `label_prefix` and `opensearch_index`. The subject ID is also used for subject-specific processed data. Check the spelling and YAML indentation, then confirm that the configuration loads:
 
 ```bash

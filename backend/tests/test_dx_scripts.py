@@ -16,6 +16,105 @@ import pytest
 from scripts import build_chunk_windows, evaluate_rag, stack_check
 
 # ---------------------------------------------------------------------------
+# ingest_books: bounded downloads and transient-failure retries
+# ---------------------------------------------------------------------------
+
+
+def _chapter_response(status=200):
+    import requests
+
+    response = requests.Response()
+    response.status_code = status
+    response.url = "https://example.com/chapter.md"
+    response._content = b"synthetic chapter"
+    return response
+
+
+def test_fetch_text_sets_timeout_and_user_agent(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(ingest_books.requests, "get", return_value=_chapter_response())
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") == "synthetic chapter"
+    assert get.call_args.kwargs["timeout"] == 30
+    assert "adaptive-knowledge-graph" in get.call_args.kwargs["headers"]["User-Agent"]
+    sleep.assert_not_called()
+
+
+@pytest.mark.parametrize("status", [429, 500, 503, 599])
+def test_fetch_text_retries_transient_http_failures(mocker, status):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=[_chapter_response(status), _chapter_response()]
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") == "synthetic chapter"
+    assert get.call_count == 2
+    sleep.assert_called_once_with(1)
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+def test_fetch_text_does_not_retry_permanent_http_failures(mocker, status):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(ingest_books.requests, "get", return_value=_chapter_response(status))
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    get.assert_called_once()
+    sleep.assert_not_called()
+
+
+@pytest.mark.parametrize("error_name", ["Timeout", "ConnectionError"])
+def test_fetch_text_retries_transient_network_failures(mocker, error_name):
+    from scripts import ingest_books
+
+    error = getattr(ingest_books.requests, error_name)("synthetic failure")
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=[error, _chapter_response()]
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") == "synthetic chapter"
+    assert get.call_count == 2
+    sleep.assert_called_once_with(1)
+
+
+def test_fetch_text_stops_after_three_attempts(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(ingest_books.requests, "get", return_value=_chapter_response(503))
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    assert get.call_count == 3
+    assert [call.args for call in sleep.call_args_list] == [(1,), (2,)]
+    assert all(call.kwargs["timeout"] == 30 for call in get.call_args_list)
+
+
+def test_fetch_text_stops_after_repeated_timeouts(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=ingest_books.requests.Timeout("synthetic timeout")
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    assert get.call_count == 3
+    assert [call.args for call in sleep.call_args_list] == [(1,), (2,)]
+
+
+def test_fetch_text_preserves_none_for_unexpected_failure(mocker):
+    from scripts import ingest_books
+
+    get = mocker.patch.object(
+        ingest_books.requests, "get", side_effect=RuntimeError("synthetic failure")
+    )
+    sleep = mocker.patch.object(ingest_books.time, "sleep")
+    assert ingest_books.fetch_text("https://example.com/chapter.md") is None
+    get.assert_called_once()
+    sleep.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # stack_check: npm engines ranges
 # ---------------------------------------------------------------------------
 

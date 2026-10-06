@@ -12,3 +12,15 @@
 id = "GHSA-vfj7-8cjw-p6xm"
 ignoreUntil = 2026-12-31
 reason = "braces 3.0.3 is a dev-only dependency (via chokidar and micromatch in the build and test tooling: tailwindcss 3, jest 29, the Next.js ESLint plugin) and is not in the production bundle; no fixed release yet; tracked in #166"
+
+# --- postcss-selector-parser 6.1.4: fixed only in 7.x, which needs Tailwind 4; dev-only (#186)
+[[IgnoredVulns]]
+id = "GHSA-rj75-hqrm-r3gf"
+ignoreUntil = 2026-12-31
+reason = "postcss-selector-parser 6.1.4 is a dev-only dependency (tailwindcss 3 and postcss-nested in the CSS build) and is not in the production bundle; the fix is only in 7.x, which needs Tailwind 4 (deferred, see the #143 ignore rule); tracked in #186"
+
+# --- sprintf-js 1.0.3: no fixed release; dev-only (#186)
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2026-12-31
+reason = "sprintf-js 1.0.3 is a dev-only dependency (argparse 1 via @istanbuljs/load-nyc-config in the Jest coverage tooling) and is not in the production bundle; no fixed release yet; tracked in #186"
