@@ -44,6 +44,13 @@ Most backend work does not need the full stack: the test suite mocks Neo4j,
 OpenSearch and the LLM. You need the running stack only to try changes end to
 end (`make run-api` and `npm run dev`).
 
+`make doctor` reads the backend Python requirement from `pyproject.toml`
+and checks both `python3` and versioned `python3.<minor>` executables on PATH.
+Reading the file needs a Python 3.11+ interpreter for standard-library `tomllib`,
+but does not need installed backend dependencies. The probe supports
+comma-separated numeric comparisons (`>=`, `>`, `<=`, `<`, `==`, `!=`);
+other constraint syntax is reported as an error rather than guessed.
+
 ### Upgrading an existing checkout
 
 The v0.3.0 release removes many unused Python dependencies. Syncing an

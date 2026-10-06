@@ -6,12 +6,14 @@ Every subcommand prints a one-line summary (plus indented detail lines on proble
 
     python scripts/stack_check.py ollama        # server reachable, model pulled, 1-token generation
     python scripts/stack_check.py node          # `node --version` satisfies frontend engines.node
+    python scripts/stack_check.py python-range  # backend Python requirement from pyproject.toml
     python scripts/stack_check.py spacy         # spaCy model en_core_web_sm is installed
     python scripts/stack_check.py wait          # Neo4j (bolt) and OpenSearch are ready
     python scripts/stack_check.py seed-status --subject us_history   # prints "<concepts> <chunks>"
 
-`ollama` and `node` only need the standard library, so `make doctor` can run them before
-`poetry install`. The other subcommands need the backend dependencies (`poetry run python ...`).
+`ollama`, `node` and `python-range` only need the standard library, so `make doctor` can run them
+before `poetry install`. `python-range` needs Python >=3.11 for `tomllib`. The other subcommands
+need the backend dependencies (`poetry run python ...`).
 Connection settings come from the backend settings (environment variables and `.env`) when they
 can be imported, falling back to the environment and the backend defaults.
 """
@@ -22,6 +24,7 @@ import argparse
 import base64
 import json
 import logging
+import operator as version_operator
 import os
 import re
 import ssl
@@ -49,6 +52,60 @@ def _report(summary: str, details: list[str] | None = None) -> None:
 def _truncate(text: str, limit: int = 300) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+# ---------------------------------------------------------------------------
+# Python requirement
+# ---------------------------------------------------------------------------
+
+
+def satisfies_python(version: str, requirement: str) -> bool:
+    """Check comma-separated numeric Python comparisons; reject unknown syntax."""
+    comparisons = {
+        ">=": version_operator.ge,
+        ">": version_operator.gt,
+        "<=": version_operator.le,
+        "<": version_operator.lt,
+        "==": version_operator.eq,
+        "!=": version_operator.ne,
+    }
+
+    def parts(value: str) -> tuple[int, ...]:
+        if not re.fullmatch(r"\d+(?:\.\d+){0,2}", value):
+            raise ValueError(f"invalid numeric Python version: {value!r}")
+        numbers = tuple(int(part) for part in value.split("."))
+        return numbers + (0,) * (3 - len(numbers))
+
+    installed = parts(version)
+    accepted = True
+    for clause in requirement.split(","):
+        match = re.fullmatch(r"\s*(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+){0,2})\s*", clause)
+        if match is None:
+            raise ValueError(
+                "use comma-separated numeric comparisons (>=, >, <=, <, ==, !=); "
+                f"unsupported clause: {clause!r}"
+            )
+        # Validate every clause, even if an earlier comparison already failed.
+        accepted = comparisons[match[1]](installed, parts(match[2])) and accepted
+    return accepted
+
+
+def cmd_python_range(args: argparse.Namespace) -> int:
+    """Print the declared Python range, optionally checking a candidate version."""
+    try:
+        # Keep the other stdlib probes usable on older Python bootstrap interpreters.
+        import tomllib
+
+        with (PROJECT_ROOT / "pyproject.toml").open("rb") as file:
+            requirement = tomllib.load(file)["tool"]["poetry"]["dependencies"]["python"]
+        if not isinstance(requirement, str):
+            raise ValueError("tool.poetry.dependencies.python must be a string")
+        accepted = satisfies_python(args.version or "0.0.0", requirement)
+    except (ImportError, OSError, KeyError, TypeError, ValueError) as error:
+        _report(f"Cannot read the Python requirement in pyproject.toml: {error}")
+        return 1
+    print(requirement)
+    return 0 if args.version is None or accepted else 1
 
 
 # ---------------------------------------------------------------------------
@@ -489,6 +546,10 @@ def main(argv: list[str] | None = None) -> int:
     ollama = sub.add_parser("ollama", help="Ollama reachable, model pulled, 1-token generation")
     ollama.add_argument("--timeout", type=float, default=120.0, help="generation timeout (s)")
     ollama.set_defaults(func=cmd_ollama)
+
+    python_range = sub.add_parser("python-range", help="backend Python range from pyproject.toml")
+    python_range.add_argument("--version", help="check an installed numeric Python version")
+    python_range.set_defaults(func=cmd_python_range)
 
     node = sub.add_parser("node", help="node --version satisfies frontend engines.node")
     node.set_defaults(func=cmd_node)
