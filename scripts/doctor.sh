@@ -89,22 +89,39 @@ else
     fi
 fi
 
-# Poetry needs an interpreter in the project's range (python = ">=3.11,<3.14")
-py_found=""
-for candidate in python3.13 python3.12 python3.11 python3; do
-    have "$candidate" || continue
-    py_version="$("$candidate" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2> /dev/null || true)"
-    if [ -n "$py_version" ] && version_ge "$py_version" 3.11.0 && ! version_ge "$py_version" 3.14.0; then
-        py_found="$candidate ($py_version)"
+# Discover versioned executables too: a future supported minor may not be python3.
+py_candidates="$(compgen -c | grep -E '^python3(\.[0-9]+)?$' | LC_ALL=C sort -u || true)"
+py_reader=""
+py_range=""
+py_range_error="Python >=3.11 is needed to read pyproject.toml with tomllib"
+for candidate in $py_candidates; do
+    if py_range="$("$candidate" scripts/stack_check.py python-range 2>&1)"; then
+        py_reader="$candidate"
         break
     fi
+    py_range_error="$py_range"
 done
-if [ -n "$py_found" ]; then
-    check_pass "Python for the backend: $py_found"
-elif poetry_env_ready; then
-    check_warn "No Python 3.11-3.13 on PATH (the existing Poetry environment still works)"
+
+py_found=""
+if [ -z "$py_reader" ]; then
+    check_fail "Cannot determine the backend Python range from pyproject.toml"
+    detail "$py_range_error"
 else
-    check_fail "No Python 3.11-3.13 on PATH (python3.13/3.12/3.11); Poetry needs one for the backend"
+    for candidate in $py_candidates; do
+        py_version="$("$candidate" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2> /dev/null || true)"
+        if [ -n "$py_version" ] \
+            && "$py_reader" scripts/stack_check.py python-range --version "$py_version" > /dev/null 2>&1; then
+            py_found="$candidate ($py_version)"
+            break
+        fi
+    done
+    if [ -n "$py_found" ]; then
+        check_pass "Python for the backend: $py_found (requires $py_range)"
+    elif poetry_env_ready; then
+        check_warn "No Python satisfying $py_range on PATH (the existing Poetry environment still works)"
+    else
+        check_fail "No Python satisfying $py_range on PATH; Poetry needs one for the backend"
+    fi
 fi
 if ! have python3; then
     check_fail "python3 is missing (the checks in scripts/stack_check.py need it)"
