@@ -4,6 +4,7 @@
 COMPOSE := bash scripts/compose.sh
 PROFILE ?= cpu
 SUBJECT ?=
+RERANKER ?=
 API_HOST ?= 127.0.0.1
 # The environment wins, then API_PORT in the repository .env (read by scripts/lib.sh), then 8000
 API_PORT ?= $(or $(shell bash -c '. scripts/lib.sh && printf %s "$${API_PORT:-}"' 2> /dev/null),8000)
@@ -21,7 +22,7 @@ GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 	test test-fast test-tribunal test-integration test-integration-ui \
 	lint format type-check pre-commit clean \
 	docker-build docker-up docker-down docker-logs docker-ps \
-	ingest-books build-kg index-rag pipeline-all \
+	ingest-books build-kg index-rag pipeline-all embedding-parity \
 	run-api run-frontend dev-setup \
 	eval-rag eval-rag-api eval-compare \
 	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval
@@ -116,6 +117,9 @@ build-kg: ## Build the knowledge graph of SUBJECT in Neo4j (asks before clearing
 
 index-rag: ## Chunk, embed and index the text of SUBJECT into OpenSearch
 	poetry run python scripts/index_to_opensearch.py $(if $(SUBJECT),--subject $(SUBJECT))
+
+embedding-parity: ## Re-embed indexed chunks with the installed stack and compare (SUBJECT=..., RERANKER=1)
+	poetry run python scripts/check_embedding_parity.py $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(RERANKER),--reranker)
 
 pipeline-all: ## Rebuild from scratch: re-ingest, rebuild graph, recreate index (SUBJECT or both demo subjects)
 	bash scripts/seed_demo.sh --reset $(SUBJECT)

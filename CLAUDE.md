@@ -45,6 +45,7 @@ make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch
 make build-windows SUBJECT=economics  # Chunk NEXT edges in Neo4j for one subject (only for opt-in window retrieval)
 make demo-eval                        # Golden-set evaluation against the running API
 make eval-compare BASE=a.json HEAD=b.json  # Compare two eval reports (exit 1 on a KG citation regression)
+make embedding-parity SUBJECT=us_history  # After an embedding-stack upgrade: re-embed 50 indexed chunks, exit 1 below cosine 0.999 (RERANKER=1 adds a reranker check)
 ```
 
 The scripted demo uses `make demo-client-prep`, `make demo-client-check` and `make demo-client-reset` (see `docs/demo/README.md`).

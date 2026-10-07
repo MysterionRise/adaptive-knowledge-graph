@@ -32,7 +32,7 @@ def _fake_torch(cuda: bool, mps: bool | None) -> SimpleNamespace:
 def fake_sentence_transformer():
     """Replace the sentence_transformers module with a fake SentenceTransformer class."""
     model = MagicMock()
-    model.get_sentence_embedding_dimension.return_value = 3
+    model.get_embedding_dimension.return_value = 3
     model.encode.return_value = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
     model_cls = MagicMock(return_value=model)
 

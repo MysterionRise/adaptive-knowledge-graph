@@ -75,6 +75,14 @@ should show no retrieval flips in `make eval-compare`. Pin the embedding and rer
 `EMBEDDING_MODEL_REVISION` and `RERANKER_MODEL_REVISION` (a Hugging Face
 commit) when you need byte-identical retrieval across machines.
 
+Library upgrades can move the vectors too. After upgrading transformers,
+sentence-transformers or torch, run `make embedding-parity SUBJECT=…`
+(`RERANKER=1` adds a reranker check) against the index the previous versions
+built. It re-embeds 50 stored chunks and exits 1 when any cosine similarity
+drops below 0.999. In that case, re-index (`make index-rag`, and
+`make build-windows` if you use window retrieval) and compare evaluation runs
+before and after.
+
 `make run-api` passes the checkout's commit to the API as `GIT_SHA`
 (`scripts/compose.sh` does the same for containers). Set `GIT_SHA` yourself
 when you start the API another way, or the report records `unknown` and

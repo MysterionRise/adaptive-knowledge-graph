@@ -10,7 +10,7 @@ loaded, so importing this module stays cheap.
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -103,9 +103,9 @@ class EmbeddingModel:
         try:
             # Pin the Hugging Face revision only when one is configured
             revision = settings.embedding_model_revision
-            kwargs = {"revision": revision} if revision else {}
+            kwargs: dict[str, Any] = {"revision": revision} if revision else {}
             self.model = SentenceTransformer(self.model_name, device=self.device, **kwargs)
-            self.embedding_dim = self.model.get_sentence_embedding_dimension()
+            self.embedding_dim = self.model.get_embedding_dimension()
 
             logger.success(
                 f"✓ Loaded {self.model_name} (dim={self.embedding_dim}) on {self.device}"
