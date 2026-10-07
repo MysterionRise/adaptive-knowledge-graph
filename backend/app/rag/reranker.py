@@ -45,7 +45,7 @@ class Reranker:
 
             device = resolve_device(settings.reranker_device)
             logger.info(f"Loading reranker model {settings.reranker_model} on {device}")
-            revision = settings.reranker_model_revision
+            revision = settings.effective_reranker_revision
             kwargs = {"revision": revision} if revision else {}
             self._model = CrossEncoder(settings.reranker_model, device=device, **kwargs)
             self._device = device

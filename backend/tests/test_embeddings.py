@@ -121,6 +121,18 @@ class TestEmbeddingModel:
 
         model_cls.assert_called_once_with("test-model", device="cpu")
 
+    def test_default_model_loads_its_pinned_revision(self, fake_sentence_transformer, monkeypatch):
+        from backend.app.core.settings import PINNED_MODEL_REVISIONS
+
+        model_cls, _ = fake_sentence_transformer
+        monkeypatch.setattr(embeddings.settings, "embedding_model_revision", None)
+
+        EmbeddingModel(model_name="BAAI/bge-m3", device="cpu").load()
+
+        model_cls.assert_called_once_with(
+            "BAAI/bge-m3", device="cpu", revision=PINNED_MODEL_REVISIONS["BAAI/bge-m3"]
+        )
+
     def test_load_errors_propagate(self, fake_sentence_transformer):
         model_cls, _ = fake_sentence_transformer
         model_cls.side_effect = OSError("model not found")

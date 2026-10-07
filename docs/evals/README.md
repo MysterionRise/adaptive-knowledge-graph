@@ -71,17 +71,27 @@ LLM_TEMPERATURE=0 LLM_SEED=42 make run-api
 too: the question's concepts come first, then their neighbours ordered by
 importance and then by name, so the expanded query (which is embedded for
 retrieval) is the same in every API process. Two runs on the same seed and data
-should show no retrieval flips in `make eval-compare`. Pin the embedding and reranker models with
-`EMBEDDING_MODEL_REVISION` and `RERANKER_MODEL_REVISION` (a Hugging Face
+should show no retrieval flips in `make eval-compare`. BGE-M3 loads a pinned
+Hugging Face commit by default (`PINNED_MODEL_REVISIONS` in
+`backend/app/core/settings.py`), so an upstream model update cannot move the
+vectors. Pin the reranker, or another embedding model, with
+`RERANKER_MODEL_REVISION` and `EMBEDDING_MODEL_REVISION` (a Hugging Face
 commit) when you need byte-identical retrieval across machines.
 
 Library upgrades can move the vectors too. After upgrading transformers,
 sentence-transformers or torch, run `make embedding-parity SUBJECT=…`
 (`RERANKER=1` adds a reranker check) against the index the previous versions
 built. It re-embeds 50 stored chunks and exits 1 when any cosine similarity
-drops below 0.999. In that case, re-index (`make index-rag`, and
-`make build-windows` if you use window retrieval) and compare evaluation runs
-before and after.
+drops below 0.999. In that case, rebuild the index
+(`make index-rag SUBJECT=… RECREATE=1`, and `make build-windows` if you use
+window retrieval) and compare evaluation runs before and after.
+
+Each index also records the embedding stack that built it: the model, its
+revision, the vector dimension and the vector of a fixed probe text, in the
+index mapping's `_meta`. `make doctor` re-embeds the probe and fails when the
+model changed or the probe's cosine similarity is below 0.999, so a stack
+change that moves the vectors is caught without a parity run. Indexes built
+before this check get a warning until they are rebuilt.
 
 `make run-api` passes the checkout's commit to the API as `GIT_SHA`
 (`scripts/compose.sh` does the same for containers). Set `GIT_SHA` yourself
@@ -104,7 +114,8 @@ make eval-compare BASE=docs/evals/history/<baseline>.json HEAD=docs/evals/latest
 Every report (`schema_version` 2) has a `provenance` block:
 
 - `server`: the API's `GET /api/v1/demo/provenance`: app version, `git_sha`,
-  embedding and reranker models with their revision (`null` when not pinned)
+  embedding and reranker models with the revision they load (`null` when
+  neither configured nor pinned)
   and devices, the LLM mode, model, temperature and seed, an allowlist of
   retrieval settings (never credentials or hosts) and the concept and chunk
   counts of each subject;

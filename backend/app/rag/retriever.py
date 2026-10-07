@@ -14,6 +14,7 @@ from opensearchpy import OpenSearch, helpers
 from backend.app.core.settings import settings
 from backend.app.core.subjects import get_subject
 from backend.app.nlp.embeddings import get_embedding_model
+from backend.app.rag.index_fingerprint import fingerprint
 
 
 class OpenSearchRetriever:
@@ -78,7 +79,8 @@ class OpenSearchRetriever:
 
         if not client.indices.exists(index=self.index_name):
             # Create index with kNN settings. Replicas default to 0 so a single-node
-            # cluster stays green (a replica can never be allocated on one node).
+            # cluster stays green (a replica can never be allocated on one node). _meta
+            # records the embedding stack that builds the vectors (make doctor checks it).
             index_body = {
                 "settings": {
                     "index": {
@@ -88,6 +90,7 @@ class OpenSearchRetriever:
                     }
                 },
                 "mappings": {
+                    "_meta": {"embedding": fingerprint(self.embedding_model)},
                     "properties": {
                         "text": {"type": "text"},
                         "id": {"type": "keyword"},
@@ -107,7 +110,7 @@ class OpenSearchRetriever:
                                 "parameters": {"ef_construction": 128, "m": 24},
                             },
                         },
-                    }
+                    },
                 },
             }
 

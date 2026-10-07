@@ -480,13 +480,13 @@ async def get_provenance():
         git_sha=settings.git_sha,
         embedding=ModelProvenance(
             model=settings.embedding_model,
-            revision=settings.embedding_model_revision,
+            revision=settings.effective_embedding_revision,
             device=settings.embedding_device,
             resolved_device=loaded_embedding_device(),
         ),
         reranker=ModelProvenance(
             model=settings.reranker_model,
-            revision=settings.reranker_model_revision,
+            revision=settings.effective_reranker_revision,
             device=settings.reranker_device,
             resolved_device=loaded_reranker_device(),
             enabled=settings.reranker_enabled,

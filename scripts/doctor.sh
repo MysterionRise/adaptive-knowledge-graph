@@ -286,6 +286,17 @@ if [ "$DB_READY" = true ] && poetry_env_ready; then
             check_warn "$subj not seeded ($concepts concepts, $chunks chunks); run: make seed SUBJECT=$subj"
         fi
     done
+    # The stored vectors still match the installed embedding stack. This loads the embedding
+    # model once; its log lines go to stderr, so only stdout (summary and details) is kept.
+    rc=0
+    out="$(poetry run python scripts/stack_check.py index-fingerprint "${AKG_DEMO_SUBJECTS[@]}" 2> /dev/null)" || rc=$?
+    if [ -z "$out" ]; then
+        check_fail "Index fingerprint check did not run; rerun: poetry run python scripts/stack_check.py index-fingerprint ${AKG_DEMO_SUBJECTS[*]}"
+    elif [ "$rc" -eq 2 ]; then
+        report_probe warn 1 "$out"
+    else
+        report_probe fail "$rc" "$out"
+    fi
 fi
 
 API_URL="${API_URL:-http://localhost:${API_PORT:-8000}}"

@@ -38,6 +38,19 @@ PRIVACY_CLOUD_MODEL_ERROR = (
 )
 
 
+# Hugging Face commits the default models load unless a revision is configured (#71), so an
+# upstream update cannot silently change the vectors in an existing index. Keyed by model:
+# a different EMBEDDING_MODEL is never pinned to this commit. "main" follows the branch.
+PINNED_MODEL_REVISIONS: dict[str, str] = {
+    "BAAI/bge-m3": "5617a9f61b028005a4858fdac845db406aefb181",
+}
+
+
+def model_revision(model: str, configured: str | None) -> str | None:
+    """The revision to load: the configured one, else the model's pinned commit, if any."""
+    return configured or PINNED_MODEL_REVISIONS.get(model)
+
+
 def _package_version() -> str:
     """Installed package version: the single source of truth for ``app_version``."""
     try:
@@ -163,7 +176,8 @@ class Settings(BaseSettings):
 
     # Embeddings
     embedding_model: str = "BAAI/bge-m3"
-    # Hugging Face revision (commit, tag or branch) to pin; unset loads the default branch.
+    # Hugging Face revision (commit, tag or branch). Unset: the commit in PINNED_MODEL_REVISIONS
+    # for a pinned model (BGE-M3), else the default branch; "main" follows the branch.
     embedding_model_revision: str | None = None
     embedding_device: str = Field(
         default="auto",
@@ -271,6 +285,16 @@ class Settings(BaseSettings):
     data_raw_dir: str = "data/raw"
     data_processed_dir: str = "data/processed"
     data_books_jsonl: str = "data/processed/books.jsonl"  # read by scripts/normalize_book.py
+
+    @property
+    def effective_embedding_revision(self) -> str | None:
+        """The revision the embedding model loads (see ``model_revision``)."""
+        return model_revision(self.embedding_model, self.embedding_model_revision)
+
+    @property
+    def effective_reranker_revision(self) -> str | None:
+        """The revision the reranker loads (see ``model_revision``)."""
+        return model_revision(self.reranker_model, self.reranker_model_revision)
 
     @property
     def remote_llm_allowed(self) -> bool:

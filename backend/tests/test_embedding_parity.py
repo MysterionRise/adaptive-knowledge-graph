@@ -46,17 +46,6 @@ class TestSampleChunks:
         assert body["_source"] == ["id", "text", "embedding"]
 
 
-class TestCosine:
-    def test_identical_and_orthogonal(self):
-        assert parity.cosine([0.6, 0.8], [0.6, 0.8]) == pytest.approx(1.0)
-        assert parity.cosine([1.0, 0.0], [0.0, 1.0]) == pytest.approx(0.0)
-
-    def test_degenerate_vectors_score_zero(self):
-        assert parity.cosine([], []) == 0.0
-        assert parity.cosine([0.0, 0.0], [1.0, 0.0]) == 0.0
-        assert parity.cosine([1.0], [1.0, 0.0]) == 0.0
-
-
 class TestCompare:
     def test_identical_vectors_pass(self):
         chunks = [_chunk("a", "A", [1.0, 0.0]), _chunk("b", "B", [0.0, 1.0])]

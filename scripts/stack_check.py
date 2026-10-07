@@ -2,7 +2,7 @@
 Readiness and prerequisite probes shared by the shell scripts (quickstart, doctor, seeding).
 
 Every subcommand prints a one-line summary (plus indented detail lines on problems) and exits
-0 when the check passes and 1 when it does not.
+0 when the check passes and 1 when it does not (`index-fingerprint` exits 2 on warnings only).
 
     python scripts/stack_check.py ollama        # server reachable, model pulled, 1-token generation
     python scripts/stack_check.py node          # `node --version` satisfies frontend engines.node
@@ -10,6 +10,7 @@ Every subcommand prints a one-line summary (plus indented detail lines on proble
     python scripts/stack_check.py spacy         # spaCy model en_core_web_sm is installed
     python scripts/stack_check.py wait          # Neo4j (bolt) and OpenSearch are ready
     python scripts/stack_check.py seed-status --subject us_history   # prints "<concepts> <chunks>"
+    python scripts/stack_check.py index-fingerprint us_history economics   # vectors still match
 
 `ollama`, `node` and `python-range` only need the standard library, so `make doctor` can run them
 before `poetry install`. `python-range` needs Python >=3.11 for `tomllib`. The other subcommands
@@ -539,6 +540,105 @@ def cmd_seed_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _index_embedding_meta(
+    settings: Any, index: str
+) -> tuple[int, dict[str, Any] | None, str | None]:
+    """(HTTP status, the index's ``_meta.embedding`` or None, error) for one index."""
+    base, auth, context = _opensearch_base(settings)
+    try:
+        status, body = _http_json(
+            f"{base}/{index}/_mapping", timeout=10, auth=auth, context=context
+        )
+    except (urllib.error.URLError, OSError) as e:
+        return 0, None, _truncate(str(e))
+    if status != 200:
+        return status, None, None if status == 404 else f"HTTP {status}"
+    # Keyed by the concrete index name, which differs from `index` when that is an alias
+    entry = body.get(index) or (next(iter(body.values())) if len(body) == 1 else {})
+    meta = (entry.get("mappings") or {}).get("_meta", {}).get("embedding")
+    return status, meta if isinstance(meta, dict) else None, None
+
+
+def cmd_index_fingerprint(args: argparse.Namespace) -> int:
+    """Compare each seeded index's embedding fingerprint with the installed stack (#71)."""
+    settings = _require_backend_settings()
+    from backend.app.core.privacy import hf_model_is_cached
+    from backend.app.core.subjects import get_subject
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    fingerprinted: list[tuple[str, str, dict[str, Any]]] = []
+    for subject_id in args.subjects:
+        index = get_subject(subject_id).database.opensearch_index
+        status, meta, error = _index_embedding_meta(settings, index)
+        if error:
+            errors.append(f"{subject_id}: cannot read the {index} mapping ({error})")
+        elif status == 404:
+            continue  # not seeded; the seed check reports it
+        elif meta is None:
+            warnings.append(
+                f"{subject_id}: {index} was built before index fingerprints; rebuild it to "
+                f"enable this check (make index-rag SUBJECT={subject_id} RECREATE=1)"
+            )
+        else:
+            fingerprinted.append((subject_id, index, meta))
+
+    model_name, revision = settings.embedding_model, settings.effective_embedding_revision
+    checked: list[str] = []
+    mismatched = False
+    lowest = 1.0
+    if fingerprinted and not hf_model_is_cached(model_name, revision):
+        warnings.append(
+            f"{model_name} (revision {revision}) is not cached, so the fingerprints were not "
+            "checked; it downloads on the API's first start"
+        )
+    elif fingerprinted:
+        # Cached: never contact the Hub from here
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        from backend.app.nlp.embeddings import EmbeddingModel
+        from backend.app.rag.index_fingerprint import check_fingerprint
+
+        model = EmbeddingModel()
+        try:
+            model.load()
+        except Exception as e:
+            errors.append(f"{model_name} failed to load: {_truncate(f'{type(e).__name__}: {e}')}")
+        else:
+            for subject_id, index, meta in fingerprinted:
+                check = check_fingerprint(meta, model)
+                checked.append(subject_id)
+                if check.probe_cosine is not None:
+                    lowest = min(lowest, check.probe_cosine)
+                errors.extend(f"{subject_id}: {problem}" for problem in check.errors)
+                warnings.extend(f"{subject_id}: {problem}" for problem in check.warnings)
+                if check.errors:
+                    mismatched = True
+                    errors.append(
+                        f"hint: rebuild {index} with make index-rag SUBJECT={subject_id} "
+                        "RECREATE=1 (and make build-windows if you use window retrieval)"
+                    )
+
+    if errors:
+        summary = "do not match the embedding stack" if mismatched else "could not be checked"
+        _report(f"Index fingerprints {summary}", [*errors, *warnings])
+        return 1
+    if warnings:
+        _report(
+            f"Index fingerprints: {len(warnings)} warning(s) "
+            f"(checked: {', '.join(checked) or 'none'})",
+            warnings,
+        )
+        return 2
+    if not checked:
+        _report("Index fingerprints: no seeded index to check")
+        return 0
+    _report(
+        f"Index fingerprints match the embedding stack ({', '.join(checked)}; "
+        f"lowest probe cosine {lowest:.6f})"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -565,6 +665,12 @@ def main(argv: list[str] | None = None) -> int:
     status = sub.add_parser("seed-status", help='print "<concepts> <indexed chunks>"')
     status.add_argument("--subject", required=True)
     status.set_defaults(func=cmd_seed_status)
+
+    fingerprint = sub.add_parser(
+        "index-fingerprint", help="the indexes' embedding fingerprints match the installed stack"
+    )
+    fingerprint.add_argument("subjects", nargs="+", metavar="SUBJECT")
+    fingerprint.set_defaults(func=cmd_index_fingerprint)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
