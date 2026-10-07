@@ -60,6 +60,13 @@ is compiled in the release pull request
   preview), and the golden set's `expected_sources` now name real sections,
   so citation hit rate and MRR are not comparable with earlier reports
   ([#154](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/154)).
+- Natural-language graph queries (`/api/v1/graph/query`) run on langchain-core
+  1.x and langchain-neo4j 0.10, with `langchain-ollama` and `langchain-openai`
+  for the chat models. `langchain` and `langchain-community` are no longer
+  installed. Schema introspection, which langchain-neo4j now runs outside
+  `Neo4jGraph.query()`, still runs in READ transactions, and an unreachable
+  Ollama or OpenRouter answers 503
+  ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
 
 ### Added
 

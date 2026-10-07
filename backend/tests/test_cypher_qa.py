@@ -7,11 +7,20 @@ wiring, using a fake LLM and a mocked Neo4j driver: no services are needed.
 
 from unittest.mock import MagicMock, PropertyMock, patch
 
+import httpx
 import neo4j
+import ollama
+import openai
 import pytest
-from langchain_neo4j import GraphCypherQAChain
+from langchain_neo4j import GraphCypherQAChain, Neo4jGraph
+from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
-from backend.app.core.exceptions import LLMGenerationError, Neo4jConnectionError
+from backend.app.core.exceptions import (
+    LLMConnectionError,
+    LLMGenerationError,
+    Neo4jConnectionError,
+)
 from backend.app.kg.cypher_qa import (
     MAX_CYPHER_CHARS,
     CypherQAService,
@@ -277,8 +286,32 @@ class TestReadOnlyNeo4jGraph:
 
         driver.session.assert_not_called()
 
-    def test_schema_refresh_is_trusted_but_still_read_only(self, make_neo4j_driver):
+    def test_session_params_cannot_switch_to_write(self, graph_and_driver):
+        """Neo4jGraph.query() takes session_params since langchain-neo4j 0.4; they are ignored."""
+        graph, driver = graph_and_driver
+
+        graph.query(
+            "MATCH (c:Concept) RETURN c",
+            session_params={"default_access_mode": neo4j.WRITE_ACCESS, "database": "system"},
+        )
+
+        driver.session.assert_called_once_with(
+            database="neo4j", default_access_mode=neo4j.READ_ACCESS
+        )
+        driver.mock_session.execute_read.assert_called_once()
+        driver.mock_session.run.assert_not_called()
+        driver.execute_query.assert_not_called()
+
+    def test_upstream_schema_refresh_bypasses_query(self, make_neo4j_driver):
+        """Why refresh_schema is overridden: upstream calls driver.execute_query directly.
+
+        langchain-neo4j >= 0.4 hands the raw driver to neo4j-graphrag's
+        get_structured_schema, which uses execute_query (WRITE routing by default) and
+        never goes through query(). If this starts failing, upstream changed and the
+        override in ReadOnlyNeo4jGraph should be re-checked.
+        """
         driver = make_neo4j_driver([])
+        driver.execute_query.return_value.records = []
         with patch("neo4j.GraphDatabase.driver", return_value=driver):
             graph = ReadOnlyNeo4jGraph(
                 url="bolt://neo4j.test:7687",
@@ -287,15 +320,62 @@ class TestReadOnlyNeo4jGraph:
                 refresh_schema=False,
             )
 
+        with patch.object(ReadOnlyNeo4jGraph, "query") as query:
+            Neo4jGraph.refresh_schema(graph)
+
+        query.assert_not_called()
+        assert driver.execute_query.call_count >= 3
+        for call in driver.execute_query.call_args_list:
+            assert call.kwargs.get("routing_", neo4j.RoutingControl.WRITE) is not (
+                neo4j.RoutingControl.READ
+            )
+
+    def test_schema_refresh_is_not_validated_but_still_read_only(self, make_neo4j_driver):
+        driver = make_neo4j_driver([])
+        node_props = MagicMock(name="node_props_result")
+        node_props.__iter__.side_effect = lambda: iter(
+            [
+                MagicMock(
+                    data=MagicMock(return_value={"output": {"label": "Concept", "properties": []}})
+                )
+            ]
+        )
+        empty = MagicMock(name="empty_result")
+        empty.__iter__.side_effect = lambda: iter([])
+
+        def run(cypher, params):
+            is_node_props = (
+                "elementType = 'node'" in cypher and "NOT type = 'RELATIONSHIP'" in cypher
+            )
+            return node_props if is_node_props else empty
+
+        driver.mock_tx.run.side_effect = run
+        with patch("neo4j.GraphDatabase.driver", return_value=driver):
+            graph = ReadOnlyNeo4jGraph(
+                url="bolt://neo4j.test:7687",
+                username="neo4j",
+                password="test-password",
+                timeout=7.0,
+                refresh_schema=False,
+            )
+
         graph.refresh_schema()
 
         executed = [call.args[0] for call in driver.mock_tx.run.call_args_list]
-        # langchain's own introspection ran, including statements the validator rejects
+        # neo4j-graphrag's introspection ran, including statements the validator rejects
         assert "SHOW CONSTRAINTS" in executed
-        assert any("apoc.meta.data()" in cypher for cypher in executed)
-        assert driver.mock_session.execute_read.call_count == len(executed)
+        assert any("apoc.meta.data(" in cypher for cypher in executed)
+        driver.execute_query.assert_not_called()
+        driver.mock_session.run.assert_not_called()
         driver.mock_session.execute_write.assert_not_called()
-        # the trusted context ends with the refresh
+        assert driver.mock_session.execute_read.call_count == len(executed)
+        for call in driver.session.call_args_list:
+            assert call.kwargs == {"database": "neo4j", "default_access_mode": neo4j.READ_ACCESS}
+        for call in driver.mock_session.execute_read.call_args_list:
+            assert call.args[0].timeout == 7.0
+        assert "Concept" in graph.structured_schema["node_props"]
+        assert "Concept" in graph.schema
+        # introspection statements are still rejected when sent through query()
         with pytest.raises(CypherValidationError):
             graph.query("SHOW CONSTRAINTS")
 
@@ -439,6 +519,35 @@ class TestCypherQAService:
 
         assert not isinstance(excinfo.value, ValueError)
 
+    @pytest.mark.parametrize(
+        ("error", "expected"),
+        [
+            (ConnectionError("Failed to connect to Ollama"), LLMConnectionError),
+            (
+                openai.APIConnectionError(request=httpx.Request("POST", "https://llm.test")),
+                LLMConnectionError,
+            ),
+            (ollama.ResponseError("model 'llama3' not found", 404), LLMGenerationError),
+            (
+                openai.APIStatusError(
+                    "unauthorized",
+                    response=httpx.Response(401, request=httpx.Request("POST", "https://llm.test")),
+                    body=None,
+                ),
+                LLMGenerationError,
+            ),
+        ],
+        ids=["ollama-down", "openrouter-down", "ollama-http-error", "openrouter-http-error"],
+    )
+    def test_llm_client_errors_map_to_llm_errors(self, error, expected):
+        """langchain-ollama/-openai raise their clients' errors, not ValueError (503, not 500)."""
+        service = CypherQAService()
+        service._chain = MagicMock()
+        service._chain.invoke.side_effect = error
+
+        with pytest.raises(expected):
+            service.query("Which concepts exist?")
+
     def test_graph_connection_failure_is_not_a_value_error(self):
         driver = MagicMock()
         driver.verify_connectivity.side_effect = neo4j.exceptions.ServiceUnavailable("down")
@@ -469,6 +578,42 @@ class TestCypherQAService:
 
         driver.close.assert_called_once()
         assert service._graph is None
+
+
+class TestLLMSelection:
+    """LLM_MODE picks the chat model; building one makes no network call."""
+
+    def test_local_mode_uses_chat_ollama(self, monkeypatch):
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "llm_mode", "local")
+        monkeypatch.setattr(settings, "llm_ollama_host", "http://ollama.test:11434")
+        monkeypatch.setattr(settings, "llm_local_model", "llama3.1:8b")
+
+        llm = CypherQAService().llm
+
+        assert isinstance(llm, ChatOllama)
+        assert llm.base_url == "http://ollama.test:11434"
+        assert llm.model == "llama3.1:8b"
+        assert llm.temperature == 0.0
+
+    @pytest.mark.parametrize("mode", ["remote", "hybrid"])
+    def test_other_modes_use_openrouter(self, monkeypatch, mode):
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "llm_mode", mode)
+        monkeypatch.setattr(settings, "openrouter_base_url", "https://openrouter.test/api/v1")
+        monkeypatch.setattr(settings, "openrouter_api_key", "sk-or-test")
+        monkeypatch.setattr(settings, "openrouter_model", "mistralai/mixtral-8x7b-instruct")
+
+        llm = CypherQAService().llm
+
+        assert isinstance(llm, ChatOpenAI)
+        assert llm.openai_api_base == "https://openrouter.test/api/v1"
+        assert llm.model_name == "mistralai/mixtral-8x7b-instruct"
+        assert llm.openai_api_key is not None
+        assert llm.openai_api_key.get_secret_value() == "sk-or-test"
+        assert llm.temperature == 0.0
 
 
 class TestLoggingUntrustedText:

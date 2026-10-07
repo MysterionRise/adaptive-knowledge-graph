@@ -2,8 +2,7 @@
 #
 # Time-boxed exceptions for advisories that cannot be fixed in this release. Each entry
 # names the upgrade issue that removes it:
-#   - transformers and langchain entries are fixed only in a new major version of the
-#     affected package (#71, #72);
+#   - transformers entries are fixed only in a new major version (#71);
 #   - the two torch entries are fixed within 2.x (2.11 / 2.13), but those releases switch
 #     the Linux wheels to CUDA 13, a deliberate wheel-set change deferred to #79.
 # Delete an entry when its upgrade lands; do not extend ignoreUntil without re-checking
@@ -39,27 +38,6 @@ reason = "transformers 4.x (Trainer class): configured BAAI bge-m3 / bge-reranke
 id = "PYSEC-2025-217"
 ignoreUntil = 2026-12-31
 reason = "transformers 4.x (X-CLIP checkpoint conversion, CVE-2025-14929): configured BAAI bge-m3 / bge-reranker-v2-m3 only; no trust_remote_code/save_pretrained/Trainer usage; `kernels` package not installed; transformers 5 migration #71"
-
-# --- langchain 0.3.x: fixed only in the 1.x line (migration: #72)
-[[IgnoredVulns]]
-id = "GHSA-qh6h-p6c9-ff54"
-ignoreUntil = 2026-12-31
-reason = "langchain-core 0.3.x: legacy load_prompt/load_prompt_from_config not used (prompts are built in code); 1.x migration #72"
-
-[[IgnoredVulns]]
-id = "GHSA-2g6r-c272-w58r"
-ignoreUntil = 2026-12-31
-reason = "langchain-core 0.3.x: ChatOpenAI.get_num_tokens_from_messages with image_url not used; 1.x migration #72"
-
-[[IgnoredVulns]]
-id = "GHSA-gr75-jv2w-4656"
-ignoreUntil = 2026-12-31
-reason = "langchain 0.3.x: file-search middleware and prompt/chain config loaders not used; 1.x migration #72"
-
-[[IgnoredVulns]]
-id = "GHSA-fv5p-p927-qmxr"
-ignoreUntil = 2026-12-31
-reason = "langchain-text-splitters 0.3.x: HTMLHeaderTextSplitter.split_text_from_url not used; 1.x migration #72"
 
 # --- torch 2.10.x: local-only; fixed in torch >= 2.11/2.13, which ship CUDA 13 wheels (#79)
 [[IgnoredVulns]]

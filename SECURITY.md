@@ -110,11 +110,6 @@ If anyone other than you can reach the API, run it in production mode:
     ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
     Mitigation: the application only loads the pinned `BAAI/bge-m3` embedding
     model and the optional `BAAI/bge-reranker-v2-m3` reranker.
-  - `langchain`, `langchain-core` and `langchain-text-splitters`, until the
-    move to langchain 1.x
-    ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
-    This project does not use the affected APIs, such as the legacy prompt
-    loader.
   - `torch` 2.10, for two local-only advisories in features this project does
     not use (`torch.jit.script` and loading `.pt2` archives). The fixed
     releases switch the Linux wheels to CUDA 13, which is deferred to
