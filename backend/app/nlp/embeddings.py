@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from backend.app.core.settings import settings
+from backend.app.core.settings import model_revision, settings
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
@@ -101,8 +101,8 @@ class EmbeddingModel:
         logger.info(f"Loading embedding model: {self.model_name} on {self.device}")
 
         try:
-            # Pin the Hugging Face revision only when one is configured
-            revision = settings.embedding_model_revision
+            # The configured Hugging Face revision, else the model's pinned commit
+            revision = model_revision(self.model_name, settings.embedding_model_revision)
             kwargs: dict[str, Any] = {"revision": revision} if revision else {}
             self.model = SentenceTransformer(self.model_name, device=self.device, **kwargs)
             self.embedding_dim = self.model.get_embedding_dimension()

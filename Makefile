@@ -115,8 +115,8 @@ ingest-books: ## Fetch and normalise the books of SUBJECT into data/processed/bo
 build-kg: ## Build the knowledge graph of SUBJECT in Neo4j (asks before clearing)
 	poetry run python scripts/build_knowledge_graph.py $(if $(SUBJECT),--subject $(SUBJECT))
 
-index-rag: ## Chunk, embed and index the text of SUBJECT into OpenSearch
-	poetry run python scripts/index_to_opensearch.py $(if $(SUBJECT),--subject $(SUBJECT))
+index-rag: ## Chunk, embed and index the text of SUBJECT into OpenSearch (RECREATE=1 drops the index first)
+	poetry run python scripts/index_to_opensearch.py $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(RECREATE),--recreate)
 
 embedding-parity: ## Re-embed indexed chunks with the installed stack and compare (SUBJECT=..., RERANKER=1)
 	poetry run python scripts/check_embedding_parity.py $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(RERANKER),--reranker)

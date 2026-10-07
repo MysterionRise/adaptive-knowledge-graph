@@ -29,7 +29,11 @@ from backend.app.core.privacy import (
     is_cloud_model,
     ollama_host_problem,
 )
-from backend.app.core.settings import PRIVACY_LLM_MODE_ERROR, Settings
+from backend.app.core.settings import (
+    PINNED_MODEL_REVISIONS,
+    PRIVACY_LLM_MODE_ERROR,
+    Settings,
+)
 from backend.app.main import create_app
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -260,10 +264,16 @@ def test_every_problem_reported_at_once(monkeypatch, clean_tracing_env):
 # ==========================================================================
 
 
-def _cache_model(hub: Path, model: str) -> None:
-    snapshot = hub / f"models--{model.replace('/', '--')}" / "snapshots" / "abc123"
+def _cache_model(hub: Path, model: str, commit: str | None = None, ref: str = "main") -> None:
+    """Cache a snapshot the way huggingface_hub does: the commit (by default the model's
+    pinned one) under snapshots/, and refs/<ref> pointing at it."""
+    commit = commit or PINNED_MODEL_REVISIONS.get(model, "abc123")
+    repo = hub / f"models--{model.replace('/', '--')}"
+    snapshot = repo / "snapshots" / commit
     snapshot.mkdir(parents=True)
     (snapshot / "config.json").write_text("{}")
+    (repo / "refs").mkdir(exist_ok=True)
+    (repo / "refs" / ref).write_text(commit)
 
 
 @pytest.fixture
@@ -337,6 +347,26 @@ class TestHuggingFaceHub:
 
     def test_local_model_directory_counts_as_cached(self, hf_env, tmp_path):
         assert hf_model_is_cached(str(tmp_path))
+
+    def test_another_commit_does_not_count_for_the_pinned_one(self, hf_env):
+        _cache_model(hf_env, "BAAI/bge-m3", commit="0" * 40)
+
+        status = configure_huggingface_hub(_settings())
+
+        assert hf_model_is_cached("BAAI/bge-m3")
+        assert not hf_model_is_cached("BAAI/bge-m3", PINNED_MODEL_REVISIONS["BAAI/bge-m3"])
+        assert "HF_HUB_OFFLINE" not in os.environ
+        assert "BAAI/bge-m3 not cached yet" in status
+
+    def test_branch_revision_resolves_through_refs(self, hf_env):
+        _cache_model(hf_env, "BAAI/bge-m3", commit="1" * 40, ref="main")
+
+        assert hf_model_is_cached("BAAI/bge-m3", "main")
+        assert hf_model_is_cached("BAAI/bge-m3", "1" * 40)
+        assert not hf_model_is_cached("BAAI/bge-m3", "v2.0")
+
+        configure_huggingface_hub(_settings(embedding_model_revision="main"))
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
 
     def test_api_import_sets_env_before_huggingface_hub_loads(self, tmp_path):
         """Importing the API must not import huggingface_hub: it reads the variables once."""

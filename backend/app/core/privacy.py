@@ -113,13 +113,22 @@ def hf_hub_cache_dir() -> Path:
     return Path(xdg_cache).expanduser() / "huggingface" / "hub"
 
 
-def hf_model_is_cached(model: str) -> bool:
-    """Whether a model is available without the Hub: a local directory or a cached snapshot."""
+def hf_model_is_cached(model: str, revision: str | None = None) -> bool:
+    """Whether a model is available without the Hub: a local directory or a cached snapshot.
+
+    With a revision, that revision must be cached: the snapshot of a commit, or the one a
+    cached branch or tag ref (``refs/<name>``) points to.
+    """
     if Path(model).expanduser().is_dir():
         return True
-    snapshots = hf_hub_cache_dir() / f"models--{model.replace('/', '--')}" / "snapshots"
+    repo = hf_hub_cache_dir() / f"models--{model.replace('/', '--')}"
     try:
-        return any(path.is_dir() and any(path.iterdir()) for path in snapshots.iterdir())
+        if revision:
+            ref = repo / "refs" / revision
+            commit = ref.read_text(encoding="utf-8").strip() if ref.is_file() else revision
+            snapshot = repo / "snapshots" / commit
+            return snapshot.is_dir() and any(snapshot.iterdir())
+        return any(path.is_dir() and any(path.iterdir()) for path in (repo / "snapshots").iterdir())
     except OSError:
         return False
 
@@ -129,8 +138,9 @@ def configure_huggingface_hub(app_settings: Settings) -> str:
 
     Telemetry is always off. Under PRIVACY_LOCAL_ONLY, ``HF_HUB_OFFLINE=1`` is set when
     every model the API loads (the embedding model, plus the reranker when enabled) is
-    already cached, so the API never contacts huggingface.co. A first run without the cache
-    stays online so the models can download. An explicit ``HF_HUB_OFFLINE`` is respected.
+    already cached at the revision it loads, so the API never contacts huggingface.co. A
+    first run without the cache (or after a revision change) stays online so the models can
+    download. An explicit ``HF_HUB_OFFLINE`` is respected.
     Must run before ``huggingface_hub`` is imported (it reads these variables once).
     """
     disable_hf_telemetry()
@@ -138,10 +148,10 @@ def configure_huggingface_hub(app_settings: Settings) -> str:
         return f"HF_HUB_OFFLINE={os.environ['HF_HUB_OFFLINE']} (set explicitly)"
     if not app_settings.privacy_local_only:
         return "online (PRIVACY_LOCAL_ONLY=false)"
-    models = [app_settings.embedding_model]
+    models = [(app_settings.embedding_model, app_settings.effective_embedding_revision)]
     if app_settings.reranker_enabled:
-        models.append(app_settings.reranker_model)
-    missing = [model for model in models if not hf_model_is_cached(model)]
+        models.append((app_settings.reranker_model, app_settings.effective_reranker_revision))
+    missing = [model for model, revision in models if not hf_model_is_cached(model, revision)]
     if missing:
         return (
             f"online: {', '.join(missing)} not cached yet and will be downloaded from "

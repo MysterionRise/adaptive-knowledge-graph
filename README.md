@@ -242,8 +242,9 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
 
 - **Start with `make doctor`.** It checks the tools (Docker, Compose, Python,
   Poetry, Node), resources (disk, RAM, Docker memory), ports, container health,
-  seed status per subject, the API and the frontend, the Ollama model with a
-  test generation, and the spaCy model. It exits non-zero only on failures.
+  seed status per subject, whether each index still matches the installed
+  embedding stack, the API and the frontend, the Ollama model with a test
+  generation, and the spaCy model. It exits non-zero only on failures.
 - **Ollama is unreachable or the model is missing.** Start Ollama
   (`ollama serve` or the desktop app), check `ollama list`, and pull the model
   again. If Ollama runs elsewhere, set `LLM_OLLAMA_HOST`.

@@ -41,7 +41,7 @@ cd frontend && npm run lint && npm run type-check && npm test -- --ci && npm run
 ```bash
 make ingest-books SUBJECT=economics   # Fetch and normalize a subject's books
 make build-kg SUBJECT=economics       # Build that subject's knowledge graph in Neo4j
-make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch
+make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch (RECREATE=1 drops the index first)
 make build-windows SUBJECT=economics  # Chunk NEXT edges in Neo4j for one subject (only for opt-in window retrieval)
 make demo-eval                        # Golden-set evaluation against the running API
 make eval-compare BASE=a.json HEAD=b.json  # Compare two eval reports (exit 1 on a KG citation regression)
@@ -97,7 +97,7 @@ Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key v
 - `TRUST_PROXY_HEADERS=true` keys rate limits on the right-most `X-Forwarded-For` hop; only behind a proxy that appends the client IP
 - `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`, a loopback/private `LLM_OLLAMA_HOST` and a non-cloud `LLM_LOCAL_MODEL`, and refuses LangSmith tracing variables; startup fails otherwise (checks in `backend/app/core/privacy.py`). The API also disables LangSmith tracing at runtime and sets `HF_HUB_OFFLINE=1` once its models are cached
 - `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
-- `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values); `EMBEDDING_MODEL_REVISION` / `RERANKER_MODEL_REVISION` pin Hugging Face revisions
+- `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values); `EMBEDDING_MODEL_REVISION` / `RERANKER_MODEL_REVISION` pin Hugging Face revisions. Unset, BGE-M3 loads the commit in `PINNED_MODEL_REVISIONS` (`backend/app/core/settings.py`) and the reranker its default branch; `main` follows the branch. New OpenSearch indexes record the embedding stack in their mapping's `_meta` (`backend/app/rag/index_fingerprint.py`), and `make doctor` fails when it no longer matches
 - `LLM_SEED` - sampling seed sent to Ollama (unset by default); evaluations use `LLM_TEMPERATURE=0` and a fixed seed
 - `GIT_SHA` - commit reported by `/api/v1/demo/provenance` (`make run-api` and `scripts/compose.sh` set it from git; default `unknown`)
 - `RERANKER_ENABLED=false` - set `true` to enable the cross-encoder reranker

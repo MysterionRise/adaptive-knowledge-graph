@@ -332,6 +332,16 @@ class TestProvenanceEndpoint:
         assert data["embedding"]["resolved_device"] == "cpu"
         assert data["reranker"]["resolved_device"] == "cuda"
 
+    def test_reports_the_pinned_revision_by_default(self, client, monkeypatch):
+        from backend.app.core.settings import PINNED_MODEL_REVISIONS
+
+        monkeypatch.setattr(settings, "embedding_model", "BAAI/bge-m3")
+        monkeypatch.setattr(settings, "embedding_model_revision", None)
+        monkeypatch.setattr(settings, "reranker_model_revision", None)
+        data = self._get(client).json()
+        assert data["embedding"]["revision"] == PINNED_MODEL_REVISIONS["BAAI/bge-m3"]
+        assert data["reranker"]["revision"] is None
+
 
 class TestDemoLatestEvalSchema:
     """The demo page calls a report ready only if scripts/check_demo_eval.py would."""

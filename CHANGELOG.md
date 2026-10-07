@@ -75,8 +75,27 @@ is compiled in the release pull request
   `make embedding-parity` against the seeded index to confirm the stored
   vectors still match
   ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
+- BGE-M3 now loads a pinned Hugging Face commit (`5617a9f6`) unless
+  `EMBEDDING_MODEL_REVISION` is set, so an upstream model update cannot
+  change the vectors of an existing index. Set `EMBEDDING_MODEL_REVISION=main`
+  to follow the branch. Offline mode (`HF_HUB_OFFLINE=1`) now starts only once
+  the revision the API loads is cached, so a cache that holds another BGE-M3
+  commit fetches the pinned one on the next start. Another `EMBEDDING_MODEL`
+  is not pinned, and the reranker still follows its default branch
+  ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
 
 ### Added
+
+- Index fingerprints: a new OpenSearch index records the embedding model, its
+  revision, the vector dimension and the vector of a fixed probe text in its
+  mapping's `_meta`. `make doctor` (`scripts/stack_check.py index-fingerprint`)
+  re-embeds the probe with the installed stack and fails when the model
+  differs or the probe's cosine similarity drops below 0.999, naming the
+  command that rebuilds the index (`make index-rag SUBJECT=… RECREATE=1`;
+  `RECREATE=1` is new and drops the index first). It warns about an index
+  built before fingerprints (rebuild it to enable the check) and one built
+  with another revision whose probe still matches
+  ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
 
 - `make embedding-parity` (`scripts/check_embedding_parity.py`) re-embeds a
   fixed sample of 50 indexed chunks with the installed embedding stack and

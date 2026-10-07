@@ -7,14 +7,15 @@ chunks (the lowest --sample chunk ids), re-embeds their text with the installed 
 compares each new vector with the stored one by cosine similarity.
 
 Exit status 1 when the lowest similarity is below --threshold (default 0.999). The index then
-needs new embeddings: re-run ``make index-rag`` (plus ``make build-windows`` when window
-retrieval is used) and attach a ``make eval-compare`` delta to the upgrade.
+needs new embeddings: rebuild it with ``make index-rag SUBJECT=<id> RECREATE=1`` (plus
+``make build-windows`` when window retrieval is used) and attach a ``make eval-compare`` delta
+to the upgrade.
 
 --reranker also smoke-tests the cross-encoder: each of the first 5 sampled chunks is queried
 with its own opening words and must rank first among those 5, for at least 4 of them.
 
 The report lists the library versions, the inference device and the model revisions (the
-configured one and the one cached under refs/main), which is what a revision pin needs.
+one loaded and the one cached under refs/main), which is what a revision pin needs.
 
 Usage:
     poetry run python scripts/check_embedding_parity.py --subject us_history
@@ -24,14 +25,14 @@ Usage:
 
 import argparse
 import json
-import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from importlib import metadata
 from typing import Any
 
 from backend.app.core.privacy import hf_hub_cache_dir
-from backend.app.core.settings import settings
+from backend.app.core.settings import model_revision, settings
 from backend.app.core.subjects import get_subject
+from backend.app.rag.index_fingerprint import cosine
 
 DEFAULT_SAMPLE = 50
 DEFAULT_THRESHOLD = 0.999
@@ -75,14 +76,6 @@ def sample_chunks(client: Any, index: str, size: int) -> list[dict[str, Any]]:
                 }
             )
     return chunks
-
-
-def cosine(a: Sequence[float], b: Sequence[float]) -> float:
-    """Cosine similarity; 0.0 when either vector is empty, zero or of another length."""
-    if len(a) != len(b) or not a:
-        return 0.0
-    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
-    return sum(x * y for x, y in zip(a, b, strict=True)) / norm if norm else 0.0
 
 
 def compare(chunks: list[dict[str, Any]], encode: Encode, threshold: float) -> dict[str, Any]:
@@ -151,7 +144,7 @@ def _print_report(report: dict[str, Any]) -> None:
     print(f"Embedding parity for {report['subject']} (index {report['index']})")
     print(f"  model: {report['embedding']['model']} on {report['embedding']['device']}")
     print(
-        f"  revision: configured {report['embedding']['configured_revision']}, "
+        f"  revision: {report['embedding']['revision']} (loaded), "
         f"cached {report['embedding']['cached_revision']}"
     )
     print("  libraries: " + ", ".join(f"{k} {v}" for k, v in report["libraries"].items()))
@@ -223,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         "embedding": {
             "model": model.model_name,
             "device": model.device,
-            "configured_revision": settings.embedding_model_revision,
+            "revision": model_revision(model.model_name, settings.embedding_model_revision),
             "cached_revision": cached_revision(model.model_name),
         },
         "libraries": library_versions(),
@@ -238,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         report["reranker"] = {
             "model": settings.reranker_model,
             "device": reranker.device,
-            "configured_revision": settings.reranker_model_revision,
+            "revision": settings.effective_reranker_revision,
             "cached_revision": cached_revision(settings.reranker_model),
             **smoke,
         }
