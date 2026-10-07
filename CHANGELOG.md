@@ -137,6 +137,11 @@ is compiled in the release pull request
 
 ### Fixed
 
+- An `.nvmrc` now pins the same Node version as `.node-version`, so
+  `nvm install` and `nvm use` pick it up (nvm does not read `.node-version`).
+  When the Node check in `make quickstart`, `make doctor` or
+  `make demo-client-check` fails, its hint names the command for fnm, nvm and
+  Volta instead of claiming that all three read `.node-version`.
 - GitHub book-content downloads now use a 30-second request timeout and an
   identifying User-Agent, with at most three attempts and 1/2-second backoff
   for HTTP 429/5xx, timeouts and connection failures. Other HTTP failures are

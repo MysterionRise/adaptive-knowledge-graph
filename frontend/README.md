@@ -6,7 +6,8 @@ assessment over synthetic learner state, and a demo readiness page.
 
 ## Prerequisites
 
-- Node.js 24 LTS, pinned in the repository's [`.node-version`](../.node-version).
+- Node.js 24 LTS, pinned in the repository's [`.node-version`](../.node-version)
+  (fnm, mise) and [`.nvmrc`](../.nvmrc) (nvm).
   `package.json` accepts Node `^22.13.0 || >=24`, and `npm ci` enforces that
   range (`engine-strict=true` in `.npmrc`), so an unsupported Node version
   fails early.
@@ -136,4 +137,5 @@ mock the API client explicitly. Useful endpoints:
 - **The graph is empty.** The data is not seeded. Run `make seed` in the
   repository root.
 - **`npm ci` fails with an engine error.** Switch to the Node version in
-  `.node-version`.
+  `.node-version`: `fnm use --install-if-missing`, or `nvm install` (it reads
+  `.nvmrc`), from the repository root.

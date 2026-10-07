@@ -169,7 +169,7 @@ Approximate memory use of the full local stack:
 | --- | --- |
 | Python | 3.11, 3.12 or 3.13 |
 | [Poetry](https://python-poetry.org/docs/#installation) | 2.x |
-| [Node.js](https://nodejs.org/) | 24 LTS (pinned in [`.node-version`](.node-version)) |
+| [Node.js](https://nodejs.org/) | 24 LTS (pinned in [`.node-version`](.node-version) and [`.nvmrc`](.nvmrc)) |
 | Docker with Compose v2 | Compose 2.24 or newer (Docker Desktop or Docker Engine) |
 | [Ollama](https://ollama.com/download) | current release |
 | Git and GNU Make | any recent version |
@@ -265,8 +265,11 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
   Unset the tracing variable it names, point `LLM_OLLAMA_HOST` at a loopback or
   private address, or pick a local model. Set `PRIVACY_LOCAL_ONLY=false` only if
   that traffic is approved.
-- **`npm ci` fails with an engine error.** Switch to Node 24, for example with
-  `fnm use` (it reads `.node-version`) or `nvm install 24`.
+- **`npm ci` fails with an engine error, or quickstart stops at the Node
+  check.** Switch to Node 24 from the repository root:
+  `fnm use --install-if-missing` (it reads `.node-version`), `nvm install` (it
+  reads `.nvmrc`), `volta install node@24`, or the installer from
+  [nodejs.org](https://nodejs.org/).
 - **A port is already in use.** The stack uses 3000 (frontend), 8000 (API),
   7474 and 7687 (Neo4j), 9200 (OpenSearch) and 11434 (Ollama).
 
