@@ -61,6 +61,10 @@ updates:
       # run on TS 7 (#176); upgrade together once it supports TS 7.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # eslint-plugin-react 7.37 (via eslint-config-next) calls context.getFilename(), which
+      # eslint 10 removed, so lint crashes (#190); upgrade together once it supports eslint 10.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   # API images (infra/docker/*.Dockerfile)
   - package-ecosystem: "docker"
