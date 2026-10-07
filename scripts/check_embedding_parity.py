@@ -173,6 +173,19 @@ def _print_report(report: dict[str, Any]) -> None:
     print("PASS" if report["passed"] else "FAIL")
 
 
+def _nothing_to_compare(problem: str, subject_id: str, embedding_model: str) -> int:
+    """Exit status 2 with what to do; the cached revisions are still useful for a pin."""
+    print(
+        f"{problem}: nothing to compare. Seed it with `make seed SUBJECT={subject_id}`; "
+        "parity only applies to an index built with the previous embedding stack."
+    )
+    print(
+        f"Cached revisions: {embedding_model} {cached_revision(embedding_model)}, "
+        f"{settings.reranker_model} {cached_revision(settings.reranker_model)}"
+    )
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compare re-embedded chunks with the index")
     parser.add_argument("--subject", default=None, help="Subject id (default subject if unset)")
@@ -190,12 +203,16 @@ def main(argv: list[str] | None = None) -> int:
     index = subject.database.opensearch_index
     retriever = OpenSearchRetriever(index_name=index)
     retriever.connect()
-    chunks = sample_chunks(retriever.client, index, args.sample)
-    if not chunks:
-        print(f"No chunks with stored vectors in {index}; seed it first (make seed)")
-        return 2
-
     model = retriever.embedding_model
+    client = retriever.client
+    if client is None or not client.indices.exists(index=index):
+        return _nothing_to_compare(f"Index {index} does not exist", subject.id, model.model_name)
+    chunks = sample_chunks(client, index, args.sample)
+    if not chunks:
+        return _nothing_to_compare(
+            f"No chunks with stored vectors in {index}", subject.id, model.model_name
+        )
+
     parity = compare(
         chunks, lambda texts: model.encode(texts, normalize=True), threshold=args.threshold
     )
