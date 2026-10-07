@@ -105,11 +105,6 @@ If anyone other than you can reach the API, run it in production mode:
   expires within 90 days and names its issue; a weekly dependency audit flags
   entries 30 days before they expire, and pull requests fail on any advisory
   they add. Each upgrade has its own issue:
-  - `transformers` 4.x, including remote-code-execution advisories, until the
-    move to transformers 5 and sentence-transformers 6
-    ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
-    Mitigation: the application only loads the pinned `BAAI/bge-m3` embedding
-    model and the optional `BAAI/bge-reranker-v2-m3` reranker.
   - `torch` 2.10, for two local-only advisories in features this project does
     not use (`torch.jit.script` and loading `.pt2` archives). The fixed
     releases switch the Linux wheels to CUDA 13, which is deferred to

@@ -67,8 +67,24 @@ is compiled in the release pull request
   `Neo4jGraph.query()`, still runs in READ transactions, and an unreachable
   Ollama or OpenRouter answers 503
   ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
+- Embeddings and reranking run on transformers 5 and sentence-transformers
+  6.1 (with huggingface-hub 1.x, tokenizers 0.23 and safetensors 0.8). This
+  clears the transformers 4.x advisories, including the remote-code-execution
+  ones, and removes their 6 entries from `osv-scanner.toml`. The models and
+  their configuration are unchanged; after upgrading an existing install, run
+  `make embedding-parity` against the seeded index to confirm the stored
+  vectors still match
+  ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
 
 ### Added
+
+- `make embedding-parity` (`scripts/check_embedding_parity.py`) re-embeds a
+  fixed sample of 50 indexed chunks with the installed embedding stack and
+  compares them with the stored vectors. It exits 1 when any cosine
+  similarity is below 0.999, which means the index needs new embeddings;
+  `RERANKER=1` also smoke-tests the cross-encoder. Run it after upgrading
+  transformers, sentence-transformers or torch
+  ([#71](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/71)).
 
 - Community health files: code of conduct, security policy, support guide,
   issue forms, citation metadata, `CODEOWNERS`, `.editorconfig` and

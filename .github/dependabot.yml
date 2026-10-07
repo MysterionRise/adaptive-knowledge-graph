@@ -26,10 +26,6 @@ updates:
       # Deliberate upgrades tracked in issues; keep them out of the weekly group.
       - dependency-name: "torch" # 2.11+ switches the Linux wheels to CUDA 13 (#79)
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
-      - dependency-name: "transformers" # 5.x with sentence-transformers 6 (#71)
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "sentence-transformers" # (#71)
-        update-types: ["version-update:semver-major"]
       - dependency-name: "neo4j-graphrag" # 1.22 needs the neo4j 6 driver
         update-types: ["version-update:semver-minor"]
 

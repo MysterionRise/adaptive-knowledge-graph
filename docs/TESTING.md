@@ -165,8 +165,10 @@ expire within 30 days.
 The allowlists are `osv-scanner.toml` (Python) and `frontend/osv-scanner.toml`
 (npm): osv-scanner applies the file next to each lockfile. Every entry needs a
 reason that names an issue and an `ignoreUntil` date at most 90 days out;
-`backend/tests/test_osv_audit.py` enforces both and checks that the
-transformers and torch features the reasons call unused stay unused.
+`backend/tests/test_osv_audit.py` enforces both and checks that the torch
+features the reasons call unused stay unused. It also keeps transformers
+remote code, model saving, training and the `kernels` package out of the
+project.
 
 ## Evaluation
 

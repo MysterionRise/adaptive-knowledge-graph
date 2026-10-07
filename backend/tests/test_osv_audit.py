@@ -152,8 +152,9 @@ def test_allowlist_entries_are_time_boxed_and_tracked(config):
         assert re.search(r"#\d+", entry.reason), f"{entry.id}: the reason must name an issue"
 
 
-# The reasons in osv-scanner.toml say the vulnerable transformers and torch
-# features are unused. These checks keep that true.
+# The torch reasons in osv-scanner.toml say jit.script and .pt2 loading are unused.
+# The transformers checks outlived their allowlist entries (#71): the app only loads
+# the configured models, and remote code, model saving and training stay out of it.
 _UNUSED_FEATURES = {
     "trust_remote_code=True": r"trust_remote_code\s*=\s*True",
     "custom generate code": r"custom_generate",
@@ -178,5 +179,5 @@ def test_allowlisted_features_are_not_used(feature):
 
 
 def test_kernels_package_is_not_installed():
-    # The transformers allowlist reasons rely on the `kernels` package being absent.
+    # With `kernels` installed, transformers can fetch compute kernels (code) from the Hub.
     assert importlib.util.find_spec("kernels") is None
