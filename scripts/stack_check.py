@@ -347,6 +347,27 @@ def satisfies(version: str, version_range: str) -> bool:
     return False
 
 
+def _pinned_node_major() -> str | None:
+    """The Node major version pinned in .node-version (``24`` for ``24`` or ``v24.1.0``)."""
+    try:
+        match = re.match(r"v?(\d+)", (PROJECT_ROOT / ".node-version").read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    return match.group(1) if match else None
+
+
+def _node_switch_hint(reason: str) -> list[str]:
+    """How to get the pinned Node with each version manager. nvm reads .nvmrc, not .node-version."""
+    major = _pinned_node_major()
+    version = f"Node {major}" if major else "the Node version in .node-version"
+    return [
+        f"hint: {reason} Get {version} from the repository root:",
+        "`fnm use --install-if-missing` (reads .node-version), `nvm install` (reads .nvmrc),",
+        f"`volta install node@{major or '<version>'}`, or the installer from https://nodejs.org.",
+        "Or set SKIP_FRONTEND=1 to skip the frontend.",
+    ]
+
+
 def cmd_node(args: argparse.Namespace) -> int:
     package_json = PROJECT_ROOT / "frontend" / "package.json"
     try:
@@ -363,10 +384,7 @@ def cmd_node(args: argparse.Namespace) -> int:
     except (OSError, subprocess.SubprocessError):
         _report(
             f"Node.js not found (frontend needs {required})",
-            [
-                "hint: install Node.js from https://nodejs.org or with a version manager "
-                "(fnm/nvm/volta read the repo's .node-version), or set SKIP_FRONTEND=1."
-            ],
+            _node_switch_hint("The frontend needs Node.js."),
         )
         return 1
 
@@ -378,10 +396,7 @@ def cmd_node(args: argparse.Namespace) -> int:
     if not compatible:
         _report(
             f"Node {found} does not satisfy frontend engines.node {required!r}",
-            [
-                "hint: `npm ci` refuses to install (engine-strict). Switch Node with fnm/nvm/volta "
-                "(see .node-version), or set SKIP_FRONTEND=1."
-            ],
+            _node_switch_hint("`npm ci` refuses to install with it (engine-strict)."),
         )
         return 1
     _report(f"Node {found} satisfies engines.node {required!r}")

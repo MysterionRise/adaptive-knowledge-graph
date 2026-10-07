@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -277,6 +278,60 @@ def test_doctor_rejects_unreadable_requirement_even_with_existing_environment(tm
 )
 def test_satisfies_npm_ranges(version, version_range, expected):
     assert stack_check.satisfies(version, version_range) is expected
+
+
+def _fake_node(monkeypatch, version: str | None) -> None:
+    """`node --version` prints `version` for stack_check; None means Node is not installed."""
+
+    def run(cmd, **kwargs):
+        if version is None:
+            raise FileNotFoundError(cmd[0])
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{version}\n", stderr="")
+
+    fake = SimpleNamespace(run=run, SubprocessError=subprocess.SubprocessError)
+    monkeypatch.setattr(stack_check, "subprocess", fake)
+
+
+@pytest.mark.parametrize("version", ["v20.18.0", None])
+def test_node_check_names_the_command_for_each_version_manager(monkeypatch, capsys, version):
+    _fake_node(monkeypatch, version)
+    major = (stack_check.PROJECT_ROOT / ".node-version").read_text().strip()
+
+    assert stack_check.main(["node"]) == 1
+
+    output = capsys.readouterr().out
+    assert f"Get Node {major} from the repository root" in output
+    for command in (
+        "`fnm use --install-if-missing` (reads .node-version)",
+        "`nvm install` (reads .nvmrc)",
+        f"`volta install node@{major}`",
+        "https://nodejs.org",
+        "SKIP_FRONTEND=1",
+    ):
+        assert command in output
+
+
+def test_node_check_passes_on_the_pinned_major(monkeypatch, capsys):
+    major = (stack_check.PROJECT_ROOT / ".node-version").read_text().strip()
+    _fake_node(monkeypatch, f"v{major}.11.0")
+
+    assert stack_check.main(["node"]) == 0
+    assert "satisfies engines.node" in capsys.readouterr().out
+
+
+def test_node_hint_without_a_readable_node_version(tmp_path, monkeypatch):
+    monkeypatch.setattr(stack_check, "PROJECT_ROOT", tmp_path)
+
+    hint = " ".join(stack_check._node_switch_hint("x"))
+
+    assert "Get the Node version in .node-version" in hint
+    assert "`volta install node@<version>`" in hint
+
+
+def test_nvmrc_pins_the_same_node_as_node_version():
+    """nvm reads .nvmrc; fnm, the hint and CI read .node-version: they must agree."""
+    root = stack_check.PROJECT_ROOT
+    assert (root / ".nvmrc").read_text().strip() == (root / ".node-version").read_text().strip()
 
 
 def test_ollama_check_can_be_skipped(monkeypatch, capsys):
