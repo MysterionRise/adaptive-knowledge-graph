@@ -150,8 +150,9 @@ class TestMain:
     @pytest.fixture
     def fake_stack(self, monkeypatch):
         """A retriever over two stored chunks and an embedding model that returns `vectors`."""
-        state = SimpleNamespace(vectors=[[1.0, 0.0], [0.0, 1.0]])
         client = MagicMock()
+        client.indices.exists.return_value = True
+        state = SimpleNamespace(vectors=[[1.0, 0.0], [0.0, 1.0]], client=client)
         client.search.return_value = {
             "hits": {
                 "hits": [
@@ -194,7 +195,20 @@ class TestMain:
         monkeypatch.setattr(parity, "sample_chunks", lambda client, index, size: [])
 
         assert parity.main(["--subject", "us_history"]) == 2
-        assert "make seed" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "No chunks with stored vectors" in out
+        assert "make seed SUBJECT=us_history" in out
+
+    def test_exit_2_when_the_index_does_not_exist(self, fake_stack, capsys):
+        fake_stack.client.indices.exists.return_value = False
+
+        assert parity.main(["--subject", "economics"]) == 2
+
+        out = capsys.readouterr().out
+        assert "Index textbook_chunks_economics does not exist" in out
+        assert "make seed SUBJECT=economics" in out
+        assert "Cached revisions: BAAI/bge-m3 None" in out
+        fake_stack.client.search.assert_not_called()
 
     def test_reranker_smoke_runs_with_the_flag(self, fake_stack, monkeypatch, capsys):
         reranker = SimpleNamespace(device="cpu", load=lambda: None, rerank=_overlap_rerank)
