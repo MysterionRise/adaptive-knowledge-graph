@@ -271,7 +271,13 @@ Local service URLs: Neo4j Browser <http://localhost:7474> (development login
   reads `.nvmrc`), `volta install node@24`, or the installer from
   [nodejs.org](https://nodejs.org/).
 - **A port is already in use.** The stack uses 3000 (frontend), 8000 (API),
-  7474 and 7687 (Neo4j), 9200 (OpenSearch) and 11434 (Ollama).
+  7474 and 7687 (Neo4j), 9200 (OpenSearch) and 11434 (Ollama). When Neo4j or
+  OpenSearch cannot start, `make quickstart`, `make up` and `make doctor` name
+  the container or process that holds the port. A container from compose
+  project `compose` was left by a checkout made before the project was renamed
+  to `adaptive-kg`: `docker stop` it (its data volumes are kept). Or move this
+  stack with `NEO4J_HTTP_PORT`, `NEO4J_BOLT_PORT` or `OPENSEARCH_PORT` in
+  `.env`.
 
 ## Configuration
 

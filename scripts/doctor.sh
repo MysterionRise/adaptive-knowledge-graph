@@ -59,10 +59,6 @@ report_probe() {
     fi
 }
 
-port_open() {
-    (exec 3<> "/dev/tcp/127.0.0.1/$1") 2> /dev/null
-}
-
 echo "=========================================="
 echo "Adaptive Knowledge Graph - doctor"
 echo "=========================================="
@@ -231,9 +227,16 @@ for name, service in config.get("services", {}).items():
         elif [ "$service" = ollama ]; then
             check_pass "$label (in use, probably a host Ollama; only matters for --profile ollama)"
         elif [ "$service" = neo4j ] || [ "$service" = opensearch ]; then
-            check_fail "$label is taken by another process or compose project"
-            detail "hint: stop it (e.g. an older checkout: docker compose -p compose -f infra/compose/compose.yaml down)" \
-                "      or pick another host port (NEO4J_HTTP_PORT, NEO4J_BOLT_PORT, OPENSEARCH_PORT)"
+            case "$service:$target" in
+                neo4j:7474) variable=NEO4J_HTTP_PORT ;;
+                neo4j:7687) variable=NEO4J_BOLT_PORT ;;
+                *) variable=OPENSEARCH_PORT ;;
+            esac
+            conflict="$(port_conflict "$published" "$variable")"
+            check_fail "$label is ${conflict%%$'\n'*}"
+            while IFS= read -r hint; do
+                detail "$hint"
+            done <<< "${conflict#*$'\n'}"
         else
             check_warn "$label is taken by another process (set API_PORT / FRONTEND_PORT to move it)"
         fi

@@ -14,4 +14,10 @@ cd "$AKG_ROOT"
 # Commit the containerised API reports in /api/v1/demo/provenance (evaluation reports)
 GIT_SHA="${GIT_SHA:-$(git rev-parse HEAD 2> /dev/null || echo unknown)}"
 export GIT_SHA
-compose "$@"
+status=0
+compose "$@" || status=$?
+# A failed `up` (make up, make docker-up) is usually a host port that something else holds
+case " $* " in
+    *" up "*) if [ "$status" -ne 0 ]; then report_port_conflicts || true; fi ;;
+esac
+exit "$status"

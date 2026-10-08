@@ -30,7 +30,7 @@ step "Checking the spaCy model"
 ensure_spacy_model
 
 step "Starting Neo4j and OpenSearch"
-compose up -d --wait --wait-timeout 300 neo4j opensearch
+start_databases
 
 step "Seeding OpenStax demo data and the synthetic learner profile"
 bash scripts/seed_demo.sh
