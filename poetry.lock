@@ -3094,23 +3094,24 @@ files = [
 
 [[package]]
 name = "neo4j"
-version = "5.28.7"
+version = "6.4.0"
 description = "Neo4j Bolt driver for Python"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "neo4j-5.28.7-py3-none-any.whl", hash = "sha256:e118db8e13d49639b85ec778412b0be2147be3f12593f579f52cf4fb960f7e8d"},
-    {file = "neo4j-5.28.7.tar.gz", hash = "sha256:5acc6c83870c9c2f35395e16d3d14193cf59b34c961a4c6fd4c2d7de258e51a3"},
+    {file = "neo4j-6.4.0-py3-none-any.whl", hash = "sha256:fdd048ba827be138063b045cf59e40056fbf0405ac02dadc24f64e369fbd9d3d"},
+    {file = "neo4j-6.4.0.tar.gz", hash = "sha256:056676698f080b5af5b24b0fc5abb485b8db1b95edf366d01dcfd63bcff9b71d"},
 ]
 
 [package.dependencies]
 pytz = "*"
 
 [package.extras]
-numpy = ["numpy (>=1.7.0,<3.0.0)"]
-pandas = ["numpy (>=1.7.0,<3.0.0)", "pandas (>=1.1.0,<3.0.0)"]
-pyarrow = ["pyarrow (>=1.0.0)"]
+http = ["aiohttp[speedups] (>=3.12.15,<4.0.0)", "urllib3 (>=2.0.0,<3.0.0)"]
+numpy = ["numpy (>=1.21.2,<3.0.0)"]
+pandas = ["numpy (>=1.21.2,<3.0.0)", "pandas[timezone] (>=1.1.0,<4.0.0)"]
+pyarrow = ["pyarrow (>=6.0.0,<26.0.0)"]
 
 [[package]]
 name = "neo4j-graphrag"
@@ -7284,4 +7285,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "b2a40bb746e46c57d58cb9bb57e77c8fed82ce9745e1232429eba435e3b66259"
+content-hash = "0a0dee188e455a3a8aeac1735572c1482ce9bdf58bcb98426c382f62a62cfafe"
