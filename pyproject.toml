@@ -47,7 +47,7 @@ yake = ">=0.4.8,<0.8.0"
 spacy = "^3.7.2"
 
 # Knowledge Graph
-neo4j = "^5.28.0"
+neo4j = ">=5.28,<7.0"
 networkx = "^3.6"
 
 # Vector DB & Search
