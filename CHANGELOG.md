@@ -137,6 +137,12 @@ is compiled in the release pull request
 
 ### Fixed
 
+- When Neo4j or OpenSearch cannot start because a host port is taken,
+  `make quickstart`, `make up`, `make seed` and `make doctor` now name the
+  container (with its image and compose project) or the process that holds it,
+  and how to free it, instead of only pointing at the container logs. A
+  container left by a checkout from before the compose project rename (project
+  `compose`) is called out.
 - An `.nvmrc` now pins the same Node version as `.node-version`, so
   `nvm install` and `nvm use` pick it up (nvm does not read `.node-version`).
   When the Node check in `make quickstart`, `make doctor` or

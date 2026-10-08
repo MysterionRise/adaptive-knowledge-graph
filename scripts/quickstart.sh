@@ -63,8 +63,7 @@ else
 fi
 
 step "5/6 Starting Neo4j and OpenSearch"
-compose up -d --wait --wait-timeout 300 neo4j opensearch \
-    || die "The databases did not become healthy; see: docker compose -f infra/compose/compose.yaml logs neo4j opensearch"
+start_databases
 ok "Neo4j and OpenSearch are healthy"
 
 step "6/6 Seeding US History and Economics (embedding every chunk takes a while on CPU)"

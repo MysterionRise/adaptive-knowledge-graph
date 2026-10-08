@@ -217,6 +217,67 @@ ensure_spacy_model() {
     ok "spaCy model en_core_web_sm installed"
 }
 
+# --- databases ----------------------------------------------------------------------------
+# True when something accepts TCP connections on 127.0.0.1:<port>.
+port_open() {
+    (exec 3<> "/dev/tcp/127.0.0.1/$1") 2> /dev/null
+}
+
+# port_conflict <port> <VARIABLE>: what holds a host port and how to free it, for messages. The
+# first line is "taken by container <name> (<image>, compose project <project>)" or "taken by a
+# process on this machine"; the lines after it are hints. VARIABLE moves this stack's port.
+port_conflict() {
+    local port="$1" variable="$2" line name image project
+    line="$(docker ps --filter "publish=$port" \
+        --format '{{.Names}}|{{.Image}}|{{.Label "com.docker.compose.project"}}' 2> /dev/null \
+        | head -n 1)" || true
+    if [ -n "$line" ]; then
+        IFS='|' read -r name image project <<< "$line"
+        echo "taken by container $name ($image${project:+, compose project $project})"
+        if [ "$project" = compose ]; then
+            # Before #119 the stack was compose project "compose", with a container named opensearch
+            echo "probably from a checkout made before this stack's compose project became adaptive-kg"
+        fi
+        echo "stop it: docker stop $name (its data volumes are kept)"
+    else
+        echo "taken by a process on this machine"
+        echo "find it: lsof -nP -iTCP:$port -sTCP:LISTEN"
+    fi
+    echo "or move this stack to a free port: $variable=<port> in .env"
+}
+
+# report_port_conflicts: for each database host port (Neo4j HTTP and Bolt, OpenSearch) that
+# something other than this stack's container holds, print what holds it and how to free it.
+# Returns 0 when it reported a conflict, 1 when there is none.
+report_port_conflicts() {
+    local running entry service variable port conflict found=1
+    running=" $(compose ps --status running --services 2> /dev/null | tr '\n' ' ') "
+    for entry in "neo4j NEO4J_HTTP_PORT ${NEO4J_HTTP_PORT:-7474}" \
+        "neo4j NEO4J_BOLT_PORT ${NEO4J_BOLT_PORT:-7687}" \
+        "opensearch OPENSEARCH_PORT ${OPENSEARCH_PORT:-9200}"; do
+        read -r service variable port <<< "$entry"
+        case "$running" in *" $service "*) continue ;; esac
+        port_open "$port" || continue
+        found=0
+        conflict="$(port_conflict "$port" "$variable")"
+        error "Port $port ($service) is ${conflict%%$'\n'*}"
+        printf '%s\n' "${conflict#*$'\n'}" | sed 's/^/    /' >&2
+    done
+    return "$found"
+}
+
+# Start the compose Neo4j and OpenSearch and wait until both are healthy. When that fails, name
+# whatever holds their host ports (the usual cause), else point at the container logs.
+start_databases() {
+    if compose up -d --wait --wait-timeout 300 neo4j opensearch; then
+        return 0
+    fi
+    if report_port_conflicts; then
+        die "Free the port(s) above, or move this stack's ports in .env, then retry."
+    fi
+    die "The databases did not become healthy; see: docker compose -f infra/compose/compose.yaml logs neo4j opensearch"
+}
+
 # Make sure Neo4j and OpenSearch accept requests: a quick probe first (the stack may already
 # be up), otherwise start the compose databases and wait for them, then probe again. This also
 # covers containers that are running but not ready yet (cold start).
@@ -227,8 +288,7 @@ ensure_databases() {
     fi
     require_docker
     info "Starting Neo4j and OpenSearch (docker compose up -d --wait)..."
-    compose up -d --wait --wait-timeout 300 neo4j opensearch \
-        || die "The databases did not become healthy; see: docker compose -f infra/compose/compose.yaml logs neo4j opensearch"
+    start_databases
     (cd "$AKG_ROOT" && poetry run python scripts/stack_check.py wait --timeout 180 --verbose) \
         || die "Neo4j/OpenSearch are not reachable with the backend settings (NEO4J_URI, OPENSEARCH_HOST/PORT)."
 }

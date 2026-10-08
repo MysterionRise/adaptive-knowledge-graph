@@ -6,6 +6,7 @@ import json
 import os
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -695,6 +696,210 @@ def test_makefile_api_port_follows_dotenv(tmp_path):
         ["make", "-n", "run-api"], cwd=root, env=env, capture_output=True, text=True
     )
     assert "--port 8123" in out.stdout
+
+
+# ---------------------------------------------------------------------------
+# lib.sh: what holds a database port when the stack cannot start
+# ---------------------------------------------------------------------------
+
+# `docker compose ... ps` lists FAKE_RUNNING, `docker compose ... up` exits FAKE_UP_STATUS,
+# `docker ps --filter publish=...` prints FAKE_HOLDER; anything else succeeds silently.
+FAKE_DOCKER = """#!/bin/sh
+case "$1" in
+    compose)
+        case " $* " in
+            *" up "*) exit "${FAKE_UP_STATUS:-0}" ;;
+            *" ps "*) if [ -n "$FAKE_RUNNING" ]; then echo "$FAKE_RUNNING"; fi ;;
+        esac
+        ;;
+    ps) if [ -n "$FAKE_HOLDER" ]; then echo "$FAKE_HOLDER"; fi ;;
+esac
+exit 0
+"""
+OLD_OPENSEARCH = "opensearch|opensearchproject/opensearch:2.11.0|compose"
+
+
+def _free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+@pytest.fixture
+def held_port():
+    """A loopback port that something listens on, as another container or process would."""
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        yield listener.getsockname()[1]
+
+
+def _with_fake_docker(tmp_path, opensearch_port, *command, **fake):
+    """Run `command` in a copy of the scripts, with a fake docker and free Neo4j ports."""
+    root = _repo_copy(tmp_path, None)
+    (root / "scripts" / "compose.sh").write_text(Path("scripts/compose.sh").read_text())
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text(FAKE_DOCKER)
+    docker.chmod(0o755)
+    env = _clean_env(
+        PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        NEO4J_HTTP_PORT=str(_free_port()),
+        NEO4J_BOLT_PORT=str(_free_port()),
+        OPENSEARCH_PORT=str(opensearch_port),
+        NO_COLOR="1",
+        GIT_SHA="test",
+        **{f"FAKE_{key.upper()}": value for key, value in fake.items()},
+    )
+    return subprocess.run(
+        command, cwd=root, env=env, capture_output=True, text=True, timeout=30, check=False
+    )
+
+
+def _report(tmp_path, opensearch_port, **fake):
+    return _with_fake_docker(
+        tmp_path, opensearch_port, "bash", "-c", ". scripts/lib.sh && report_port_conflicts", **fake
+    )
+
+
+def test_port_conflict_names_the_container_and_how_to_free_it(tmp_path, held_port):
+    result = _report(tmp_path, held_port, holder=OLD_OPENSEARCH)
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        f"Port {held_port} (opensearch) is taken by container opensearch "
+        "(opensearchproject/opensearch:2.11.0, compose project compose)"
+    ) in result.stderr
+    assert "before this stack's compose project became adaptive-kg" in result.stderr
+    assert "stop it: docker stop opensearch (its data volumes are kept)" in result.stderr
+    assert "OPENSEARCH_PORT=<port> in .env" in result.stderr
+    assert "(neo4j)" not in result.stderr  # its ports are free
+
+
+def test_port_conflict_with_a_process_names_the_lsof_command(tmp_path, held_port):
+    result = _report(tmp_path, held_port)
+
+    assert result.returncode == 0, result.stderr
+    assert f"Port {held_port} (opensearch) is taken by a process on this machine" in result.stderr
+    assert f"lsof -nP -iTCP:{held_port} -sTCP:LISTEN" in result.stderr
+    assert "docker stop" not in result.stderr
+
+
+def test_no_conflict_when_this_stack_holds_the_port(tmp_path, held_port):
+    result = _report(tmp_path, held_port, holder=OLD_OPENSEARCH, running="neo4j\nopensearch")
+
+    assert result.returncode == 1
+    assert result.stderr == ""
+
+
+def test_no_conflict_on_free_ports(tmp_path):
+    result = _report(tmp_path, _free_port(), holder=OLD_OPENSEARCH)
+
+    assert result.returncode == 1
+    assert result.stderr == ""
+
+
+def test_start_databases_reports_the_conflict_instead_of_the_logs(tmp_path, held_port):
+    result = _with_fake_docker(
+        tmp_path,
+        held_port,
+        "bash",
+        "-c",
+        ". scripts/lib.sh && start_databases",
+        holder=OLD_OPENSEARCH,
+        up_status="1",
+    )
+
+    assert result.returncode == 1
+    assert "taken by container opensearch" in result.stderr
+    assert "Free the port(s) above" in result.stderr
+    assert "logs neo4j opensearch" not in result.stderr
+
+
+def test_start_databases_points_at_the_logs_without_a_conflict(tmp_path):
+    result = _with_fake_docker(
+        tmp_path, _free_port(), "bash", "-c", ". scripts/lib.sh && start_databases", up_status="1"
+    )
+
+    assert result.returncode == 1
+    assert "logs neo4j opensearch" in result.stderr
+
+
+def test_compose_wrapper_reports_conflicts_only_for_a_failed_up(tmp_path, held_port):
+    failed_up = _with_fake_docker(
+        tmp_path,
+        held_port,
+        "bash",
+        "scripts/compose.sh",
+        "up",
+        "-d",
+        "neo4j",
+        holder=OLD_OPENSEARCH,
+        up_status="1",
+    )
+    assert failed_up.returncode == 1
+    assert "taken by container opensearch" in failed_up.stderr
+
+    other = tmp_path / "other"
+    other.mkdir()
+    logs = _with_fake_docker(other, held_port, "bash", "scripts/compose.sh", "logs", holder="x")
+    assert logs.returncode == 0
+    assert logs.stderr == ""
+
+
+def test_every_database_start_goes_through_start_databases():
+    for script in ("scripts/quickstart.sh", "scripts/demo_client_prep.sh"):
+        code = [
+            line
+            for line in Path(script).read_text().splitlines()
+            if not line.lstrip().startswith("#")
+        ]
+        assert any(line.strip() == "start_databases" for line in code), script
+        assert not [line for line in code if "up -d --wait" in line], script
+    lib = Path("scripts/lib.sh").read_text()
+    assert lib.count("up -d --wait --wait-timeout") == 1  # only in start_databases
+    assert "    start_databases\n" in lib.split("ensure_databases() {")[1]
+
+
+def test_doctor_names_what_holds_a_database_port(tmp_path, held_port):
+    doctor = Path("scripts/doctor.sh").read_text()
+    header = doctor.split('section "Tools"')[0]
+    ports = doctor.split('section "Ports')[1].split('section "Stack"')[0]
+    published = [{"published": str(held_port), "target": 9200}]
+    config = json.dumps({"services": {"opensearch": {"ports": published}}})
+    root = _repo_copy(tmp_path, None)
+    (root / "scripts" / "doctor-ports.sh").write_text(
+        header + 'DOCKER_OK=true\nsection "Ports' + ports
+    )
+    fake_docker = FAKE_DOCKER.replace(
+        '            *" ps "*)',
+        f'            *" config "*) echo \'{config}\' ;;\n            *" ps "*)',
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "docker").write_text(fake_docker)
+    (bin_dir / "docker").chmod(0o755)
+    result = subprocess.run(
+        ["bash", "scripts/doctor-ports.sh"],
+        cwd=root,
+        env=_clean_env(
+            PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            NO_COLOR="1",
+            FAKE_HOLDER=OLD_OPENSEARCH,
+        ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert (
+        f"{held_port} -> opensearch:9200 is taken by container opensearch "
+        "(opensearchproject/opensearch:2.11.0, compose project compose)"
+    ) in result.stdout, result.stdout + result.stderr
+    assert "stop it: docker stop opensearch" in result.stdout
+    assert "OPENSEARCH_PORT=<port> in .env" in result.stdout
 
 
 def test_legacy_scripts_and_data_are_gone():
