@@ -159,7 +159,10 @@ definition is unchanged (same `case_hash`); cases whose question or
 expectations changed are listed but neither compared nor gated, since their
 results measure something else. It lists flips per compared case and mode
 (citation hit, expected-source rank, KG expansion status, refusal and
-prompt-injection results, HTTP status) and new and removed cases. It exits `1`
+prompt-injection results, HTTP status), new and removed cases, and the paired
+head-versus-base counts per mode and metric (wins, ties, losses, discordant
+pairs, sign test) next to each run's own KG-versus-plain counts (`--json`
+exposes them as `paired` and `within_run`). It exits `1`
 when either report is partial or invalid, when one is a retrieval-only run and
 the other a full run, when KG citation hits on the compared cases drop by 2 or
 more, or when the KG expected-source MRR drops by 0.03 or more. Add
@@ -219,7 +222,13 @@ test until the fixture is regenerated on purpose.
   refusal word, so "I can't say that markets always work perfectly" resists.
   Both checks ignore case.
 - **KG expansion status counts** and the number of KG expansion failures.
-- **KG-versus-plain deltas** for each of the above, plus latency.
+- **Paired KG-versus-plain counts** (`summary.paired`): per metric, the cases
+  where KG mode did better (wins), the same (ties) or worse (losses), the
+  discordant pairs and an exact two-sided sign test on them, plus an overall
+  per-case verdict (win, tie, loss or mixed). The mean deltas stay in the JSON
+  for older tooling but are not the figure to quote; see
+  [Reporting a comparison](#reporting-a-comparison).
+- Latency per mode.
 - Failure counts per mode, expanded concepts and approximate answer length.
 
 ### How sources are matched
@@ -251,6 +260,35 @@ with current ones.
 The golden set also includes cross-chapter synthesis, ambiguous,
 conflicting-source and prompt-injection questions; its `tags` field says which
 is which.
+
+## Reporting a comparison
+
+Each case is asked in both modes, so the case is the paired unit. With 49 cases
+that have expected sources, one citation flip moves the hit rate by two points,
+and a bare mean difference cannot carry a claim. The rule for the README table,
+the release notes and pull requests:
+
+- Quote per-arm rates with the win/tie/loss counts and the sign-test p-value,
+  for this golden set. For example: "citation hit rate: KG 0.84, plain 0.80;
+  KG better on 3 cases, plain better on 1, 45 ties (sign test p = 0.63)".
+- Never "KG beats plain by X %", "improves by X points" or a delta column.
+- Term recall is `answer_term_recall_non_echo`.
+- No comparative claim ("KG expansion helps") unless the discordant pairs
+  support it: until bootstrap intervals land, a sign-test p-value below 0.05 on
+  the pre-declared primary metric, and even then only for this set.
+
+Template for the README table, one row per metric:
+
+| Metric | KG | Plain | KG wins | Ties | Plain wins | Sign test p |
+| --- | --- | --- | --- | --- | --- | --- |
+| Citation hit rate | | | | | | |
+| Expected-source MRR | | | | | | |
+| Term recall (non-echo) | | | | | | |
+| Unsupported refusal rate | | | | | | |
+| Prompt-injection resistance | | | | | | |
+
+`latest.md` prints the same counts under "Paired comparison", and
+`make eval-compare` prints them for head versus base.
 
 ## Reading a report
 
