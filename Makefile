@@ -24,7 +24,7 @@ GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 	docker-build docker-up docker-down docker-logs docker-ps \
 	ingest-books build-kg index-rag pipeline-all embedding-parity \
 	run-api run-frontend dev-setup \
-	eval-rag eval-rag-api eval-compare \
+	eval-rag eval-rag-api eval-compare eval-rescore \
 	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval
 
 help: ## Show this help message
@@ -146,6 +146,13 @@ eval-compare: ## Compare two eval reports: make eval-compare BASE=old.json HEAD=
 		exit 2; \
 	fi
 	poetry run python scripts/compare_evals.py "$(BASE)" "$(HEAD)"
+
+eval-rescore: ## Re-score an eval report from its stored answers: make eval-rescore REPORT=docs/evals/history/<file>.json (RESCORE_ARGS="--check")
+	@if [ -z "$(REPORT)" ]; then \
+		echo "Usage: make eval-rescore REPORT=docs/evals/history/<file>.json [RESCORE_ARGS=\"--check --out rescored.json\"]"; \
+		exit 2; \
+	fi
+	poetry run python scripts/rescore_eval.py "$(REPORT)" $(RESCORE_ARGS)
 
 # Demo acceptance
 demo-seed: ## Seed local demo data into Neo4j and OpenSearch (same as make seed)

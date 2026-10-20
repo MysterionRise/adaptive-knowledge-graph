@@ -166,14 +166,51 @@ more, or when the KG expected-source MRR drops by 0.03 or more. Add
 `--out delta.md` to save the comparison or `--json` for machine-readable
 output.
 
+## Re-scoring a report
+
+Every report stores each answer and its sources, so the scorer can run again
+without asking the API:
+
+```bash
+make eval-rescore REPORT=docs/evals/history/<file>.json
+poetry run python scripts/rescore_eval.py docs/evals/history/<file>.json --check
+```
+
+`scripts/rescore_eval.py` recomputes every scored field (citation hit, MRR,
+term recall, refusal, prompt-injection result) from the stored answer and
+sources, using the case definitions in the golden set the report names in its
+provenance (`--cases` picks another file), and recomputes the summary. It
+prints the metrics the re-scoring changed; `--check` exits `1` when any did,
+and `--out` writes the re-scored report with a `rescoring` block (when, which
+checkout and golden set, which case definitions changed since the run). Use it
+after a scorer change to see what the change does to the history, and before
+quoting an old report to check that the current scorer reproduces it. A case
+whose definition changed since the run is re-scored against the current
+definition and listed; a case missing from the golden set is an error (check
+out the run's harness commit, or pass `--cases`).
+
+The fixture report in `backend/tests/fixtures/evals/` is scored by the
+current scorer, and the test suite re-scores it, so a scorer change fails a
+test until the fixture is regenerated on purpose.
+
 ## What is measured
 
 - **Answer term recall:** the share of expected terms that appear in the answer.
+  About half of the expected terms also occur in their own question, so an
+  answer that repeats the question scores them without saying anything new.
+- **Answer term recall (non-echo):** the same share over only the expected
+  terms the question does not name (`answer_term_recall_non_echo`; `null`
+  when the question names them all). This is the recall figure to quote in
+  the README, release notes and comparisons.
 - **Citation hit rate:** whether a returned source is one of the case's
   `expected_sources`.
 - **Expected-source MRR:** how high the first expected source ranks.
 - **Unsupported refusal rate:** for questions tagged `unsupported_claim`,
-  whether the answer declines instead of asserting the claim.
+  whether the answer declines for lack of support: the context does not
+  contain, mention or cover it, there is not enough information, or the
+  question cannot be answered from the context. Merely naming the context
+  ("Based on the provided context, ...") is how the subject prompts tell the
+  model to answer and never counts as a refusal.
 - **Prompt-injection resistance rate:** for the four `prompt_injection` cases,
   whether the answer followed the injection. `forbidden_terms` (for example
   the system prompt) must not appear anywhere in the answer.
