@@ -5,7 +5,9 @@ Only the case IDs both reports share are compared, and of those only the ones wh
 definition is unchanged (same case hash): the output lists the others as changed
 definitions, outside the gate. It lists metric flips per compared case and mode (citation
 hit, expected-source rank, KG expansion status, refusal and prompt-injection results, HTTP
-status), and new and removed cases.
+status), new and removed cases, and the paired head-versus-base counts per mode and metric
+(wins, ties, losses, discordant pairs and an exact sign test), next to each run's own
+KG-versus-plain counts.
 
 Exit status 1 (regression) when either report is partial (--subject/--limit or an
 unavailable subject) or invalid, when one is a retrieval-only run and the other a full run,
@@ -24,6 +26,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from backend.app.core.eval_report import as_dict, is_partial
+from backend.app.core.eval_stats import PAIRED_METRICS, outcome, paired_counts
 
 KG_CITATION_HIT_DROP_LIMIT = 2
 KG_MRR_DROP_LIMIT = 0.03
@@ -122,6 +125,21 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
                         }
                     )
 
+    # Head versus base, per mode and metric, over the compared cases: wins are head better.
+    paired = {
+        mode: {
+            metric: paired_counts(
+                outcome(
+                    as_dict(head_cases[case_id].get(mode)).get(metric),
+                    as_dict(base_cases[case_id].get(mode)).get(metric),
+                )
+                for case_id in compared
+            )
+            for metric in PAIRED_METRICS
+        }
+        for mode in MODES
+    }
+
     base_hits, base_mrr = _kg_citation_stats(base_cases, compared)
     head_hits, head_mrr = _kg_citation_stats(head_cases, compared)
     hit_drop = base_hits - head_hits
@@ -157,6 +175,11 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
         "retrieval_flips": sum(1 for flip in flips if flip["retrieval"]),
         "kg_citation_hits": {"base": base_hits, "head": head_hits, "drop": hit_drop},
         "kg_mrr": {"base": base_mrr, "head": head_mrr, "drop": mrr_drop},
+        "paired": paired,
+        "within_run": {
+            "base": as_dict(base.get("summary")).get("paired"),
+            "head": as_dict(head.get("summary")).get("paired"),
+        },
         "failures": failures,
     }
 
@@ -172,6 +195,50 @@ def _provenance_line(label: str, report: dict[str, Any]) -> str:
         f"`{server.get('git_sha', 'n/a')}`, golden set `{golden_sha}`, LLM "
         f"`{llm.get('model', 'n/a')}`"
     )
+
+
+def _fmt(value: Any) -> str:
+    return "n/a" if value is None else str(value)
+
+
+def _paired_sections(result: dict[str, Any]) -> list[str]:
+    """Head-versus-base counts per mode and metric, then each run's KG-versus-plain counts."""
+    lines = [
+        "",
+        "## Paired comparison (head versus base, per case)",
+        "",
+        "| Mode | Metric | Pairs | Head wins | Ties | Base wins | Discordant | Sign test p |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for mode, metrics in (result.get("paired") or {}).items():
+        for metric, counts in metrics.items():
+            if not counts.get("pairs"):
+                continue
+            lines.append(
+                f"| {mode} | {metric} | {counts['pairs']} | {counts['wins']} | {counts['ties']} "
+                f"| {counts['losses']} | {counts['discordant']} | {_fmt(counts['sign_test_p'])} |"
+            )
+    within = result.get("within_run") or {}
+    if any(within.get(side) for side in ("base", "head")):
+        lines.extend(
+            [
+                "",
+                "## KG versus plain within each run (per case)",
+                "",
+                "| Run | Metric | Pairs | KG wins | Ties | Plain wins | Discordant | Sign test p |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        for side in ("base", "head"):
+            for metric, counts in as_dict(within.get(side)).items():
+                if not counts.get("pairs"):
+                    continue
+                lines.append(
+                    f"| {side} | {metric} | {counts['pairs']} | {counts['wins']} | "
+                    f"{counts['ties']} | {counts['losses']} | {counts['discordant']} | "
+                    f"{_fmt(counts['sign_test_p'])} |"
+                )
+    return lines
 
 
 def format_markdown(base: dict[str, Any], head: dict[str, Any], result: dict[str, Any]) -> str:
@@ -198,6 +265,7 @@ def format_markdown(base: dict[str, Any], head: dict[str, Any], result: dict[str
         lines.extend(f"- FAIL: {failure}" for failure in result["failures"])
     else:
         lines.append("- PASS")
+    lines.extend(_paired_sections(result))
     if result["flips"]:
         lines.extend(["", "## Flips", "", "| Case | Mode | Field | Base | Head |"])
         lines.append("| --- | --- | --- | --- | --- |")

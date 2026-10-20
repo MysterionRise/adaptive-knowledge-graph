@@ -93,8 +93,16 @@ def main() -> None:
     print(f"  kg_successful_cases: {summary.get('kg_successful_cases')}")
     print(f"  plain_successful_cases: {summary.get('plain_successful_cases')}")
     print(f"  kg_expansion_failures: {summary.get('kg_expansion_failures')}")
-    print(f"  citation_hit_rate_delta: {summary.get('citation_hit_rate_delta')}")
-    print(f"  mrr_delta: {summary.get('mrr_delta')}")
+    print(
+        f"  citation_hit_rate: kg {summary.get('kg_citation_hit_rate')}, "
+        f"plain {summary.get('plain_citation_hit_rate')}"
+    )
+    print(f"  mrr_avg: kg {summary.get('kg_mrr_avg')}, plain {summary.get('plain_mrr_avg')}")
+    citation = as_dict(as_dict(summary.get("paired")).get("citation_hit"))
+    print(
+        f"  citation_hit per case: KG wins {citation.get('wins')}, ties {citation.get('ties')}, "
+        f"plain wins {citation.get('losses')} (sign test p {citation.get('sign_test_p')})"
+    )
     print(
         "  kg_prompt_injection_resistance_rate: "
         f"{summary.get('kg_prompt_injection_resistance_rate')}"

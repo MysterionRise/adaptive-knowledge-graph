@@ -918,3 +918,67 @@ class TestRescore:
         assert rescored["mrr"] == 1.0
         assert "answer_term_recall" not in rescored
         assert list(rescored)[:4] == ["status_code", "latency_ms", "citation_hit", "mrr"]
+
+
+# ---------------------------------------------------------------------------
+# Paired counts in reports and comparisons (#203)
+# ---------------------------------------------------------------------------
+
+
+class TestPairedReporting:
+    def test_summary_carries_the_paired_counts(self):
+        plain_miss = _case("c1")
+        plain_miss["plain"]["citation_hit"] = False
+        plain_miss["plain"]["mrr"] = 0.0
+        summary = evaluate_rag._summarize([plain_miss, _case("c2")])
+        assert summary["paired"]["citation_hit"] == {
+            "pairs": 2,
+            "wins": 1,
+            "ties": 1,
+            "losses": 0,
+            "discordant": 1,
+            "sign_test_p": 1.0,
+        }
+        assert summary["paired"]["overall"]["wins"] == 1
+        assert summary["citation_hit_rate_delta"] == 0.5  # still in the JSON, not quoted
+
+    def test_markdown_report_shows_the_paired_table_instead_of_a_dict(self, tmp_path):
+        evaluate_rag.write_reports(tmp_path, _report(), history=False)
+        markdown = (tmp_path / "latest.md").read_text()
+        assert "## Paired comparison (KG versus plain, per case)" in markdown
+        assert "| citation_hit | 2 | 0 | 2 | 0 | n/a | 0 | n/a |" in markdown
+        assert "| overall (per case) | 2 | 0 | 2 | 0 | 0 | 0 | n/a |" in markdown
+        assert "`paired`:" not in markdown
+
+    def test_compare_counts_head_versus_base_per_mode_and_metric(self):
+        base = _report(_cases_with_hits([True] * 4))
+        head = _report(_cases_with_hits([True, True, False, False]))
+        result = compare_evals.compare(base, head)
+        assert result["paired"]["kg"]["citation_hit"] == {
+            "pairs": 4,
+            "wins": 0,
+            "ties": 2,
+            "losses": 2,
+            "discordant": 2,
+            "sign_test_p": 0.5,
+        }
+        assert result["paired"]["plain"]["citation_hit"]["ties"] == 4
+        assert result["within_run"]["base"]["citation_hit"]["pairs"] == 4
+        assert result["within_run"]["head"]["citation_hit"]["losses"] == 2
+        # The hard-drop gate is unchanged
+        assert any("citation hits dropped by 2" in f for f in result["failures"])
+
+    def test_compare_json_and_markdown_expose_the_counts(self, tmp_path, capsys):
+        base = _write(tmp_path, _report(_cases_with_hits([True] * 4)), "base.json")
+        head = _write(tmp_path, _report(_cases_with_hits([True, True, False, False])), "h.json")
+        assert compare_evals.main([str(base), str(head), "--json"]) == 1
+        printed = json.loads(capsys.readouterr().out)
+        assert printed["paired"]["kg"]["citation_hit"]["losses"] == 2
+        assert printed["within_run"]["head"]["overall"]["losses"] == 2
+
+        compare_evals.main([str(base), str(head)])
+        text = capsys.readouterr().out
+        assert "## Paired comparison (head versus base, per case)" in text
+        assert "| kg | citation_hit | 4 | 0 | 2 | 2 | 2 | 0.5 |" in text
+        assert "## KG versus plain within each run (per case)" in text
+        assert "| head | citation_hit | 4 | 0 | 2 | 2 | 2 | 0.5 |" in text

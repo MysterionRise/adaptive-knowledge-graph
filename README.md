@@ -344,8 +344,10 @@ when `environment_valid` is `true`: every request returned `200` and KG
 expansion never failed. `make eval-compare BASE=… HEAD=…` compares two
 reports case by case.
 
-<!-- eval table: filled in the release PR (#104); its term recall column is
-answer_term_recall_non_echo, not answer_term_recall -->
+<!-- eval table: filled in the release PR (#104) with the template and wording
+rule in docs/evals/README.md#reporting-a-comparison: per-arm rates plus
+win/tie/loss and the sign test, term recall is answer_term_recall_non_echo,
+no delta column -->
 
 The metrics are heuristic (keyword and source-title matching). They are meant
 for regression tracking, not as a benchmark; see

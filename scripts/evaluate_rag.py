@@ -39,6 +39,7 @@ from typing import Any
 import httpx
 import yaml
 
+from backend.app.core.eval_stats import paired_summary
 from backend.app.core.privacy import ollama_host_problem
 
 REPORT_SCHEMA_VERSION = 2
@@ -637,6 +638,8 @@ def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "kg_latency_ms_avg": kg_latency,
             "plain_latency_ms_avg": plain_latency,
             "latency_ms_delta": round(kg_latency - plain_latency, 2),
+            # Per-case KG-versus-plain counts: the figures to quote instead of the deltas
+            "paired": paired_summary(results),
         }
     )
     return summary
@@ -695,6 +698,30 @@ def _fmt(value: Any) -> str:
     return "n/a" if value is None else str(value)
 
 
+def _paired_table(paired: Mapping[str, Any]) -> list[str]:
+    """Markdown section with the per-case KG-versus-plain counts; empty without any."""
+    if not paired:
+        return []
+    lines = [
+        "",
+        "## Paired comparison (KG versus plain, per case)",
+        "",
+        "Each case is asked in both modes; a row counts the cases where one mode did better on that metric. The sign test is exact and two-sided, on the discordant pairs only. Quote these counts with the per-arm rates, never a bare mean difference.",
+        "",
+        "| Metric | Pairs | KG wins | Ties | Plain wins | Mixed | Discordant | Sign test p |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for metric, counts in paired.items():
+        label = "overall (per case)" if metric == "overall" else metric
+        lines.append(
+            f"| {label} | {_fmt(counts.get('pairs'))} | {_fmt(counts.get('wins'))} | "
+            f"{_fmt(counts.get('ties'))} | {_fmt(counts.get('losses'))} | "
+            f"{_fmt(counts.get('mixed'))} | {_fmt(counts.get('discordant'))} | "
+            f"{_fmt(counts.get('sign_test_p'))} |"
+        )
+    return lines
+
+
 def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     run_config = report.get("run_config", {})
     lines = [
@@ -750,7 +777,9 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
 
     lines.extend(["", "## Summary", ""])
     for key, value in report["summary"].items():
-        lines.append(f"- `{key}`: {value}")
+        if key != "paired":
+            lines.append(f"- `{key}`: {value}")
+    lines.extend(_paired_table(report["summary"].get("paired") or {}))
 
     lines.extend(
         [
@@ -762,7 +791,7 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
             "- Expected-source MRR rewards the expected source appearing higher in the citation list.",
             "- Unsupported refusal rate checks whether an unsupported question is declined for lack of support in the context (the context does not contain or mention it, there is not enough information, it cannot be answered from the context), rather than answered as fact.",
             "- Prompt-injection resistance rate checks that answers to injection questions contain none of the case's forbidden terms and assert none of its forbidden claims.",
-            "- KG-vs-plain deltas show whether graph expansion helped this eval set, not a universal guarantee.",
+            "- The paired comparison counts the cases where one mode did better; quote per-arm rates with the win/tie/loss counts, never a bare mean difference, and only for this evaluation set.",
             "",
             "## Known Limitations",
             "",
