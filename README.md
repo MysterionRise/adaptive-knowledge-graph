@@ -326,10 +326,11 @@ prefixed with `NEXT_PUBLIC_` end up in the browser bundle, so read
 [`scripts/evaluate_rag.py`](scripts/evaluate_rag.py) sends each question in the
 golden set ([`data/evals/golden_qa.yaml`](data/evals/golden_qa.yaml): 27 US
 History and 26 Economics cases) to a running API twice, with and without
-knowledge-graph expansion. It reports answer term recall, citation hit rate,
-expected-source MRR, how often questions the book cannot support are refused,
-and latency. The set mixes answerable questions with cross-chapter synthesis,
-ambiguous and conflicting-source questions, unsupported claims and
+knowledge-graph expansion. It reports answer term recall (quote the non-echo
+variant, over the expected terms the question does not already name), citation
+hit rate, expected-source MRR, how often questions the book cannot support are
+refused, and latency. The set mixes answerable questions with cross-chapter
+synthesis, ambiguous and conflicting-source questions, unsupported claims and
 prompt-injection attempts.
 
 ```bash
@@ -343,7 +344,8 @@ when `environment_valid` is `true`: every request returned `200` and KG
 expansion never failed. `make eval-compare BASE=… HEAD=…` compares two
 reports case by case.
 
-<!-- eval table: filled in the release PR (#104) -->
+<!-- eval table: filled in the release PR (#104); its term recall column is
+answer_term_recall_non_echo, not answer_term_recall -->
 
 The metrics are heuristic (keyword and source-title matching). They are meant
 for regression tracking, not as a benchmark; see
