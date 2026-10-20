@@ -136,7 +136,7 @@ Show:
 
 Explain:
 
-- answer term recall
+- answer term recall (quote the non-echo variant)
 - citation hit rate
 - expected-source MRR
 - unsupported-question refusal rate

@@ -55,6 +55,7 @@ def mode_result(hit: bool | None = True, mrr: float = 1.0, **overrides: Any) -> 
         "citation_hit": hit,
         "mrr": mrr if hit else 0.0,
         "answer_term_recall": 1.0,
+        "answer_term_recall_non_echo": 1.0,
         "sources": [{"module_title": "Chapter"}],
         "answer": "An answer",
     }
