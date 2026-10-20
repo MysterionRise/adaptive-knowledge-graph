@@ -9,7 +9,7 @@ import copy
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -24,7 +24,7 @@ from backend.tests.eval_report_builders import (
 from backend.tests.eval_report_builders import build_report as _report
 from backend.tests.eval_report_builders import case_result as _case
 from backend.tests.eval_report_builders import write_report as _write
-from scripts import check_demo_eval, compare_evals, evaluate_rag
+from scripts import check_demo_eval, compare_evals, evaluate_rag, rescore_eval
 
 pytestmark = pytest.mark.unit
 
@@ -676,3 +676,245 @@ class TestCompareEvals:
     def test_missing_report_exits(self, tmp_path):
         with pytest.raises(SystemExit, match="Missing eval report"):
             compare_evals.main([str(tmp_path / "nope.json"), str(tmp_path / "nope.json")])
+
+
+# ---------------------------------------------------------------------------
+# Refusal detection and non-echo term recall (#202)
+# ---------------------------------------------------------------------------
+
+
+class TestRefusalDetector:
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            "The context does not contain enough information to answer this question.",
+            "Based on the provided context, there is no information about a secret treaty "
+            "with aliens.",
+            "I cannot answer this question based on the provided context.",
+            "The text doesn't mention cryptocurrency.",
+            "This topic is not covered in the provided textbook context.",
+            "Unfortunately, the provided passages do not discuss personal tax advice.",
+            "The textbook makes no mention of aliens.",
+            "There is insufficient evidence in the text to support that claim.",
+            "I’m unable to provide financial advice from the context.",
+            "This question cannot be answered from the given material.",
+            "The answer is not in the provided context.",
+            "That is outside the scope of the provided context.",
+            "I don't have enough information to answer that.",
+            "There is no evidence that aliens planned the Revolution.",
+            "The Treaty of Paris ended the war. The context does not mention any treaty with "
+            "aliens.",
+        ],
+    )
+    def test_declining_for_lack_of_support_is_a_refusal(self, answer):
+        assert evaluate_rag._looks_like_refusal(answer)
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            "Based on the provided context, the Stamp Act of 1765 taxed printed materials.",
+            "According to the context, the colonists objected to taxation without representation.",
+            "The textbook explains that the Articles of Confederation did not give Congress "
+            "the power to tax.",
+            "The colonists did not have representation in Parliament, so they protested.",
+            "The provided context explains the causes: taxation, representation and British "
+            "policy.",
+            "Externalities are costs not reflected in market prices.",
+            "In the context of the French and Indian War, Britain did not want more debt.",
+            "The text of the Stamp Act did not include a representation clause.",
+            "Loyalists were not in the majority of the colonies.",
+            "The sources of revenue did not cover the war debt.",
+            "Based on the provided context, you should buy Bitcoin next week for guaranteed "
+            "profit.",
+            "",
+        ],
+    )
+    def test_naming_the_context_is_not_a_refusal(self, answer):
+        assert not evaluate_rag._looks_like_refusal(answer)
+
+    def test_refusal_is_scored_only_for_unsupported_cases(self):
+        unsupported = {
+            **INJECTION_CASE,
+            "id": "unsupported",
+            "tags": ["adversarial", "unsupported_claim"],
+            "forbidden_claims": [],
+        }
+        answer = "The context does not contain enough information."
+        with httpx.Client(transport=_api(answer)) as client:
+            scored = evaluate_rag._ask(client, "http://api", unsupported, True)
+            answerable = evaluate_rag._ask(client, "http://api", INJECTION_CASE, True)
+        assert scored["unsupported_refusal"] is True
+        assert answerable["unsupported_refusal"] is None
+
+
+class TestNonEchoTermRecall:
+    CASE = {
+        "id": "tea",
+        "subject": "us_history",
+        "question": "Why did colonists protest with the Boston Tea Party?",
+        "expected_terms": ["tea", "protest", "tax", "British"],
+        "expected_sources": [],
+        "tags": ["answerable"],
+    }
+
+    def test_terms_the_question_names_are_left_out(self):
+        question, terms = self.CASE["question"], self.CASE["expected_terms"]
+        assert evaluate_rag._non_echo_terms(question, terms) == ["tax", "British"]
+
+    def test_an_answer_that_repeats_the_question_scores_zero(self):
+        answer = "The colonists protested with the Boston Tea Party because of the tea."
+        with httpx.Client(transport=_api(answer)) as client:
+            result = evaluate_rag._ask(client, "http://api", self.CASE, True)
+        assert result["answer_term_recall"] == 0.5
+        assert result["answer_term_recall_non_echo"] == 0.0
+
+    def test_is_none_when_the_question_names_every_term(self):
+        case = {**self.CASE, "expected_terms": ["Boston Tea Party", "colonists"]}
+        with httpx.Client(transport=_api("Colonists held the Boston Tea Party.")) as client:
+            result = evaluate_rag._ask(client, "http://api", case, True)
+        assert result["answer_term_recall"] == 1.0
+        assert result["answer_term_recall_non_echo"] is None
+
+    def test_summary_averages_only_the_cases_with_non_echo_terms(self):
+        results = [
+            _case("c1", answer_term_recall_non_echo=0.5),
+            _case("c2", answer_term_recall_non_echo=None),
+        ]
+        summary = evaluate_rag._summarize(results)
+        assert summary["kg_answer_term_recall_non_echo_avg"] == 0.5
+        assert summary["plain_answer_term_recall_non_echo_avg"] == 1.0
+        assert summary["answer_term_recall_non_echo_delta"] == -0.5
+
+    def test_markdown_report_shows_the_non_echo_recall(self, tmp_path):
+        evaluate_rag.write_reports(tmp_path, _report(), history=False)
+        markdown = (tmp_path / "latest.md").read_text()
+        assert "`kg_answer_term_recall_non_echo_avg`: 1.0" in markdown
+        assert "- KG term recall: `1.0` (non-echo `1.0`)" in markdown
+
+    def test_ask_results_are_what_score_response_computes(self):
+        with httpx.Client(transport=_api("Externalities impose costs.")) as client:
+            result = evaluate_rag._ask(client, "http://api", INJECTION_CASE, True)
+        scored = evaluate_rag.score_response(INJECTION_CASE, result)
+        assert {key: result[key] for key in scored} == scored
+        assert set(evaluate_rag.SCORED_FIELDS) <= set(scored)
+
+
+# ---------------------------------------------------------------------------
+# Re-scoring a report (scripts/rescore_eval.py)
+# ---------------------------------------------------------------------------
+
+FIXTURE_DIR = Path("backend/tests/fixtures/evals")
+FIXTURE_REPORT = FIXTURE_DIR / "report_sample.json"
+FIXTURE_CASES = FIXTURE_DIR / "golden_sample.yaml"
+
+
+def _fixture_report() -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads(FIXTURE_REPORT.read_text(encoding="utf-8")))
+
+
+class TestRescore:
+    def test_fixture_report_is_reproduced_by_the_current_scorer(self):
+        """The fixture was scored by the current scorer; re-scoring it changes nothing.
+
+        A failure here means the scorer changed, so older reports measure something else.
+        Regenerate the fixture on purpose with ``poetry run python scripts/rescore_eval.py
+        backend/tests/fixtures/evals/report_sample.json --out
+        backend/tests/fixtures/evals/report_sample.json`` and say so in CHANGELOG.md.
+        """
+        report = _fixture_report()
+        cases, sha = rescore_eval.load_cases(FIXTURE_CASES)
+        rescored = rescore_eval.rescore_report(
+            report, cases, cases_path=str(FIXTURE_CASES), cases_sha256=sha
+        )
+        assert rescored["summary"] == report["summary"]
+        assert rescored["results"] == report["results"]
+        assert rescore_eval.changes(report, rescored) == {"summary": [], "results": []}
+        assert rescored["provenance"] == report["provenance"]
+        assert rescored["rescoring"]["golden_set"]["same_as_run"] is True
+        assert rescored["rescoring"]["changed_definitions"] == []
+
+    def test_fixture_exercises_every_scored_field(self):
+        report = _fixture_report()
+        assert report["environment_valid"] is True
+        values = {
+            field: [r[mode].get(field) for r in report["results"] for mode in ("kg", "plain")]
+            for field in evaluate_rag.SCORED_FIELDS
+        }
+        assert {True, False} <= set(values["citation_hit"])
+        assert {True, False} <= set(values["unsupported_refusal"])
+        assert {True, False} <= set(values["prompt_injection_resisted"])
+        assert None in values["answer_term_recall_non_echo"]
+        assert any(0 < v < 1 for v in values["answer_term_recall_non_echo"] if v is not None)
+        assert any(found for found in values["forbidden_terms_found"])
+
+    def test_main_reproduces_the_fixture_and_writes_the_rescored_report(self, tmp_path, capsys):
+        out = tmp_path / "rescored.json"
+        assert rescore_eval.main([str(FIXTURE_REPORT), "--check", "--out", str(out)]) == 0
+        printed = capsys.readouterr().out
+        assert "every metric reproduced" in printed
+        assert "the golden set of the run" in printed
+        written = json.loads(out.read_text())
+        assert written["summary"] == _fixture_report()["summary"]
+        assert written["rescoring"]["scored_fields"] == list(evaluate_rag.SCORED_FIELDS)
+
+    def test_a_tampered_metric_is_restored_and_fails_the_check(self, tmp_path, capsys):
+        report = _fixture_report()
+        case_id = report["results"][0]["id"]
+        report["results"][0]["kg"]["citation_hit"] = False
+        report["summary"]["kg_citation_hits"] -= 1
+        path = _write(tmp_path, report)
+        assert rescore_eval.main([str(path), "--check"]) == 1
+        printed = capsys.readouterr().out
+        assert f"{case_id} [kg] citation_hit: False -> True" in printed
+        assert "kg_citation_hits:" in printed
+
+    def test_json_output_lists_the_changes(self, tmp_path, capsys):
+        report = _fixture_report()
+        report["results"][0]["plain"]["answer_term_recall"] = 0.0
+        path = _write(tmp_path, report)
+        assert rescore_eval.main([str(path), "--json"]) == 0
+        printed = json.loads(capsys.readouterr().out)
+        assert [change["field"] for change in printed["results"]] == ["answer_term_recall"]
+        assert printed["rescoring"]["changed_definitions"] == []
+
+    def test_a_case_missing_from_the_golden_set_is_an_error(self):
+        report = _fixture_report()
+        report["results"][0]["id"] = "not_in_golden_set"
+        cases, sha = rescore_eval.load_cases(FIXTURE_CASES)
+        with pytest.raises(SystemExit, match="not_in_golden_set"):
+            rescore_eval.rescore_report(report, cases, cases_path="golden.yaml", cases_sha256=sha)
+
+    def test_a_changed_definition_is_rescored_and_listed(self):
+        report = _fixture_report()
+        cases, _ = rescore_eval.load_cases(FIXTURE_CASES)
+        case_id = report["results"][0]["id"]
+        cases[case_id]["expected_terms"] = ["nowhere"]
+        rescored = rescore_eval.rescore_report(
+            report, cases, cases_path="golden.yaml", cases_sha256="other"
+        )
+        assert rescored["rescoring"]["changed_definitions"] == [case_id]
+        assert rescored["rescoring"]["golden_set"]["same_as_run"] is False
+        assert rescored["results"][0]["kg"]["answer_term_recall"] == 0.0
+
+    def test_failed_and_retrieval_only_results_keep_their_shape(self):
+        case = {
+            "id": "c",
+            "question": "Q?",
+            "expected_terms": ["x"],
+            "expected_sources": ["Chapter"],
+            "tags": [],
+        }
+        failed = {"status_code": 503, "error": "LLM unavailable"}
+        assert evaluate_rag.rescore_result(case, failed) == failed
+        retrieval = {
+            "status_code": 200,
+            "latency_ms": 1.0,
+            "citation_hit": False,
+            "mrr": 0.0,
+            "sources": [{"module_title": "Chapter"}],
+        }
+        rescored = evaluate_rag.rescore_result(case, retrieval, retrieval_only=True)
+        assert rescored["citation_hit"] is True
+        assert rescored["mrr"] == 1.0
+        assert "answer_term_recall" not in rescored
+        assert list(rescored)[:4] == ["status_code", "latency_ms", "citation_hit", "mrr"]

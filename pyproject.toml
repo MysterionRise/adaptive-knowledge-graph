@@ -58,7 +58,7 @@ openai = ">=2.45,<4"  # langchain-openai ChatOpenAI (LLM_MODE=remote/hybrid, Ope
 
 # LangChain (GraphCypherQAChain, kg/cypher_qa.py)
 langchain-core = ">=1.0,<2.0"
-langchain-neo4j = ">=0.10,<0.11"
+langchain-neo4j = ">=0.10,<0.12"
 langchain-ollama = ">=1.0,<2.0"  # ChatOllama (LLM_MODE=local)
 langchain-openai = ">=1.0,<2.0"  # ChatOpenAI (LLM_MODE=remote/hybrid)
 # 1.22 needs the neo4j 6 driver; 1.21 brings pypdf >= 6.19 and tenacity >= 9.1.4
@@ -92,7 +92,7 @@ pytest-cov = "^7.0.0"
 pytest-mock = "^3.12.0"
 
 # Code quality
-ruff = "^0.16"
+ruff = ">=0.16,<0.18"
 mypy = ">=1.8,<3.0"
 pre-commit = "^4.0.0"
 

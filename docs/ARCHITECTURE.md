@@ -176,7 +176,8 @@ reranking, LLM generation and learner-model updates.
 `data/evals/golden_qa.yaml` against a live API, once with KG expansion and
 once without, and tracks:
 
-- answer term recall
+- answer term recall, and its non-echo variant over the expected terms the
+  question does not name (the figure to quote)
 - citation hit rate and expected-source MRR
 - refusal of questions the book cannot support
 - KG-versus-plain deltas
