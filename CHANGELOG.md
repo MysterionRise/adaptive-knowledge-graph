@@ -86,6 +86,14 @@ is compiled in the release pull request
 
 ### Added
 
+- `scripts/rescore_eval.py` (`make eval-rescore REPORT=…`) re-scores an
+  evaluation report from the answers and sources it stores, using the golden
+  set named in its provenance, and prints the metrics the current scorer
+  changes; `--check` exits 1 when any did and `--out` writes the re-scored
+  report. Reports gain `answer_term_recall_non_echo`, term recall over the
+  expected terms the question does not already name (93 of the 197 expected
+  terms occur in their own question), which is the recall figure to quote
+  ([#202](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/202)).
 - Index fingerprints: a new OpenSearch index records the embedding model, its
   revision, the vector dimension and the vector of a fixed probe text in its
   mapping's `_meta`. `make doctor` (`scripts/stack_check.py index-fingerprint`)
@@ -137,6 +145,15 @@ is compiled in the release pull request
 
 ### Fixed
 
+- The evaluation's refusal detector no longer counts the phrase "provided
+  context" as a refusal: the subject prompts tell the model to answer from
+  "the provided context", so answers to the unsupported-claim cases that
+  began "Based on the provided context, ..." scored as refusals. A refusal
+  now has to name what is missing (the context does not contain or mention
+  it, not enough information, cannot be answered from the context).
+  Unsupported refusal rates in reports from before this change are not
+  comparable; re-score them with `scripts/rescore_eval.py`
+  ([#202](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/202)).
 - When Neo4j or OpenSearch cannot start because a host port is taken,
   `make quickstart`, `make up`, `make seed` and `make doctor` now name the
   container (with its image and compose project) or the process that holds it,
