@@ -86,6 +86,16 @@ is compiled in the release pull request
 
 ### Added
 
+- Evaluation reports carry a paired KG-versus-plain comparison
+  (`summary.paired`): per metric, the cases where KG mode did better, the same
+  or worse, the discordant pairs and an exact two-sided sign test, plus an
+  overall per-case verdict. `latest.md` prints them as a table, and
+  `make eval-compare` prints the same counts for head versus base (`--json`
+  exposes them as `paired` and `within_run`); its regression gates are
+  unchanged. `docs/evals/README.md` sets the wording rule for the README table
+  and release notes: per-arm rates plus win/tie/loss, no "beats by X %" and no
+  delta column
+  ([#203](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/203)).
 - `scripts/rescore_eval.py` (`make eval-rescore REPORT=…`) re-scores an
   evaluation report from the answers and sources it stores, using the golden
   set named in its provenance, and prints the metrics the current scorer
