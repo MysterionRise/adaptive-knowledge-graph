@@ -207,7 +207,11 @@ class TestProvenanceEndpoint:
         """GET /demo/provenance with a mocked Neo4j adapter and OpenSearch `_count`."""
         if adapter is None:
             adapter = MagicMock()
-            adapter.count_concepts.return_value = 42
+            adapter.concept_counts.return_value = {
+                "concepts": 42,
+                "definitions": 30,
+                "prereq_edges": 12,
+            }
         if opensearch is None:
 
             async def opensearch(url, auth=None):
@@ -245,7 +249,13 @@ class TestProvenanceEndpoint:
         }
         assert set(data["retrieval"]) == set(demo.PROVENANCE_RETRIEVAL_SETTINGS)
         assert {s["id"] for s in data["subjects"]} >= {"us_history", "economics"}
-        assert all(s["concept_count"] == 42 and s["chunk_count"] == 314 for s in data["subjects"])
+        assert all(
+            s["concept_count"] == 42
+            and s["definition_count"] == 30
+            and s["prereq_count"] == 12
+            and s["chunk_count"] == 314
+            for s in data["subjects"]
+        )
 
     def test_requires_the_api_key_when_one_is_configured(
         self, production_client, production_settings
@@ -296,7 +306,7 @@ class TestProvenanceEndpoint:
 
     def test_unreadable_stores_give_null_counts(self, client, captured_logs):
         adapter = MagicMock()
-        adapter.count_concepts.side_effect = RuntimeError("bolt://neo4j:hunter2@db refused")
+        adapter.concept_counts.side_effect = RuntimeError("bolt://neo4j:hunter2@db refused")
         opensearch = AsyncMock(side_effect=httpx.ConnectError("http://admin:pw@os refused"))
         response = self._get(client, adapter, opensearch)
         assert response.status_code == 200
@@ -304,6 +314,8 @@ class TestProvenanceEndpoint:
         assert "pw@os" not in response.text
         for subject in response.json()["subjects"]:
             assert subject["concept_count"] is None
+            assert subject["definition_count"] is None
+            assert subject["prereq_count"] is None
             assert subject["chunk_count"] is None
 
     def test_missing_index_counts_zero_chunks(self, client):

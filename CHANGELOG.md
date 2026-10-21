@@ -86,6 +86,15 @@ is compiled in the release pull request
 
 ### Added
 
+- Every knowledge-graph build writes a graph quality report to
+  `data/processed/build/graph_report_<subject>.md`: the concept count with the
+  shares that carry a glossary definition, aliases or a single-word name,
+  relationship counts by type and provenance, the top 20 concepts by degree, a
+  PREREQ cycle check and the 20 concepts mentioned in the fewest modules (noise
+  candidates). `scripts/build_knowledge_graph.py --no-persist` writes the JSON
+  copy and the report without Neo4j. `GET /api/v1/demo/provenance` adds
+  per-subject `prereq_count` and `definition_count`, read in the same query as
+  the concept count, so evaluation reports carry them ([#204](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/204)).
 - Evaluation reports carry a paired KG-versus-plain comparison
   (`summary.paired`): per metric, the cases where KG mode did better, the same
   or worse, the discordant pairs and an exact two-sided sign test, plus an
@@ -144,6 +153,12 @@ is compiled in the release pull request
 
 ### Removed
 
+- The stale `data/processed/knowledge_graph_us_history.json` and
+  `knowledge_graph_economics.json` (2.9 and 3.4 MB, built before the current
+  builder: no PREREQ edges, definitions or aliases, and noise concepts such as
+  "Data-Type"). Nothing read them. `make seed` builds the graph from
+  `books_<subject>.jsonl` and writes its JSON copy and report to the ignored
+  `data/processed/build/`, and the pattern is now gitignored ([#204](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/204)).
 - Unused Python dependencies
   ([#93](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/93)).
   Recreate an existing virtual environment after upgrading

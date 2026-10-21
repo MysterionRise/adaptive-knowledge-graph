@@ -392,6 +392,8 @@ class SubjectProvenance(BaseModel):
     id: str
     concept_count: int | None = None
     chunk_count: int | None = None
+    prereq_count: int | None = None
+    definition_count: int | None = None
 
 
 class ProvenanceResponse(BaseModel):
@@ -411,15 +413,18 @@ def _retrieval_settings() -> dict[str, str | int | float | bool | None]:
     return {name: getattr(settings, name) for name in PROVENANCE_RETRIEVAL_SETTINGS}
 
 
-def _concept_count(subject_id: str) -> int | None:
-    """Concepts in the subject's graph (blocking: Neo4j); None when Neo4j fails."""
+def _graph_counts(subject_id: str) -> dict[str, int] | None:
+    """Concept, definition and PREREQ counts of the subject's graph (blocking: Neo4j, one query).
+
+    None when Neo4j fails.
+    """
     try:
         from backend.app.kg.neo4j_adapter import get_neo4j_adapter
 
-        return get_neo4j_adapter(subject_id).count_concepts()
+        return get_neo4j_adapter(subject_id).concept_counts()
     except Exception:
         logger.opt(exception=True).warning(
-            "Provenance: concept count failed for subject {}", subject_id
+            "Provenance: graph counts failed for subject {}", subject_id
         )
         return None
 
@@ -441,12 +446,18 @@ async def _chunk_count(index: str) -> int | None:
 
 
 async def _subject_provenance(subject: SubjectConfig) -> SubjectProvenance:
-    """A subject's concept and chunk counts, read concurrently."""
-    concept_count, chunk_count = await asyncio.gather(
-        run_in_threadpool(_concept_count, subject.id),
+    """A subject's graph and chunk counts, read concurrently."""
+    graph, chunk_count = await asyncio.gather(
+        run_in_threadpool(_graph_counts, subject.id),
         _chunk_count(subject.database.opensearch_index),
     )
-    return SubjectProvenance(id=subject.id, concept_count=concept_count, chunk_count=chunk_count)
+    return SubjectProvenance(
+        id=subject.id,
+        concept_count=graph["concepts"] if graph else None,
+        chunk_count=chunk_count,
+        prereq_count=graph["prereq_edges"] if graph else None,
+        definition_count=graph["definitions"] if graph else None,
+    )
 
 
 @router.get(
@@ -461,7 +472,7 @@ async def get_provenance():
 
     Covers the server's git SHA (`GIT_SHA`), the embedding and reranker models with their
     revisions and devices, the LLM and its sampling settings, an allowlist of retrieval
-    settings and per-subject concept and chunk counts. It never includes credentials,
+    settings and per-subject concept, definition, PREREQ and chunk counts. It never includes credentials,
     hosts or file paths. Requires `X-API-Key` when an API key is configured. Read by
     `scripts/evaluate_rag.py`.
     """

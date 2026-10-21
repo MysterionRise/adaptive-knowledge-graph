@@ -78,7 +78,7 @@ make build-kg SUBJECT=my_subject
 make index-rag SUBJECT=my_subject
 ```
 
-The graph build uses the processed records for that subject. The indexing step uses its configured OpenSearch index. Resolve missing input or service errors before checking the UI.
+The graph build uses the processed records for that subject and writes two files to `data/processed/build/` (ignored by git): a JSON copy of the graph and `graph_report_my_subject.md`, the graph quality report. The report lists the concept count and the shares with a glossary definition, aliases or a single-word name; the relationships by type and provenance; the top concepts by degree; PREREQ cycles, which a learning path cannot order; and the concepts mentioned in the fewest modules, the usual noise candidates. Read it before indexing, and put noise on the stopword list instead of quoting a graph that carries it. `poetry run python scripts/build_knowledge_graph.py --subject my_subject --no-persist` writes both files without touching Neo4j. The indexing step uses the subject's configured OpenSearch index. Resolve missing input or service errors before checking the UI.
 
 ## 4. Verify the subject in the UI
 
