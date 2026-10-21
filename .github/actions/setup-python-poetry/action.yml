@@ -34,10 +34,12 @@ inputs:
       poetry.lock fails with a clear message instead of an install error.
     required: false
     default: "false"
-  free-disk-space:
+  assert-cpu-torch:
     description: >-
-      "true" deletes unused preinstalled toolchains before the install when
-      less than 25 GB is free on /.
+      "true" fails the job when the installed torch is a CUDA build or any
+      nvidia-* wheel is present: on Linux x86_64 the lock takes torch from
+      the PyTorch CPU index (pyproject.toml), so CI never downloads the
+      CUDA wheel set.
     required: false
     default: "false"
 
@@ -52,18 +54,6 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Free disk space when the runner is low
-      if: inputs.free-disk-space == 'true'
-      shell: bash
-      run: |
-        avail_gb=$(df --output=avail -BG / | tail -n 1 | tr -dc '0-9')
-        echo "Free space on /: ${avail_gb} GB"
-        if [ "${avail_gb}" -lt 25 ]; then
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android \
-            "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}/CodeQL"
-          df -h /
-        fi
-
     - name: Set up Python ${{ inputs.python-version }}
       id: python
       uses: actions/setup-python@v7
@@ -147,8 +137,29 @@ runs:
         # shellcheck disable=SC2086
         poetry sync --no-interaction ${INSTALL_ARGS}
 
+    - name: Assert CPU-only torch and no nvidia-* wheels
+      if: inputs.assert-cpu-torch == 'true'
+      shell: bash
+      run: |
+        poetry run python - <<'EOF'
+        import importlib.metadata as metadata
+        import sys
+
+        import torch
+
+        nvidia = sorted(
+            d.metadata["Name"]
+            for d in metadata.distributions()
+            if d.metadata["Name"].lower().startswith("nvidia-")
+        )
+        print(f"torch {torch.__version__}, CUDA build: {torch.version.cuda}")
+        if torch.version.cuda or nvidia:
+            print(f"::error::CUDA torch or nvidia-* wheels in the CI environment: {nvidia}")
+            sys.exit(1)
+        EOF
+
     # Pull requests never save: each lock-changing PR would otherwise add
-    # ~3.5 GB per full venv and push the repository over its cache quota.
+    # a full venv per Python version and push the repository over its cache quota.
     # They still warm-start from the main-branch cache via restore-keys.
     - name: Save .venv cache
       if: >-

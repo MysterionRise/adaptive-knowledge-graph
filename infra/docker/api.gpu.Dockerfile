@@ -2,11 +2,12 @@
 # FastAPI backend, CUDA inference (NVIDIA GPU + NVIDIA Container Toolkit).
 #   docker compose -f infra/compose/compose.yaml --profile gpu up -d --wait
 #
-# Ubuntu 24.04 ships Python 3.12 as its system Python. The locked torch wheel from PyPI (2.10.x
-# on linux/amd64, pinned <2.11 in pyproject.toml) already bundles the CUDA 12.8 user-space
-# libraries through the nvidia-*-cu12 wheels, so no extra PyTorch index is needed and the CUDA
-# "base" image is enough: the "runtime" variant would duplicate ~2 GB of the same libraries. The
-# host needs an NVIDIA driver that supports CUDA 12.8. Single stage, like api.cpu.Dockerfile.
+# Ubuntu 24.04 ships Python 3.12 as its system Python. On linux/amd64 the lock installs the
+# CPU-only torch wheel (pyproject.toml, #79), so after `poetry install` this image reinstalls
+# the same torch version from the PyTorch CUDA 12.8 index, whose wheel pins the nvidia-*-cu12
+# user-space libraries it needs. The CUDA "base" image is therefore enough: the "runtime"
+# variant would duplicate ~2 GB of the same libraries. The host needs an NVIDIA driver that
+# supports CUDA 12.8. Single stage, like api.cpu.Dockerfile.
 
 ARG CUDA_IMAGE=nvidia/cuda:12.8.1-base-ubuntu24.04
 FROM ${CUDA_IMAGE}
@@ -45,6 +46,9 @@ RUN --mount=type=cache,target=/root/.cache \
     && /opt/poetry/bin/pip install "poetry==${POETRY_VERSION}" \
     && python3 -m venv /opt/venv \
     && /opt/poetry/bin/poetry install --only main --no-root --no-ansi \
+    && TORCH_VERSION="$(python -c 'import torch; print(torch.__version__.split("+")[0])')" \
+    && pip install --index-url https://download.pytorch.org/whl/cu128 "torch==${TORCH_VERSION}" \
+    && python -c 'import torch; assert torch.version.cuda, "CUDA torch expected"' \
     && python -m spacy download en_core_web_sm \
     && rm -rf /opt/poetry \
     && apt-get purge -y --auto-remove python3-dev build-essential \

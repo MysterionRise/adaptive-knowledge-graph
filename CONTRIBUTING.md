@@ -51,6 +51,27 @@ but does not need installed backend dependencies. The probe supports
 comma-separated numeric comparisons (`>=`, `>`, `<=`, `<`, `==`, `!=`);
 other constraint syntax is reported as an error rather than guessed.
 
+### torch: CPU wheels on Linux x86_64
+
+`poetry.lock` resolves torch twice: on Linux x86_64 from the PyTorch CPU index
+(`pytorch-cpu`, an explicit source in `pyproject.toml`, wheel `2.10.0+cpu`),
+everywhere else from PyPI. The PyPI wheel on Linux x86_64 would pull the CUDA
+12.8 runtime, fifteen `nvidia-*` wheels of several gigabytes that CI and the
+CPU image never use. CI asserts after every install that torch is not a CUDA
+build and that no `nvidia-*` wheel is present (`assert-cpu-torch` in
+`.github/actions/setup-python-poetry/action.yml`). The GPU image
+(`infra/docker/api.gpu.Dockerfile`) reinstalls the same torch version from the
+PyTorch CUDA 12.8 index after `poetry install`; do the same on a Linux
+machine with a GPU:
+
+```bash
+poetry run pip install --index-url https://download.pytorch.org/whl/cu128 "torch==2.10.0"
+```
+
+Regenerating the lock (`poetry lock`) needs access to
+`download.pytorch.org`, which some cloud sandboxes block; run it on a machine
+that can reach it. The torch version bump is tracked separately (#207).
+
 ### Upgrading an existing checkout
 
 The v0.3.0 release removes many unused Python dependencies. Syncing an
