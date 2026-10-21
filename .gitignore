@@ -175,6 +175,7 @@ certs
 *.sqlite3*
 data/processed/chunks_*.json
 data/processed/build/
+data/processed/knowledge_graph_*.json
 logs/
 
 # Claude Code local settings and worktrees

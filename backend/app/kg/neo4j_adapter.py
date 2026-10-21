@@ -287,6 +287,20 @@ class Neo4jAdapter:
             record = session.run(f"MATCH (c:{concept_label}) RETURN count(c) AS count").single()
         return int(record["count"]) if record else 0
 
+    def concept_counts(self) -> dict[str, int]:
+        """Concepts, concepts with a definition and PREREQ edges of this graph, in one query."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            record = session.run(
+                f"MATCH (c:{concept_label}) "
+                "WITH count(c) AS concepts, count(c.definition) AS definitions "
+                f"OPTIONAL MATCH (:{concept_label})-[r:PREREQ]->(:{concept_label}) "
+                "RETURN concepts, definitions, count(r) AS prereq_edges"
+            ).single()
+        if not record:
+            return {"concepts": 0, "definitions": 0, "prereq_edges": 0}
+        return {key: int(record[key]) for key in ("concepts", "definitions", "prereq_edges")}
+
     def concept_exists(self, name: str) -> bool:
         """
         Check whether a concept exists in this adapter's (subject's) graph.

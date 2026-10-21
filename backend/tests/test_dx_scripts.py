@@ -563,6 +563,34 @@ def test_build_knowledge_graph_does_not_prompt_without_a_terminal(monkeypatch):
     assert build_knowledge_graph._should_clear("us_history", clear_flag=True) is True
 
 
+def test_build_knowledge_graph_writes_the_report_without_neo4j(tmp_path, monkeypatch):
+    from backend.app.core.settings import settings
+    from backend.tests.test_kg_builder import CORPUS
+    from scripts import build_knowledge_graph as bkg
+
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    (processed / "books_us_history.jsonl").write_text(
+        "\n".join(json.dumps(record) for record in CORPUS) + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(settings, "data_processed_dir", str(processed))
+    monkeypatch.setattr(
+        bkg, "get_neo4j_adapter", lambda subject_id: pytest.fail("connected to Neo4j")
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["build_knowledge_graph.py", "--subject", "us_history", "--no-persist"]
+    )
+
+    bkg.main()
+
+    report = (processed / "build" / "graph_report_us_history.md").read_text(encoding="utf-8")
+    assert report.startswith("# Knowledge graph report: us_history\n")
+    assert "Builder options: max_concepts=200" in report
+    assert "| Stamp Act |" in report
+    assert "| PREREQ | glossary |" in report
+    assert (processed / "build" / "knowledge_graph_us_history.json").is_file()
+
+
 class _TunableBuilder:
     def __init__(self, max_concepts=200, *, cooccurrence_threshold=5, prereq_patterns=False):
         pass
@@ -913,6 +941,8 @@ def test_legacy_scripts_and_data_are_gone():
         "scripts/run_pipeline.sh",
         "scripts/validate_setup.sh",
         "data/processed/knowledge_graph.json",
+        "data/processed/knowledge_graph_us_history.json",  # #204: built, not tracked
+        "data/processed/knowledge_graph_economics.json",
         "data/processed/books.jsonl",
         "data/processed/student_profiles.json",
     ]:

@@ -4,7 +4,10 @@ Build knowledge graph from normalized textbook data.
 This script:
 1. Loads normalized JSONL data
 2. Extracts concepts and relationships using KGBuilder
-3. Writes a JSON copy to data/processed/build/ (ignored by git; nothing reads it at runtime)
+3. Writes a JSON copy and a graph quality report (graph_report_<subject>.md: concept
+   counts and shares, relationships by type and provenance, top concepts by degree,
+   PREREQ cycles, noise candidates) to data/processed/build/ (ignored by git; nothing
+   reads them at runtime)
 4. Persists the graph to Neo4j
 5. Outputs statistics and top concepts
 
@@ -13,6 +16,7 @@ Usage:
     poetry run python scripts/build_knowledge_graph.py --subject economics --clear
     poetry run python scripts/build_knowledge_graph.py --subject us_history --max-concepts 300
     poetry run python scripts/build_knowledge_graph.py --subject us_history --cooccurrence-threshold 3
+    poetry run python scripts/build_knowledge_graph.py --subject economics --no-persist  # report only
 
 Without --clear the script asks whether to clear the subject's existing nodes when it runs in a
 terminal, and keeps them (MERGE on top) when it does not. Exits non-zero on failure.
@@ -39,6 +43,7 @@ from backend.app.core.settings import settings
 from backend.app.core.subjects import get_subject
 from backend.app.kg.builder import KGBuilder
 from backend.app.kg.neo4j_adapter import get_neo4j_adapter
+from backend.app.kg.report import graph_report
 
 
 def load_records(jsonl_path: Path) -> list:
@@ -132,6 +137,11 @@ def main() -> None:
         action="store_true",
         help="Also create PREREQ edges from cue phrases (or KG_PREREQ_PATTERNS=1)",
     )
+    parser.add_argument(
+        "--no-persist",
+        action="store_true",
+        help="Build the graph and write the JSON copy and the report without touching Neo4j",
+    )
     args = parser.parse_args()
 
     # Resolve subject
@@ -177,6 +187,23 @@ def main() -> None:
     graph_json_path = build_dir / f"knowledge_graph_{subject_id}.json"
     graph_json_path.write_text(kg.model_dump_json(indent=2), encoding="utf-8")
     logger.success(f"Saved graph to {graph_json_path}")
+
+    report_path = build_dir / f"graph_report_{subject_id}.md"
+    report_path.write_text(
+        graph_report(
+            kg,
+            subject_id=subject_id,
+            source=str(jsonl_path),
+            records=len(records),
+            options={"max_concepts": args.max_concepts, **options},
+        ),
+        encoding="utf-8",
+    )
+    logger.success(f"Saved graph quality report to {report_path}")
+
+    if args.no_persist:
+        logger.info("--no-persist: not connecting to Neo4j")
+        return
 
     # Persist to Neo4j
     logger.info("\nConnecting to Neo4j...")
