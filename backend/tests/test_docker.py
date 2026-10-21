@@ -196,7 +196,10 @@ def test_gpu_dockerfile():
     assert re.search(r"ARG CUDA_IMAGE=nvidia/cuda:12\.8\.\d+-\w+-ubuntu24\.04", content)
     assert "ubuntu22.04" not in content
     assert "python3.12" not in content  # Ubuntu 24.04's python3 is 3.12
-    assert "download.pytorch.org" not in content  # the locked torch wheel ships CUDA 12.8
+    # The lock installs CPU torch on linux/amd64 (#79); the GPU image puts the CUDA build back
+    assert "--index-url https://download.pytorch.org/whl/cu128" in content
+    assert 'torch.__version__.split("+")[0]' in content  # the locked version, not a float
+    assert "torch.version.cuda" in content
     assert 'pip install "poetry==${POETRY_VERSION}"' in content
     assert "COPY --chown=app:app config/ ./config/" in content
     assert "USER app" in content
@@ -211,6 +214,45 @@ def test_dockerfiles_install_the_poetry_version_ci_uses(dockerfile):
     action = yaml.safe_load(SETUP_POETRY_ACTION.read_text())
     ci_version = action["inputs"]["poetry-version"]["default"]
     assert f"ARG POETRY_VERSION={ci_version}" in dockerfile.read_text()
+
+
+def test_torch_is_cpu_only_on_linux_x86_64():
+    """pyproject.toml and poetry.lock take torch from the CPU index on Linux x86_64 (#79)."""
+    import tomllib
+
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    sources = {s["name"]: s for s in pyproject["tool"]["poetry"]["source"]}
+    assert sources["pytorch-cpu"]["url"] == "https://download.pytorch.org/whl/cpu"
+    assert sources["pytorch-cpu"]["priority"] == "explicit"
+    constraints = pyproject["tool"]["poetry"]["dependencies"]["torch"]
+    cpu = next(c for c in constraints if c.get("source") == "pytorch-cpu")
+    assert cpu["markers"] == "sys_platform == 'linux' and platform_machine == 'x86_64'"
+    assert all(c["version"] == cpu["version"] for c in constraints)
+
+    lock = tomllib.loads(Path("poetry.lock").read_text())
+    torch_entries = [p for p in lock["package"] if p["name"] == "torch"]
+    cpu_entry = next(p for p in torch_entries if p["version"].endswith("+cpu"))
+    assert cpu_entry["source"]["reference"] == "pytorch-cpu"
+    assert (
+        cpu_entry["markers"]["main"] == 'sys_platform == "linux" and platform_machine == "x86_64"'
+    )
+    assert not any(name.startswith("nvidia-") for name in cpu_entry.get("dependencies", {}))
+    pypi_entry = next(p for p in torch_entries if "source" not in p)
+    assert (
+        pypi_entry["markers"]["main"] == 'sys_platform != "linux" or platform_machine != "x86_64"'
+    )
+
+
+def test_setup_action_asserts_cpu_torch_instead_of_freeing_disk():
+    action = yaml.safe_load(SETUP_POETRY_ACTION.read_text())
+    assert "free-disk-space" not in action["inputs"]
+    assert action["inputs"]["assert-cpu-torch"]["default"] == "false"
+    steps = {step["name"]: step for step in action["runs"]["steps"]}
+    assert "Assert CPU-only torch and no nvidia-* wheels" in steps
+    assert "torch.version.cuda" in steps["Assert CPU-only torch and no nvidia-* wheels"]["run"]
+    ci = Path(".github/workflows/ci.yaml").read_text()
+    assert "free-disk-space" not in ci
+    assert ci.count('assert-cpu-torch: "true"') == 3  # type-check, tests, tribunal
 
 
 def test_frontend_dockerfile():

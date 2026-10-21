@@ -14,6 +14,15 @@ is compiled in the release pull request
 
 ### Changed
 
+- On Linux x86_64 the lock now takes torch from the PyTorch CPU index
+  (`pytorch-cpu`, an explicit source in `pyproject.toml`; wheel `2.10.0+cpu`)
+  instead of the PyPI wheel, which pulled the CUDA 12.8 runtime (fifteen
+  `nvidia-*` wheels, several GB) that CI and the CPU image never used. Every
+  other platform keeps PyPI. CI asserts after each install that torch is not a
+  CUDA build and no `nvidia-*` wheel is present, and the runner disk-cleanup
+  workaround is gone. The GPU image reinstalls the same torch version from the
+  PyTorch CUDA 12.8 index after `poetry install`; Linux machines with a GPU do
+  the same (see CONTRIBUTING.md) ([#205](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/205), [#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79)).
 - `make doctor` now reads the backend Python requirement from `pyproject.toml`
   and discovers versioned Python executables on PATH, avoiding stale
   hard-coded bounds when the supported range changes.

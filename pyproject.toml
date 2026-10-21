@@ -42,7 +42,15 @@ slowapi = "^0.1.10"
 # NLP & Embeddings
 transformers = ">=5.18,<6"  # 5.x clears the 4.x RCE advisories (#71)
 sentence-transformers = ">=6.1,<7"  # 6.x is the line tested with transformers 5
-torch = ">=2.10.0,<2.11"  # 2.11+ switches the Linux wheels to CUDA 13; upgrade deliberately (#79)
+# torch: on Linux x86_64 the PyPI wheel pulls the CUDA 12.8 runtime (15 nvidia-* wheels,
+# several GB), which CI and the CPU image never use, so the lock takes the CPU-only wheel
+# from the PyTorch index there; every other platform keeps PyPI. The GPU image reinstalls
+# the CUDA build on top (infra/docker/api.gpu.Dockerfile), see CONTRIBUTING.md (#79).
+# 2.11+ switches the Linux wheels to CUDA 13; upgrade deliberately (#207).
+torch = [
+    { version = ">=2.10.0,<2.11", markers = "sys_platform == 'linux' and platform_machine == 'x86_64'", source = "pytorch-cpu" },
+    { version = ">=2.10.0,<2.11", markers = "sys_platform != 'linux' or platform_machine != 'x86_64'" },
+]
 yake = ">=0.4.8,<0.8.0"
 spacy = "^3.7.2"
 
@@ -83,6 +91,11 @@ loguru = "^0.7.2"
 tenacity = ">=8.2.3,<10.0.0"
 requests = "^2.33.0"
 pyyaml = "^6.0.0"
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [tool.poetry.group.dev.dependencies]
 # Testing

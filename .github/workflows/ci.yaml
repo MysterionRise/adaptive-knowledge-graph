@@ -65,7 +65,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           install-args: --without pyirt,pybkt
-          free-disk-space: "true"
+          assert-cpu-torch: "true"
 
       - name: Run mypy (paths from [tool.mypy] files)
         run: poetry run mypy
@@ -101,7 +101,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           install-args: --without pyirt,pybkt
           cache: ${{ matrix.cache }}
-          free-disk-space: "true"
+          assert-cpu-torch: "true"
 
       - name: Run fast tests with coverage
         run: PYTEST_TEST_TIMEOUT_SECONDS=60 poetry run pytest -m "not tribunal" --cov=backend/app --cov-report=term --cov-fail-under=75
@@ -341,7 +341,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           install-args: --without pyirt,pybkt
-          free-disk-space: "true"
+          assert-cpu-torch: "true"
 
       - name: Run tribunal suite (adversarial risk register)
         # --no-cov: coverage is measured on the main suite; this partial run

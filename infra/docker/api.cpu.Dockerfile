@@ -4,9 +4,9 @@
 #   docker build -f infra/docker/api.cpu.Dockerfile -t adaptive-kg-api:cpu .
 #
 # One stage on purpose: the dependency layer is installed and cleaned up (compilers, Poetry,
-# download caches) in a single RUN, so the image holds the virtualenv once. Copying it between
-# stages would double the peak disk use of a build on linux/amd64, where the locked PyPI torch
-# wheel also pulls the CUDA runtime wheels (nvidia-*-cu12; CPU-only wheels are tracked in #79).
+# download caches) in a single RUN, so the image holds the virtualenv once. On linux/amd64 the
+# lock takes torch from the PyTorch CPU index (pyproject.toml, #79), so the image carries no
+# CUDA runtime wheels; on other platforms torch comes from PyPI.
 
 ARG PYTHON_IMAGE=python:3.12-slim
 FROM ${PYTHON_IMAGE}
