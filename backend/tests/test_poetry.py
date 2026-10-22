@@ -81,6 +81,13 @@ def test_dev_dependencies():
         assert dep in dev_deps, f"Required dev dependency '{dep}' not found"
 
 
+def test_no_optional_dependency_groups():
+    """The unused pyirt and pybkt groups are gone (#104), so no install needs `--without`."""
+    data = toml.load(Path("pyproject.toml"))
+    assert set(data["tool"]["poetry"]["group"]) == {"dev"}
+    assert "--without" not in Path("Makefile").read_text()
+
+
 def test_ruff_configuration():
     """Test ruff is configured in pyproject.toml."""
     pyproject = Path("pyproject.toml")

@@ -41,24 +41,25 @@ playbook.
   contracts, a one-command local stack, the frontend platform upgrade, a 75%
   backend coverage floor, evaluation provenance and `make eval-compare`,
   transformers 5 and langchain 1.x.
-
-## Now: v0.3.0 and v0.4.0 (October to November 2026)
-
-Waves W1 and W2, tracked in
-[#105](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/105)
-and
-[#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164).
-
-- **v0.3.0, tagged by 8 November:** the release
-  ([#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104))
-  on a scorer that counts refusals correctly
+- **v0.3.0, the first tagged release (November 2026,
+  [#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104)):**
+  a scorer that counts refusals correctly
   ([#202](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/202)),
   per-arm rates with win/tie/loss counts instead of a bare delta
   ([#203](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/203)),
   the stale committed graph files retired
-  ([#204](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/204))
-  and CPU-only torch in CI
-  ([#205](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/205)).
+  ([#204](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/204)),
+  CPU-only torch in CI
+  ([#205](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/205)),
+  the first valid evaluation run on golden set v2 reported in the README,
+  containers that report their version, and the tribunal, E2E, link-check and
+  shellcheck jobs promoted to required checks.
+
+## Now: v0.4.0 (November 2026)
+
+Wave W2, tracked in
+[#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164).
+
 - **v0.4.0, tagged by 22 November:** golden set v3 with strata, a
   rehearsal/final split and a frozen protocol
   ([#206](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/206));

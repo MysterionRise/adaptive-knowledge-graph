@@ -64,7 +64,6 @@ jobs:
         uses: ./.github/actions/setup-python-poetry
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          install-args: --without pyirt,pybkt
           assert-cpu-torch: "true"
 
       - name: Run mypy (paths from [tool.mypy] files)
@@ -99,7 +98,6 @@ jobs:
         uses: ./.github/actions/setup-python-poetry
         with:
           python-version: ${{ matrix.python-version }}
-          install-args: --without pyirt,pybkt
           cache: ${{ matrix.cache }}
           assert-cpu-torch: "true"
 
@@ -323,14 +321,14 @@ jobs:
           exit "${rc}"
 
   # ---------------------------------------------------------------------------
-  # Advisory gates: not in `All Checks Passed` yet. Release PR #104 promotes
-  # them by adding them to its `needs` and dropping `continue-on-error`.
+  # Required since v0.3.0 (#104): the tribunal suite, the link check, shellcheck
+  # and the E2E suite are in `All Checks Passed`. Only the full dependency scan
+  # below stays advisory.
   # ---------------------------------------------------------------------------
   tribunal:
-    name: Tribunal Tests (advisory)
+    name: Tribunal Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -340,7 +338,6 @@ jobs:
         uses: ./.github/actions/setup-python-poetry
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          install-args: --without pyirt,pybkt
           assert-cpu-torch: "true"
 
       - name: Run tribunal suite (adversarial risk register)
@@ -402,10 +399,9 @@ jobs:
           exit "${rc}"
 
   link-check:
-    name: Link Check (advisory)
+    name: Link Check
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -422,10 +418,9 @@ jobs:
           token: "" # not needed offline; keep the GITHUB_TOKEN away from the tool
 
   shellcheck:
-    name: Shellcheck (advisory)
+    name: Shellcheck
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -439,16 +434,14 @@ jobs:
           shellcheck scripts/*.sh
 
   # ---------------------------------------------------------------------------
-  # Advisory, on every PR, push and manual dispatch: `npm run test:e2e` runs
-  # the hermetic chromium project (API calls stubbed in tests/e2e/fixtures.ts,
-  # no backend needed). The release PR promotes it by adding it to
-  # `All Checks Passed` and dropping `continue-on-error`.
+  # On every PR, push and manual dispatch: `npm run test:e2e` runs the hermetic
+  # chromium project (API calls stubbed in tests/e2e/fixtures.ts, no backend
+  # needed). Required since v0.3.0.
   # ---------------------------------------------------------------------------
   e2e-tests:
-    name: E2E Tests (Playwright, advisory)
+    name: E2E Tests (Playwright)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    continue-on-error: true
     env:
       NEXT_TELEMETRY_DISABLED: "1"
     defaults:
@@ -494,6 +487,10 @@ jobs:
       - docs-check
       - security
       - dependency-diff
+      - tribunal
+      - link-check
+      - shellcheck
+      - e2e-tests
     if: always()
     steps:
       - name: Show required job results

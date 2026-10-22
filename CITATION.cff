@@ -13,6 +13,8 @@ authors:
 repository-code: "https://github.com/MysterionRise/adaptive-knowledge-graph"
 url: "https://github.com/MysterionRise/adaptive-knowledge-graph"
 license: MIT
+version: 0.3.0
+date-released: 2026-11-07
 keywords:
   - knowledge graph
   - retrieval-augmented generation

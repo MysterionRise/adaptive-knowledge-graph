@@ -7,13 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-The full list of changes from the v0.3.0 open-source quality sprint
+## [0.3.0] - 2026-11-07
+
+The first tagged release: the open-source quality sprint
 ([#105](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/105))
-is compiled in the release pull request
-([#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104)).
+and the first wave of the domain-at-a-time program, released through
+[#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104).
+The README's evaluation table reports the first valid run of the golden set
+(version 2, 53 cases) as per-arm rates with win/tie/loss counts; see
+`docs/evals/README.md`, "Reporting a comparison", for how to read it.
 
 ### Changed
 
+- The tribunal suite, the Playwright E2E suite, the offline link check and
+  shellcheck are now required checks: `All Checks Passed` fails when any of
+  them does. The full osv-scanner scan and `npm audit` stay advisory, because
+  a newly published advisory would otherwise block unrelated pull requests
+  ([#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104)).
 - On Linux x86_64 the lock now takes torch from the PyTorch CPU index
   (`pytorch-cpu`, an explicit source in `pyproject.toml`; wheel `2.10.0+cpu`)
   instead of the PyPI wheel, which pulled the CUDA 12.8 runtime (fifteen
@@ -162,6 +172,10 @@ is compiled in the release pull request
 
 ### Removed
 
+- The optional `pyirt` and `pybkt` dependency groups (`py-irt` and `pyBKT`
+  from git, Python 3.11 only). Nothing imported them: mastery uses the
+  in-tree BKT update. `poetry install` no longer needs
+  `--without pyirt,pybkt` ([#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104)).
 - The stale `data/processed/knowledge_graph_us_history.json` and
   `knowledge_graph_economics.json` (2.9 and 3.4 MB, built before the current
   builder: no PREREQ edges, definitions or aliases, and noise concepts such as
@@ -171,7 +185,7 @@ is compiled in the release pull request
 - Unused Python dependencies
   ([#93](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/93)).
   Recreate an existing virtual environment after upgrading
-  (`poetry env remove --all && poetry install --without pyirt,pybkt`, then
+  (`poetry env remove --all && poetry install`, then
   `make quickstart` to reinstall the spaCy model); syncing it in place can
   break `import spacy`. See CONTRIBUTING.md, "Upgrading an existing checkout".
 - `.env.demo` is no longer tracked. Copy `.env.demo.example` instead
@@ -179,6 +193,11 @@ is compiled in the release pull request
 
 ### Fixed
 
+- The Docker images now report the package version (`app_version`, the
+  OpenAPI `info.version` and `GET /api/v1/demo/provenance`). Both Dockerfiles
+  register the project after copying its sources, where the images used to
+  report `0.0.0+unknown`; the Docker Build workflow checks the version the
+  built image reports ([#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104)).
 - The evaluation's refusal detector no longer counts the phrase "provided
   context" as a refusal: the subject prompts tell the model to answer from
   "the provided context", so answers to the unsupported-claim cases that
@@ -250,4 +269,5 @@ history:
   local LLM through Ollama and a Next.js frontend; OpenSearch replaced Qdrant as
   the vector store.
 
-[Unreleased]: https://github.com/MysterionRise/adaptive-knowledge-graph/commits/main
+[Unreleased]: https://github.com/MysterionRise/adaptive-knowledge-graph/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/MysterionRise/adaptive-knowledge-graph/releases/tag/v0.3.0
