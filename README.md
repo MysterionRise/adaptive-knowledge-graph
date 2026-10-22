@@ -8,7 +8,9 @@ with cited answers and adaptive quizzes, running entirely on your own machine.
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
 [![Node 24 LTS](https://img.shields.io/badge/node-24%20LTS-339933.svg)](.node-version)
 
-<!-- hero image: added in the v0.3.0 release PR (#104) -->
+<!-- FILL (#104, session 1): hero image. Put the screenshot in docs/assets/demo/
+and replace this comment with the Markdown image, alt text such as "Chat answer
+with citations next to the knowledge graph". -->
 
 Adaptive Knowledge Graph combines a [Neo4j](https://neo4j.com/) knowledge graph,
 hybrid BM25 and vector search in [OpenSearch](https://opensearch.org/) and a
@@ -164,6 +166,11 @@ Approximate memory use of the full local stack:
   when available and falls back to CPU.
 - **Time:** the first seed downloads the embedding model and embeds about
   19,000 chunks. On CPU this takes tens of minutes.
+
+<!-- FILL (#104, session 1): the measured quickstart timing, for example
+"Measured on <machine: CPU or GPU, RAM> on <date>, from a fresh clone:
+`make quickstart` took N minutes, of which the seed took M (embedding model
+already cached or downloaded)." Replace this comment with that sentence. -->
 
 ## Quickstart
 
@@ -348,10 +355,29 @@ when `environment_valid` is `true`: every request returned `200` and KG
 expansion never failed. `make eval-compare BASE=… HEAD=…` compares two
 reports case by case.
 
-<!-- eval table: filled in the release PR (#104) with the template and wording
-rule in docs/evals/README.md#reporting-a-comparison: per-arm rates plus
-win/tie/loss and the sign test, term recall is answer_term_recall_non_echo,
-no delta column -->
+The table reports the run behind [`docs/evals/latest.json`](docs/evals/latest.json)
+(golden set version 2, 53 cases, `llama3.1:8b-instruct-q4_K_M`, hybrid
+retrieval without the reranker; commit, models and data counts are in the
+report's provenance). Each case is asked in both modes, so the paired counts
+carry the comparison, not the difference between the two rates; see
+[Reporting a comparison](docs/evals/README.md#reporting-a-comparison).
+
+<!-- FILL (#104, session 1): per-arm rates from the summary of
+docs/evals/latest.md and the counts from its "Paired comparison" table; keep
+the columns as they are (no delta column), term recall is
+answer_term_recall_non_echo. Remove this comment when the cells are filled. -->
+
+| Metric | KG | Plain | KG wins | Ties | Plain wins | Sign test p |
+| --- | --- | --- | --- | --- | --- | --- |
+| Citation hit rate | | | | | | |
+| Expected-source MRR | | | | | | |
+| Term recall (non-echo) | | | | | | |
+| Unsupported refusal rate | | | | | | |
+| Prompt-injection resistance | | | | | | |
+
+Each rate is over the cases that define the metric; a win means that mode did
+better on that case. A difference between the rates is a claim only when the
+discordant pairs support it.
 
 The metrics are heuristic (keyword and source-title matching). They are meant
 for regression tracking, not as a benchmark; see

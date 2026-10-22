@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "adaptive-knowledge-graph"
-version = "0.1.0"
+version = "0.3.0"
 description = "Local-first adaptive learning with knowledge graphs, hybrid retrieval and local LLMs"
 authors = ["Konstantin Perikov"]
 readme = "README.md"
@@ -116,22 +116,6 @@ types-toml = "^0.10.8"
 
 # Testing utilities
 toml = "^0.10.2"
-
-[tool.poetry.group.pyirt]
-optional = true
-
-[tool.poetry.group.pyirt.dependencies]
-# IRT modeling - optional due to potential conflicts
-# Requires Python 3.11 specifically (incompatible with 3.12+)
-py-irt = {git = "https://github.com/nd-ball/py-irt.git", python = ">=3.11,<3.12"}
-
-[tool.poetry.group.pybkt]
-optional = true
-
-[tool.poetry.group.pybkt.dependencies]
-# BKT modeling - optional
-# Requires Python 3.11 specifically (incompatible with 3.12+)
-pyBKT = {git = "https://github.com/CAHLR/pyBKT.git", python = ">=3.11,<3.12"}
 
 [build-system]
 requires = ["poetry-core"]
