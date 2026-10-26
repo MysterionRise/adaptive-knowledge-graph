@@ -18,7 +18,7 @@ repository-root `.env` through the optional `env_file` syntax, which needs
 | `api-cpu` | API image, CPU (`infra/docker/api.cpu.Dockerfile`) | `cpu`, `full` | 8000 |
 | `api-gpu` | API image, CUDA 12.8 (`infra/docker/api.gpu.Dockerfile`) | `gpu` | 8000 |
 | `frontend` | Next.js production build (`infra/docker/frontend.Dockerfile`) | `full` | 3000 |
-| `ollama` | `ollama/ollama:0.35.0` | `ollama` | 11434 |
+| `ollama` | `ollama/ollama:0.40.10` | `ollama` | 11434 |
 
 - **No profile:** Neo4j and OpenSearch only. This is what `make up` starts.
 - **`cpu`:** adds the API container on CPU.
