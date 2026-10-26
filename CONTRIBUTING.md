@@ -72,6 +72,42 @@ Regenerating the lock (`poetry lock`) needs access to
 `download.pytorch.org`, which some cloud sandboxes block; run it on a machine
 that can reach it. The torch version bump is tracked separately (#207).
 
+### Fixing an advisory in a transitive dependency
+
+The weekly dependency audit opens or updates a tracking issue titled
+"Dependency audit: open advisories and expiring allowlist entries" when
+`osv-scanner` finds fixable advisories on `main`, or when an allowlist entry
+expires within 30 days (see `.github/workflows/dependency-audit.yml`). Dependabot
+only bumps packages it declares, so a transitive package named in that issue
+will not appear in the weekly version-update groups.
+
+Clear it with a deliberate lockfile update for the package that needs the
+fixed release:
+
+```bash
+# Python (poetry.lock)
+poetry update <package>
+
+# Frontend (frontend/package-lock.json)
+cd frontend && npm update <package>
+```
+
+Open one pull request per lockfile for deliberate upgrades, so
+`poetry.lock` and `frontend/package-lock.json` changes are reviewed and
+merged separately (see the lockfile merge order in
+[#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164)).
+The required **Dependency Audit (new advisories)** job compares the change to
+the base branch and fails only if the pull request adds an advisory; see
+[docs/TESTING.md](docs/TESTING.md).
+
+If no fixed release exists yet, do not bump a lockfile. Add a time-boxed entry
+to [`osv-scanner.toml`](osv-scanner.toml) or
+[`frontend/osv-scanner.toml`](frontend/osv-scanner.toml) with a reason that
+names an issue and an `ignoreUntil` date at most 90 days out, as
+[SECURITY.md](SECURITY.md#accepted-risks) and `backend/tests/test_osv_audit.py`
+require. Prefer clearing the advisory with an update when a fixed release is
+available.
+
 ### Upgrading an existing checkout
 
 The v0.3.0 release removes many unused Python dependencies. Syncing an
