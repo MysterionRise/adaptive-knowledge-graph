@@ -113,10 +113,6 @@ If anyone other than you can reach the API, run it in production mode:
     tooling that is not in the production bundle, until a fixed release
     exists
     ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166)).
-  - `postcss-selector-parser` 6.1.4, a dev-only dependency of the frontend
-    CSS build (Tailwind 3) that is not in the production bundle. The fix is
-    only in 7.x, which needs Tailwind 4
-    ([#186](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/186)).
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
   read that key. An API key therefore only gates non-browser clients such as
