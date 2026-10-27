@@ -167,10 +167,11 @@ Approximate memory use of the full local stack:
 - **Time:** the first seed downloads the embedding model and embeds about
   19,000 chunks. On CPU this takes tens of minutes.
 
-<!-- FILL (#104, session 1): the measured quickstart timing, for example
-"Measured on <machine: CPU or GPU, RAM> on <date>, from a fresh clone:
-`make quickstart` took N minutes, of which the seed took M (embedding model
-already cached or downloaded)." Replace this comment with that sentence. -->
+Measured on an Apple M1 Max laptop (64 GB, embeddings on Apple Silicon) on
+27 October 2026, from a fresh clone: `make quickstart` took about 10 minutes,
+of which the seed took 9. The Poetry and npm caches and the embedding model
+were already on the machine; a first run on a new machine adds their
+downloads.
 
 ## Quickstart
 
