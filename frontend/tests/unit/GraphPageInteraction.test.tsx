@@ -19,10 +19,6 @@ jest.mock('@/lib/api-client', () => ({
   apiClient: { getGraphData: jest.fn() },
 }));
 
-jest.mock('@/components/SubjectPicker', () => function MockSubjectPicker() {
-  return null;
-});
-
 const cytoscape = cytoscapeModule as unknown as CytoscapeMock;
 const initialStoreState = useAppStore.getState();
 

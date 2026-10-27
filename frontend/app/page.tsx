@@ -20,8 +20,8 @@ import {
   BookOpen,
   ArrowRight,
   Sparkles,
+  ClipboardCheck,
 } from 'lucide-react';
-import SubjectPicker from '@/components/SubjectPicker';
 
 const TOP_CONCEPT_COUNT = 6;
 
@@ -39,7 +39,7 @@ export default function Home() {
   const topConcepts = useApiQuery(`top-concepts:${currentSubject}`, (signal) =>
     apiClient.getTopConceptsForSubject(TOP_CONCEPT_COUNT, currentSubject, { signal })
   );
-  // Only for the attribution footer; SubjectPicker shows its own errors.
+  // Only for the attribution footer; the SubjectPicker in the NavBar shows its own errors.
   const subjects = useApiQuery('subjects', (signal) => apiClient.getSubjects({ signal }));
   const availableSubjectNames = (subjects.data?.subjects ?? [])
     .filter(isSubjectAvailable)
@@ -57,32 +57,17 @@ export default function Home() {
   const topConceptNames = (topConcepts.data ?? []).map((concept) => concept.name);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Adaptive Knowledge Graph
-              </h1>
-              <p className="mt-2 text-gray-600">
-                Grounded AI tutoring over open textbooks
-              </p>
-            </div>
-            <SubjectPicker />
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
+    <>
+      {/* The product name is the hero heading: no header band on the home page */}
       <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero Section */}
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
-            Adaptive Learning Over
-            <span className="text-primary-600"> Open Textbooks</span>
-          </h2>
+          <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
+            Adaptive Knowledge Graph
+          </h1>
+          <p className="mt-3 text-2xl font-semibold text-primary-600">
+            Adaptive learning over open textbooks
+          </p>
           <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
             An open-source demo that combines a knowledge graph with retrieval-augmented
             generation over OpenStax textbooks: grounded answers with citations, adaptive
@@ -292,7 +277,7 @@ export default function Home() {
           <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
             Key Features
           </h3>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
             <FeatureCard
               title="Knowledge Map"
               description="Visualize concepts and their prerequisite relationships"
@@ -322,6 +307,12 @@ export default function Home() {
               description="Test your mastery with adaptive quizzes and instant remediation"
               icon={<GraduationCap className="w-6 h-6" />}
               link="/assessment"
+            />
+            <FeatureCard
+              title="Demo Status"
+              description="Checks that services, seeded data and the latest evaluation are ready"
+              icon={<ClipboardCheck className="w-6 h-6" />}
+              link="/demo-status"
             />
           </div>
         </div>
@@ -378,7 +369,7 @@ export default function Home() {
           </p>
         </div>
       </main>
-    </div>
+    </>
   );
 }
 

@@ -16,6 +16,7 @@ import { describeError } from '@/lib/api-errors';
 import type { DemoReadinessStatus, DemoStatusResponse } from '@/lib/types';
 import { useApiQuery } from '@/lib/useApiQuery';
 import ErrorMessage from '@/components/ErrorMessage';
+import PageHeader from '@/components/PageHeader';
 
 const statusLabels: Record<DemoReadinessStatus, string> = {
   ok: 'Ready',
@@ -74,16 +75,10 @@ export default function DemoStatusPage() {
   const status = error ? undefined : demoStatus.data;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Demo Status</h1>
-            <p className="text-sm text-gray-600">
-              Checks that the local services, the seeded subject data and the latest evaluation
-              are ready.
-            </p>
-          </div>
+    <>
+      <PageHeader
+        title="Demo Status"
+        actions={
           <button
             type="button"
             onClick={demoStatus.retry}
@@ -97,8 +92,8 @@ export default function DemoStatusPage() {
             )}
             Refresh
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <main id="main-content" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {isLoading && !status ? (
@@ -263,6 +258,6 @@ export default function DemoStatusPage() {
           </div>
         ) : null}
       </main>
-    </div>
+    </>
   );
 }

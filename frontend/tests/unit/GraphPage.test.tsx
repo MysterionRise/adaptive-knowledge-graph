@@ -11,13 +11,6 @@ jest.mock('@/lib/api-client', () => ({
   },
 }));
 
-// Mock SubjectPicker to avoid side effects
-jest.mock('@/components/SubjectPicker', () => {
-  return function MockSubjectPicker() {
-    return <div data-testid="subject-picker">Subject Picker</div>;
-  };
-});
-
 // Mock next/navigation
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -102,8 +95,6 @@ describe('GraphPage', () => {
       await renderGraphPage();
 
       expect(screen.getByRole('heading', { level: 1, name: 'Knowledge Graph Visualization' })).toBeInTheDocument();
-      expect(screen.getByText(/Explore concepts and their relationships/i)).toBeInTheDocument();
-      expect(screen.getByTestId('subject-picker')).toBeInTheDocument();
     });
 
     it('shows loading skeleton initially', () => {

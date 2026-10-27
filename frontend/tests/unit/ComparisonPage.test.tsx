@@ -11,10 +11,6 @@ jest.mock('@/lib/api-client', () => ({
   },
 }));
 
-jest.mock('@/components/SubjectPicker', () => function MockSubjectPicker() {
-  return <div data-testid="subject-picker" />;
-});
-
 // react-markdown is ESM-only; the real rendering is covered by the Playwright suite
 jest.mock('react-markdown', () => function MockMarkdown({ children }: { children: string }) {
   return <div data-testid="markdown">{children}</div>;
@@ -72,14 +68,13 @@ describe('ComparisonPage', () => {
   });
 
   describe('form', () => {
-    it('renders the heading, the question field and the subject picker', () => {
+    it('renders the heading and the question field', () => {
       render(<ComparisonPage />);
 
       expect(
         screen.getByRole('heading', { level: 1, name: 'KG-RAG vs Regular RAG Comparison' })
       ).toBeInTheDocument();
       expect(questionInput()).toHaveAttribute('placeholder', 'e.g., What caused the American Revolution?');
-      expect(screen.getByTestId('subject-picker')).toBeInTheDocument();
     });
 
     it('enables Compare only when a question is entered', () => {
