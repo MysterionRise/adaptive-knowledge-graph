@@ -22,15 +22,15 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "^16.4.2",
+    "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "cytoscape": "^3.34.4",
     "cytoscape-cose-bilkent": "^4.1.0",
     "axios": "^1.20.0",
-    "lucide-react": "^1.58.0",
+    "lucide-react": "^1.61.0",
     "react-markdown": "^10.1.0",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
@@ -46,9 +46,9 @@
     "jest-environment-jsdom": "^30.5.2",
     "typescript": "^5.6.0",
     "tailwindcss": "^3.4.19",
-    "postcss": "^8.5.30",
+    "postcss": "^8.5.31",
     "autoprefixer": "^10.6.1",
     "eslint": "^9.39.0",
-    "eslint-config-next": "^16.4.2"
+    "eslint-config-next": "^16.4.3"
   }
 }
