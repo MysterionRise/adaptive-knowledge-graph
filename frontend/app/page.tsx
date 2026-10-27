@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { describeError } from '@/lib/api-errors';
+import { MASTERY_BAND_LABELS, MASTERY_BAND_STYLES, masteryBand } from '@/lib/mastery';
 import { useAppStore } from '@/lib/store';
 import { isSubjectAvailable } from '@/lib/subjects';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -47,8 +48,9 @@ export default function Home() {
 
   // Calculate overall progress from mastery map
   const masteryEntries = Object.values(masteryMap);
-  const masteredCount = masteryEntries.filter(m => m.masteryLevel >= 0.7).length;
-  const inProgressCount = masteryEntries.filter(m => m.masteryLevel >= 0.3 && m.masteryLevel < 0.7).length;
+  const bands = masteryEntries.map((m) => masteryBand(m.masteryLevel));
+  const masteredCount = bands.filter((band) => band === 'mastered').length;
+  const inProgressCount = bands.filter((band) => band === 'in_progress').length;
   const totalTracked = masteryEntries.length;
   const overallMastery = totalTracked > 0
     ? masteryEntries.reduce((sum, m) => sum + m.masteryLevel, 0) / totalTracked
@@ -151,12 +153,16 @@ export default function Home() {
                   </div>
                   <div className="flex gap-6 text-center">
                     <div>
-                      <p className="text-2xl font-bold text-emerald-600">{masteredCount}</p>
-                      <p className="text-xs text-gray-500">Mastered</p>
+                      <p className={`text-2xl font-bold ${MASTERY_BAND_STYLES.mastered.text}`}>
+                        {masteredCount}
+                      </p>
+                      <p className="text-xs text-gray-500">{MASTERY_BAND_LABELS.mastered}</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-blue-600">{inProgressCount}</p>
-                      <p className="text-xs text-gray-500">In Progress</p>
+                      <p className={`text-2xl font-bold ${MASTERY_BAND_STYLES.in_progress.text}`}>
+                        {inProgressCount}
+                      </p>
+                      <p className="text-xs text-gray-500">{MASTERY_BAND_LABELS.in_progress}</p>
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-gray-400">{totalTracked}</p>
@@ -175,32 +181,29 @@ export default function Home() {
 
                 {/* Concept Progress List */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {Object.entries(masteryMap).slice(0, 6).map(([name, data]) => (
-                    <Link
-                      key={name}
-                      href={chatHref(name)}
-                      className="block p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-900 truncate">{name}</span>
-                        <span className={`text-xs font-semibold ${
-                          data.masteryLevel >= 0.7 ? 'text-emerald-600' :
-                          data.masteryLevel >= 0.4 ? 'text-blue-600' : 'text-gray-400'
-                        }`}>
-                          {Math.round(data.masteryLevel * 100)}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden" aria-hidden="true">
-                        <div
-                          className={`h-full transition-all ${
-                            data.masteryLevel >= 0.7 ? 'bg-emerald-500' :
-                            data.masteryLevel >= 0.4 ? 'bg-blue-500' : 'bg-gray-300'
-                          }`}
-                          style={{ width: `${data.masteryLevel * 100}%` }}
-                        />
-                      </div>
-                    </Link>
-                  ))}
+                  {Object.entries(masteryMap).slice(0, 6).map(([name, data]) => {
+                    const bandStyles = MASTERY_BAND_STYLES[masteryBand(data.masteryLevel)];
+                    return (
+                      <Link
+                        key={name}
+                        href={chatHref(name)}
+                        className="block p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900 truncate">{name}</span>
+                          <span className={`text-xs font-semibold ${bandStyles.text}`}>
+                            {Math.round(data.masteryLevel * 100)}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden" aria-hidden="true">
+                          <div
+                            className={`h-full transition-all ${bandStyles.bar}`}
+                            style={{ width: `${data.masteryLevel * 100}%` }}
+                          />
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             ) : (

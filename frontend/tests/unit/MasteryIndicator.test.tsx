@@ -120,7 +120,7 @@ describe('MasteryIndicator', () => {
   });
 
   describe('Color Coding', () => {
-    it('uses red color for low mastery (< 0.4)', () => {
+    it('uses the to-learn colour for low mastery (< 0.4)', () => {
       const { container } = render(
         <MasteryIndicator
           mastery={0.2}
@@ -129,12 +129,10 @@ describe('MasteryIndicator', () => {
         />
       );
 
-      // Check that the SVG circle uses red stroke
-      const circles = container.querySelectorAll('circle');
-      expect(circles.length).toBeGreaterThan(0);
+      expect(container.querySelector('circle.stroke-gray-300')).toBeInTheDocument();
     });
 
-    it('uses yellow color for medium mastery (0.4-0.7)', () => {
+    it('uses the in-progress colour for medium mastery (0.4-0.7)', () => {
       const { container } = render(
         <MasteryIndicator
           mastery={0.55}
@@ -143,11 +141,10 @@ describe('MasteryIndicator', () => {
         />
       );
 
-      const circles = container.querySelectorAll('circle');
-      expect(circles.length).toBeGreaterThan(0);
+      expect(container.querySelector('circle.stroke-blue-500')).toBeInTheDocument();
     });
 
-    it('uses green color for high mastery (> 0.7)', () => {
+    it('uses the mastered colour for high mastery (>= 0.7)', () => {
       const { container } = render(
         <MasteryIndicator
           mastery={0.85}
@@ -156,8 +153,20 @@ describe('MasteryIndicator', () => {
         />
       );
 
-      const circles = container.querySelectorAll('circle');
-      expect(circles.length).toBeGreaterThan(0);
+      expect(container.querySelector('circle.stroke-emerald-500')).toBeInTheDocument();
+      expect(container.querySelector('.h-full.bg-emerald-500')).not.toBeInTheDocument();
+    });
+
+    it('colours the progress bar of the full indicator the same way', () => {
+      const { container } = render(
+        <MasteryIndicator
+          mastery={0.7}
+          targetDifficulty="hard"
+        />
+      );
+
+      expect(container.querySelector('circle.stroke-emerald-500')).toBeInTheDocument();
+      expect(container.querySelector('.h-full.bg-emerald-500')).toBeInTheDocument();
     });
   });
 

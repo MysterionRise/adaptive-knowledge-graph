@@ -217,9 +217,25 @@ describe('LearningPath Component', () => {
       render(<LearningPath conceptName="Advanced Topic" />);
       await screen.findByText('Basic Concept');
 
+      // The unassessed target (initial mastery 0.3) is still to learn
       expect(screen.getByText('Mastered').nextSibling).toHaveTextContent('1');
+      expect(screen.getByText('In Progress').nextSibling).toHaveTextContent('0');
+      expect(screen.getByText('To Learn').nextSibling).toHaveTextContent('2');
+    });
+
+    it('counts a partly learned concept as in progress', async () => {
+      useAppStore.setState({
+        masteryMap: {
+          'Intermediate Concept': { conceptName: 'Intermediate Concept', masteryLevel: 0.5, attempts: 1, lastAssessed: null },
+        },
+      });
+
+      render(<LearningPath conceptName="Advanced Topic" />);
+      await screen.findByText('Basic Concept');
+
+      expect(screen.getByText('Mastered').nextSibling).toHaveTextContent('0');
       expect(screen.getByText('In Progress').nextSibling).toHaveTextContent('1');
-      expect(screen.getByText('To Learn').nextSibling).toHaveTextContent('1');
+      expect(screen.getByText('To Learn').nextSibling).toHaveTextContent('2');
     });
   });
 
