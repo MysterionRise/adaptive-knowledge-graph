@@ -167,6 +167,12 @@ class LLMConnectionError(AdaptiveKGException):
     pass
 
 
+class LLMTimeoutError(LLMGenerationError):
+    """The model did not answer within LLM_TIMEOUT or LLM_STREAM_TIMEOUT (not retried)."""
+
+    pass
+
+
 class QuizGenerationError(AdaptiveKGException):
     """Failed to generate quiz."""
 
