@@ -24,7 +24,7 @@ export default function NavBar() {
 
   return (
     <nav aria-label="Main" className="bg-gray-900 text-gray-100">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 overflow-x-auto px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-nav max-w-7xl items-center gap-4 overflow-x-auto px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           aria-current={pathname === '/' ? 'page' : undefined}

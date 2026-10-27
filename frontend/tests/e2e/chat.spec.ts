@@ -46,9 +46,15 @@ test.describe('Chat Page', () => {
     }
     await expect(page.getByText(tutorAnswer.attribution)).toBeVisible();
     await expect(page.getByText(`Model: ${tutorAnswer.model}`)).toBeVisible();
+    await expect(page.getByText('KG expansion: ok')).toBeVisible();
+    await expect(page.getByText(`${tutorAnswer.sources.length} chunks retrieved`)).toBeVisible();
+    await expect(page.getByText('4 after window expansion')).toBeVisible();
     await expect(page.getByRole('log')).toHaveAttribute('aria-busy', 'false');
 
-    await page.getByRole('button', { name: 'Show Sources (2)' }).click();
+    const firstSource = page.getByRole('button', { name: /^Source 1/ });
+    await expect(firstSource).toHaveAttribute('aria-expanded', 'false');
+    await firstSource.click();
+    await expect(firstSource).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByText(tutorAnswer.sources[0].text)).toBeVisible();
     await expect(page.getByText(tutorAnswer.sources[0].section)).toBeVisible();
     await expect(page.getByText(tutorAnswer.sources[1].section)).toBeVisible();

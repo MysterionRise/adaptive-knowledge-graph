@@ -53,6 +53,8 @@ export interface QuestionResponse {
   /** Omitted by backends older than v0.4.0. */
   kg_expansion_status?: KGExpansionStatus;
   retrieved_count: number;
+  /** Chunks after window expansion; null when window retrieval is off. */
+  window_expanded_count?: number | null;
   model: string;
   attribution: string;
 }
@@ -66,7 +68,7 @@ export interface StreamMetadata {
   expanded_concepts?: string[] | null;
   kg_expansion_status?: KGExpansionStatus;
   retrieved_count?: number;
-  window_expanded_count?: number;
+  window_expanded_count?: number | null;
   model?: string;
   attribution?: string;
 }
