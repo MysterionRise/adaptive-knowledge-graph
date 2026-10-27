@@ -12,6 +12,20 @@ test.describe('Demo Status Page', () => {
     await expect(page.getByText('US History', { exact: true })).toBeVisible();
   });
 
+  test('shows the evaluation metrics and the script readiness checks', async ({ page }) => {
+    await page.goto('/demo-status');
+
+    await expect(page.getByRole('heading', { name: 'Latest Evaluation' })).toBeVisible();
+    await expect(page.getByText('+12.5 pp')).toBeVisible();
+    await expect(page.getByText('+0.083')).toBeVisible();
+    await expect(page.getByText('85%')).toBeVisible();
+
+    await expect(page.getByRole('heading', { name: 'Script Readiness' })).toBeVisible();
+    await expect(page.getByText('Language model configured')).toBeVisible();
+    await expect(page.getByText('Latest evaluation valid')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Language model' })).toBeVisible();
+  });
+
   test('explains how to recover when the API is unreachable', async ({ page, api }) => {
     api.on('GET /demo/status', { status: 502, json: { detail: 'Bad gateway' } });
 

@@ -23,15 +23,26 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Props the (mocked) KnowledgeGraph received on each render
-var mockGraphRenders: Array<{ onNodeClick?: unknown; chapterColors?: unknown }>;
+var mockGraphRenders: Array<{
+  onNodeClick?: unknown;
+  onBackgroundClick?: unknown;
+  chapterColors?: unknown;
+}>;
 
 // Mock next/dynamic to avoid SSR issues
 jest.mock('next/dynamic', () => {
   mockGraphRenders = [];
   return function dynamic() {
     // Return a mock component
-    return function MockKnowledgeGraph({ data, onNodeClick, highlightedConcepts, className, chapterColors }: any) {
-      mockGraphRenders.push({ onNodeClick, chapterColors });
+    return function MockKnowledgeGraph({
+      data,
+      onNodeClick,
+      onBackgroundClick,
+      highlightedConcepts,
+      className,
+      chapterColors,
+    }: any) {
+      mockGraphRenders.push({ onNodeClick, onBackgroundClick, chapterColors });
       return (
         <div data-testid="knowledge-graph" className={className}>
           <div data-testid="graph-nodes">{data?.nodes?.length || 0} nodes</div>
@@ -41,9 +52,14 @@ jest.mock('next/dynamic', () => {
           )}
           <button
             data-testid="mock-node-click"
-            onClick={() => onNodeClick?.('node-1', 'Test Concept')}
+            onClick={() =>
+              onNodeClick?.('node-1', 'Test Concept', { importance: 0.8, connections: 2 })
+            }
           >
             Click Node
+          </button>
+          <button data-testid="mock-background-click" onClick={() => onBackgroundClick?.()}>
+            Click Background
           </button>
         </div>
       );
@@ -130,6 +146,12 @@ describe('GraphPage', () => {
       expect(screen.getByTestId('knowledge-graph')).toBeInTheDocument();
     });
 
+    it('sizes the graph to the viewport', async () => {
+      await renderGraphPage();
+
+      expect(screen.getByTestId('knowledge-graph')).toHaveClass('min-h-[480px]');
+    });
+
     it('displays graph stats after loading', async () => {
       await renderGraphPage();
 
@@ -209,6 +231,16 @@ describe('GraphPage', () => {
 
       expect(screen.getByText('Selected Concept')).toBeInTheDocument();
       expect(screen.getByText('Test Concept')).toBeInTheDocument();
+      expect(screen.getByText('Importance 80% · 2 connections')).toBeInTheDocument();
+    });
+
+    it('clears the selected concept when the background is clicked', async () => {
+      await renderGraphPage();
+      fireEvent.click(screen.getByTestId('mock-node-click'));
+
+      fireEvent.click(screen.getByTestId('mock-background-click'));
+
+      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
     });
 
     it('navigates to chat with question when Ask AI Tutor is clicked', async () => {
@@ -227,8 +259,10 @@ describe('GraphPage', () => {
       act(() => useAppStore.getState().setHighlightedConcepts(['Concept 1']));
 
       const handlers = new Set(mockGraphRenders.map((props) => props.onNodeClick));
+      const backgroundHandlers = new Set(mockGraphRenders.map((props) => props.onBackgroundClick));
       expect(mockGraphRenders.length).toBeGreaterThan(1);
       expect(handlers.size).toBe(1);
+      expect(backgroundHandlers.size).toBe(1);
     });
 
     it('does not re-render the graph for unrelated store updates', async () => {
