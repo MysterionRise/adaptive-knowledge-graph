@@ -152,9 +152,12 @@ Show `/demo-status`, `docs/evals/latest.md` and the CI and test summary.
 
 Talking points:
 
-- local-only LLM mode
+- local-only LLM mode by default, a hosted model by configuration
 - readiness checks
-- KG versus plain retrieval evaluation
+- KG versus plain retrieval evaluation: quote the per-arm rates with the
+  paired win, tie and loss counts from `docs/evals/latest.md`, not a headline
+  difference. When the sign test does not support a difference (as on the
+  October 2026 run), say so: the harness exists to show exactly that
 - refusal rate on unsupported questions
 - clear limitations
 
