@@ -40,7 +40,7 @@ cd frontend && npm run dev
 
 ### Data available
 
-US History and Economics are seeded, with about 19,000 chunks in total. For the
+US History and Economics are seeded, with about 16,600 chunks in total. For the
 current concept, module and relationship counts, call
 `curl http://localhost:8000/api/v1/graph/stats` (they change whenever the
 knowledge-graph pipeline changes).

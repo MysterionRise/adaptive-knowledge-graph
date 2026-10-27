@@ -165,7 +165,7 @@ Approximate memory use of the full local stack:
 - **GPU:** optional. `EMBEDDING_DEVICE=auto` uses CUDA or Apple Silicon (MPS)
   when available and falls back to CPU.
 - **Time:** the first seed downloads the embedding model and embeds about
-  19,000 chunks. On CPU this takes tens of minutes.
+  16,600 chunks. On CPU this takes tens of minutes.
 
 Measured on an Apple M1 Max laptop (64 GB, embeddings on Apple Silicon) on
 27 October 2026, from a fresh clone: `make quickstart` took about 10 minutes,
