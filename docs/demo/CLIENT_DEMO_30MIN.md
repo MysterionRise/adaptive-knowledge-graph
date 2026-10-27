@@ -37,6 +37,25 @@ Open:
 - `http://localhost:3000/assessment`
 - `http://localhost:8000/docs`
 
+## Model
+
+The answers come from the language model named in `.env`. Two configurations
+are rehearsed:
+
+- **Local (default):** `LLM_MODE=local` and `PRIVACY_LOCAL_ONLY=true`. Ollama
+  runs `llama3.1:8b-instruct-q4_K_M` on the laptop and the API refuses any
+  remote call.
+- **Hosted:** `LLM_MODE=remote`, `PRIVACY_LOCAL_ONLY=false`,
+  `OPENROUTER_BASE_URL` pointing at an OpenAI-compatible endpoint, plus
+  `OPENROUTER_MODEL` and `OPENROUTER_API_KEY`. Questions and retrieved excerpts
+  go to that provider. `/demo-status` names the model that answers, and so
+  should you.
+
+Switching is one edit to `.env` and an API restart (about ten seconds).
+Retrieval, the graph, the quizzes and the evaluation evidence are the same in
+both. The evaluation report itself is always produced in local mode: the gate
+requires the local model digest, so run `make demo-eval` before switching.
+
 ## Script
 
 ### 0–3 min: The problem
@@ -58,8 +77,9 @@ Talking points:
 - Neo4j models concepts, prerequisites, related ideas and the textbook
   modules that cover them.
 - OpenSearch provides hybrid lexical and vector retrieval.
-- Ollama keeps inference local; with `PRIVACY_LOCAL_ONLY=true` the API cannot
-  call a remote model.
+- The language model is a configuration choice: Ollama runs it locally by
+  default, and `PRIVACY_LOCAL_ONLY=true` then refuses any remote call. A hosted
+  model is one variable away; retrieval, graph and evidence do not change.
 - SQLite stores synthetic learner mastery for the demo.
 - Evaluation reports separate evidence from claims.
 
@@ -68,6 +88,13 @@ Talking points:
 Open the **AI Tutor** (`/chat`).
 
 Ask:
+
+```text
+What was the Stamp Act and how did it lead to colonial resistance?
+```
+
+Then, if time allows, the broader question (it pulls in more tangential
+passages, which is a good moment to show the sources):
 
 ```text
 What caused the American Revolution?
@@ -148,9 +175,12 @@ Describe what a constrained pilot would look like (see the
 - **Neo4j unavailable:** show the architecture, API docs and evaluation design.
 - **OpenSearch unavailable:** show the graph and explain the retrieval
   dependency.
-- **Ollama unavailable:** show `/demo-status`, the docs and the API contracts.
-  Do not switch to a remote model unless the audience has explicitly approved
-  it.
+- **Hosted model unavailable:** set `LLM_MODE=local` and
+  `PRIVACY_LOCAL_ONLY=true` in `.env`, restart the API and continue with the
+  local model. Say so.
+- **Ollama unavailable (local mode):** show `/demo-status`, the docs and the
+  API contracts. Switch to a hosted model only if the audience accepts that
+  questions and excerpts leave the machine, and say which model answers.
 - **Frontend unavailable:** use `/docs` and the `curl` examples in the
   [technical playbook](DEMO_PLAYBOOK.md).
 
