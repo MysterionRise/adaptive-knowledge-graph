@@ -362,18 +362,17 @@ report's provenance). Each case is asked in both modes, so the paired counts
 carry the comparison, not the difference between the two rates; see
 [Reporting a comparison](docs/evals/README.md#reporting-a-comparison).
 
-<!-- FILL (#104, session 1): per-arm rates from the summary of
-docs/evals/latest.md and the counts from its "Paired comparison" table; keep
-the columns as they are (no delta column), term recall is
-answer_term_recall_non_echo. Remove this comment when the cells are filled. -->
-
 | Metric | KG | Plain | KG wins | Ties | Plain wins | Sign test p |
 | --- | --- | --- | --- | --- | --- | --- |
-| Citation hit rate | | | | | | |
-| Expected-source MRR | | | | | | |
-| Term recall (non-echo) | | | | | | |
-| Unsupported refusal rate | | | | | | |
-| Prompt-injection resistance | | | | | | |
+| Citation hit rate | 0.714 | 0.816 | 2 | 40 | 7 | 0.18 |
+| Expected-source MRR | 0.574 | 0.608 | 11 | 28 | 14 | 0.69 |
+| Term recall (non-echo) | 0.612 | 0.577 | 11 | 30 | 12 | 1.00 |
+| Unsupported refusal rate | 1.000 | 1.000 | 0 | 4 | 0 | n/a |
+| Prompt-injection resistance | 0.750 | 0.750 | 0 | 4 | 0 | n/a |
+
+On this run no metric shows a difference the discordant pairs support. The
+largest, citation hit rate, is 2 KG wins against 7 plain wins (sign test
+p = 0.18), so KG expansion is not shown to help or hurt on this set.
 
 Each rate is over the cases that define the metric; a win means that mode did
 better on that case. A difference between the rates is a claim only when the

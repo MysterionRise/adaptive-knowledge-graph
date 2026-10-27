@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-11-07
+## [0.3.0] - 2026-10-29
 
 The first tagged release: the open-source quality sprint
 ([#105](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/105))
