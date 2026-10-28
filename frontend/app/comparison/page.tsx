@@ -303,7 +303,7 @@ function ComparisonResult({ response, showKGInfo }: ComparisonResultProps) {
       {/* Answer */}
       <div>
         <h4 className="text-sm font-semibold text-gray-700 mb-2">Answer:</h4>
-        <MarkdownContent>{response.answer}</MarkdownContent>
+        <MarkdownContent className="text-sm">{response.answer}</MarkdownContent>
       </div>
 
       {/* KG Expansion Info */}

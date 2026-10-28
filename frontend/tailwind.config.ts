@@ -8,6 +8,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      spacing: {
+        // Height of the site nav bar (NavBar.tsx): pages that fill the viewport subtract it.
+        nav: '2.75rem',
+      },
       colors: {
         primary: {
           50: '#f0f9ff',

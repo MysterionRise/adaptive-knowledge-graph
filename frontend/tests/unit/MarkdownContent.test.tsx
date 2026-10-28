@@ -17,6 +17,27 @@ describe('MarkdownContent', () => {
     expect(screen.getByTestId('markdown').parentElement).toHaveClass('extra');
   });
 
+  it('renders the trailing node after the Markdown', () => {
+    render(
+      <MarkdownContent trailing={<span data-testid="cursor" />}>{'Streaming'}</MarkdownContent>
+    );
+
+    const markdown = screen.getByTestId('markdown');
+    const cursor = screen.getByTestId('cursor');
+    expect(markdown.parentElement).toContainElement(cursor);
+    expect(markdown.compareDocumentPosition(cursor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The last paragraph becomes inline so the node sits on its last line
+    expect(markdown.parentElement).toHaveClass('[&>p:last-of-type]:inline');
+  });
+
+  it('keeps the last paragraph block-level without a trailing node', () => {
+    render(<MarkdownContent>{'Done'}</MarkdownContent>);
+
+    expect(screen.getByTestId('markdown').parentElement).not.toHaveClass(
+      '[&>p:last-of-type]:inline'
+    );
+  });
+
   it('does not render images from the answer', () => {
     render(<MarkdownContent>{'![tracker](https://example.com/pixel.png)'}</MarkdownContent>);
 
