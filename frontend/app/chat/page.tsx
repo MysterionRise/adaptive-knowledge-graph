@@ -426,7 +426,8 @@ function RetrievalSummary({ response }: { response: QuestionResponse }) {
 const SOURCE_PREVIEW_LENGTH = 240;
 
 const sourceTitle = (source: Source) => source.section ?? source.module_title ?? 'Source';
-const sourceScore = (source: Source) => `${((source.score ?? 0) * 100).toFixed(0)}%`;
+// No score: with hybrid retrieval it is a rank-fusion value (at most about 0.03), not a
+// relevance percentage, so the numbering carries the order.
 
 /** Numbered source chips; at most one source's text is open at a time. */
 function SourceList({ sources }: { sources: Source[] }) {
@@ -469,8 +470,7 @@ function SourceList({ sources }: { sources: Source[] }) {
               >
                 <span className="sr-only">Source </span>
                 <span className="rounded-full bg-gray-100 px-1.5 font-mono text-xs">{index + 1}</span>{' '}
-                <span>{sourceTitle(source)}</span>{' '}
-                <span className="text-gray-400">{sourceScore(source)}</span>
+                <span>{sourceTitle(source)}</span>
               </button>
             </li>
           );
@@ -482,10 +482,9 @@ function SourceList({ sources }: { sources: Source[] }) {
           id={panelId(openIndex)}
           className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm"
         >
-          <div className="mb-2 flex flex-wrap items-center gap-x-2 text-xs text-gray-600">
-            {open.chapter && <span className="font-medium">{open.chapter}</span>}
-            <span className="ml-auto text-gray-500">{`Score: ${sourceScore(open)}`}</span>
-          </div>
+          {open.chapter && (
+            <div className="mb-2 text-xs font-medium text-gray-600">{open.chapter}</div>
+          )}
           <p className="text-gray-700">{text}</p>
           {isLong && (
             <button
