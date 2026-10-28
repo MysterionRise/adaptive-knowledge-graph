@@ -27,6 +27,8 @@ curl http://localhost:11434/api/tags
 #    RERANKER_ENABLED=true
 #    STUDENT_BKT_ENABLED=true
 #    RERANKER_DEVICE=cpu
+#    (.env.demo.example keeps RERANKER_ENABLED=false; enable the reranker only
+#    when its model is already cached and warmed up, otherwise leave it off)
 
 # 4. Start the API (restart it after changing .env)
 make run-api
