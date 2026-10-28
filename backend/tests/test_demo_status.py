@@ -29,7 +29,7 @@ class TestDemoStatusEndpoint:
 
         monkeypatch.setattr(demo, "_check_neo4j", ok_neo4j)
         monkeypatch.setattr(demo, "_check_opensearch", ok_opensearch)
-        monkeypatch.setattr(demo, "_check_ollama", ok_ollama)
+        monkeypatch.setattr(demo, "_check_llm", ok_ollama)
         monkeypatch.setattr(
             demo,
             "_subject_statuses",
@@ -62,7 +62,96 @@ class TestDemoStatusEndpoint:
         payload = response.json()
         assert payload["status"] == "ready"
         assert payload["script_readiness"]["latest_eval_valid"] is True
+        assert payload["script_readiness"]["llm_ready"] is True
         assert payload["next_actions"] == []
+
+    def test_demo_status_remote_mode_without_key_names_the_fix(self, client, monkeypatch):
+        """A hosted model that is not configured yet is reported with its own next action."""
+
+        async def ok_service():
+            return demo.DemoServiceStatus(status="ok")
+
+        async def unconfigured_llm():
+            return demo.DemoServiceStatus(status="error", message="not configured")
+
+        monkeypatch.setattr(settings, "llm_mode", "remote")
+        monkeypatch.setattr(demo, "_check_neo4j", ok_service)
+        monkeypatch.setattr(demo, "_check_opensearch", ok_service)
+        monkeypatch.setattr(demo, "_check_llm", unconfigured_llm)
+        monkeypatch.setattr(
+            demo,
+            "_subject_statuses",
+            lambda: [demo.DemoSubjectStatus(id="us_history", name="US History", status="ok")],
+        )
+        monkeypatch.setattr(demo, "_latest_eval_status", lambda: demo.DemoEvalStatus(status="ok"))
+
+        payload = client.get("/api/v1/demo/status").json()
+
+        assert payload["status"] == "degraded"
+        assert payload["script_readiness"]["llm_ready"] is False
+        assert payload["next_actions"] == [
+            "Set OPENROUTER_API_KEY and OPENROUTER_MODEL for the hosted model, "
+            "then restart the API."
+        ]
+
+
+def _ollama_tags(*names: str) -> httpx.Response:
+    return httpx.Response(200, json={"models": [{"name": name} for name in names]})
+
+
+@pytest.mark.unit
+class TestLlmCheck:
+    """The LLM check follows LLM_MODE: Ollama probe, or the configured hosted model."""
+
+    def test_remote_mode_is_ready_without_a_paid_request(self, monkeypatch):
+        monkeypatch.setattr(settings, "llm_mode", "remote")
+        monkeypatch.setattr(settings, "openrouter_api_key", "sk-ant-secret-key")
+        monkeypatch.setattr(settings, "openrouter_model", "claude-sonnet-5-5")
+        monkeypatch.setattr(settings, "openrouter_base_url", "https://api.anthropic.com/v1")
+
+        with patch.object(httpx.AsyncClient, "get", AsyncMock()) as get:
+            status = asyncio.run(demo._check_llm())
+
+        assert status.status == "ok"
+        assert status.message == (
+            "remote model claude-sonnet-5-5 via api.anthropic.com (PRIVACY_LOCAL_ONLY=false)"
+        )
+        assert "secret" not in status.message
+        get.assert_not_called()
+
+    def test_remote_mode_without_key_is_an_error(self, monkeypatch):
+        monkeypatch.setattr(settings, "llm_mode", "remote")
+        monkeypatch.setattr(settings, "openrouter_api_key", "")
+
+        status = asyncio.run(demo._check_llm())
+
+        assert status.status == "error"
+        assert "OPENROUTER_API_KEY" in str(status.message)
+
+    def test_hybrid_mode_probes_ollama_and_names_the_fallback(self, monkeypatch):
+        monkeypatch.setattr(settings, "llm_mode", "hybrid")
+        monkeypatch.setattr(settings, "openrouter_model", "claude-haiku-5-5")
+
+        with patch.object(
+            httpx.AsyncClient,
+            "get",
+            AsyncMock(return_value=_ollama_tags(settings.llm_local_model)),
+        ):
+            status = asyncio.run(demo._check_llm())
+
+        assert status.status == "ok"
+        assert status.message == "local model with remote fallback to claude-haiku-5-5"
+
+    def test_local_mode_probes_ollama(self, monkeypatch):
+        monkeypatch.setattr(settings, "llm_mode", "local")
+
+        with patch.object(
+            httpx.AsyncClient, "get", AsyncMock(return_value=_ollama_tags("other:latest"))
+        ):
+            status = asyncio.run(demo._check_llm())
+
+        assert status.status == "degraded"
+        assert str(status.message).startswith("Configured model not found")
 
     def test_demo_status_degraded_when_eval_invalid(self, client, monkeypatch):
         """A seeded local stack with an invalid eval report is not marked ready."""
@@ -72,7 +161,7 @@ class TestDemoStatusEndpoint:
 
         monkeypatch.setattr(demo, "_check_neo4j", ok_service)
         monkeypatch.setattr(demo, "_check_opensearch", ok_service)
-        monkeypatch.setattr(demo, "_check_ollama", ok_service)
+        monkeypatch.setattr(demo, "_check_llm", ok_service)
         monkeypatch.setattr(
             demo,
             "_subject_statuses",

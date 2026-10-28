@@ -23,7 +23,7 @@ follow the [Quickstart](../../README.md#quickstart).
 | Grounded tutoring | KG-aware answers with citations, source snippets, expanded concepts and streaming |
 | Knowledge graph | Neo4j concepts and modules with prerequisite, related-concept and coverage edges |
 | Retrieval | OpenSearch hybrid BM25 + vector retrieval with an optional reranker |
-| Local-first LLM | Ollama by default; with `PRIVACY_LOCAL_ONLY=true` remote providers cannot be used |
+| Local-first LLM | Ollama by default; with `PRIVACY_LOCAL_ONLY=true` remote providers cannot be used. A hosted model (`LLM_MODE=remote`, `PRIVACY_LOCAL_ONLY=false`, `OPENROUTER_BASE_URL` pointing at any OpenAI-compatible endpoint) shows on `/demo-status` as the model that answers; the evaluation evidence is still produced in local mode |
 | Adaptive practice | LLM-generated quizzes, synthetic mastery state, target difficulty and recommendations |
 | Demo operations | `/demo-status` page, strict `make demo-client-check`, reset script, Node version pinned in `.node-version` |
 | Evaluation | 53 OpenStax golden cases comparing KG-expanded retrieval with plain retrieval |
@@ -66,6 +66,11 @@ pull the Ollama model first.
    API after a commit: the gate rejects a report whose server commit differs
    from the checkout's.
 
+   The evaluation runs with the local model (the gate requires its digest). To
+   answer with a hosted model during the demo, switch `.env` afterwards (see
+   the [Model section of the 30-minute script](CLIENT_DEMO_30MIN.md#model))
+   and restart the API; `/demo-status` then names that model.
+
 5. Between rehearsals, reset the synthetic learner state:
 
    ```bash
@@ -81,6 +86,20 @@ Pages to have open:
 
 After `make demo-client-check` passes, capture screenshots and a short
 walkthrough with the [asset capture checklist](DEMO_ASSET_CAPTURE.md).
+
+## Warm-up checklist (45 minutes before a live demo)
+
+1. `make up`, then start Ollama even when a hosted model answers: `make doctor`
+   and the local fallback need it.
+2. Set the model in `.env` (local or hosted), `make run-api`, and check that
+   `/demo-status` names the expected model.
+3. Serve the production frontend build, not the dev server:
+   `cd frontend && npm run build && npm run start`.
+4. `make demo-client-check`.
+5. Open `/`, `/demo-status`, `/graph`, `/chat`, `/assessment` and `/docs`; ask
+   one question to warm the caches; `make demo-client-reset`.
+6. Have the screenshots and the recording from the asset checklist open as a
+   backup, close DevTools, mute notifications, set the browser zoom to 125%.
 
 ## Evaluation caveat
 
