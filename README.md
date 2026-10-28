@@ -8,9 +8,7 @@ with cited answers and adaptive quizzes, running entirely on your own machine.
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
 [![Node 24 LTS](https://img.shields.io/badge/node-24%20LTS-339933.svg)](.node-version)
 
-<!-- FILL (#104, session 1): hero image. Put the screenshot in docs/assets/demo/
-and replace this comment with the Markdown image, alt text such as "Chat answer
-with citations next to the knowledge graph". -->
+![The AI tutor answering a US History question with numbered citations, the related concepts found in the knowledge graph and an open source passage](docs/assets/demo/03-chat-citations.png)
 
 Adaptive Knowledge Graph combines a [Neo4j](https://neo4j.com/) knowledge graph,
 hybrid BM25 and vector search in [OpenSearch](https://opensearch.org/) and a
