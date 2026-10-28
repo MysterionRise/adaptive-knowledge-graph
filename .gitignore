@@ -181,3 +181,6 @@ logs/
 # Claude Code local settings and worktrees
 .claude/settings.local.json
 .claude/worktrees/
+
+# Demo recordings are attached to the GitHub release (over the 1,000 KB pre-commit limit)
+docs/assets/demo/*.mp4
