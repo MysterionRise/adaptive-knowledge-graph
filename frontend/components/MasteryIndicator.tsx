@@ -1,6 +1,7 @@
 'use client';
 
 import { Zap, TrendingUp, Target } from 'lucide-react';
+import { MASTERY_BAND_STYLES, masteryBand } from '@/lib/mastery';
 
 interface MasteryIndicatorProps {
   mastery: number; // 0.0 - 1.0
@@ -23,12 +24,8 @@ export default function MasteryIndicator({
 }: MasteryIndicatorProps) {
   const percentage = Math.round(mastery * 100);
 
-  // Color gradient based on mastery: Red (0-40%) -> Yellow (40-70%) -> Green (70-100%)
-  const getColor = () => {
-    if (mastery < 0.4) return { bg: 'bg-red-500', text: 'text-red-700', light: 'bg-red-100' };
-    if (mastery <= 0.7) return { bg: 'bg-yellow-500', text: 'text-yellow-700', light: 'bg-yellow-100' };
-    return { bg: 'bg-green-500', text: 'text-green-700', light: 'bg-green-100' };
-  };
+  // Same bands and colours as the other mastery displays (the difficulty badge has its own)
+  const bandStyles = MASTERY_BAND_STYLES[masteryBand(mastery)];
 
   const getDifficultyBadge = () => {
     const badges = {
@@ -39,7 +36,6 @@ export default function MasteryIndicator({
     return badges[targetDifficulty];
   };
 
-  const color = getColor();
   const diffBadge = getDifficultyBadge();
 
   if (compact) {
@@ -60,7 +56,7 @@ export default function MasteryIndicator({
               cy="16"
               r="12"
               strokeWidth="3"
-              className={`fill-none ${color.bg.replace('bg-', 'stroke-')}`}
+              className={`fill-none ${bandStyles.stroke}`}
               style={{
                 strokeDasharray: 75.4,
                 strokeDashoffset: 75.4 - (75.4 * mastery),
@@ -115,7 +111,7 @@ export default function MasteryIndicator({
               cy="32"
               r="26"
               strokeWidth="6"
-              className={`fill-none transition-all duration-500 ${color.bg.replace('bg-', 'stroke-')}`}
+              className={`fill-none transition-all duration-500 ${bandStyles.stroke}`}
               style={{
                 strokeDasharray: 163.4,
                 strokeDashoffset: 163.4 - (163.4 * mastery),
@@ -140,7 +136,7 @@ export default function MasteryIndicator({
             <span className="text-sm text-gray-600">Mastery:</span>
             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${color.bg}`}
+                className={`h-full rounded-full transition-all duration-500 ${bandStyles.bar}`}
                 style={{ width: `${percentage}%` }}
               />
             </div>

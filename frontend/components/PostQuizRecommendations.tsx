@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AlertCircle, TrendingUp, BookOpen, MessageSquare, ChevronDown, ChevronUp, Sparkles, Target, RefreshCw } from 'lucide-react';
-import { INITIAL_MASTERY } from '@/lib/mastery';
+import { INITIAL_MASTERY, MASTERY_BAND_STYLES, masteryBand } from '@/lib/mastery';
 import type { ReadingMaterial, RecommendationResponse } from '@/lib/types';
 
 interface PostQuizRecommendationsProps {
@@ -18,7 +18,7 @@ interface PostQuizRecommendationsProps {
 function MasteryBar({ mastery }: { mastery?: number | null }) {
   const value = mastery ?? INITIAL_MASTERY;
   const pct = Math.round(value * 100);
-  const color = value >= 0.7 ? 'bg-emerald-500' : value >= 0.4 ? 'bg-blue-500' : 'bg-gray-300';
+  const color = MASTERY_BAND_STYLES[masteryBand(value)].bar;
 
   return (
     <div className="flex items-center gap-2">

@@ -10,7 +10,7 @@ import { useAppStore } from '@/lib/store';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { GraphSkeleton } from '@/components/Skeleton';
 import ErrorMessage from '@/components/ErrorMessage';
-import SubjectPicker from '@/components/SubjectPicker';
+import PageHeader from '@/components/PageHeader';
 
 // Dynamic import to avoid SSR issues with Cytoscape
 const KnowledgeGraph = dynamic(() => import('@/components/KnowledgeGraph'), {
@@ -64,23 +64,8 @@ export default function GraphPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Knowledge Graph Visualization
-              </h1>
-              <p className="mt-2 text-gray-600">
-                Explore concepts and their relationships
-              </p>
-            </div>
-            <SubjectPicker />
-          </div>
-        </div>
-      </header>
+    <>
+      <PageHeader title="Knowledge Graph Visualization" />
 
       {/* Main Content */}
       <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -204,6 +189,6 @@ export default function GraphPage() {
           </div>
         </div>
       </main>
-    </div>
+    </>
   );
 }

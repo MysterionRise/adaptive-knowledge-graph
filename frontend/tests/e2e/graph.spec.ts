@@ -8,7 +8,6 @@ test.describe('Graph Visualization Page', () => {
     await expect(
       page.getByRole('heading', { name: 'Knowledge Graph Visualization' })
     ).toBeVisible();
-    await expect(page.getByText('Explore concepts and their relationships')).toBeVisible();
   });
 
   test('renders the graph returned by the API', async ({ page, api }) => {

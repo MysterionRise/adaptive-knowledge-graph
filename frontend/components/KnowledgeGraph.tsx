@@ -459,7 +459,7 @@ export default function KnowledgeGraph({
 
       {/* Selected Node Info */}
       {selectedNode && (
-        <div className="absolute bottom-4 left-4 bg-white rounded-xl shadow-lg p-5 border border-gray-200 max-w-xs animate-in slide-in-from-left duration-300">
+        <div className="absolute bottom-4 left-4 bg-white rounded-xl shadow-lg p-5 border border-gray-200 max-w-xs">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
             <h4 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">

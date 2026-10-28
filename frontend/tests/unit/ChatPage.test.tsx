@@ -29,13 +29,6 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
-// Mock SubjectPicker
-jest.mock('@/components/SubjectPicker', () => {
-  return function MockSubjectPicker() {
-    return <div data-testid="subject-picker">Subject Picker</div>;
-  };
-});
-
 // react-markdown is ESM-only; the real rendering is covered by the Playwright suite
 jest.mock('react-markdown', () => function MockMarkdown({ children }: { children: string }) {
   return <div data-testid="markdown">{children}</div>;
@@ -122,7 +115,6 @@ describe('ChatPage', () => {
       render(<ChatPage />);
 
       expect(screen.getByRole('heading', { level: 1, name: 'AI Tutor Chat' })).toBeInTheDocument();
-      expect(screen.getByText(/Ask questions about your selected subject/i)).toBeInTheDocument();
     });
 
     it('renders welcome message when no messages', () => {

@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import defaultTheme from "tailwindcss/defaultTheme";
 
 const config: Config = {
   content: [
@@ -37,6 +38,21 @@ const config: Config = {
           800: '#6b21a8',
           900: '#581c87',
         },
+      },
+      // Local fonts only: whichever of these the system has, no web font request.
+      fontFamily: {
+        sans: [
+          '"Inter"',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI Variable"',
+          '"Segoe UI"',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          ...defaultTheme.fontFamily.sans,
+        ],
+        mono: ['"JetBrains Mono"', 'Menlo', 'Consolas', ...defaultTheme.fontFamily.mono],
       },
     },
   },
