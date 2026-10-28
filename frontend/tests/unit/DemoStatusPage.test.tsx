@@ -193,8 +193,50 @@ describe('DemoStatusPage', () => {
     await screen.findByText('Demo ready');
     expect(screen.getByRole('heading', { level: 3, name: 'Language model' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 3, name: 'ollama' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'neo4j' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'Neo4j' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'OpenSearch' })).toBeInTheDocument();
     expect(screen.getByText('OpenRouter model: anthropic/claude-sonnet-4')).toBeInTheDocument();
+  });
+
+  it('shows a configured subject without concepts as not seeded, not as a warning', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      subjects: [
+        ...readyStatus.subjects,
+        {
+          id: 'biology',
+          name: 'Biology',
+          status: 'degraded',
+          concept_count: 0,
+          module_count: 0,
+          relationship_count: 0,
+          message: 'Configured, but no graph concepts were found.',
+        },
+      ],
+    });
+
+    render(<DemoStatusPage />);
+
+    const row = (await screen.findByText('Biology')).closest('tr') as HTMLElement;
+    expect(within(row).getByText('Not seeded')).toHaveAttribute(
+      'title',
+      'Configured, but no graph concepts were found.'
+    );
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
+    const seeded = screen.getByText('US History').closest('tr') as HTMLElement;
+    expect(within(seeded).getByText('Ready')).toBeInTheDocument();
+  });
+
+  it('keeps the warning for a degraded subject that has concepts', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      subjects: [{ ...readyStatus.subjects[0], status: 'degraded' }],
+    });
+
+    render(<DemoStatusPage />);
+
+    const row = (await screen.findByText('US History')).closest('tr') as HTMLElement;
+    expect(within(row).getByText('Needs attention')).toBeInTheDocument();
   });
 
   it('renders next actions when demo is degraded', async () => {
