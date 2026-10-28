@@ -36,12 +36,15 @@ const readyStatus = {
   },
   script_readiness: {
     critical_services_ready: true,
-    local_llm_ready: true,
+    llm_ready: true,
     openstax_subject_seeded: true,
     latest_eval_valid: true,
   },
   next_actions: [],
 };
+
+/** The value shown next to a term of the "Latest Evaluation" list. */
+const valueOf = (term: string) => screen.getByText(term).nextSibling;
 
 describe('DemoStatusPage', () => {
   beforeEach(() => {
@@ -57,7 +60,7 @@ describe('DemoStatusPage', () => {
       expect(screen.getByText('Demo ready')).toBeInTheDocument();
     });
     expect(screen.getByText('US History')).toBeInTheDocument();
-    expect(screen.getByText('The local stack, seeded OpenStax data, local LLM, and latest eval are ready for rehearsal.')).toBeInTheDocument();
+    expect(screen.getByText('The services, the seeded OpenStax data, the language model and the latest eval are ready for rehearsal.')).toBeInTheDocument();
   });
 
   it('renders the latest evaluation provenance and validity signals', async () => {
@@ -76,11 +79,61 @@ describe('DemoStatusPage', () => {
     render(<DemoStatusPage />);
 
     await screen.findByText('Demo ready');
-    expect(screen.getByText('KG expansion failures').nextSibling).toHaveTextContent('0');
+    expect(valueOf('KG expansion failures')).toHaveTextContent('0');
     expect(screen.getByText('75%')).toBeInTheDocument();
     expect(
       screen.getByText('Server 0123456789ab, golden set fedcba987654')
     ).toBeInTheDocument();
+  });
+
+  it('renders the evaluation deltas and the refusal rate', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      latest_eval: {
+        ...readyStatus.latest_eval,
+        citation_hit_rate_delta: 0.125,
+        mrr_delta: 0.0831,
+        unsupported_refusal_rate: 0.85,
+      },
+    });
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    expect(valueOf('Citation hit rate Δ (KG − plain)')).toHaveTextContent('+12.5 pp');
+    expect(valueOf('MRR Δ (KG − plain)')).toHaveTextContent('+0.083');
+    expect(valueOf('Unsupported-question refusal rate')).toHaveTextContent('85%');
+  });
+
+  it('shows a negative citation delta with its sign', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      latest_eval: { ...readyStatus.latest_eval, citation_hit_rate_delta: -0.03, mrr_delta: -0.0125 },
+    });
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    expect(valueOf('Citation hit rate Δ (KG − plain)')).toHaveTextContent('-3.0 pp');
+    expect(valueOf('MRR Δ (KG − plain)')).toHaveTextContent('-0.013');
+  });
+
+  it('shows a placeholder for the metrics the report does not have', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue(readyStatus);
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    for (const term of [
+      'Citation hit rate Δ (KG − plain)',
+      'MRR Δ (KG − plain)',
+      'Unsupported-question refusal rate',
+      'Prompt-injection resistance',
+      'KG expansion failures',
+    ]) {
+      expect(valueOf(term)).toHaveTextContent('—');
+    }
+    expect(screen.queryByText('n/a')).not.toBeInTheDocument();
   });
 
   it('flags a latest evaluation without provenance', async () => {
@@ -89,8 +142,59 @@ describe('DemoStatusPage', () => {
     render(<DemoStatusPage />);
 
     await screen.findByText('Demo ready');
-    expect(screen.getByText('Provenance').nextSibling).toHaveTextContent('Missing');
-    expect(screen.getByText('Prompt-injection resistance').nextSibling).toHaveTextContent('n/a');
+    expect(valueOf('Provenance')).toHaveTextContent('Missing');
+    expect(valueOf('Prompt-injection resistance')).toHaveTextContent('—');
+  });
+
+  it('lists the script readiness checks', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      script_readiness: { ...readyStatus.script_readiness, latest_eval_valid: false },
+    });
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    const heading = screen.getByRole('heading', { level: 2, name: 'Script Readiness' });
+    const card = heading.closest('div.rounded-lg') as HTMLElement;
+    const items = within(card).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Critical services (Neo4j, OpenSearch)Ready',
+      'Language model configuredReady',
+      'OpenStax subject seededReady',
+      'Latest evaluation validNot ready',
+    ]);
+  });
+
+  it('labels the readiness checks of older servers and unknown keys', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      script_readiness: { local_llm_ready: true, golden_set_fresh: false },
+    });
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    expect(screen.getByText('Local LLM (Ollama)')).toBeInTheDocument();
+    expect(screen.getByText('Golden set fresh')).toBeInTheDocument();
+  });
+
+  it('labels the language model service card', async () => {
+    (apiClient.getDemoStatus as jest.Mock).mockResolvedValue({
+      ...readyStatus,
+      services: {
+        ...readyStatus.services,
+        ollama: { status: 'ok', message: 'OpenRouter model: anthropic/claude-sonnet-4' },
+      },
+    });
+
+    render(<DemoStatusPage />);
+
+    await screen.findByText('Demo ready');
+    expect(screen.getByRole('heading', { level: 3, name: 'Language model' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 3, name: 'ollama' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'neo4j' })).toBeInTheDocument();
+    expect(screen.getByText('OpenRouter model: anthropic/claude-sonnet-4')).toBeInTheDocument();
   });
 
   it('renders next actions when demo is degraded', async () => {

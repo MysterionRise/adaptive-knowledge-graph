@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useEffectEvent, useRef, useState, useCallback, useId, useMemo } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useCallback,
+  useId,
+  useMemo,
+  type FormEvent,
+} from 'react';
 import cytoscape, {
   Core,
   NodeSingular,
@@ -9,7 +18,7 @@ import cytoscape, {
 } from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import type { GraphData } from '@/lib/types';
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Search } from 'lucide-react';
 
 // Type for cose-bilkent layout options (not included in @types/cytoscape)
 type CoseBilkentLayoutOptions = {
@@ -24,6 +33,7 @@ type CoseBilkentLayoutOptions = {
   tile?: boolean;
   animate?: boolean | 'end' | 'during';
   animationDuration?: number;
+  nodeDimensionsIncludeLabels?: boolean;
 };
 
 // Register layout
@@ -36,25 +46,34 @@ const DEFAULT_CHAPTER_COLORS: Record<string, string> = {
   'default': '#6366f1',
 };
 
+/** Relationship types of the graph: edge colour on the canvas and swatch in the legend. */
+const EDGE_TYPES: Record<string, { label: string; color: string; swatchClass: string }> = {
+  PREREQ: { label: 'Prerequisite', color: '#ef4444', swatchClass: 'bg-red-500' },
+  COVERS: { label: 'Covers', color: '#3b82f6', swatchClass: 'bg-blue-500' },
+  RELATED: { label: 'Related', color: '#8b5cf6', swatchClass: 'bg-purple-500' },
+};
+const DEFAULT_EDGE_COLOR = '#9ca3af';
+
 // Stable default, so a missing prop never looks like new highlights on a re-render
 const NO_HIGHLIGHTS: string[] = [];
 
 // Number of concepts named in the text summary for screen readers
 const SUMMARY_CONCEPT_COUNT = 10;
 
+/** What the graph knows about a selected concept. */
+export interface SelectedNodeDetails {
+  importance: number;
+  connections: number;
+}
+
 interface KnowledgeGraphProps {
   data: GraphData;
-  onNodeClick?: (nodeId: string, nodeName: string) => void;
+  onNodeClick?: (nodeId: string, nodeName: string, details: SelectedNodeDetails) => void;
+  /** Called when the selection is cleared: a tap on the background or "Reset view". */
+  onBackgroundClick?: () => void;
   highlightedConcepts?: string[];
   className?: string;
   chapterColors?: Record<string, string>; // Dynamic colors from subject theme
-}
-
-interface SelectedNodeInfo {
-  id: string;
-  label: string;
-  importance: number;
-  connections: number;
 }
 
 // Helper to get color based on chapter/topic
@@ -70,9 +89,35 @@ function getNodeColor(node: NodeSingular, chapterColors: Record<string, string>)
   return chapterColors.default || DEFAULT_CHAPTER_COLORS.default;
 }
 
+function getEdgeColor(edge: EdgeSingular): string {
+  return EDGE_TYPES[edge.data('type')]?.color ?? DEFAULT_EDGE_COLOR;
+}
+
 function clearFocus(cy: Core) {
   cy.nodes().removeClass('selected highlighted faded');
   cy.edges().removeClass('highlighted faded');
+}
+
+/** Select `node`, highlight its neighbourhood and fade the rest of the graph. */
+function focusNode(cy: Core, node: NodeSingular): SelectedNodeDetails {
+  clearFocus(cy);
+  node.addClass('selected');
+
+  // Connected nodes and edges
+  const neighborhood = node.neighborhood();
+  const connectedNodes = neighborhood.nodes();
+  const connectedEdges = neighborhood.edges();
+  connectedNodes.addClass('highlighted');
+  connectedEdges.addClass('highlighted');
+
+  // Fade non-connected elements for focus
+  cy.nodes().not(node).not(connectedNodes).addClass('faded');
+  cy.edges().not(connectedEdges).addClass('faded');
+
+  return {
+    importance: Number(node.data('importance') ?? 0),
+    connections: connectedNodes.length,
+  };
 }
 
 /** Highlight the nodes whose label matches one of `concepts` and fade the others. */
@@ -104,9 +149,23 @@ function applyHighlights(cy: Core, concepts: string[]) {
   cy.fit(highlightedNodes, 80);
 }
 
+/** The node whose label equals `query` (case-insensitive), else the first whose label contains it. */
+function findNode(data: GraphData, query: string) {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return undefined;
+  return (
+    data.nodes.find((node) => node.data.label.toLowerCase() === wanted) ??
+    data.nodes.find((node) => node.data.label.toLowerCase().includes(wanted))
+  );
+}
+
+const CONTROL_BUTTON_CLASS =
+  'p-2.5 bg-white rounded-lg shadow-md border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all';
+
 export default function KnowledgeGraph({
   data,
   onNodeClick,
+  onBackgroundClick,
   highlightedConcepts = NO_HIGHLIGHTS,
   className = '',
   chapterColors,
@@ -120,20 +179,20 @@ export default function KnowledgeGraph({
   const cyRef = useRef<Core | null>(null);
   const colorsRef = useRef(effectiveColors);
   const summaryId = useId();
+  const searchId = useId();
+  const listId = useId();
 
-  // A selection belongs to one data set: a new graph starts without one.
-  const [selection, setSelection] = useState<{ data: GraphData; node: SelectedNodeInfo } | null>(
-    null
-  );
-  const selectedNode = selection?.data === data ? selection.node : null;
+  const [searchQuery, setSearchQuery] = useState('');
+  // A search result belongs to one data set: a new graph starts without a stale message.
+  const [searchStatus, setSearchStatus] = useState<{ data: GraphData; text: string } | null>(null);
+  const searchMessage = searchStatus?.data === data ? searchStatus.text : '';
 
   // Called from Cytoscape handlers. As effect events they always see the latest props, so a
   // parent passing a new onNodeClick function never rebuilds (and re-lays out) the graph.
-  const handleNodeTap = useEffectEvent((node: SelectedNodeInfo) => {
-    setSelection({ data, node });
-    onNodeClick?.(node.id, node.label);
+  const handleNodeTap = useEffectEvent((node: NodeSingular, details: SelectedNodeDetails) => {
+    onNodeClick?.(node.id(), node.data('label'), details);
   });
-  const handleBackgroundTap = useEffectEvent(() => setSelection(null));
+  const handleBackgroundTap = useEffectEvent(() => onBackgroundClick?.());
 
   // Build the graph and run the layout once per data set.
   useEffect(() => {
@@ -161,10 +220,14 @@ export default function KnowledgeGraph({
               const importance = ele.data('importance') || 0.5;
               return 25 + importance * 45;
             },
-            'font-size': 11,
+            'font-size': 10,
             'font-weight': 'bold' as const,
-            'text-valign': 'center' as const,
+            // Labels wrap under the node, so long concept names stay readable
+            'text-wrap': 'wrap' as const,
+            'text-max-width': '96px',
+            'text-valign': 'bottom' as const,
             'text-halign': 'center' as const,
+            'text-margin-y': 5,
             'color': '#1f2937',
             'text-outline-color': '#ffffff',
             'text-outline-width': 2,
@@ -201,38 +264,14 @@ export default function KnowledgeGraph({
           },
         },
         {
+          // Edge labels only appear on hover or on the selected neighbourhood (see below)
           selector: 'edge',
           style: {
             'width': 2,
-            'line-color': (ele: EdgeSingular) => {
-              const type = ele.data('type');
-              switch (type) {
-                case 'PREREQ':
-                  return '#ef4444'; // Red for prerequisites
-                case 'COVERS':
-                  return '#3b82f6'; // Blue for covers
-                case 'RELATED':
-                  return '#8b5cf6'; // Purple for related
-                default:
-                  return '#9ca3af'; // Gray default
-              }
-            },
+            'line-color': getEdgeColor,
             'target-arrow-shape': 'triangle' as const,
-            'target-arrow-color': (ele: EdgeSingular) => {
-              const type = ele.data('type');
-              switch (type) {
-                case 'PREREQ':
-                  return '#ef4444';
-                case 'COVERS':
-                  return '#3b82f6';
-                case 'RELATED':
-                  return '#8b5cf6';
-                default:
-                  return '#9ca3af';
-              }
-            },
+            'target-arrow-color': getEdgeColor,
             'curve-style': 'bezier' as const,
-            'label': 'data(label)',
             'font-size': 9,
             'text-rotation': 'autorotate' as const,
             'text-background-color': '#ffffff',
@@ -245,8 +284,15 @@ export default function KnowledgeGraph({
           },
         },
         {
+          selector: 'edge.hover',
+          style: {
+            'label': 'data(label)',
+          },
+        },
+        {
           selector: 'edge.highlighted',
           style: {
+            'label': 'data(label)',
             'width': 4,
             'opacity': 1,
             'z-index': 10,
@@ -271,6 +317,7 @@ export default function KnowledgeGraph({
         tile: true,
         animate: 'end',
         animationDuration: 1000,
+        nodeDimensionsIncludeLabels: true,
       } as CoseBilkentLayoutOptions,
       minZoom: 0.3,
       maxZoom: 3,
@@ -279,35 +326,10 @@ export default function KnowledgeGraph({
 
     cyRef.current = cy;
 
-    // Node click handler with enhanced visual feedback
+    // Node click: select it and highlight its neighbourhood
     cy.on('tap', 'node', (event: EventObject) => {
       const node = event.target as NodeSingular;
-
-      // Remove all previous classes
-      clearFocus(cy);
-
-      // Add selection to clicked node
-      node.addClass('selected');
-
-      // Get neighborhood (connected nodes and edges)
-      const neighborhood = node.neighborhood();
-      const connectedNodes = neighborhood.nodes();
-      const connectedEdges = neighborhood.edges();
-
-      // Highlight connected elements
-      connectedNodes.addClass('highlighted');
-      connectedEdges.addClass('highlighted');
-
-      // Fade non-connected elements for focus
-      cy.nodes().not(node).not(connectedNodes).addClass('faded');
-      cy.edges().not(connectedEdges).addClass('faded');
-
-      handleNodeTap({
-        id: node.id(),
-        label: node.data('label'),
-        importance: Number(node.data('importance') ?? 0),
-        connections: connectedNodes.length,
-      });
+      handleNodeTap(node, focusNode(cy, node));
     });
 
     // Click on background to reset view
@@ -324,6 +346,14 @@ export default function KnowledgeGraph({
     });
     cy.on('mouseout', 'node', () => {
       container.style.cursor = '';
+    });
+
+    // Edge labels on hover
+    cy.on('mouseover', 'edge', (event: EventObject) => {
+      (event.target as EdgeSingular).addClass('hover');
+    });
+    cy.on('mouseout', 'edge', (event: EventObject) => {
+      (event.target as EdgeSingular).removeClass('hover');
     });
 
     // Cleanup
@@ -356,6 +386,32 @@ export default function KnowledgeGraph({
       : 'The graph has no concepts yet.';
   }, [data]);
 
+  // Relationship types on this graph, in the legend's fixed order
+  const presentEdgeTypes = useMemo(
+    () => Object.keys(EDGE_TYPES).filter((type) => data.edges.some((edge) => edge.data.type === type)),
+    [data]
+  );
+
+  // Find a concept by name: select it on the canvas, zoom to it and tell the parent
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const cy = cyRef.current;
+    const query = searchQuery.trim();
+    if (!cy || !query) return;
+
+    const match = findNode(data, query);
+    if (!match) {
+      setSearchStatus({ data, text: `No concept matches “${query}”` });
+      return;
+    }
+    setSearchStatus(null);
+
+    const node = cy.getElementById(match.data.id);
+    const details = focusNode(cy, node);
+    cy.animate({ center: { eles: node }, zoom: Math.max(cy.zoom(), 1.5) }, { duration: 300 });
+    onNodeClick?.(match.data.id, match.data.label, details);
+  };
+
   // Zoom controls
   const handleZoomIn = useCallback(() => {
     cyRef.current?.zoom(cyRef.current.zoom() * 1.3);
@@ -373,11 +429,12 @@ export default function KnowledgeGraph({
   }, []);
 
   const handleResetView = useCallback(() => {
-    setSelection(null);
+    setSearchStatus(null);
+    onBackgroundClick?.();
     if (!cyRef.current) return;
     clearFocus(cyRef.current);
     cyRef.current.fit(undefined, 50);
-  }, []);
+  }, [onBackgroundClick]);
 
   return (
     <div className={`relative ${className}`}>
@@ -386,8 +443,7 @@ export default function KnowledgeGraph({
         role="img"
         aria-label={`Knowledge graph with ${data.nodes.length} concepts and ${data.edges.length} relationships`}
         aria-describedby={summaryId}
-        className="cytoscape-container w-full h-full bg-gray-50 rounded-lg border border-gray-200"
-        style={{ minHeight: '600px' }}
+        className="cytoscape-container h-full w-full bg-gray-50 rounded-lg border border-gray-200"
       />
       <div id={summaryId} className="sr-only">
         <p>{summary}</p>
@@ -396,27 +452,65 @@ export default function KnowledgeGraph({
         )}
       </div>
 
+      {/* Concept search */}
+      <form
+        role="search"
+        onSubmit={handleSearch}
+        className="absolute left-4 top-4 flex flex-wrap items-start gap-2"
+      >
+        <label htmlFor={searchId} className="sr-only">
+          Find a concept
+        </label>
+        <input
+          id={searchId}
+          type="search"
+          list={listId}
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Find a concept…"
+          autoComplete="off"
+          className="w-56 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+        <datalist id={listId}>
+          {data.nodes.map((node) => (
+            <option key={node.data.id} value={node.data.label} />
+          ))}
+        </datalist>
+        <button
+          type="submit"
+          className={CONTROL_BUTTON_CLASS}
+          aria-label="Find concept"
+          title="Find concept"
+        >
+          <Search className="w-5 h-5 text-gray-700" />
+        </button>
+        <p
+          role="status"
+          className={`basis-full text-xs text-gray-700 ${
+            searchMessage ? 'rounded-md bg-white/90 px-2 py-1 shadow-sm' : ''
+          }`}
+        >
+          {searchMessage}
+        </p>
+      </form>
+
       {/* Legend */}
       <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md p-4 border border-gray-200">
         <h4 className="font-semibold text-sm text-gray-900 mb-2">Legend</h4>
         <div className="space-y-2 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-0.5 bg-red-500"></div>
-            <span className="text-gray-700">Prerequisite</span>
-          </div>
-          {data.edges.some((edge) => edge.data.type === 'COVERS') && (
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-0.5 bg-blue-500"></div>
-              <span className="text-gray-700">Covers</span>
+          {presentEdgeTypes.map((type) => (
+            <div key={type} className="flex items-center gap-2">
+              <div className={`w-4 h-0.5 ${EDGE_TYPES[type].swatchClass}`}></div>
+              <span className="text-gray-700">{EDGE_TYPES[type].label}</span>
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-0.5 bg-purple-500"></div>
-            <span className="text-gray-700">Related</span>
-          </div>
+          ))}
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-amber-500"></div>
             <span className="text-gray-700">Highlighted</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-emerald-500"></div>
+            <span className="text-gray-700">Selected</span>
           </div>
         </div>
       </div>
@@ -425,7 +519,7 @@ export default function KnowledgeGraph({
       <div className="absolute bottom-4 right-4 flex flex-col gap-2">
         <button
           onClick={handleZoomIn}
-          className="p-2.5 bg-white rounded-lg shadow-md border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
+          className={CONTROL_BUTTON_CLASS}
           aria-label="Zoom in"
           title="Zoom In"
         >
@@ -433,7 +527,7 @@ export default function KnowledgeGraph({
         </button>
         <button
           onClick={handleZoomOut}
-          className="p-2.5 bg-white rounded-lg shadow-md border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
+          className={CONTROL_BUTTON_CLASS}
           aria-label="Zoom out"
           title="Zoom Out"
         >
@@ -441,7 +535,7 @@ export default function KnowledgeGraph({
         </button>
         <button
           onClick={handleFitToView}
-          className="p-2.5 bg-white rounded-lg shadow-md border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
+          className={CONTROL_BUTTON_CLASS}
           aria-label="Fit to view"
           title="Fit to View"
         >
@@ -449,42 +543,13 @@ export default function KnowledgeGraph({
         </button>
         <button
           onClick={handleResetView}
-          className="p-2.5 bg-white rounded-lg shadow-md border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
+          className={CONTROL_BUTTON_CLASS}
           aria-label="Reset view"
           title="Reset View"
         >
           <RotateCcw className="w-5 h-5 text-gray-700" />
         </button>
       </div>
-
-      {/* Selected Node Info */}
-      {selectedNode && (
-        <div className="absolute bottom-4 left-4 bg-white rounded-xl shadow-lg p-5 border border-gray-200 max-w-xs">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-            <h4 className="font-semibold text-sm text-gray-500 uppercase tracking-wide">
-              Selected Concept
-            </h4>
-          </div>
-          <p className="text-lg font-bold text-gray-900 mb-2">
-            {selectedNode.label}
-          </p>
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-1.5">
-              <span className="text-gray-500">Importance:</span>
-              <span className="font-semibold text-emerald-600">
-                {(selectedNode.importance * 100).toFixed(0)}%
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-gray-500">Connections:</span>
-              <span className="font-semibold text-blue-600">
-                {selectedNode.connections}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
