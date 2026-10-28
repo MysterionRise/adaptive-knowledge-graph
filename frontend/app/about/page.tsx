@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Shield, Database, Cpu, Globe } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
 
 export const metadata: Metadata = {
   title: 'About',
@@ -8,16 +9,8 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">About</h1>
-          <p className="mt-2 text-gray-600">
-            Learn more about the Adaptive Knowledge Graph project
-          </p>
-        </div>
-      </header>
+    <>
+      <PageHeader title="About" maxWidthClassName="max-w-4xl" />
 
       {/* Main Content */}
       <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -133,7 +126,7 @@ export default function AboutPage() {
           </p>
         </div>
       </main>
-    </div>
+    </>
   );
 }
 

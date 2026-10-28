@@ -12,6 +12,7 @@ import json
 import time
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -151,11 +152,41 @@ async def _check_opensearch() -> DemoServiceStatus:
         return DemoServiceStatus(status="error", message="OpenSearch unavailable")
 
 
+def _remote_provider() -> str:
+    """The hosted provider's host name, never its key or full URL."""
+    return urlsplit(settings.openrouter_base_url).hostname or "remote provider"
+
+
+async def _check_llm() -> DemoServiceStatus:
+    """
+    Check the language model the configured ``LLM_MODE`` answers with.
+
+    ``local`` and ``hybrid`` probe Ollama for the configured model. ``remote`` is ready when a
+    key and a model are configured (no paid request is made); the message names the model and
+    the provider host so the status page says which model answers.
+    """
+    if settings.llm_mode == "remote":
+        if not settings.openrouter_api_key or not settings.openrouter_model:
+            return DemoServiceStatus(
+                status="error",
+                message="LLM mode is remote, but OPENROUTER_API_KEY or OPENROUTER_MODEL is not set",
+            )
+        return DemoServiceStatus(
+            status="ok",
+            message=(
+                f"remote model {settings.openrouter_model} via {_remote_provider()} "
+                "(PRIVACY_LOCAL_ONLY=false)"
+            ),
+        )
+
+    status = await _check_ollama()
+    if settings.llm_mode == "hybrid" and status.status == "ok":
+        status.message = f"local model with remote fallback to {settings.openrouter_model}"
+    return status
+
+
 async def _check_ollama() -> DemoServiceStatus:
     """Check local Ollama model availability."""
-    if settings.llm_mode != "local":
-        return DemoServiceStatus(status="degraded", message=f"LLM mode is {settings.llm_mode}")
-
     start = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -314,7 +345,7 @@ async def get_demo_status():
     services = {
         "neo4j": await _check_neo4j(),
         "opensearch": await _check_opensearch(),
-        "ollama": await _check_ollama(),
+        "ollama": await _check_llm(),
     }
     subjects = _subject_statuses()
     latest_eval = _latest_eval_status()
@@ -323,7 +354,7 @@ async def get_demo_status():
     script_readiness = {
         "critical_services_ready": services["neo4j"].status == "ok"
         and services["opensearch"].status in ("ok", "degraded"),
-        "local_llm_ready": services["ollama"].status == "ok",
+        "llm_ready": services["ollama"].status == "ok",
         "openstax_subject_seeded": any(subject.status == "ok" for subject in subjects),
         "latest_eval_valid": latest_eval.status == "ok",
     }
@@ -331,8 +362,14 @@ async def get_demo_status():
     next_actions = []
     if not script_readiness["critical_services_ready"]:
         next_actions.append("Start Neo4j and OpenSearch, then run make demo-client-prep.")
-    if not script_readiness["local_llm_ready"]:
-        next_actions.append("Start Ollama and pull the configured local model.")
+    if not script_readiness["llm_ready"]:
+        if settings.llm_mode == "remote":
+            next_actions.append(
+                "Set OPENROUTER_API_KEY and OPENROUTER_MODEL for the hosted model, "
+                "then restart the API."
+            )
+        else:
+            next_actions.append("Start Ollama and pull the configured local model.")
     if not script_readiness["openstax_subject_seeded"]:
         next_actions.append("Seed OpenStax demo data with make demo-client-prep.")
     if not script_readiness["latest_eval_valid"]:

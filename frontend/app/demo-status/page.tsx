@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  ClipboardCheck,
   Database,
   FileCheck2,
   Gauge,
@@ -16,6 +17,7 @@ import { describeError } from '@/lib/api-errors';
 import type { DemoReadinessStatus, DemoStatusResponse } from '@/lib/types';
 import { useApiQuery } from '@/lib/useApiQuery';
 import ErrorMessage from '@/components/ErrorMessage';
+import PageHeader from '@/components/PageHeader';
 
 const statusLabels: Record<DemoReadinessStatus, string> = {
   ok: 'Ready',
@@ -30,6 +32,31 @@ const statusClasses: Record<DemoReadinessStatus, string> = {
   error: 'bg-red-50 text-red-700 border-red-200',
   missing: 'bg-gray-50 text-gray-700 border-gray-200',
 };
+
+// Services whose key is not a product name: in remote mode the `ollama` entry is the hosted model
+const serviceLabels: Record<string, string> = {
+  ollama: 'Language model',
+};
+
+// Checks of `script_readiness`; `local_llm_ready` is the name older servers send for `llm_ready`
+const readinessLabels: Record<string, string> = {
+  critical_services_ready: 'Critical services (Neo4j, OpenSearch)',
+  llm_ready: 'Language model configured',
+  local_llm_ready: 'Local LLM (Ollama)',
+  openstax_subject_seeded: 'OpenStax subject seeded',
+  latest_eval_valid: 'Latest evaluation valid',
+};
+
+/** The label of a readiness check; unknown keys read as words ("some_check" -> "Some check"). */
+function readinessLabel(key: string): string {
+  const known = readinessLabels[key];
+  if (known) return known;
+  const words = key.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Placeholder for a metric the report does not have. */
+const MISSING = '—';
 
 function StatusIcon({ status }: { status: DemoReadinessStatus }) {
   if (status === 'ok') return <CheckCircle2 className="h-5 w-5" aria-hidden="true" />;
@@ -59,8 +86,23 @@ function OverallBadge({ status }: { status: DemoStatusResponse['status'] }) {
   return <span className={`rounded-md px-3 py-1.5 text-sm font-semibold ${className}`}>{label}</span>;
 }
 
+/** A fraction as a percentage: 0.85 -> "85%". */
 function formatRate(rate?: number | null): string {
-  return rate === null || rate === undefined ? 'n/a' : `${Math.round(rate * 100)}%`;
+  return rate === null || rate === undefined ? MISSING : `${Math.round(rate * 100)}%`;
+}
+
+/** A fraction with an explicit sign, `digits` decimals: 0.0831 -> "+0.083". */
+function formatSignedDelta(delta?: number | null, digits = 3): string {
+  if (delta === null || delta === undefined) return MISSING;
+  const rounded = Number(delta.toFixed(digits));
+  const sign = rounded < 0 ? '-' : '+';
+  return `${sign}${Math.abs(rounded).toFixed(digits)}`;
+}
+
+/** A difference between two rates in percentage points: 0.125 -> "+12.5 pp". */
+function formatPointsDelta(delta?: number | null): string {
+  if (delta === null || delta === undefined) return MISSING;
+  return `${formatSignedDelta(delta * 100, 1)} pp`;
 }
 
 function shortHash(hash?: string | null): string {
@@ -74,16 +116,10 @@ export default function DemoStatusPage() {
   const status = error ? undefined : demoStatus.data;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Demo Status</h1>
-            <p className="text-sm text-gray-600">
-              Checks that the local services, the seeded subject data and the latest evaluation
-              are ready.
-            </p>
-          </div>
+    <>
+      <PageHeader
+        title="Demo Status"
+        actions={
           <button
             type="button"
             onClick={demoStatus.retry}
@@ -97,8 +133,8 @@ export default function DemoStatusPage() {
             )}
             Refresh
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <main id="main-content" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {isLoading && !status ? (
@@ -135,10 +171,15 @@ export default function DemoStatusPage() {
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Server className="h-5 w-5 text-gray-500" />
-                      <h3 className="font-semibold capitalize text-gray-900">{name}</h3>
+                      <h3
+                        className={`font-semibold text-gray-900 ${serviceLabels[name] ? '' : 'capitalize'}`}
+                      >
+                        {serviceLabels[name] ?? name}
+                      </h3>
                     </div>
                     <StatusBadge status={service.status} />
                   </div>
+                  {/* In remote mode the language model's message names the hosted model */}
                   <p className="min-h-[44px] text-sm text-gray-600">
                     {service.message || 'Service is available for the local demo.'}
                   </p>
@@ -213,15 +254,33 @@ export default function DemoStatusPage() {
                     <dd className="font-semibold text-gray-900">{status.latest_eval.plain_successful_cases}</dd>
                   </div>
                   <div>
-                    <dt className="text-gray-500">KG expansion failures</dt>
+                    <dt className="text-gray-500">Citation hit rate Δ (KG − plain)</dt>
                     <dd className="font-semibold text-gray-900">
-                      {status.latest_eval.kg_expansion_failures ?? 'n/a'}
+                      {formatPointsDelta(status.latest_eval.citation_hit_rate_delta)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">MRR Δ (KG − plain)</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {formatSignedDelta(status.latest_eval.mrr_delta, 3)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Unsupported-question refusal rate</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {formatRate(status.latest_eval.unsupported_refusal_rate)}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-gray-500">Prompt-injection resistance</dt>
                     <dd className="font-semibold text-gray-900">
                       {formatRate(status.latest_eval.prompt_injection_resistance_rate)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">KG expansion failures</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {status.latest_eval.kg_expansion_failures ?? MISSING}
                     </dd>
                   </div>
                   <div className="col-span-2">
@@ -242,27 +301,58 @@ export default function DemoStatusPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="mb-4 text-lg font-bold text-gray-900">Next Actions</h2>
-                {status.next_actions.length > 0 ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                  <div className="mb-4 flex items-center gap-2">
+                    <ClipboardCheck className="h-5 w-5 text-gray-500" />
+                    <h2 className="text-lg font-bold text-gray-900">Script Readiness</h2>
+                  </div>
                   <ul className="space-y-3 text-sm text-gray-700">
-                    {status.next_actions.map((action) => (
-                      <li key={action} className="flex gap-2">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-500" />
-                        <span>{action}</span>
+                    {Object.entries(status.script_readiness).map(([key, ready]) => (
+                      <li key={key} className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2">
+                          {ready ? (
+                            <CheckCircle2
+                              className="h-4 w-4 flex-none text-emerald-600"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <XCircle className="h-4 w-4 flex-none text-red-600" aria-hidden="true" />
+                          )}
+                          {readinessLabel(key)}
+                        </span>
+                        <span
+                          className={`text-xs font-semibold ${ready ? 'text-emerald-700' : 'text-red-700'}`}
+                        >
+                          {ready ? 'Ready' : 'Not ready'}
+                        </span>
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <p className="text-sm text-gray-700">
-                    The local stack, seeded OpenStax data, local LLM, and latest eval are ready for rehearsal.
-                  </p>
-                )}
+                </div>
+
+                <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                  <h2 className="mb-4 text-lg font-bold text-gray-900">Next Actions</h2>
+                  {status.next_actions.length > 0 ? (
+                    <ul className="space-y-3 text-sm text-gray-700">
+                      {status.next_actions.map((action) => (
+                        <li key={action} className="flex gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-500" />
+                          <span>{action}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-700">
+                      The services, the seeded OpenStax data, the language model and the latest eval are ready for rehearsal.
+                    </p>
+                  )}
+                </div>
               </div>
             </section>
           </div>
         ) : null}
       </main>
-    </div>
+    </>
   );
 }

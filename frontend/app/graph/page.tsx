@@ -10,13 +10,17 @@ import { useAppStore } from '@/lib/store';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { GraphSkeleton } from '@/components/Skeleton';
 import ErrorMessage from '@/components/ErrorMessage';
-import SubjectPicker from '@/components/SubjectPicker';
+import PageHeader from '@/components/PageHeader';
+import type { SelectedNodeDetails } from '@/components/KnowledgeGraph';
+
+// The canvas fills the viewport under the navigation bar (2.75rem) and the page header (~11rem)
+const GRAPH_HEIGHT = 'h-[calc(100dvh-2.75rem-11rem)] min-h-[480px]';
 
 // Dynamic import to avoid SSR issues with Cytoscape
 const KnowledgeGraph = dynamic(() => import('@/components/KnowledgeGraph'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-[600px] bg-gray-50 rounded-lg">
+    <div className={`flex items-center justify-center ${GRAPH_HEIGHT} bg-gray-50 rounded-lg`}>
       <Loader2 className="w-8 h-8 animate-spin text-primary-600" aria-label="Loading graph" />
     </div>
   ),
@@ -25,7 +29,7 @@ const KnowledgeGraph = dynamic(() => import('@/components/KnowledgeGraph'), {
 // Maximum number of concepts requested for the visualization
 const GRAPH_CONCEPT_LIMIT = 100;
 
-interface SelectedConcept {
+interface SelectedConcept extends SelectedNodeDetails {
   subject: string;
   id: string;
   name: string;
@@ -49,13 +53,14 @@ export default function GraphPage() {
   // A concept selected on another subject's graph is not shown
   const selectedConcept = selected?.subject === currentSubject ? selected : null;
 
-  // Stable handler, so re-renders of this page never rebuild the graph
+  // Stable handlers, so re-renders of this page never rebuild the graph
   const handleNodeClick = useCallback(
-    (nodeId: string, nodeName: string) => {
-      setSelected({ subject: currentSubject, id: nodeId, name: nodeName });
+    (nodeId: string, nodeName: string, details: SelectedNodeDetails) => {
+      setSelected({ subject: currentSubject, id: nodeId, name: nodeName, ...details });
     },
     [currentSubject]
   );
+  const handleBackgroundClick = useCallback(() => setSelected(null), []);
 
   const handleAskAboutConcept = () => {
     if (selectedConcept) {
@@ -64,23 +69,8 @@ export default function GraphPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Knowledge Graph Visualization
-              </h1>
-              <p className="mt-2 text-gray-600">
-                Explore concepts and their relationships
-              </p>
-            </div>
-            <SubjectPicker />
-          </div>
-        </div>
-      </header>
+    <>
+      <PageHeader title="Knowledge Graph Visualization" />
 
       {/* Main Content */}
       <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -112,7 +102,7 @@ export default function GraphPage() {
             )}
 
             {graph.isLoading ? (
-              <GraphSkeleton />
+              <GraphSkeleton className={GRAPH_HEIGHT} />
             ) : graph.error ? (
               <ErrorMessage
                 title="Unable to load the knowledge graph."
@@ -123,12 +113,15 @@ export default function GraphPage() {
               <KnowledgeGraph
                 data={graphData}
                 onNodeClick={handleNodeClick}
+                onBackgroundClick={handleBackgroundClick}
                 highlightedConcepts={highlightedConcepts}
                 chapterColors={chapterColors}
-                className="h-[600px]"
+                className={GRAPH_HEIGHT}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center gap-1 h-[600px] bg-gray-50 rounded-lg border border-gray-200 text-center px-4">
+              <div
+                className={`flex flex-col items-center justify-center gap-1 ${GRAPH_HEIGHT} bg-gray-50 rounded-lg border border-gray-200 text-center px-4`}
+              >
                 <p className="text-gray-600">No graph data available</p>
                 <p className="text-sm text-gray-500">
                   This subject has no concepts in the knowledge graph yet.
@@ -168,8 +161,13 @@ export default function GraphPage() {
                 <h3 className="font-semibold text-gray-900 mb-3">
                   Selected Concept
                 </h3>
-                <p className="text-lg font-medium text-primary-600 mb-4">
+                <p className="text-lg font-medium text-primary-600">
                   {selectedConcept.name}
+                </p>
+                <p className="mb-4 mt-1 text-sm text-gray-600">
+                  Importance {Math.round(selectedConcept.importance * 100)}% ·{' '}
+                  {selectedConcept.connections}{' '}
+                  {selectedConcept.connections === 1 ? 'connection' : 'connections'}
                 </p>
                 <button
                   type="button"
@@ -204,6 +202,6 @@ export default function GraphPage() {
           </div>
         </div>
       </main>
-    </div>
+    </>
   );
 }

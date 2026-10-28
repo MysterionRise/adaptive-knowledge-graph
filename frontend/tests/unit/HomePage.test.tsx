@@ -4,7 +4,7 @@ import { apiClient } from '@/lib/api-client';
 import { ApiError } from '@/lib/api-errors';
 import { useAppStore } from '@/lib/store';
 
-// Mock the API client (all methods used by the page and SubjectPicker)
+// Mock the API client (all methods used by the page)
 jest.mock('@/lib/api-client', () => ({
   apiClient: {
     getGraphStats: jest.fn(),
@@ -41,10 +41,10 @@ const subjects = {
   default_subject: 'us_history',
 };
 
-/** Render the page and let the SubjectPicker request settle. */
+/** Render the page and let the subjects request (for the attribution) settle. */
 async function renderHome() {
   render(<Home />);
-  await screen.findByRole('button', { name: /US History/i });
+  await screen.findByText(/open textbooks \(US History, Economics\)/);
 }
 
 const statsSection = () => screen.getByRole('region', { name: 'Knowledge Graph Statistics' });
@@ -58,10 +58,11 @@ describe('Home Page', () => {
     mockGetSubjects.mockResolvedValue(subjects);
   });
 
-  it('renders the main heading', async () => {
+  it('renders the main heading and the tagline', async () => {
     await renderHome();
 
     expect(screen.getByRole('heading', { level: 1, name: 'Adaptive Knowledge Graph' })).toBeInTheDocument();
+    expect(screen.getByText('Adaptive learning over open textbooks')).toBeInTheDocument();
   });
 
   it('displays graph statistics for the current subject', async () => {
@@ -193,9 +194,17 @@ describe('Home Page', () => {
   it('displays feature cards', async () => {
     await renderHome();
 
-    for (const feature of ['Knowledge Map', 'AI Tutor Chat', 'KG-Aware RAG', 'Local-First', 'Assessment']) {
+    for (const feature of [
+      'Knowledge Map',
+      'AI Tutor Chat',
+      'KG-Aware RAG',
+      'Local-First',
+      'Assessment',
+      'Demo Status',
+    ]) {
       expect(screen.getByRole('heading', { level: 4, name: feature })).toBeInTheDocument();
     }
+    expect(screen.getByRole('link', { name: /Demo Status/ })).toHaveAttribute('href', '/demo-status');
   });
 
   it('attributes the content of the available subjects', async () => {
@@ -210,8 +219,9 @@ describe('Home Page', () => {
     mockGetSubjects.mockRejectedValue(new ApiError('network', 'Could not reach the API'));
 
     render(<Home />);
+    // The failed subjects request settles in the same flush as the statistics
+    await within(statsSection()).findByText('150');
 
-    expect(await screen.findByText("Couldn't load subjects")).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'OpenStax' }).parentElement).toHaveTextContent(
       /^Content adapted from OpenStax open textbooks$/
     );
