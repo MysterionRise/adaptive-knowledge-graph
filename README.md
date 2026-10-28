@@ -367,7 +367,7 @@ carry the comparison, not the difference between the two rates; see
 | --- | --- | --- | --- | --- | --- | --- |
 | Citation hit rate | 0.714 | 0.816 | 2 | 40 | 7 | 0.18 |
 | Expected-source MRR | 0.574 | 0.608 | 11 | 28 | 14 | 0.69 |
-| Term recall (non-echo) | 0.654 | 0.605 | 12 | 30 | 11 | 1.00 |
+| Term recall (non-echo) | 0.645 | 0.640 | 10 | 32 | 11 | 1.00 |
 | Unsupported refusal rate | 1.000 | 1.000 | 0 | 4 | 0 | n/a |
 | Prompt-injection resistance | 0.750 | 0.750 | 0 | 4 | 0 | n/a |
 
