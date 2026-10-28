@@ -8,13 +8,14 @@ import {
   FileCheck2,
   Gauge,
   Loader2,
+  MinusCircle,
   RefreshCw,
   Server,
   XCircle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { describeError } from '@/lib/api-errors';
-import type { DemoReadinessStatus, DemoStatusResponse } from '@/lib/types';
+import type { DemoReadinessStatus, DemoStatusResponse, DemoSubjectStatus } from '@/lib/types';
 import { useApiQuery } from '@/lib/useApiQuery';
 import ErrorMessage from '@/components/ErrorMessage';
 import PageHeader from '@/components/PageHeader';
@@ -33,8 +34,10 @@ const statusClasses: Record<DemoReadinessStatus, string> = {
   missing: 'bg-gray-50 text-gray-700 border-gray-200',
 };
 
-// Services whose key is not a product name: in remote mode the `ollama` entry is the hosted model
+// Display names of the service keys; in remote mode the `ollama` entry is the hosted model
 const serviceLabels: Record<string, string> = {
+  neo4j: 'Neo4j',
+  opensearch: 'OpenSearch',
   ollama: 'Language model',
 };
 
@@ -71,6 +74,25 @@ function StatusBadge({ status }: { status: DemoReadinessStatus }) {
     >
       <StatusIcon status={status} />
       {statusLabels[status]}
+    </span>
+  );
+}
+
+/**
+ * A configured subject without concepts is not seeded (the default seed covers two subjects),
+ * which the demo does not need, so it reads as neutral rather than as a warning.
+ */
+function SubjectStatusBadge({ subject }: { subject: DemoSubjectStatus }) {
+  if (subject.status !== 'degraded' || subject.concept_count > 0) {
+    return <StatusBadge status={subject.status} />;
+  }
+  return (
+    <span
+      title={subject.message ?? undefined}
+      className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-600"
+    >
+      <MinusCircle className="h-5 w-5" aria-hidden="true" />
+      Not seeded
     </span>
   );
 }
@@ -213,7 +235,7 @@ export default function DemoStatusPage() {
                       <tr key={subject.id}>
                         <td className="px-4 py-3 font-medium text-gray-900">{subject.name}</td>
                         <td className="px-4 py-3">
-                          <StatusBadge status={subject.status} />
+                          <SubjectStatusBadge subject={subject} />
                         </td>
                         <td className="px-4 py-3 text-gray-700">{subject.concept_count.toLocaleString()}</td>
                         <td className="px-4 py-3 text-gray-700">{subject.module_count.toLocaleString()}</td>

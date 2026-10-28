@@ -490,7 +490,7 @@ describe('ChatPage', () => {
       await ask('Question');
 
       const chip = await screen.findByRole('button', { name: /^Source 1/ });
-      expect(chip).toHaveAccessibleName('Source 1 The Stamp Act 95%');
+      expect(chip).toHaveAccessibleName('Source 1 The Stamp Act');
       expect(chip).toHaveAttribute('aria-expanded', 'false');
       expect(screen.queryByText('Source content here')).not.toBeInTheDocument();
       fireEvent.click(chip);
@@ -502,7 +502,8 @@ describe('ChatPage', () => {
         screen.getByText('Imperial Reforms and Colonial Protests, 1763-1774')
       ).toBeInTheDocument();
       expect(screen.getByText('The Stamp Act')).toBeInTheDocument();
-      expect(screen.getByText('Score: 95%')).toBeInTheDocument();
+      // The retrieval score is not shown: with hybrid retrieval it is not a percentage
+      expect(screen.queryByText(/95%/)).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Show full text' })).not.toBeInTheDocument();
 
       fireEvent.click(chip);
@@ -579,7 +580,7 @@ describe('ChatPage', () => {
       await ask('Question');
 
       expect(
-        await screen.findByRole('button', { name: 'Source 1 Preface 50%' })
+        await screen.findByRole('button', { name: 'Source 1 Preface' })
       ).toBeInTheDocument();
     });
 
@@ -594,7 +595,7 @@ describe('ChatPage', () => {
       await ask('Question');
 
       expect(
-        await screen.findByRole('button', { name: 'Source 1 US History - m49990 50%' })
+        await screen.findByRole('button', { name: 'Source 1 US History - m49990' })
       ).toBeInTheDocument();
     });
   });
