@@ -48,8 +48,9 @@ Open:
 Say:
 
 > This is a local KG-RAG prototype over OpenStax textbooks. The interesting
-> parts are graph-aware retrieval, local-first LLMs, streaming UX, adaptive
-> practice, live readiness checks and clearly stated production boundaries.
+> parts are graph-aware retrieval, a local-first LLM that can be swapped for a
+> hosted one by configuration, streaming UX, adaptive practice, live readiness
+> checks and clearly stated production boundaries.
 
 Show:
 
@@ -66,7 +67,10 @@ Talking points:
   coverage relationships.
 - OpenSearch provides hybrid BM25 + vector retrieval.
 - Ollama is the local inference path; `PRIVACY_LOCAL_ONLY=true` makes the API
-  refuse any remote LLM mode.
+  refuse any remote LLM mode. `LLM_MODE=remote` with `PRIVACY_LOCAL_ONLY=false`
+  sends the same prompts to an OpenAI-compatible endpoint instead (see the
+  [Model section of the 30-minute script](CLIENT_DEMO_30MIN.md#model)); nothing
+  else in the pipeline changes.
 - SQLite stores synthetic learner mastery.
 - `/health/ready` and `/api/v1/demo/status` separate service health from demo
   readiness.
@@ -94,8 +98,11 @@ Open the **AI Tutor** (`/chat`).
 Ask:
 
 ```text
-What caused the American Revolution?
+What was the Stamp Act and how did it lead to colonial resistance?
 ```
+
+(The broader "What caused the American Revolution?" works too and retrieves
+more tangential passages; use it when you want to discuss ranking.)
 
 Show:
 
@@ -172,9 +179,11 @@ Use the [5-minute script](DEMO_5MIN.md).
   harness.
 - **OpenSearch unavailable:** show the graph and explain the retrieval
   dependency.
-- **Ollama unavailable:** show `/demo-status`, the API contracts and the docs.
-  Do not switch to a remote model unless the audience has explicitly approved
-  it.
+- **Hosted model unavailable:** set `LLM_MODE=local` and
+  `PRIVACY_LOCAL_ONLY=true`, restart the API, continue locally and say so.
+- **Ollama unavailable (local mode):** show `/demo-status`, the API contracts
+  and the docs. Switch to a hosted model only if the audience accepts that
+  questions and excerpts leave the machine, and say which model answers.
 - **Frontend unavailable:** demo with `/docs` and `curl` requests against
   `/api/v1/ask`, `/api/v1/graph/stats` and `/health/ready`.
 

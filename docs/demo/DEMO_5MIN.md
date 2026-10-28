@@ -24,6 +24,10 @@ make demo-eval
 make demo-client-check
 ```
 
+Decide which model answers before `make run-api` (see the
+[Model section of the 30-minute script](CLIENT_DEMO_30MIN.md#model)); the
+evaluation above runs in local mode either way.
+
 ## 0:00–0:45: What it is
 
 Open `http://localhost:3000` and `/demo-status`.
@@ -55,7 +59,7 @@ Open the **AI Tutor** (`/chat`).
 Ask:
 
 ```text
-What caused the American Revolution?
+What was the Stamp Act and how did it lead to colonial resistance?
 ```
 
 Show:
