@@ -15,7 +15,7 @@ from loguru import logger
 from backend.app.core.exceptions import ContentNotFoundError, QuizGenerationError
 from backend.app.core.subjects import get_subject
 from backend.app.nlp.llm_client import get_llm_client
-from backend.app.rag.retriever import get_retriever
+from backend.app.rag.retriever import get_retriever, is_reference_section
 from backend.app.ui_payloads.quiz import Quiz, QuizOption, QuizQuestion
 
 
@@ -60,8 +60,13 @@ class QuizGenerator:
             f"Generating quiz for topic: {topic} (target_difficulty={target_difficulty or 'mixed'})"
         )
 
-        # 1. Retrieve content
-        chunks = self.retriever.retrieve(query=topic, top_k=2)  # Get top 2 chunks for context
+        # 1. Retrieve content. A bibliography chunk matches a topic through its book titles,
+        # so retrieve a few candidates and skip reference sections.
+        chunks = [
+            chunk
+            for chunk in self.retriever.retrieve(query=topic, top_k=5)
+            if not is_reference_section(chunk)
+        ]
         if not chunks:
             logger.warning(f"No content found for topic: {topic}")
             raise ContentNotFoundError(f"No content found for {topic}")

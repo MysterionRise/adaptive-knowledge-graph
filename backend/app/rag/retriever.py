@@ -16,6 +16,16 @@ from backend.app.core.subjects import get_subject
 from backend.app.nlp.embeddings import get_embedding_model
 from backend.app.rag.index_fingerprint import fingerprint
 
+# Sections that list other works instead of teaching the subject (US History's "Further
+# Reading" bibliography). Quizzes and reading lists skip them; question answering keeps the
+# whole index, which is what its evaluation measures.
+REFERENCE_SECTIONS = frozenset({"further reading"})
+
+
+def is_reference_section(chunk: dict) -> bool:
+    """True for a chunk from a section that lists other works, such as "Further Reading"."""
+    return (chunk.get("section") or "").strip().lower() in REFERENCE_SECTIONS
+
 
 class OpenSearchRetriever:
     """Retriever using OpenSearch vector database."""
