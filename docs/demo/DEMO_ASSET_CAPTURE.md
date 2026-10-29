@@ -22,8 +22,11 @@ docs/assets/demo/
 
 ## Recording
 
-- `demo-walkthrough.mp4`: a 3–5 minute silent walkthrough covering status,
-  chat, graph, assessment and the evaluation report.
+- `demo-walkthrough.mp4`: a silent walkthrough of 2–5 minutes covering
+  status, chat, graph, assessment and the evaluation report. Keep it in
+  `docs/assets/demo/` locally (ignored by git, because recordings exceed the
+  1,000 KB pre-commit limit) and attach it to the GitHub release:
+  `gh release upload v<version> docs/assets/demo/demo-walkthrough.mp4`.
 
 ## Acceptance criteria
 

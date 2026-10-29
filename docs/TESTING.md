@@ -139,21 +139,18 @@ for merging into `main`):
 | Documentation Check | markdownlint on `*.md`, `docs/**`, `frontend/*.md`, `infra/**` and `.github/*.md` |
 | Security Scan | bandit, with results uploaded to code scanning |
 | Dependency Audit (new advisories) | When a pull request changes a lockfile or an `osv-scanner.toml`: osv-scanner on the change and on the base branch; fails only on advisories the change adds |
+| Tribunal Tests | `pytest -m tribunal`, the adversarial risk register (required since v0.3.0) |
+| E2E Tests (Playwright) | The hermetic Chromium suite (`npm run test:e2e`, with the API stubbed) on every pull request, push and manual dispatch (required since v0.3.0) |
+| Link Check | lychee in offline mode over the same Markdown files as the documentation check (required since v0.3.0) |
+| Shellcheck | `shellcheck scripts/*.sh` (required since v0.3.0) |
 
-Advisory jobs (they report but do not block yet; the v0.3.0 release makes them
-required, except the full dependency scan):
+Advisory jobs (they report but do not block):
 
-- **Tribunal Tests:** `pytest -m tribunal`.
 - **Dependency Audit (full scan):** osv-scanner over `poetry.lock` and
   `frontend/package-lock.json`, with results uploaded to code scanning. It
   stays advisory, because a newly published advisory would otherwise block
   unrelated pull requests; the required gate is the new-advisories job above.
-- **Link Check:** lychee in offline mode over the same Markdown files as the
-  documentation check.
-- **npm audit:** part of the frontend job.
-- **E2E Tests (Playwright):** the hermetic Chromium suite (`npm run test:e2e`,
-  with the API stubbed) on every pull request, push and manual dispatch.
-- **Shellcheck:** `shellcheck scripts/*.sh`.
+- **npm audit:** part of the frontend job, advisory for the same reason.
 
 The live-stack integration suite runs locally with `make test-integration`.
 Separate workflows run CodeQL analysis, build the Docker images when their

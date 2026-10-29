@@ -44,3 +44,11 @@ jobs:
 
       - name: Show image size
         run: docker image ls adaptive-kg-api:ci
+
+      - name: Check that the image reports the package version
+        # The Dockerfile registers the project after copying it; app_version reads this
+        run: |
+          expected=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["poetry"]["version"])')
+          actual=$(docker run --rm adaptive-kg-api:ci python -c 'from importlib.metadata import version; print(version("adaptive-knowledge-graph"))')
+          echo "image reports ${actual}; pyproject.toml says ${expected}"
+          [ "${actual}" = "${expected}" ]

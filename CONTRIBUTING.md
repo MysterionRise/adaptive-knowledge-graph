@@ -81,7 +81,7 @@ shares), so recreate it after pulling:
 
 ```bash
 poetry env remove --all
-poetry install --without pyirt,pybkt
+poetry install
 make quickstart   # reinstalls the spaCy model en_core_web_sm; safe to re-run
 ```
 

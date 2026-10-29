@@ -8,7 +8,7 @@ with cited answers and adaptive quizzes, running entirely on your own machine.
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
 [![Node 24 LTS](https://img.shields.io/badge/node-24%20LTS-339933.svg)](.node-version)
 
-<!-- hero image: added in the v0.3.0 release PR (#104) -->
+![The AI tutor answering a US History question with numbered citations, the related concepts found in the knowledge graph and an open source passage](docs/assets/demo/03-chat-citations.png)
 
 Adaptive Knowledge Graph combines a [Neo4j](https://neo4j.com/) knowledge graph,
 hybrid BM25 and vector search in [OpenSearch](https://opensearch.org/) and a
@@ -163,7 +163,13 @@ Approximate memory use of the full local stack:
 - **GPU:** optional. `EMBEDDING_DEVICE=auto` uses CUDA or Apple Silicon (MPS)
   when available and falls back to CPU.
 - **Time:** the first seed downloads the embedding model and embeds about
-  19,000 chunks. On CPU this takes tens of minutes.
+  16,600 chunks. On CPU this takes tens of minutes.
+
+Measured on an Apple M1 Max laptop (64 GB, embeddings on Apple Silicon) on
+27 October 2026, from a fresh clone: `make quickstart` took about 10 minutes,
+of which the seed took 9. The Poetry and npm caches and the embedding model
+were already on the machine; a first run on a new machine adds their
+downloads.
 
 ## Quickstart
 
@@ -348,10 +354,28 @@ when `environment_valid` is `true`: every request returned `200` and KG
 expansion never failed. `make eval-compare BASE=… HEAD=…` compares two
 reports case by case.
 
-<!-- eval table: filled in the release PR (#104) with the template and wording
-rule in docs/evals/README.md#reporting-a-comparison: per-arm rates plus
-win/tie/loss and the sign test, term recall is answer_term_recall_non_echo,
-no delta column -->
+The table reports the run behind [`docs/evals/latest.json`](docs/evals/latest.json)
+(golden set version 2, 53 cases, `llama3.1:8b-instruct-q4_K_M`, hybrid
+retrieval without the reranker; commit, models and data counts are in the
+report's provenance). Each case is asked in both modes, so the paired counts
+carry the comparison, not the difference between the two rates; see
+[Reporting a comparison](docs/evals/README.md#reporting-a-comparison).
+
+| Metric | KG | Plain | KG wins | Ties | Plain wins | Sign test p |
+| --- | --- | --- | --- | --- | --- | --- |
+| Citation hit rate | 0.714 | 0.816 | 2 | 40 | 7 | 0.18 |
+| Expected-source MRR | 0.574 | 0.608 | 11 | 28 | 14 | 0.69 |
+| Term recall (non-echo) | 0.645 | 0.640 | 10 | 32 | 11 | 1.00 |
+| Unsupported refusal rate | 1.000 | 1.000 | 0 | 4 | 0 | n/a |
+| Prompt-injection resistance | 0.750 | 0.750 | 0 | 4 | 0 | n/a |
+
+On this run no metric shows a difference the discordant pairs support. The
+largest, citation hit rate, is 2 KG wins against 7 plain wins (sign test
+p = 0.18), so KG expansion is not shown to help or hurt on this set.
+
+Each rate is over the cases that define the metric; a win means that mode did
+better on that case. A difference between the rates is a claim only when the
+discordant pairs support it.
 
 The metrics are heuristic (keyword and source-title matching). They are meant
 for regression tracking, not as a benchmark; see

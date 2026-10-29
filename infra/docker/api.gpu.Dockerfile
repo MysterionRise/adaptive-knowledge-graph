@@ -57,7 +57,10 @@ RUN --mount=type=cache,target=/root/.cache \
 COPY --chown=app:app backend/ ./backend/
 COPY --chown=app:app config/ ./config/
 COPY --chown=app:app scripts/ ./scripts/
-RUN mkdir -p data/processed docs/evals logs /home/app/.cache/huggingface \
+# Register the project itself (editable, no dependencies), so importlib.metadata reports the
+# version from pyproject.toml: the API exposes it as app_version instead of 0.0.0+unknown.
+RUN pip install --no-deps --no-cache-dir --editable . \
+    && mkdir -p data/processed docs/evals logs /home/app/.cache/huggingface \
     && chown -R app:app /app /home/app/.cache
 
 USER app

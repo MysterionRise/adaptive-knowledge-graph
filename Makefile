@@ -57,7 +57,7 @@ install: ## Install runtime dependencies (no dev tools)
 	poetry install --only main
 
 install-dev: ## Install all dependencies including dev tools, and the pre-commit hooks
-	poetry install --without pyirt,pybkt
+	poetry install
 	poetry run pre-commit install
 
 # Tests and code quality
