@@ -349,9 +349,10 @@ class LLMClient:
         payload: dict[str, Any] = {
             "model": self.remote_model,
             "messages": messages,
-            "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if settings.openrouter_send_temperature:
+            payload["temperature"] = temperature
         if stream:
             payload["stream"] = True
 

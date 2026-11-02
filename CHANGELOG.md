@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The case hash leaves out `stratum` and `split`, so every case keeps the hash
   it had in version 2 and earlier reports stay comparable.
 
+### Fixed
+
+- Hosted Claude 5.x models through Anthropic's OpenAI-compatible endpoint
+  answered every request with HTTP 400 ("`temperature` is deprecated for this
+  model"), so answers, quizzes, recommendations and graph queries all failed
+  with 503. `OPENROUTER_SEND_TEMPERATURE=false` leaves `temperature` out of
+  remote requests; the default (`true`) keeps today's behaviour.
+
 ## [0.3.0] - 2026-10-29
 
 The first tagged release: the open-source quality sprint
