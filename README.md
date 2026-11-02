@@ -158,6 +158,12 @@ Approximate memory use of the full local stack:
 
 - **Memory:** 16 GB RAM minimum, which is tight (close other applications);
   32 GB recommended.
+- **Docker Desktop (macOS, Windows):** Neo4j and OpenSearch run inside
+  Docker's virtual machine, so its memory limit (Settings, Resources) must
+  hold both, about 5–6 GB, plus any other containers you run. When it is too
+  small, Docker stops one of them with exit code 137 in the middle of a
+  session. 8 GB is enough for this stack alone; give Docker more if other
+  projects' containers run at the same time.
 - **Disk:** about 20 GB free for Docker images, the Ollama model, the BGE-M3
   download (about 2.3 GB) and the indices.
 - **GPU:** optional. `EMBEDDING_DEVICE=auto` uses CUDA or Apple Silicon (MPS)
