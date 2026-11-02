@@ -158,6 +158,12 @@ Approximate memory use of the full local stack:
 
 - **Memory:** 16 GB RAM minimum, which is tight (close other applications);
   32 GB recommended.
+- **Docker Desktop (macOS, Windows):** Neo4j and OpenSearch run inside
+  Docker's virtual machine, so its memory limit (Settings, Resources) must
+  hold both, about 5–6 GB, plus any other containers you run. When it is too
+  small, Docker stops one of them with exit code 137 in the middle of a
+  session. 8 GB is enough for this stack alone; give Docker more if other
+  projects' containers run at the same time.
 - **Disk:** about 20 GB free for Docker images, the Ollama model, the BGE-M3
   download (about 2.3 GB) and the indices.
 - **GPU:** optional. `EMBEDDING_DEVICE=auto` uses CUDA or Apple Silicon (MPS)
@@ -304,7 +310,7 @@ need:
 | `CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS` | `http://localhost:3000,http://localhost:3001`; `GET,POST,OPTIONS`; `Content-Type,X-API-Key,X-Request-ID` | Comma-separated CORS allow-lists. |
 | `TRUST_PROXY_HEADERS` | `false` | Keys rate limits on the right-most `X-Forwarded-For` hop. Enable it only behind a proxy that appends the client IP. |
 | `PRIVACY_LOCAL_ONLY` | `true` | Keeps questions, textbook context and usage data local. While it is `true` the API refuses to start unless `LLM_MODE=local`, `LLM_OLLAMA_HOST` is loopback or private (`localhost`, `ollama`, `host.docker.internal`, `host.containers.internal`, a private IP, or a name resolving only to those), `LLM_LOCAL_MODEL` is not an Ollama cloud model (`-cloud`, `:cloud`) and no LangSmith tracing variable (`LANGSMITH_TRACING`, `LANGCHAIN_TRACING_V2`, ...) is on. The API also runs the Hugging Face Hub offline once its models are cached. |
-| `LLM_MODE` | `local` | `local` uses Ollama. `remote` uses the OpenAI-compatible chat-completions endpoint at `OPENROUTER_BASE_URL` (OpenRouter by default; any provider with that API works) with `OPENROUTER_API_KEY` and `OPENROUTER_MODEL`. `hybrid` tries Ollama and falls back to that endpoint. Both remote modes send questions and retrieved excerpts to the provider and require `PRIVACY_LOCAL_ONLY=false`; the demo status page then reports the hosted model as the one that answers. |
+| `LLM_MODE` | `local` | `local` uses Ollama. `remote` uses the OpenAI-compatible chat-completions endpoint at `OPENROUTER_BASE_URL` (OpenRouter by default; any provider with that API works) with `OPENROUTER_API_KEY` and `OPENROUTER_MODEL`. `hybrid` tries Ollama and falls back to that endpoint. Both remote modes send questions and retrieved excerpts to the provider and require `PRIVACY_LOCAL_ONLY=false`; the demo status page then reports the hosted model as the one that answers. For Claude 5.x through Anthropic (`OPENROUTER_BASE_URL=https://api.anthropic.com/v1`), also set `OPENROUTER_SEND_TEMPERATURE=false`: those models reject any temperature but their default. |
 | `EMBEDDING_DEVICE` | `auto` | `auto` picks `cuda`, then `mps`, then `cpu`. Set a device to override. |
 | `LLM_LOCAL_MODEL` | `llama3.1:8b-instruct-q4_K_M` | Ollama model tag. |
 | `LLM_OLLAMA_HOST` | `http://localhost:11434` | Ollama URL. |
