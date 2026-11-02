@@ -27,8 +27,8 @@
     "react-dom": "^19.3.1",
     "cytoscape": "^3.34.4",
     "cytoscape-cose-bilkent": "^4.1.0",
-    "axios": "^1.20.0",
-    "lucide-react": "^1.61.0",
+    "axios": "^1.21.0",
+    "lucide-react": "^1.65.0",
     "react-markdown": "^10.1.0",
     "zustand": "^5.0.16"
   },
@@ -46,8 +46,8 @@
     "jest-environment-jsdom": "^30.5.2",
     "typescript": "^5.6.0",
     "tailwindcss": "^3.4.19",
-    "postcss": "^8.5.31",
-    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.32",
+    "autoprefixer": "^10.6.2",
     "eslint": "^9.39.0",
     "eslint-config-next": "^16.4.3"
   }
