@@ -49,7 +49,10 @@ are rehearsed:
   `OPENROUTER_BASE_URL` pointing at an OpenAI-compatible endpoint, plus
   `OPENROUTER_MODEL` and `OPENROUTER_API_KEY`. Questions and retrieved excerpts
   go to that provider. `/demo-status` names the model that answers, and so
-  should you.
+  should you. For Claude 5.x through Anthropic, use
+  `OPENROUTER_BASE_URL=https://api.anthropic.com/v1` and
+  `OPENROUTER_SEND_TEMPERATURE=false`; those models reject any temperature
+  other than their default.
 
 Switching is one edit to `.env` and an API restart (about ten seconds).
 Retrieval, the graph, the quizzes and the evaluation evidence are the same in

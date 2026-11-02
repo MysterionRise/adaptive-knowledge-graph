@@ -173,6 +173,10 @@ class Settings(BaseSettings):
     openrouter_model: str = "mistralai/mixtral-8x7b-instruct"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_verify_ssl: bool = True
+    # False leaves `temperature` out of every remote request (answers, quizzes, recommendations
+    # and graph queries), so the provider applies the model's default. Claude 5.x models on
+    # Anthropic's OpenAI-compatible endpoint reject any other value with HTTP 400.
+    openrouter_send_temperature: bool = True
 
     # Embeddings
     embedding_model: str = "BAAI/bge-m3"

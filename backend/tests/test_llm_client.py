@@ -48,6 +48,7 @@ def llm_settings():
         mock_settings.openrouter_base_url = "https://openrouter.ai/api/v1"
         mock_settings.openrouter_model = REMOTE_MODEL
         mock_settings.openrouter_verify_ssl = True
+        mock_settings.openrouter_send_temperature = True
         mock_settings.privacy_local_only = False
         mock_settings.llm_temperature = 0.1
         mock_settings.llm_seed = None
@@ -383,6 +384,19 @@ class TestGenerateOpenRouter:
         assert payload["messages"][1] == {"role": "user", "content": "user prompt"}
         assert payload["temperature"] == 0.2
         assert payload["max_tokens"] == 512
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("stream", [False, True])
+    async def test_temperature_is_left_out_when_the_provider_rejects_it(self, stream):
+        # OPENROUTER_SEND_TEMPERATURE=false, for Claude 5.x on Anthropic's endpoint
+        llm_client_module.settings.openrouter_send_temperature = False
+        client = _make_client(mode="remote", api_key="sk-test-123")
+
+        _, payload, _, _ = client._openrouter_request("user prompt", None, 0.3, 512, stream=stream)
+
+        assert "temperature" not in payload
+        assert payload["max_tokens"] == 512
+        assert payload.get("stream", False) is stream
 
     @pytest.mark.asyncio
     async def test_no_system_prompt_omits_system_message(self):
