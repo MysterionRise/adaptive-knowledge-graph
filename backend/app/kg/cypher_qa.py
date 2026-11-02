@@ -460,7 +460,8 @@ class CypherQAService:
                     base_url=settings.openrouter_base_url,
                     api_key=SecretStr(settings.openrouter_api_key),
                     model=settings.openrouter_model,
-                    temperature=0.0,
+                    # None: langchain-openai leaves it out of the request (see the setting)
+                    temperature=0.0 if settings.openrouter_send_temperature else None,
                 )
         return self._llm
 
