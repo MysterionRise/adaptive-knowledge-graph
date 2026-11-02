@@ -113,6 +113,9 @@ If anyone other than you can reach the API, run it in production mode:
     tooling that is not in the production bundle, until a fixed release
     exists
     ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166)).
+  - `deepmerge` 4.3.1, a dev-only dependency of the frontend unit-test runner
+    (jest) that is not in the production bundle, until a fixed release exists
+    ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
   read that key. An API key therefore only gates non-browser clients such as
