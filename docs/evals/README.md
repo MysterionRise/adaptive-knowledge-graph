@@ -5,7 +5,10 @@ This directory holds the latest KG-RAG evaluation report and, in
 tracking. The harness compares knowledge-graph-expanded retrieval with plain
 retrieval on the golden set in
 [`data/evals/golden_qa.yaml`](../../data/evals/golden_qa.yaml): 53 questions,
-27 for US History and 26 for Economics.
+27 for US History and 26 for Economics. Since version 3 every question has a
+stratum and belongs to the rehearsal or the final split; the
+[evaluation protocol](protocol.md) says how they were drawn, which split to
+use when, and the bar a release has to meet.
 
 ## Running it
 
@@ -48,6 +51,7 @@ takes about 11 minutes. Useful options:
 | `--ollama-url URL` | Where to read the model digest (default `LLM_OLLAMA_HOST`; while `PRIVACY_LOCAL_ONLY=true`, only a host the API accepts too: loopback, a private address, `ollama` or `host.docker.internal`) |
 | `--api-key KEY` | `X-API-Key` for the API (default `API_KEY` from `.env` or the environment); needed when the API has a key, because `/api/v1/demo/provenance` requires it |
 | `--no-history` | Do not write a `history/` snapshot |
+| `--split rehearsal` | Only rehearsal (and pending) cases, written to `latest-rehearsal.json`/`.md`; `final` runs the held-out cases, `all` (default) every case; see the [protocol](protocol.md) |
 
 With Make, pass them through `EVAL_ARGS`:
 
@@ -56,7 +60,23 @@ make eval-rag EVAL_ARGS="--subject economics --limit 3"
 ```
 
 `check_demo_eval.py` rejects partial reports (for example from `--limit`)
-unless you pass `--allow-partial`, and always rejects retrieval-only reports.
+unless you pass `--allow-partial`, and always rejects retrieval-only and
+rehearsal-split reports.
+
+### Rehearsal and final splits
+
+While developing, evaluate the rehearsal split and compare it with a baseline:
+
+```bash
+make eval-rehearsal                                  # --split rehearsal
+make eval-rehearsal EVAL_ARGS="--retrieval-only"     # citation metrics only, no LLM
+```
+
+Rehearsal runs write `latest-rehearsal.*` (or `latest-retrieval-rehearsal.*`),
+so the release evidence in `latest.*` stays put. The final split runs only at
+a release gate (`--split final`, or `make demo-eval` for every case). The case
+hash leaves out `stratum` and `split`, so reports from before version 3 can
+still be compared case by case.
 
 ## Reproducible runs
 
