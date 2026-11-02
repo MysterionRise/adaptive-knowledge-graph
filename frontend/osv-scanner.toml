@@ -18,3 +18,15 @@ reason = "braces 3.0.3 is a dev-only dependency (via chokidar and micromatch in 
 id = "GHSA-gcqx-w48m-w2h4"
 ignoreUntil = 2027-01-31
 reason = "deepmerge 4.3.1 is a dev-only dependency (via jest-config in jest 30, the unit-test runner) and is not in the production bundle; no fixed release yet; tracked in #279"
+
+# --- glob 10 and 13: fixed only in glob 14, which the tooling does not use yet; dev-only (#279)
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2027-01-31
+reason = "glob 10.5.0 and 13.0.6 are dev-only dependencies (via jest 30 and tailwindcss 3/sucrase) and are not in the production bundle; the fix is only in glob 14, a major the tooling has not adopted; tracked in #279"
+
+# --- minimatch 3, 9 and 10: fixed only in minimatch 11, which the tooling does not use yet; dev-only (#279)
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-01-31
+reason = "minimatch 3.1.5, 9.0.9 and 10.2.6 are dev-only dependencies (via ESLint 9 and its plugins, jest 30 and tailwindcss 3) and are not in the production bundle; the fix is only in minimatch 11, a major the tooling has not adopted; tracked in #279"
