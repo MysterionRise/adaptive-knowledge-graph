@@ -7,7 +7,12 @@ definitions, outside the gate. It lists metric flips per compared case and mode 
 hit, expected-source rank, KG expansion status, refusal and prompt-injection results, HTTP
 status), new and removed cases, and the paired head-versus-base counts per mode and metric
 (wins, ties, losses, discordant pairs and an exact sign test), next to each run's own
-KG-versus-plain counts.
+KG-versus-plain counts and bootstrap intervals.
+
+When the two reports are repeats (same commit, settings, golden set, split, LLM and seed;
+see ``repeat_configuration``), the cases on which they disagree are the noise floor.
+--noise-floor FILE records it for the run mode (full or retrieval-only) in FILE, which
+scripts/evaluate_rag.py reads (docs/evals/protocol.md).
 
 Exit status 1 (regression) when either report is partial (--subject/--limit or an
 unavailable subject) or invalid, when one is a retrieval-only run and the other a full run,
@@ -18,6 +23,7 @@ Usage:
     poetry run python scripts/compare_evals.py BASE.json HEAD.json
     poetry run python scripts/compare_evals.py BASE.json HEAD.json --out delta.md
     make eval-compare BASE=docs/evals/history/<base>.json HEAD=docs/evals/latest.json
+    make eval-noise-floor BASE=<run 1>.json HEAD=<run 2>.json
 """
 
 import argparse
@@ -25,8 +31,22 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from backend.app.core.eval_report import as_dict, is_partial
-from backend.app.core.eval_stats import PAIRED_METRICS, outcome, paired_counts
+from backend.app.core.eval_report import (
+    as_dict,
+    configuration_differences,
+    is_partial,
+    noise_configuration,
+    repeat_configuration,
+    run_mode,
+)
+from backend.app.core.eval_stats import (
+    PAIRED_METRICS,
+    interval_summary,
+    interval_table,
+    noise_floor,
+    outcome,
+    paired_counts,
+)
 
 KG_CITATION_HIT_DROP_LIMIT = 2
 KG_MRR_DROP_LIMIT = 0.03
@@ -64,10 +84,6 @@ def run_problems(report: dict[str, Any]) -> list[str]:
 
 def _cases(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(r["id"]): r for r in report.get("results") or [] if "id" in r}
-
-
-def _run_mode(report: dict[str, Any]) -> str:
-    return "retrieval-only" if as_dict(report.get("run_config")).get("retrieval_only") else "full"
 
 
 def _kg_citation_stats(
@@ -150,9 +166,9 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
     failures: list[str] = []
     for side, report in (("base", base), ("head", head)):
         failures.extend(f"{side}: {problem}" for problem in run_problems(report))
-    if _run_mode(base) != _run_mode(head):
+    if run_mode(base) != run_mode(head):
         failures.append(
-            f"run modes differ (base {_run_mode(base)}, head {_run_mode(head)}); "
+            f"run modes differ (base {run_mode(base)}, head {run_mode(head)}); "
             "compare two runs of the same mode"
         )
     if hit_drop >= KG_CITATION_HIT_DROP_LIMIT:
@@ -180,8 +196,46 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
             "base": as_dict(base.get("summary")).get("paired"),
             "head": as_dict(head.get("summary")).get("paired"),
         },
+        # Recomputed, so reports written before the intervals existed get them too
+        "intervals": {
+            "base": interval_summary(base.get("results") or []),
+            "head": interval_summary(head.get("results") or []),
+        },
+        "repeat": {
+            "differences": configuration_differences(
+                repeat_configuration(base), repeat_configuration(head)
+            ),
+            "noise_floor": noise_floor(
+                [base_cases[case_id] for case_id in compared],
+                [head_cases[case_id] for case_id in compared],
+            ),
+        },
         "failures": failures,
     }
+
+
+def noise_floor_record(
+    base: dict[str, Any], head: dict[str, Any], result: dict[str, Any]
+) -> dict[str, Any]:
+    """The noise floor of two repeat runs, as evaluate_rag.py reads it."""
+    repeat = result["repeat"]["noise_floor"]
+    return {
+        "measured_on": str(head.get("generated_at") or "")[:10],
+        "runs": [base.get("generated_at"), head.get("generated_at")],
+        "server_git_sha": as_dict(as_dict(head.get("provenance")).get("server")).get("git_sha"),
+        "split": as_dict(head.get("run_config")).get("split") or "all",
+        "cases": result["compared_cases"],
+        "configuration": noise_configuration(head),
+        "floor": repeat["floor"],
+        "modes": repeat["modes"],
+    }
+
+
+def record_noise_floor(path: Path, mode: str, record: dict[str, Any]) -> None:
+    """Store ``record`` as the ``mode`` (full or retrieval-only) noise floor in ``path``."""
+    records = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    records[mode] = record
+    path.write_text(json.dumps(dict(sorted(records.items())), indent=2) + "\n", encoding="utf-8")
 
 
 def _provenance_line(label: str, report: dict[str, Any]) -> str:
@@ -191,7 +245,7 @@ def _provenance_line(label: str, report: dict[str, Any]) -> str:
     llm = provenance.get("llm") or {}
     golden_sha = str(golden_set.get("sha256") or "n/a")[:12]
     return (
-        f"- {label}: generated `{report.get('generated_at', 'n/a')}`, {_run_mode(report)}, server "
+        f"- {label}: generated `{report.get('generated_at', 'n/a')}`, {run_mode(report)}, server "
         f"`{server.get('git_sha', 'n/a')}`, golden set `{golden_sha}`, LLM "
         f"`{llm.get('model', 'n/a')}`"
     )
@@ -238,6 +292,47 @@ def _paired_sections(result: dict[str, Any]) -> list[str]:
                     f"{counts['ties']} | {counts['losses']} | {counts['discordant']} | "
                     f"{_fmt(counts['sign_test_p'])} |"
                 )
+    for side in ("base", "head"):
+        intervals = as_dict(as_dict(result.get("intervals")).get(side))
+        if intervals:
+            lines.extend(
+                [
+                    "",
+                    f"## KG minus plain in the {side} run (95% bootstrap intervals)",
+                    "",
+                    *interval_table(intervals),
+                ]
+            )
+    return lines
+
+
+def _noise_section(result: dict[str, Any]) -> list[str]:
+    """Whether the runs are repeats, and if so how often they disagree."""
+    repeat = as_dict(result.get("repeat"))
+    differences = repeat.get("differences") or []
+    lines = ["", "## Repeat runs", ""]
+    if differences:
+        lines.append("Not repeats of each other, so no noise floor; they differ in:")
+        lines.append("")
+        lines.extend(f"- {difference}" for difference in differences)
+        return lines
+    lines.extend(
+        [
+            "Repeats of the same configuration: the share of cases whose value changed is the "
+            "noise floor (the larger of the two modes).",
+            "",
+            "| Metric | KG changed | Plain changed | Floor |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    floor_values = as_dict(as_dict(repeat.get("noise_floor")).get("floor"))
+    modes = as_dict(as_dict(repeat.get("noise_floor")).get("modes"))
+    for metric, floor in floor_values.items():
+        cells = []
+        for mode in MODES:
+            counts = as_dict(as_dict(modes.get(mode)).get(metric))
+            cells.append(f"{counts.get('changed')} of {counts.get('pairs')}")
+        lines.append(f"| {metric} | {cells[0]} | {cells[1]} | {_fmt(floor)} |")
     return lines
 
 
@@ -266,6 +361,7 @@ def format_markdown(base: dict[str, Any], head: dict[str, Any], result: dict[str
     else:
         lines.append("- PASS")
     lines.extend(_paired_sections(result))
+    lines.extend(_noise_section(result))
     if result["flips"]:
         lines.extend(["", "## Flips", "", "| Case | Mode | Field | Base | Head |"])
         lines.append("| --- | --- | --- | --- | --- |")
@@ -283,6 +379,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("head", help="Head report (e.g. docs/evals/latest.json)")
     parser.add_argument("--out", default=None, help="Also write the Markdown comparison here")
     parser.add_argument("--json", action="store_true", help="Print the comparison as JSON")
+    parser.add_argument(
+        "--noise-floor",
+        default=None,
+        metavar="FILE",
+        help="The reports are repeat runs: record their noise floor for the run mode in FILE "
+        "(e.g. docs/evals/noise-floor.json); exit 1 if they are not repeats",
+    )
     args = parser.parse_args(argv)
 
     base, head = load_report(Path(args.base)), load_report(Path(args.head))
@@ -294,6 +397,17 @@ def main(argv: list[str] | None = None) -> int:
         print(markdown, end="")
     if args.out:
         Path(args.out).write_text(markdown, encoding="utf-8")
+    if args.noise_floor:
+        problems = [*result["failures"], *result["repeat"]["differences"]]
+        if problems:
+            print(
+                f"No noise floor recorded: the runs are not valid repeats ({len(problems)} problems)"
+            )
+            return 1
+        record_noise_floor(
+            Path(args.noise_floor), run_mode(head), noise_floor_record(base, head, result)
+        )
+        print(f"Recorded the {run_mode(head)} noise floor in {args.noise_floor}")
     return 1 if result["failures"] else 0
 
 

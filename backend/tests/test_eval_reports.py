@@ -451,6 +451,8 @@ def test_main_writes_a_valid_report_with_provenance(tmp_path, monkeypatch):
             "http://localhost:11434",
             "--api-key",
             "eval-key-0123456789",
+            "--noise-floor",
+            str(tmp_path / "noise-floor.json"),
         ],
     )
 
@@ -471,6 +473,10 @@ def test_main_writes_a_valid_report_with_provenance(tmp_path, monkeypatch):
     assert report["summary"]["kg_prompt_injection_resistance_rate"] == 1.0
     assert len(list((tmp_path / "out" / "history").glob("*.json"))) == 1
     assert eval_report.provenance_errors(report) == []
+    assert report["summary"]["noise_floor"] == {
+        "applies": False,
+        "reason": f"no noise floor recorded in {tmp_path / 'noise-floor.json'}",
+    }
 
 
 def test_default_api_key_comes_from_the_settings(monkeypatch):
@@ -1019,3 +1025,191 @@ class TestPairedReporting:
         assert "| kg | citation_hit | 4 | 0 | 2 | 2 | 2 | 0.5 |" in text
         assert "## KG versus plain within each run (per case)" in text
         assert "| head | citation_hit | 4 | 0 | 2 | 2 | 2 | 0.5 |" in text
+
+
+# ---------------------------------------------------------------------------
+# Intervals, the primary endpoint and the noise floor (#209)
+# ---------------------------------------------------------------------------
+
+
+def _floor_file(tmp_path: Path, report: dict[str, Any], **configuration: Any) -> Path:
+    """A noise-floor record for the report's run mode; keyword arguments change its
+    configuration."""
+    recorded = {**eval_report.noise_configuration(report), **configuration}
+    path = tmp_path / "noise-floor.json"
+    path.write_text(
+        json.dumps(
+            {
+                recorded["run_mode"]: {
+                    "measured_on": "2026-11-03",
+                    "server_git_sha": "b" * 40,
+                    "split": "rehearsal",
+                    "configuration": recorded,
+                    "floor": {"citation_hit": 0.0, "answer_term_recall_non_echo": 0.125},
+                }
+            }
+        )
+    )
+    return path
+
+
+class TestRunConfiguration:
+    def test_noise_configuration_leaves_out_the_commit_and_retrieval_settings(self):
+        configuration = eval_report.noise_configuration(_report())
+        assert set(configuration) == {"run_mode", "embedding", "reranker", "llm"}
+        assert configuration["llm"] == {
+            "mode": "local",
+            "model": "llama3.1:8b",
+            "ollama_digest": "sha256:abc",
+            "temperature": 0.0,
+            "seed": 42,
+        }
+        retrieval_only = eval_report.noise_configuration(_report(retrieval_only=True))
+        assert retrieval_only["run_mode"] == "retrieval-only"
+        assert "llm" not in retrieval_only
+
+    def test_repeat_configuration_adds_the_commit_golden_set_split_and_retrieval(self):
+        configuration = eval_report.repeat_configuration(_report(split="rehearsal"))
+        assert configuration["server_git_sha"] == "a" * 40
+        assert configuration["golden_set_sha256"] == golden_set_sha256()
+        assert configuration["split"] == "rehearsal"
+        assert configuration["retrieval"] == SERVER_PROVENANCE["retrieval"]
+        assert eval_report.repeat_configuration(_report())["split"] == "all"
+
+    def test_configuration_differences_are_dotted_paths(self):
+        assert eval_report.configuration_differences(
+            {"a": {"b": 1}, "c": 2}, {"a": {"b": 2}, "c": 2, "d": 3}
+        ) == ["a.b: 1 != 2", "d: None != 3"]
+
+    def test_protocol_deviations(self):
+        assert eval_report.protocol_deviations(_report()) == []
+        report = _report()
+        report["provenance"]["llm"].update(temperature=0.1, seed=None)
+        assert eval_report.protocol_deviations(report) == [
+            "LLM temperature 0.1, not 0 (LLM_TEMPERATURE=0)",
+            "no LLM seed (set LLM_SEED)",
+        ]
+        assert eval_report.protocol_deviations(_report(retrieval_only=True)) == []
+
+
+class TestEvidenceReporting:
+    def test_summary_has_intervals_and_the_primary_endpoint(self):
+        summary = evaluate_rag._summarize([_case("c1"), _case("c2")])
+        assert summary["intervals"]["overall"]["citation_hit"]["pairs"] == 2
+        assert summary["primary_endpoint"]["verdict"] == "no_difference"
+        assert summary["primary_endpoint"]["cases"] == "unlabelled"
+        assert summary["noise_floor"] is None
+
+    def test_a_floor_measured_with_the_same_configuration_applies(self, tmp_path):
+        report = _report()
+        floor = evaluate_rag.noise_floor_for(report, _floor_file(tmp_path, report))
+        assert floor["applies"] is True
+        assert floor["floor"]["answer_term_recall_non_echo"] == 0.125
+        assert (floor["measured_on"], floor["split"]) == ("2026-11-03", "rehearsal")
+        summary = evaluate_rag._summarize(report["results"], floor)
+        assert summary["noise_floor"] == floor
+        assert summary["primary_endpoint"]["noise_floor"] == 0.0
+
+    def test_a_floor_from_another_configuration_does_not_apply(self, tmp_path):
+        report = _report()
+        llm = {**eval_report.noise_configuration(report)["llm"], "temperature": 0.1, "seed": None}
+        floor = evaluate_rag.noise_floor_for(report, _floor_file(tmp_path, report, llm=llm))
+        assert floor["applies"] is False
+        assert "llm.seed: None != 42" in floor["reason"]
+        assert "llm.temperature: 0.1 != 0.0" in floor["reason"]
+        summary = evaluate_rag._summarize(report["results"], floor)
+        assert summary["primary_endpoint"]["noise_floor"] is None
+
+    def test_a_missing_file_or_run_mode_is_recorded_as_such(self, tmp_path):
+        report = _report()
+        missing = tmp_path / "none.json"
+        assert evaluate_rag.noise_floor_for(report, missing) == {
+            "applies": False,
+            "reason": f"no noise floor recorded in {missing}",
+        }
+        retrieval_only = _floor_file(tmp_path, _report(retrieval_only=True))
+        assert (
+            "no full noise floor" in evaluate_rag.noise_floor_for(report, retrieval_only)["reason"]
+        )
+
+    def test_markdown_shows_the_endpoint_intervals_floor_and_deviations(self, tmp_path):
+        report = _report()
+        report["provenance"]["llm"]["temperature"] = 0.1
+        report["summary"] = evaluate_rag._summarize(
+            report["results"], {"applies": False, "reason": "no noise floor recorded in x"}
+        )
+        evaluate_rag.write_reports(tmp_path, report, history=False)
+        markdown = (tmp_path / "latest.md").read_text()
+        assert "## Primary endpoint" in markdown
+        assert "No evidence of a difference in citation hit rate: KG 1.000" in markdown
+        assert "## Intervals (KG minus plain, per case)" in markdown
+        assert "| all | 2 | 1.000 / 1.000 | +0.000 [+0.000, +0.000] |" in markdown
+        assert "Not applied: no noise floor recorded in x." in markdown
+        assert "- LLM temperature 0.1, not 0 (LLM_TEMPERATURE=0)" in markdown
+        for key in ("intervals", "noise_floor", "primary_endpoint"):
+            assert f"`{key}`:" not in markdown
+
+    def test_markdown_lists_an_applied_floor(self, tmp_path):
+        report = _report()
+        floor = evaluate_rag.noise_floor_for(report, _floor_file(tmp_path, report))
+        report["summary"] = evaluate_rag._summarize(report["results"], floor)
+        evaluate_rag.write_reports(tmp_path, report, history=False)
+        markdown = (tmp_path / "latest.md").read_text()
+        assert "Measured 2026-11-03 on `bbbbbbbbbbbb` (rehearsal split" in markdown
+        assert "- `answer_term_recall_non_echo`: 0.125" in markdown
+
+    def test_rescoring_keeps_the_recorded_noise_floor(self):
+        report = _fixture_report()
+        report["summary"]["noise_floor"] = {"applies": False, "reason": "kept"}
+        cases, sha = rescore_eval.load_cases(FIXTURE_CASES)
+        rescored = rescore_eval.rescore_report(
+            report, cases, cases_path=str(FIXTURE_CASES), cases_sha256=sha
+        )
+        assert rescored["summary"]["noise_floor"] == {"applies": False, "reason": "kept"}
+
+
+class TestNoiseFloorRecording:
+    def test_identical_runs_are_repeats_with_a_zero_floor(self):
+        result = compare_evals.compare(_report(), _report())
+        assert result["repeat"]["differences"] == []
+        assert result["repeat"]["noise_floor"]["floor"]["citation_hit"] == 0.0
+        assert result["intervals"]["head"]["overall"]["citation_hit"]["pairs"] == 2
+
+    def test_main_records_the_floor_per_run_mode(self, tmp_path, capsys):
+        head_cases = _cases_with_hits([True] * 4)
+        head_cases[0]["kg"]["answer_term_recall_non_echo"] = 0.5
+        run1 = _write(tmp_path, _report(_cases_with_hits([True] * 4)), "run1.json")
+        run2 = _write(tmp_path, _report(head_cases), "run2.json")
+        floor_path = tmp_path / "noise-floor.json"
+
+        assert compare_evals.main([str(run1), str(run2), "--noise-floor", str(floor_path)]) == 0
+        out = capsys.readouterr().out
+        assert "| answer_term_recall_non_echo | 1 of 4 | 0 of 4 | 0.25 |" in out
+        assert f"Recorded the full noise floor in {floor_path}" in out
+        assert "## KG minus plain in the head run (95% bootstrap intervals)" in out
+        record = json.loads(floor_path.read_text())["full"]
+        assert record["floor"]["answer_term_recall_non_echo"] == 0.25
+        assert record["modes"]["kg"]["answer_term_recall_non_echo"]["changed_cases"] == ["c0"]
+        assert record["configuration"] == eval_report.noise_configuration(_report())
+        assert (record["cases"], record["split"]) == (4, "all")
+
+        retrieval1 = _write(tmp_path, _report(retrieval_only=True), "retrieval1.json")
+        retrieval2 = _write(tmp_path, _report(retrieval_only=True), "retrieval2.json")
+        args = [str(retrieval1), str(retrieval2), "--noise-floor", str(floor_path)]
+        assert compare_evals.main(args) == 0
+        assert set(json.loads(floor_path.read_text())) == {"full", "retrieval-only"}
+        # A later run of the same configuration picks the floor up
+        assert evaluate_rag.noise_floor_for(_report(), floor_path)["applies"] is True
+
+    def test_runs_that_are_not_repeats_record_nothing(self, tmp_path, capsys):
+        other = _report()
+        other["provenance"]["server"]["git_sha"] = "b" * 40
+        run1 = _write(tmp_path, _report(), "run1.json")
+        run2 = _write(tmp_path, other, "run2.json")
+        floor_path = tmp_path / "noise-floor.json"
+        assert compare_evals.main([str(run1), str(run2), "--noise-floor", str(floor_path)]) == 1
+        out = capsys.readouterr().out
+        assert "Not repeats of each other" in out
+        assert f"- server_git_sha: {'a' * 40!r} != {'b' * 40!r}" in out
+        assert "No noise floor recorded" in out
+        assert not floor_path.exists()

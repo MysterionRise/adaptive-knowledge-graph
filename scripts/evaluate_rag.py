@@ -12,6 +12,11 @@ by the subjects /api/v1/subjects reports as available, and by --split (docs/eval
 rehearsal cases while developing, written to latest-rehearsal.* so the release evidence in
 latest.* stays put, and the final split only at a release gate.
 
+The summary adds KG-minus-plain differences with seeded bootstrap intervals, overall and
+per stratum, the protocol's primary endpoint with the claim its numbers allow, and the
+noise floor recorded in docs/evals/noise-floor.json when it applies to this run's
+configuration (scripts/compare_evals.py --noise-floor measures it).
+
 Requests are paced to the API's /api/v1/ask rate limit (default 10/minute, so about one
 request every 6.25 s; every case asks twice, with and without KG expansion) and HTTP 429
 responses are retried, honouring Retry-After.
@@ -42,7 +47,18 @@ from typing import Any
 import httpx
 import yaml
 
-from backend.app.core.eval_stats import paired_summary
+from backend.app.core.eval_report import (
+    as_dict,
+    configuration_differences,
+    noise_configuration,
+    protocol_deviations,
+)
+from backend.app.core.eval_stats import (
+    interval_summary,
+    interval_table,
+    paired_summary,
+    primary_endpoint,
+)
 from backend.app.core.privacy import ollama_host_problem
 
 REPORT_SCHEMA_VERSION = 2
@@ -566,8 +582,14 @@ def _delta(kg: float | None, plain: float | None, digits: int = 3) -> float | No
     return None if kg is None or plain is None else round(kg - plain, digits)
 
 
-def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate metrics per mode. Answer metrics are None in a retrieval-only run."""
+def _summarize(
+    results: list[dict[str, Any]], noise_floor: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    """Aggregate metrics per mode. Answer metrics are None in a retrieval-only run.
+
+    ``noise_floor`` is what ``noise_floor_for`` found for the run; the primary endpoint's
+    claim uses its citation-hit floor when it applies.
+    """
 
     def successful(mode: str) -> list[dict[str, Any]]:
         return [r for r in results if r[mode].get("status_code") == 200]
@@ -654,9 +676,55 @@ def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "latency_ms_delta": round(kg_latency - plain_latency, 2),
             # Per-case KG-versus-plain counts: the figures to quote instead of the deltas
             "paired": paired_summary(results),
+            # KG minus plain with bootstrap intervals, overall and per stratum (#209)
+            "intervals": interval_summary(results),
+            "noise_floor": dict(noise_floor) if noise_floor is not None else None,
+            "primary_endpoint": primary_endpoint(results, _floor(noise_floor, "citation_hit")),
         }
     )
     return summary
+
+
+def _floor(noise_floor: Mapping[str, Any] | None, metric: str) -> float | None:
+    """The metric's noise floor when one applies to the run, else None."""
+    if not noise_floor or not noise_floor.get("applies"):
+        return None
+    value = as_dict(noise_floor.get("floor")).get(metric)
+    return float(value) if value is not None else None
+
+
+def noise_floor_for(report: dict[str, Any], path: Path) -> dict[str, Any]:
+    """The noise floor recorded in ``path`` for this report's run mode, if it applies.
+
+    It applies only when it was measured with the same LLM, embedding and reranker (see
+    ``noise_configuration``); otherwise the reason is recorded instead.
+    """
+    configuration = noise_configuration(report)
+    run_mode = configuration["run_mode"]
+    try:
+        records = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"applies": False, "reason": f"no noise floor recorded in {path}"}
+    except json.JSONDecodeError as e:
+        return {"applies": False, "reason": f"unreadable noise floor in {path}: {e}"}
+    record = as_dict(as_dict(records).get(run_mode))
+    if not record:
+        return {"applies": False, "reason": f"no {run_mode} noise floor in {path}"}
+    differences = configuration_differences(as_dict(record.get("configuration")), configuration)
+    if differences:
+        return {
+            "applies": False,
+            "reason": f"the {run_mode} noise floor in {path} was measured with a different "
+            "configuration: " + "; ".join(differences),
+        }
+    return {
+        "applies": True,
+        "source": str(path),
+        "measured_on": record.get("measured_on"),
+        "server_git_sha": record.get("server_git_sha"),
+        "split": record.get("split"),
+        "floor": as_dict(record.get("floor")),
+    }
 
 
 def _validity(
@@ -712,6 +780,10 @@ def _fmt(value: Any) -> str:
     return "n/a" if value is None else str(value)
 
 
+# Summary entries the Markdown report shows as sections rather than as bullet lines
+SUMMARY_SECTIONS = frozenset({"paired", "intervals", "noise_floor", "primary_endpoint"})
+
+
 def _paired_table(paired: Mapping[str, Any]) -> list[str]:
     """Markdown section with the per-case KG-versus-plain counts; empty without any."""
     if not paired:
@@ -733,6 +805,56 @@ def _paired_table(paired: Mapping[str, Any]) -> list[str]:
             f"{_fmt(counts.get('mixed'))} | {_fmt(counts.get('discordant'))} | "
             f"{_fmt(counts.get('sign_test_p'))} |"
         )
+    return lines
+
+
+def _evidence_sections(report: dict[str, Any]) -> list[str]:
+    """The primary endpoint, the intervals and the noise floor (#209)."""
+    summary = as_dict(report.get("summary"))
+    lines: list[str] = []
+    endpoint = as_dict(summary.get("primary_endpoint"))
+    if endpoint:
+        lines.extend(
+            [
+                "",
+                "## Primary endpoint",
+                "",
+                str(endpoint.get("claim")),
+                "",
+                "The endpoint is the KG-minus-plain citation hit rate over the final-split "
+                "cases with expected sources (`docs/evals/protocol.md`); quote this sentence, "
+                "not a bare difference.",
+            ]
+        )
+    intervals = as_dict(summary.get("intervals"))
+    if intervals:
+        lines.extend(
+            [
+                "",
+                "## Intervals (KG minus plain, per case)",
+                "",
+                f"Paired bootstrap: {intervals.get('resamples')} resamples of the cases, seed "
+                f"{intervals.get('seed')}, percentile intervals. An interval that includes "
+                "zero is no evidence of a difference, and neither is a difference below the "
+                "noise floor. Citation hit and MRR count the cases with expected sources.",
+                "",
+                *interval_table(intervals),
+            ]
+        )
+    noise = as_dict(summary.get("noise_floor"))
+    if noise:
+        lines.extend(["", "## Noise floor", ""])
+        if noise.get("applies"):
+            floor = as_dict(noise.get("floor"))
+            lines.append(
+                f"Measured {noise.get('measured_on')} on `{str(noise.get('server_git_sha'))[:12]}` "
+                f"({noise.get('split')} split, `{noise.get('source')}`): the share of cases whose "
+                "value changed between two runs of the same configuration, in either mode."
+            )
+            lines.append("")
+            lines.extend(f"- `{metric}`: {_fmt(value)}" for metric, value in floor.items())
+        else:
+            lines.append(f"Not applied: {noise.get('reason')}.")
     return lines
 
 
@@ -762,6 +884,10 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     if reasons:
         lines.extend(["", "## Validity", ""])
         lines.extend(f"- {reason}" for reason in reasons)
+    deviations = protocol_deviations(report)
+    if deviations:
+        lines.extend(["", "## Protocol deviations", ""])
+        lines.extend(f"- {deviation}" for deviation in deviations)
 
     provenance = report.get("provenance") or {}
     server = provenance.get("server") or {}
@@ -793,9 +919,10 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
             f"{_fmt(subject.get('chunk_count'))} chunks"
         )
 
+    lines.extend(_evidence_sections(report))
     lines.extend(["", "## Summary", ""])
     for key, value in report["summary"].items():
-        if key != "paired":
+        if key not in SUMMARY_SECTIONS:
             lines.append(f"- `{key}`: {value}")
     lines.extend(_paired_table(report["summary"].get("paired") or {}))
 
@@ -1075,6 +1202,12 @@ def main() -> None:
         default="docs/evals/protocol.md",
         help="Evaluation protocol whose hash the report records",
     )
+    parser.add_argument(
+        "--noise-floor",
+        default="docs/evals/noise-floor.json",
+        help="Noise floors recorded by compare_evals.py --noise-floor; the report applies the "
+        "one for its run mode when it was measured with the same configuration",
+    )
     args = parser.parse_args()
 
     subjects = [s.strip() for value in args.subject for s in value.split(",") if s.strip()]
@@ -1186,9 +1319,10 @@ def main() -> None:
             "skipped_subjects": skipped_subjects,
             "partial": bool(subjects) or args.limit is not None or bool(skipped_subjects),
         },
-        "summary": _summarize(results),
+        "summary": {},
         "results": results,
     }
+    report["summary"] = _summarize(results, noise_floor_for(report, Path(args.noise_floor)))
 
     for path in write_reports(Path(args.out_dir), report, history=not args.no_history):
         print(f"Wrote {path}")

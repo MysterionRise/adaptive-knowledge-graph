@@ -92,7 +92,12 @@ def build_report(results: list[dict[str, Any]] | None = None, **run_config: Any)
         "validity": validity,
         "provenance": {
             "server": copy.deepcopy(SERVER_PROVENANCE),
-            "llm": {"model": "llama3.1:8b", "ollama_digest": "sha256:abc"},
+            "llm": {
+                "model": "llama3.1:8b",
+                "ollama_digest": "sha256:abc",
+                "temperature": 0.0,
+                "seed": 42,
+            },
             "golden_set": {"path": GOLDEN_SET_PATH, "sha256": golden_set_sha256()},
             "harness": {"git_sha": SERVER_SHA},
         },

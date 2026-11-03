@@ -32,10 +32,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from backend.app.core.eval_stats import STRATA  # noqa: E402
 from scripts.evaluate_rag import _case_hash  # noqa: E402
 
 DEFAULT_CASES = "data/evals/golden_qa.yaml"
-STRATA = ("single_hop", "multi_hop", "meaning", "distribution", "unanswerable", "adversarial")
 SPLITS = ("rehearsal", "final", "pending")
 
 # Checked in order: the first group that shares a tag with the case decides its stratum.
