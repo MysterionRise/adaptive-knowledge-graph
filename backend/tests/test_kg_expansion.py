@@ -190,11 +190,28 @@ class TestExpandQuery:
         concepts = {"photosynthesis", "mitosis"}
         result = expander.expand_query("Explain photosynthesis", concepts)
 
+        # By default only the recognised concepts reach the keyword query; their graph
+        # neighbours are reported as related (#282)
         assert result["original_query"] == "Explain photosynthesis"
-        assert "photosynthesis" in result["extracted_concepts"]
-        assert "chloroplast" in result["expanded_concepts"]
-        assert "photosynthesis" in result["expanded_query"]
-        assert "chloroplast" in result["expanded_query"]
+        assert result["extracted_concepts"] == ["photosynthesis"]
+        assert result["expanded_concepts"] == ["photosynthesis"]
+        assert result["related_concepts"] == ["chloroplast"]
+        assert result["expanded_query"] == "Explain photosynthesis photosynthesis"
+
+    def test_neighbour_budget_adds_neighbours_to_the_keyword_query(self):
+        expander = KGExpander(extraction_strategy="simple", max_neighbours=1)
+        mock_adapter = MagicMock()
+        mock_adapter.query_concept_neighbors.return_value = [
+            {"name": "chloroplast"},
+            {"name": "ATP"},
+        ]
+        expander.neo4j_adapter = mock_adapter
+
+        result = expander.expand_query("Explain photosynthesis", {"photosynthesis"})
+
+        assert result["expanded_concepts"] == ["photosynthesis", "chloroplast"]
+        assert result["related_concepts"] == ["chloroplast", "ATP"]
+        assert result["expanded_query"] == "Explain photosynthesis photosynthesis chloroplast"
 
     def test_no_expansion_when_no_concepts(self):
         expander = KGExpander(extraction_strategy="simple")
@@ -217,7 +234,12 @@ class TestExpandQuery:
         concepts = {"photosynthesis"}
         result = expander.expand_query("Explain photosynthesis", concepts)
 
-        # 1 extracted, expanded to 3 total -> 2 new concepts
+        # Neighbours are off by default: none of the 2 joins the query
+        assert result["expansion_count"] == 0
+        assert len(result["related_concepts"]) == 2
+
+        expander.max_neighbours = 5
+        result = expander.expand_query("Explain photosynthesis", concepts)
         assert result["expansion_count"] == 2
 
 
@@ -563,7 +585,7 @@ class TestConcurrentSubjects:
 
         def ask(subject_id: str):
             try:
-                results[subject_id], _, _ = _expand_query(subject_id, question)
+                results[subject_id] = _expand_query(subject_id, question).concepts
             except BaseException as e:  # surfaced below
                 errors.append(e)
 

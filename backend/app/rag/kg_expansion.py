@@ -36,12 +36,15 @@ class KGExpander:
         max_hops: int | None = None,
         extraction_strategy: Literal["simple", "ensemble", "ner", "yake"] = "ensemble",
         subject_id: str | None = None,
+        max_neighbours: int | None = None,
     ):
         """
         Initialize KG expander.
 
         Args:
             max_hops: Maximum hops in graph for expansion
+            max_neighbours: Graph neighbours added to the keyword query
+                (default RAG_KG_EXPANSION_MAX_NEIGHBOURS)
             extraction_strategy: Concept extraction strategy
                 - "simple": Original substring matching
                 - "ensemble": Multi-strategy extraction (NER + YAKE)
@@ -51,6 +54,9 @@ class KGExpander:
                 (None = default_subject from config/subjects.yaml)
         """
         self.max_hops = max_hops or settings.rag_kg_expansion_hops
+        self.max_neighbours = (
+            settings.rag_kg_expansion_max_neighbours if max_neighbours is None else max_neighbours
+        )
         self.extraction_strategy = extraction_strategy
         self.subject_id = subject_id
         self.neo4j_adapter: Neo4jAdapter | None = None
@@ -180,33 +186,41 @@ class KGExpander:
         """
         Full query expansion pipeline.
 
+        The expansion feeds the keyword (BM25) channel only; the kNN channel embeds the
+        question itself (#282). Adding every neighbour to the embedded text pulled retrieval
+        toward the same high-degree hub concepts on most questions, so by default only the
+        concepts recognised in the question are used, and their graph neighbours are
+        returned as ``related_concepts`` for display.
+
         Args:
             query: Original query
             all_concepts: Set of all known concepts
 
         Returns:
-            Dict with original_query, extracted_concepts, expanded_concepts, expanded_query,
+            Dict with original_query, extracted_concepts, expanded_concepts (the concepts
+            the retrieval uses: the recognised ones plus at most ``max_neighbours``
+            neighbours), related_concepts (their graph neighbours, in Neo4j's order),
+            expanded_query (the keyword-channel text: the question plus expanded_concepts),
             expansion_count and failed_lookups (graph lookups that raised)
         """
         # Extract concepts from query
         extracted = self.extract_concepts_from_query(query, all_concepts)
 
-        # Expand using KG
+        # Look up their neighbours in the graph
         expanded, failed_lookups = self._expand_with_kg(extracted)
+        recognised = set(extracted)
+        neighbours = [concept for concept in expanded if concept not in recognised]
+        used = list(extracted) + neighbours[: max(0, self.max_neighbours)]
 
-        # Build expanded query
-        if expanded:
-            expanded_terms = " ".join(expanded)
-            expanded_query = f"{query} {expanded_terms}"
-        else:
-            expanded_query = query
+        expanded_query = f"{query} {' '.join(used)}" if used else query
 
         return {
             "original_query": query,
             "extracted_concepts": extracted,
-            "expanded_concepts": expanded,
+            "expanded_concepts": used,
+            "related_concepts": neighbours,
             "expanded_query": expanded_query,
-            "expansion_count": len(expanded) - len(extracted),
+            "expansion_count": len(used) - len(extracted),
             "failed_lookups": failed_lookups,
         }
 

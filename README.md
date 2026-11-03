@@ -120,9 +120,14 @@ pipeline:
    default); an unknown subject returns `404`.
 2. **Expand the question with the knowledge graph.** spaCy named-entity
    recognition and YAKE keyword extraction find concepts in the question. They
-   are matched against the subject's concepts in Neo4j, and neighbours within
-   `RAG_KG_EXPANSION_HOPS` (default 1) are added to the query. If Neo4j is
-   unavailable, the pipeline continues without expansion. The response's
+   are matched against the subject's concepts in Neo4j, and the recognised
+   concepts are added to the keyword (BM25) query; the vector query embeds the
+   question as asked. Their graph neighbours within `RAG_KG_EXPANSION_HOPS`
+   (default 1) come back as `related_concepts`, and
+   `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
+   keyword query too: on the golden set, adding neighbours lowered citation
+   hits (#282). If Neo4j is unavailable, the pipeline continues without
+   expansion. The response's
    `kg_expansion_status` says what happened: `ok`, `empty` (nothing matched),
    `failed` or `disabled`.
 3. **Retrieve with hybrid search.** OpenSearch runs a BM25 query over chunk

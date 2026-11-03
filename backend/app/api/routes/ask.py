@@ -150,7 +150,8 @@ class QuestionResponse(BaseModel):
     question: str  # The validated (trimmed, markup-free) question
     answer: str
     sources: list[dict]
-    expanded_concepts: list[str] | None = None
+    expanded_concepts: list[str] | None = None  # KG concepts the retrieval used
+    related_concepts: list[str] | None = None  # Their graph neighbours, not used (#282)
     kg_expansion_status: KGExpansionStatus = Field(description=KG_EXPANSION_STATUS_DESCRIPTION)
     retrieved_count: int
     window_expanded_count: int | None = None  # Chunks after window expansion
@@ -164,6 +165,7 @@ class RetrieveResponse(BaseModel):
     question: str
     sources: list[dict]
     expanded_concepts: list[str] | None = None
+    related_concepts: list[str] | None = None
     kg_expansion_status: KGExpansionStatus = Field(description=KG_EXPANSION_STATUS_DESCRIPTION)
     retrieved_count: int
     window_expanded_count: int | None = None
@@ -217,6 +219,7 @@ async def ask_question(body: QuestionRequest, request: Request):
             answer=answer,
             sources=_format_sources(ctx.retrieved_chunks),
             expanded_concepts=ctx.expanded_concepts or None,
+            related_concepts=ctx.related_concepts or None,
             kg_expansion_status=ctx.kg_expansion_status,
             retrieved_count=ctx.initial_count,
             window_expanded_count=ctx.window_expanded_count,
@@ -247,6 +250,7 @@ class _RetrievalContext:
 
     subject_config: SubjectConfig
     expanded_concepts: list[str]
+    related_concepts: list[str]
     kg_expansion_status: KGExpansionStatus
     retrieved_chunks: list[dict]
     initial_count: int
@@ -279,20 +283,31 @@ def _sse_event(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-def _expand_query(subject_id: str, question: str) -> tuple[list[str], str, KGExpansionStatus]:
-    """Expand the question with related KG concepts (blocking: Neo4j + NLP)."""
+@dataclass
+class _Expansion:
+    """What KG expansion contributes to one question's retrieval."""
+
+    concepts: list[str]  # used by the retrieval (the keyword channel)
+    related: list[str]  # graph neighbours of the recognised concepts, for display
+    keyword_query: str  # BM25 text: the question plus ``concepts``
+    status: KGExpansionStatus
+
+
+def _expand_query(subject_id: str, question: str) -> _Expansion:
+    """Expand the question with KG concepts for the keyword channel (blocking: Neo4j + NLP)."""
     all_concepts = get_known_concepts(subject_id)
     if not all_concepts:
         # Neo4j was unreachable or the subject's graph is empty: expansion could not run
         logger.warning("KG expansion failed: no concepts loaded for subject {}", subject_id)
-        return [], question, "failed"
+        return _Expansion([], [], question, "failed")
 
     expander = get_kg_expander(subject_id)
     expansion_result = expander.expand_query(question, all_concepts)
     expanded_concepts: list[str] = expansion_result["expanded_concepts"]
+    related: list[str] = expansion_result.get("related_concepts") or []
     logger.info(
-        f"KG Expansion: {len(expansion_result['extracted_concepts'])} -> "
-        f"{len(expanded_concepts)} concepts"
+        f"KG Expansion: {len(expansion_result['extracted_concepts'])} recognised -> "
+        f"{len(expanded_concepts)} used, {len(related)} related"
     )
     status: KGExpansionStatus
     if expansion_result.get("failed_lookups", 0):
@@ -301,13 +316,19 @@ def _expand_query(subject_id: str, question: str) -> tuple[list[str], str, KGExp
         status = "ok"
     else:
         status = "empty"
-    return expanded_concepts, expansion_result["expanded_query"], status
+    return _Expansion(expanded_concepts, related, expansion_result["expanded_query"], status)
 
 
-def _retrieve_chunks(subject_id: str, query: str, top_k: int) -> list[dict]:
-    """Retrieve chunks from OpenSearch (blocking: embedding + search)."""
+def _retrieve_chunks(
+    subject_id: str, query: str, top_k: int, keyword_query: str | None = None
+) -> list[dict]:
+    """Retrieve chunks from OpenSearch (blocking: embedding + search).
+
+    The kNN channel embeds ``query`` (the question); ``keyword_query`` (the question plus
+    KG expansion terms) goes to the BM25 channel.
+    """
     retriever = get_retriever(subject_id)
-    return retriever.retrieve(query, top_k=top_k)
+    return retriever.retrieve(query, top_k=top_k, keyword_query=keyword_query)
 
 
 def _expand_window(chunks: list[dict], window_size: int) -> tuple[list[dict], int | None]:
@@ -351,23 +372,22 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
     subject_config = get_subject_or_404(body.subject)
     subject_id = subject_config.id
 
-    # Step 1: Knowledge Graph Expansion
-    expanded_concepts: list[str] = []
-    query = body.question
-    kg_status: KGExpansionStatus = "disabled"
+    # Step 1: Knowledge Graph Expansion (keyword channel only, #282)
+    expansion = _Expansion([], [], body.question, "disabled")
 
     if body.use_kg_expansion and settings.rag_kg_expansion:
         try:
-            expanded_concepts, query, kg_status = await run_in_threadpool(
-                _expand_query, subject_id, body.question
-            )
+            expansion = await run_in_threadpool(_expand_query, subject_id, body.question)
         except Exception as e:
-            kg_status = "failed"
+            expansion = _Expansion([], [], body.question, "failed")
             logger.warning("KG expansion failed, continuing without it: {}", e)
 
     # Step 2: Retrieve chunks
     retrieval_top_k = settings.rag_retrieval_top_k if settings.reranker_enabled else body.top_k
-    retrieved_chunks = await run_in_threadpool(_retrieve_chunks, subject_id, query, retrieval_top_k)
+    keyword_query = expansion.keyword_query if expansion.keyword_query != body.question else None
+    retrieved_chunks = await run_in_threadpool(
+        _retrieve_chunks, subject_id, body.question, retrieval_top_k, keyword_query
+    )
 
     if not retrieved_chunks:
         raise ContentNotFoundError("No relevant content found for this question")
@@ -398,8 +418,9 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
 
     return _RetrievalContext(
         subject_config=subject_config,
-        expanded_concepts=expanded_concepts,
-        kg_expansion_status=kg_status,
+        expanded_concepts=expansion.concepts,
+        related_concepts=expansion.related,
+        kg_expansion_status=expansion.status,
         retrieved_chunks=retrieved_chunks,
         initial_count=initial_count,
         window_expanded_count=window_expanded_count,
@@ -451,6 +472,7 @@ async def retrieve_sources(body: QuestionRequest, request: Request):
         question=body.question,
         sources=_format_sources(ctx.retrieved_chunks),
         expanded_concepts=ctx.expanded_concepts or None,
+        related_concepts=ctx.related_concepts or None,
         kg_expansion_status=ctx.kg_expansion_status,
         retrieved_count=ctx.initial_count,
         window_expanded_count=ctx.window_expanded_count,
@@ -496,6 +518,7 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
                 "type": "metadata",
                 "sources": sources,
                 "expanded_concepts": ctx.expanded_concepts or None,
+                "related_concepts": ctx.related_concepts or None,
                 "kg_expansion_status": ctx.kg_expansion_status,
                 "retrieved_count": ctx.initial_count,
                 "window_expanded_count": ctx.window_expanded_count,

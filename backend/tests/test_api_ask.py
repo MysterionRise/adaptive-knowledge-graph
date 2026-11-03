@@ -748,7 +748,9 @@ class TestAskKeepsEventLoopFree:
             response = client.post("/api/v1/ask", json={"question": "What is photosynthesis?"})
 
         assert response.status_code == 200
-        assert retriever.retrieve.call_args.args == ("photosynthesis chlorophyll",)
+        # The kNN channel embeds the question; the expansion goes to BM25 only (#282)
+        assert retriever.retrieve.call_args.args == ("What is photosynthesis?",)
+        assert retriever.retrieve.call_args.kwargs["keyword_query"] == "photosynthesis chlorophyll"
         assert on_loop == {
             "all_concepts": False,
             "expand_query": False,
