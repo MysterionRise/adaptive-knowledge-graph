@@ -172,7 +172,7 @@ def bootstrap_interval(
     count = len(values)
     if count == 0:
         return None
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # nosec B311  # seeded resampling for a statistic, not security
     means = sorted(
         sum(values[int(rng.random() * count)] for _ in range(count)) / count
         for _ in range(resamples)
