@@ -8,7 +8,9 @@ reports under docs/evals/ (latest.json/latest.md, plus a snapshot in docs/evals/
 Every report records its provenance (the server's /api/v1/demo/provenance, the Ollama
 model digest and the golden-set hash), a hash per case and each answer with its sources,
 so a run can be re-scored and compared with scripts/compare_evals.py. Cases are selected
-by the subjects /api/v1/subjects reports as available.
+by the subjects /api/v1/subjects reports as available, and by --split (docs/evals/protocol.md):
+rehearsal cases while developing, written to latest-rehearsal.* so the release evidence in
+latest.* stays put, and the final split only at a release gate.
 
 Requests are paced to the API's /api/v1/ask rate limit (default 10/minute, so about one
 request every 6.25 s; every case asks twice, with and without KG expansion) and HTTP 429
@@ -20,6 +22,7 @@ Usage:
     poetry run python scripts/evaluate_rag.py --subject economics --limit 3 --out-dir /tmp/eval
     poetry run python scripts/evaluate_rag.py --delay 0   # API started with RATE_LIMIT_ENABLED=false
     poetry run python scripts/evaluate_rag.py --retrieval-only   # /api/v1/retrieve, no LLM
+    poetry run python scripts/evaluate_rag.py --split rehearsal  # development cases only
 """
 
 import argparse
@@ -50,9 +53,20 @@ def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# Labels about a case rather than its definition (#206): a case hashes the same with or
+# without them, so reports from before golden set v3 stay comparable case by case.
+CASE_LABEL_FIELDS = frozenset({"stratum", "split"})
+
+
+def _file_sha256(path: Path) -> str | None:
+    """SHA-256 of a file, or None when it does not exist."""
+    return _sha256_bytes(path.read_bytes()) if path.is_file() else None
+
+
 def _case_hash(case: dict[str, Any]) -> str:
     """Hash of a golden case's definition (question, expectations, tags), key-order independent."""
-    canonical = json.dumps(case, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    definition = {key: value for key, value in case.items() if key not in CASE_LABEL_FIELDS}
+    canonical = json.dumps(definition, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return _sha256_bytes(canonical.encode("utf-8"))
 
 
@@ -733,6 +747,10 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     ]
     if run_config.get("retrieval_only"):
         lines.append("Mode: `retrieval-only` (no LLM answers; answer metrics are n/a)")
+    if run_config.get("split") == "rehearsal":
+        lines.append("Split: `rehearsal` (development cases; not release evidence)")
+    elif run_config.get("split") == "final":
+        lines.append("Split: `final` (held-out cases; run only at a release gate)")
     if run_config.get("partial") or run_config.get("subjects") or run_config.get("limit"):
         skipped = run_config.get("skipped_subjects") or []
         lines.append(
@@ -833,18 +851,31 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     report_path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
+# --split choices (#206, docs/evals/protocol.md): which golden-case splits each one runs.
+# Cases added since the last version bump are pending and count as rehearsal material.
+SPLIT_CASES = {
+    "all": None,
+    "rehearsal": frozenset({"rehearsal", "pending"}),
+    "final": frozenset({"final"}),
+}
+
+
 def _select_cases(
     cases: list[dict[str, Any]],
     subjects: list[str],
     limit: int | None,
     available: list[str] | None = None,
+    split: str = "all",
 ) -> list[dict[str, Any]]:
-    """Cases of the requested subjects (all when empty) that are available, up to ``limit``."""
+    """Cases of the requested subjects (all when empty) and split that are available, up to
+    ``limit``."""
+    splits = SPLIT_CASES[split]
     selected = [
         case
         for case in cases
         if (not subjects or case.get("subject") in subjects)
         and (available is None or case.get("subject") in available)
+        and (splits is None or case.get("split") in splits)
     ]
     return selected[:limit] if limit is not None else selected
 
@@ -952,8 +983,12 @@ def _harness_git_sha() -> str:
         return "unknown"
 
 
-def _report_filenames(retrieval_only: bool) -> tuple[str, str]:
+def _report_filenames(retrieval_only: bool, split: str = "all") -> tuple[str, str]:
+    """latest.* for release evidence; retrieval-only and rehearsal runs get their own names,
+    so they never overwrite it."""
     stem = "latest-retrieval" if retrieval_only else "latest"
+    if split == "rehearsal":
+        stem += "-rehearsal"
     return f"{stem}.json", f"{stem}.md"
 
 
@@ -965,9 +1000,13 @@ def _history_path(history_dir: Path, report_json: str, generated_at: str) -> Pat
 
 
 def write_reports(out_dir: Path, report: dict[str, Any], history: bool = True) -> list[Path]:
-    """Write latest(.json|.md) (latest-retrieval.* for retrieval-only runs) and a history snapshot."""
+    """Write latest(.json|.md) and a history snapshot; retrieval-only runs write
+    latest-retrieval.*, and rehearsal-split runs add -rehearsal to the name."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    json_name, md_name = _report_filenames(bool(report["run_config"].get("retrieval_only")))
+    run_config = report["run_config"]
+    json_name, md_name = _report_filenames(
+        bool(run_config.get("retrieval_only")), run_config.get("split") or "all"
+    )
     report_json = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     json_path = out_dir / json_name
     md_path = out_dir / md_name
@@ -1024,6 +1063,18 @@ def main() -> None:
     parser.add_argument(
         "--no-history", action="store_true", help="Do not write a docs/evals/history snapshot"
     )
+    parser.add_argument(
+        "--split",
+        choices=sorted(SPLIT_CASES),
+        default="all",
+        help="Golden-case split (docs/evals/protocol.md): rehearsal (with pending cases) while "
+        "developing, final only at a release gate, all for every case (default)",
+    )
+    parser.add_argument(
+        "--protocol",
+        default="docs/evals/protocol.md",
+        help="Evaluation protocol whose hash the report records",
+    )
     args = parser.parse_args()
 
     subjects = [s.strip() for value in args.subject for s in value.split(",") if s.strip()]
@@ -1033,8 +1084,8 @@ def main() -> None:
     cases_bytes = cases_path.read_bytes()
     golden = yaml.safe_load(cases_bytes.decode("utf-8")) or {}
     all_cases = list(golden.get("cases", []))
-    if not _select_cases(all_cases, subjects, args.limit):
-        parser.error(f"no cases match subject(s) {subjects} in {args.cases}")
+    if not _select_cases(all_cases, subjects, args.limit, split=args.split):
+        parser.error(f"no {args.split}-split cases match subject(s) {subjects} in {args.cases}")
 
     delay = _default_delay() if args.delay is None else max(0.0, args.delay)
     pacer = Pacer(delay)
@@ -1044,7 +1095,7 @@ def main() -> None:
     headers = {"X-API-Key": api_key} if api_key else None
     with httpx.Client(timeout=args.timeout, headers=headers) as client:
         available = _available_subjects(client, api_url)
-        cases = _select_cases(all_cases, subjects, args.limit, available)
+        cases = _select_cases(all_cases, subjects, args.limit, available, split=args.split)
         requested = sorted(
             {c["subject"] for c in all_cases if not subjects or c["subject"] in subjects}
         )
@@ -1068,6 +1119,8 @@ def main() -> None:
                     "subject": case["subject"],
                     "question": case["question"],
                     "tags": case.get("tags", []),
+                    "stratum": case.get("stratum"),
+                    "split": case.get("split"),
                     "case_hash": _case_hash(case),
                     "kg": kg,
                     "plain": plain,
@@ -1116,6 +1169,8 @@ def main() -> None:
                 "sha256": _sha256_bytes(cases_bytes),
                 "version": golden.get("version"),
                 "cases": len(all_cases),
+                "split_seed": golden.get("split_seed"),
+                "protocol_sha256": _file_sha256(Path(args.protocol)),
             },
             "harness": {"git_sha": _harness_git_sha()},
         },
@@ -1126,6 +1181,7 @@ def main() -> None:
             "delay_seconds": delay,
             "max_retries": args.max_retries,
             "retrieval_only": args.retrieval_only,
+            "split": args.split,
             "available_subjects": available,
             "skipped_subjects": skipped_subjects,
             "partial": bool(subjects) or args.limit is not None or bool(skipped_subjects),

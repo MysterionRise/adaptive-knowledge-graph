@@ -83,6 +83,21 @@ class TestCaseSelection:
             evaluate_rag._select_cases(cases, ["us_history"], None, available=["economics"]) == []
         )
 
+    @pytest.mark.parametrize(
+        ("split", "expected"),
+        [("all", ["f", "r", "p", "u"]), ("rehearsal", ["r", "p"]), ("final", ["f"])],
+    )
+    def test_cases_are_selected_by_split(self, split, expected):
+        # Pending cases (added since the last version bump) are rehearsal material
+        cases = [
+            {"id": "f", "subject": "economics", "split": "final"},
+            {"id": "r", "subject": "economics", "split": "rehearsal"},
+            {"id": "p", "subject": "economics", "split": "pending"},
+            {"id": "u", "subject": "economics"},
+        ]
+        selected = evaluate_rag._select_cases(cases, [], None, split=split)
+        assert [c["id"] for c in selected] == expected
+
     def test_available_subjects_come_from_the_subjects_endpoint(self):
         def handler(request: httpx.Request) -> httpx.Response:
             assert request.url.path == "/api/v1/subjects"
@@ -356,6 +371,23 @@ class TestWriteReports:
         assert [p.name for p in paths] == ["latest-retrieval.json", "latest-retrieval.md"]
         assert not (tmp_path / "history").exists()
 
+    @pytest.mark.parametrize(
+        ("run_config", "stem"),
+        [
+            ({"split": "rehearsal"}, "latest-rehearsal"),
+            ({"split": "rehearsal", "retrieval_only": True}, "latest-retrieval-rehearsal"),
+            ({"split": "final"}, "latest"),
+            ({"split": "all"}, "latest"),
+        ],
+    )
+    def test_rehearsal_reports_do_not_replace_the_release_evidence(
+        self, tmp_path, run_config, stem
+    ):
+        paths = evaluate_rag.write_reports(tmp_path, _report(**run_config), history=False)
+        assert [p.name for p in paths] == [f"{stem}.json", f"{stem}.md"]
+        if run_config["split"] != "all":
+            assert f"Split: `{run_config['split']}`" in paths[1].read_text()
+
 
 def test_main_writes_a_valid_report_with_provenance(tmp_path, monkeypatch):
     """End to end against a mocked API and Ollama: provenance, validity and history."""
@@ -515,6 +547,11 @@ class TestCheckDemoEval:
     def test_retrieval_only_reports_are_not_demo_ready(self, tmp_path):
         with pytest.raises(SystemExit, match="retrieval-only"):
             check_demo_eval.validate_report(_write(tmp_path, _report(retrieval_only=True)), 1)
+
+    def test_rehearsal_split_reports_are_not_release_evidence(self, tmp_path):
+        with pytest.raises(SystemExit, match="rehearsal split"):
+            check_demo_eval.validate_report(_write(tmp_path, _report(split="rehearsal")), 1)
+        assert check_demo_eval.validate_report(_write(tmp_path, _report(split="final")), 1)
 
     def test_minimum_successful_cases(self, tmp_path):
         with pytest.raises(SystemExit, match="kg_successful_cases 2 < 3"):

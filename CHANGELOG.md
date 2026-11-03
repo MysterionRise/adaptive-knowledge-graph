@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Golden set version 3
+  ([#206](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/206)):
+  every case has a `stratum` and a `split` (24 rehearsal, 29 final), drawn by
+  `scripts/split_golden.py` from a recorded seed and stratified by subject and
+  stratum. `docs/evals/protocol.md` fixes the bar per stratum, the primary
+  endpoint (KG minus plain citation hit rate on the final split) and how cases
+  are added, and pins the final split by case hash.
+- `evaluate_rag.py --split rehearsal|final|all` and `make eval-rehearsal`.
+  Rehearsal runs write `latest-rehearsal.*`, and `check_demo_eval.py` and the
+  demo status page do not accept them as release evidence. Reports record the
+  split, the split seed and the protocol's hash.
+
+### Changed
+
+- The case hash leaves out `stratum` and `split`, so every case keeps the hash
+  it had in version 2 and earlier reports stay comparable.
+
 ### Fixed
 
 - Hosted Claude 5.x models through Anthropic's OpenAI-compatible endpoint

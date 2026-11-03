@@ -9,7 +9,8 @@ A report is demo-ready only if it:
   digest, the embedding and reranker models with their revision fields and devices (an
   enabled reranker must have loaded), the allowlisted retrieval settings and per-subject
   concept and chunk counts;
-- is a full answer run (not --retrieval-only, and not partial unless allowed);
+- is a full answer run (not --retrieval-only, not the rehearsal split, and not partial
+  unless allowed);
 - shows every request (both modes) returning 200 and zero KG-expansion failures,
   recomputed from the per-case results rather than trusted from the report's flag;
 - has at least ``min_successful_cases`` successful KG and plain cases.
@@ -126,8 +127,12 @@ def report_errors(
 ) -> list[str]:
     """Why ``report`` is not demo-ready (empty when it is)."""
     errors = provenance_errors(report)
-    if as_dict(report.get("run_config")).get("retrieval_only"):
+    run_config = as_dict(report.get("run_config"))
+    if run_config.get("retrieval_only"):
         errors.append("report comes from a retrieval-only run (--retrieval-only)")
+    if run_config.get("split") == "rehearsal":
+        # Release evidence is the final split or every case (docs/evals/protocol.md)
+        errors.append("report comes from the rehearsal split (--split rehearsal)")
     if not allow_partial and is_partial(report):
         errors.append("report comes from a partial run (--subject/--limit/unavailable subject)")
     if not report.get("environment_valid"):

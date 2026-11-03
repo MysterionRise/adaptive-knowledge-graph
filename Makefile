@@ -24,7 +24,7 @@ GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 	docker-build docker-up docker-down docker-logs docker-ps \
 	ingest-books build-kg index-rag pipeline-all embedding-parity \
 	run-api run-frontend dev-setup \
-	eval-rag eval-rag-api eval-compare eval-rescore \
+	eval-rag eval-rag-api eval-rehearsal eval-compare eval-rescore \
 	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval
 
 help: ## Show this help message
@@ -139,6 +139,9 @@ eval-rag: ## Run the live API KG-RAG evaluation (paced to the /ask rate limit)
 	poetry run python scripts/evaluate_rag.py --api-url $(API_URL) $(EVAL_ARGS)
 
 eval-rag-api: eval-rag ## Alias for eval-rag
+
+eval-rehearsal: ## Evaluate the rehearsal split only (docs/evals/protocol.md), written to docs/evals/latest-rehearsal.*
+	poetry run python scripts/evaluate_rag.py --api-url $(API_URL) --split rehearsal $(EVAL_ARGS)
 
 eval-compare: ## Compare two eval reports: make eval-compare BASE=old.json HEAD=new.json (exit 1 on regression)
 	@if [ -z "$(BASE)" ] || [ -z "$(HEAD)" ]; then \
