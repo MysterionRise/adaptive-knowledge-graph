@@ -20,7 +20,7 @@ follow the [Quickstart](../../README.md#quickstart).
 
 | Area | Current state |
 | --- | --- |
-| Grounded tutoring | KG-aware answers with citations, source snippets, expanded concepts and streaming |
+| Grounded tutoring | KG-aware answers with citations, source snippets, the graph concepts used and related, and streaming |
 | Knowledge graph | Neo4j concepts and modules with prerequisite, related-concept and coverage edges |
 | Retrieval | OpenSearch hybrid BM25 + vector retrieval with an optional reranker |
 | Local-first LLM | Ollama by default; with `PRIVACY_LOCAL_ONLY=true` remote providers cannot be used. A hosted model (`LLM_MODE=remote`, `PRIVACY_LOCAL_ONLY=false`, `OPENROUTER_BASE_URL` pointing at any OpenAI-compatible endpoint) shows on `/demo-status` as the model that answers; the evaluation evidence is still produced in local mode |

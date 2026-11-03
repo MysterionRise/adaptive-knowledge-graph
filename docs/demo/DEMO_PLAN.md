@@ -77,7 +77,8 @@ colonial resistance?"
 What happens behind the scenes:
 
 1. Concept extraction identifies key terms in the question.
-2. Graph traversal finds related concepts in Neo4j.
+2. The recognised concepts join the keyword query; graph traversal finds their
+   related concepts in Neo4j for display.
 3. OpenSearch retrieves 20 candidate chunks (hybrid kNN + BM25).
 4. **The BGE cross-encoder reranks** the 20 candidates and keeps the top 5.
 5. Ollama (llama3.1:8b) generates an answer with source citations.
@@ -86,7 +87,8 @@ What happens behind the scenes:
 
 - `retrieved_count: 20` confirms that 20 chunks were fetched for reranking.
 - `sources` shows the 5 reranked chunks sent to the LLM.
-- `expanded_concepts` lists the concepts found through the graph.
+- `expanded_concepts` lists the graph concepts added to the keyword query, and
+  `related_concepts` their neighbours, which are not searched.
 - `model` shows the model that produced the answer, running locally.
 
 **API call** (if you show a terminal):

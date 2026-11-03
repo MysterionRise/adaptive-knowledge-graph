@@ -65,7 +65,7 @@ What was the Stamp Act and how did it lead to colonial resistance?
 Show:
 
 - citations
-- expanded concepts
+- the graph concepts used for retrieval and the related ones
 - the KG expansion toggle
 
 Say:

@@ -106,7 +106,8 @@ What caused the American Revolution?
 Show:
 
 - citations and source snippets
-- expanded KG concepts
+- the Knowledge graph panel: the concepts used for retrieval and the related
+  concepts, which are shown but not searched
 - model and attribution
 
 Say:

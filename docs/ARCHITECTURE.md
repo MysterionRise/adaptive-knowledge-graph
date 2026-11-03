@@ -50,9 +50,10 @@ helper, so blocking and streaming answers cannot drift apart.
    query embeds the question. Their Neo4j neighbours, up to
    `RAG_KG_EXPANSION_HOPS`, are returned as `related_concepts`, and
    `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
-   keyword query. If Neo4j fails, the request continues without expansion. `kg_expansion_status` in the response
-   (and in the stream's `metadata` event) is `ok`, `empty`, `failed` or
-   `disabled`, so evaluations can tell a failed expansion from an empty one.
+   keyword query. If Neo4j fails, the request continues without expansion.
+   `kg_expansion_status` in the response (and in the stream's `metadata`
+   event) is `ok`, `empty`, `failed` or `disabled`, so evaluations can tell a
+   failed expansion from an empty one.
 4. Retrieve chunks from the subject's OpenSearch index. The default
    `RETRIEVAL_MODE=hybrid` runs BM25 and kNN queries and fuses them with
    reciprocal rank fusion; `knn` uses vectors only.
@@ -64,8 +65,8 @@ helper, so blocking and streaming answers cannot drift apart.
    reranking fails, the original order is used.
 7. Generate the answer with a subject-specific prompt that restricts the model
    to the retrieved context and asks for numbered citations.
-8. Return the answer, sources with scores, expanded concepts, model,
-   attribution and counts. On `/ask`, an unreachable LLM returns `503` and an
+8. Return the answer, sources with scores, the expanded and related
+   concepts, model, attribution and counts. On `/ask`, an unreachable LLM returns `503` and an
    empty or invalid LLM answer returns `502`. `/ask/stream` returns `503` only
    when the LLM is unreachable before streaming starts; a later failure or an
    empty answer is sent as an SSE `error` event.

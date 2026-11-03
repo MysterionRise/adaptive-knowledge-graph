@@ -88,6 +88,7 @@ export const graphData = {
 
 export const tutorAnswer = {
   expanded_concepts: ['Stamp Act', 'Boston Tea Party'],
+  related_concepts: ['Townshend Acts'],
   sources: [
     {
       text: 'Colonial resistance grew after Parliament passed the Stamp Act in 1765.',
@@ -127,6 +128,7 @@ export function tutorStream(answer = tutorAnswer): string {
       type: 'metadata',
       sources: answer.sources,
       expanded_concepts: answer.expanded_concepts,
+      related_concepts: answer.related_concepts,
       kg_expansion_status: 'ok',
       retrieved_count: answer.sources.length,
       window_expanded_count: 4,
@@ -231,6 +233,7 @@ const defaultHandlers: Record<string, StubHandler> = {
         answer: useKg ? kgRagAnswer : plainRagAnswer,
         sources: useKg ? tutorAnswer.sources : tutorAnswer.sources.slice(0, 1),
         expanded_concepts: useKg ? tutorAnswer.expanded_concepts : null,
+        related_concepts: useKg ? tutorAnswer.related_concepts : null,
         retrieved_count: useKg ? 8 : 5,
         model: tutorAnswer.model,
         attribution: tutorAnswer.attribution,

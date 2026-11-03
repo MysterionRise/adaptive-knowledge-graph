@@ -36,6 +36,13 @@ const PAGE_HEIGHT = 'h-[calc(100dvh-theme(spacing.nav))]';
 
 const withoutFinalPeriod = (text: string) => text.replace(/\.+$/, '');
 
+type GraphConceptFields = Pick<QuestionResponse, 'expanded_concepts' | 'related_concepts'>;
+
+/** Concepts to highlight on the graph: the ones retrieval used, then their neighbours. */
+const graphConcepts = (response: GraphConceptFields) => [
+  ...new Set([...(response.expanded_concepts ?? []), ...(response.related_concepts ?? [])]),
+];
+
 function TypingIndicator() {
   return (
     <div className="flex justify-start">
@@ -112,9 +119,10 @@ function ChatPageContent() {
             metadata = data;
             setIsThinking(false);
 
-            // Store expanded concepts for cross-page highlighting
-            if (data.expanded_concepts && data.expanded_concepts.length > 0) {
-              setHighlightedConcepts(data.expanded_concepts);
+            // Store the graph concepts for cross-page highlighting
+            const concepts = graphConcepts(data);
+            if (concepts.length > 0) {
+              setHighlightedConcepts(concepts);
             }
             setLastQuery(question);
           },
@@ -138,6 +146,7 @@ function ChatPageContent() {
           answer: message.content,
           sources: metadata?.sources ?? [],
           expanded_concepts: metadata?.expanded_concepts ?? null,
+          related_concepts: metadata?.related_concepts ?? null,
           kg_expansion_status: metadata?.kg_expansion_status,
           retrieved_count: metadata?.retrieved_count ?? 0,
           window_expanded_count: metadata?.window_expanded_count ?? null,
@@ -380,7 +389,7 @@ const KG_STATUS_BADGES: Record<
   ok: {
     label: 'KG expansion: ok',
     title:
-      'Concepts from the question were found in the knowledge graph and their neighbours were added to the retrieval.',
+      'Concepts from the question were found in the knowledge graph and added to the keyword search.',
     className: 'rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700',
   },
   empty: {
@@ -501,7 +510,99 @@ function SourceList({ sources }: { sources: Source[] }) {
   );
 }
 
-// Assistant Message Component with expanded concepts and sources
+/** Related concepts shown before "Show N more". */
+const RELATED_PREVIEW_COUNT = 8;
+
+/** The knowledge graph behind an answer: the concepts retrieval used and their neighbours. */
+function GraphConcepts({ response }: { response: QuestionResponse }) {
+  const router = useRouter();
+  const setHighlightedConcepts = useAppStore((state) => state.setHighlightedConcepts);
+  const id = useId();
+  const [showAllRelated, setShowAllRelated] = useState(false);
+
+  const used = response.expanded_concepts ?? [];
+  const related = response.related_concepts ?? [];
+  if (used.length === 0 && related.length === 0) return null;
+
+  const hiddenCount = related.length - RELATED_PREVIEW_COUNT;
+  const shownRelated =
+    showAllRelated || hiddenCount <= 0 ? related : related.slice(0, RELATED_PREVIEW_COUNT);
+
+  const handleViewOnGraph = () => {
+    setHighlightedConcepts(graphConcepts(response));
+    router.push('/graph');
+  };
+
+  return (
+    <div className="mt-4 space-y-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Network className="w-4 h-4 text-blue-600" aria-hidden="true" />
+          <span className="text-sm font-semibold text-blue-900">Knowledge graph</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleViewOnGraph}
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded transition-colors"
+        >
+          <MapPin className="w-3 h-3" aria-hidden="true" />
+          View on Graph
+        </button>
+      </div>
+
+      {used.length > 0 && (
+        <div>
+          <p id={`${id}-used`} className="mb-1 text-xs font-medium text-blue-900">
+            {`Used for retrieval (${used.length})`}
+          </p>
+          <ul aria-labelledby={`${id}-used`} className="flex flex-wrap gap-1.5">
+            {used.map((concept) => (
+              <li key={concept} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                {concept}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {related.length > 0 && (
+        <div>
+          <p id={`${id}-related`} className="mb-1 text-xs font-medium text-blue-900">
+            {`Related in the graph (${related.length})`}
+            <span className="font-normal text-blue-700"> · not searched</span>
+          </p>
+          <ul
+            id={`${id}-related-list`}
+            aria-labelledby={`${id}-related`}
+            className="flex flex-wrap gap-1.5"
+          >
+            {shownRelated.map((concept) => (
+              <li
+                key={concept}
+                className="px-2 py-1 border border-blue-200 bg-white text-blue-700 text-xs rounded-full"
+              >
+                {concept}
+              </li>
+            ))}
+          </ul>
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllRelated((current) => !current)}
+              aria-expanded={showAllRelated}
+              aria-controls={`${id}-related-list`}
+              className="mt-1.5 text-xs font-medium text-blue-700 hover:text-blue-900"
+            >
+              {showAllRelated ? 'Show fewer' : `Show ${hiddenCount} more`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Assistant Message Component with the graph concepts and sources
 interface AssistantMessageProps {
   content: string;
   response?: QuestionResponse;
@@ -519,16 +620,6 @@ function AssistantMessage({
   onRetry,
   retryDisabled,
 }: AssistantMessageProps) {
-  const router = useRouter();
-  const setHighlightedConcepts = useAppStore((state) => state.setHighlightedConcepts);
-
-  const handleViewOnGraph = () => {
-    if (response?.expanded_concepts) {
-      setHighlightedConcepts(response.expanded_concepts);
-    }
-    router.push('/graph');
-  };
-
   return (
     <div className="space-y-4">
       {(content || isStreaming) && (
@@ -561,37 +652,7 @@ function AssistantMessage({
         <>
           <RetrievalSummary response={response} />
 
-          {/* Expanded Concepts */}
-          {response.expanded_concepts && response.expanded_concepts.length > 0 && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Network className="w-4 h-4 text-blue-600" aria-hidden="true" />
-                  <span className="text-sm font-semibold text-blue-900">
-                    KG Expansion: {response.expanded_concepts.length} related concepts
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleViewOnGraph}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded transition-colors"
-                >
-                  <MapPin className="w-3 h-3" aria-hidden="true" />
-                  View on Graph
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {response.expanded_concepts.map((concept, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                  >
-                    {concept}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <GraphConcepts response={response} />
 
           {/* Sources */}
           {response.sources && response.sources.length > 0 && (

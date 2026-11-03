@@ -295,7 +295,7 @@ export default function Home() {
             />
             <FeatureCard
               title="KG-Aware RAG"
-              description="Query expansion using prerequisite concept chains"
+              description="Graph concepts in the keyword search, compared with plain retrieval"
               icon={<TrendingUp className="w-6 h-6" />}
               link="/comparison"
             />
