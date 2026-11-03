@@ -11,7 +11,7 @@ runs in the threadpool to keep the event loop free.
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import aiohttp
@@ -42,7 +42,8 @@ EMPTY_ANSWER_DETAIL = "The language model returned an empty answer"
 _SOURCE_PREVIEW_CHARS = 200
 
 # What KG expansion did for a request:
-#   ok       - related concepts were found and added to the retrieval query
+#   ok       - concepts from the question were found in the graph and added to the
+#              keyword query
 #   empty    - the graph was queried, but no concept in the question matched or had neighbours
 #   failed   - a Neo4j error (or a graph with no concepts) stopped expansion; the request
 #              continues with plain retrieval
@@ -114,6 +115,17 @@ class QuestionRequest(BaseModel):
     top_k: int = Field(default=5, description="Number of chunks to retrieve", ge=1, le=20)
 
 
+class ResolvedTerm(BaseModel):
+    """A span of the question and the concept it resolved to (#212)."""
+
+    surface: str  # the span as the question has it
+    canonical: str | None  # the concept; None when the span is ambiguous
+    via: Literal["name", "alias"]  # what the span matched in the concept lexicon
+    strategy: str  # the extraction strategy that found the span (ner, yake, ensemble, simple)
+    status: Literal["resolved", "ambiguous"]
+    candidates: list[str] | None = None  # the concepts an ambiguous span could mean
+
+
 class QuestionResponse(BaseModel):
     """Response from Q&A endpoint."""
 
@@ -152,6 +164,7 @@ class QuestionResponse(BaseModel):
     sources: list[dict]
     expanded_concepts: list[str] | None = None  # KG concepts the retrieval used
     related_concepts: list[str] | None = None  # Their graph neighbours, not used (#282)
+    resolved_terms: list[ResolvedTerm] | None = None  # How the question's spans resolved
     kg_expansion_status: KGExpansionStatus = Field(description=KG_EXPANSION_STATUS_DESCRIPTION)
     retrieved_count: int
     window_expanded_count: int | None = None  # Chunks after window expansion
@@ -166,6 +179,7 @@ class RetrieveResponse(BaseModel):
     sources: list[dict]
     expanded_concepts: list[str] | None = None
     related_concepts: list[str] | None = None
+    resolved_terms: list[ResolvedTerm] | None = None
     kg_expansion_status: KGExpansionStatus = Field(description=KG_EXPANSION_STATUS_DESCRIPTION)
     retrieved_count: int
     window_expanded_count: int | None = None
@@ -220,6 +234,7 @@ async def ask_question(body: QuestionRequest, request: Request):
             sources=_format_sources(ctx.retrieved_chunks),
             expanded_concepts=ctx.expanded_concepts or None,
             related_concepts=ctx.related_concepts or None,
+            resolved_terms=_terms(ctx.resolved_terms),
             kg_expansion_status=ctx.kg_expansion_status,
             retrieved_count=ctx.initial_count,
             window_expanded_count=ctx.window_expanded_count,
@@ -251,10 +266,15 @@ class _RetrievalContext:
     subject_config: SubjectConfig
     expanded_concepts: list[str]
     related_concepts: list[str]
+    resolved_terms: list[dict]
     kg_expansion_status: KGExpansionStatus
     retrieved_chunks: list[dict]
     initial_count: int
     window_expanded_count: int | None
+
+
+def _terms(terms: list[dict]) -> list[ResolvedTerm] | None:
+    return [ResolvedTerm(**term) for term in terms] or None
 
 
 def _format_sources(chunks: list[dict]) -> list[dict]:
@@ -291,6 +311,7 @@ class _Expansion:
     related: list[str]  # graph neighbours of the recognised concepts, for display
     keyword_query: str  # BM25 text: the question plus ``concepts``
     status: KGExpansionStatus
+    terms: list[dict] = field(default_factory=list)  # how the question's spans resolved
 
 
 def _expand_query(subject_id: str, question: str) -> _Expansion:
@@ -316,7 +337,13 @@ def _expand_query(subject_id: str, question: str) -> _Expansion:
         status = "ok"
     else:
         status = "empty"
-    return _Expansion(expanded_concepts, related, expansion_result["expanded_query"], status)
+    return _Expansion(
+        expanded_concepts,
+        related,
+        expansion_result["expanded_query"],
+        status,
+        expansion_result.get("resolved_terms") or [],
+    )
 
 
 def _retrieve_chunks(
@@ -420,6 +447,7 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
         subject_config=subject_config,
         expanded_concepts=expansion.concepts,
         related_concepts=expansion.related,
+        resolved_terms=expansion.terms,
         kg_expansion_status=expansion.status,
         retrieved_chunks=retrieved_chunks,
         initial_count=initial_count,
@@ -473,6 +501,7 @@ async def retrieve_sources(body: QuestionRequest, request: Request):
         sources=_format_sources(ctx.retrieved_chunks),
         expanded_concepts=ctx.expanded_concepts or None,
         related_concepts=ctx.related_concepts or None,
+        resolved_terms=_terms(ctx.resolved_terms),
         kg_expansion_status=ctx.kg_expansion_status,
         retrieved_count=ctx.initial_count,
         window_expanded_count=ctx.window_expanded_count,
@@ -519,6 +548,7 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
                 "sources": sources,
                 "expanded_concepts": ctx.expanded_concepts or None,
                 "related_concepts": ctx.related_concepts or None,
+                "resolved_terms": ctx.resolved_terms or None,
                 "kg_expansion_status": ctx.kg_expansion_status,
                 "retrieved_count": ctx.initial_count,
                 "window_expanded_count": ctx.window_expanded_count,

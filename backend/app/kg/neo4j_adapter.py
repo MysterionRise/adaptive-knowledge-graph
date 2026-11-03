@@ -280,6 +280,20 @@ class Neo4jAdapter:
             result = session.run(f"MATCH (c:{concept_label}) RETURN c.name AS name")
             return {record["name"] for record in result if record["name"]}
 
+    def get_concept_aliases(self) -> dict[str, list[str]]:
+        """Every concept name in this adapter's (subject's) graph with its stored aliases."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            result = session.run(
+                f"MATCH (c:{concept_label}) RETURN c.name AS name, "
+                "coalesce(c.aliases, []) AS aliases"
+            )
+            return {
+                record["name"]: [alias for alias in record["aliases"] or [] if alias]
+                for record in result
+                if record["name"]
+            }
+
     def count_concepts(self) -> int:
         """Number of concepts in this adapter's (subject's) graph (one count query)."""
         concept_label = self._get_label("Concept")
