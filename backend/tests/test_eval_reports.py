@@ -1174,6 +1174,11 @@ class TestNoiseFloorRecording:
         assert result["repeat"]["differences"] == []
         assert result["repeat"]["noise_floor"]["floor"]["citation_hit"] == 0.0
         assert result["intervals"]["head"]["overall"]["citation_hit"]["pairs"] == 2
+        markdown = compare_evals.format_markdown(_report(), _report(), result)
+        assert "| citation_hit | 0 of 2 | 0 of 2 | 0.0 |" in markdown
+        # Neither run scored refusals (no unsupported case): no row
+        assert result["repeat"]["noise_floor"]["floor"]["unsupported_refusal"] is None
+        assert "| unsupported_refusal |" not in markdown
 
     def test_main_records_the_floor_per_run_mode(self, tmp_path, capsys):
         head_cases = _cases_with_hits([True] * 4)

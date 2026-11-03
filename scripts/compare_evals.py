@@ -328,6 +328,8 @@ def _noise_section(result: dict[str, Any]) -> list[str]:
     floor_values = as_dict(as_dict(repeat.get("noise_floor")).get("floor"))
     modes = as_dict(as_dict(repeat.get("noise_floor")).get("modes"))
     for metric, floor in floor_values.items():
+        if floor is None:  # neither run scored it (answer metrics in a retrieval-only run)
+            continue
         cells = []
         for mode in MODES:
             counts = as_dict(as_dict(modes.get(mode)).get(metric))
