@@ -848,8 +848,9 @@ def _evidence_sections(report: dict[str, Any]) -> list[str]:
             floor = as_dict(noise.get("floor"))
             lines.append(
                 f"Measured {noise.get('measured_on')} on `{str(noise.get('server_git_sha'))[:12]}` "
-                f"({noise.get('split')} split, `{noise.get('source')}`): the share of cases whose "
-                "value changed between two runs of the same configuration, in either mode."
+                f"({noise.get('split')} split, `{noise.get('source')}`): per metric, the larger of "
+                "the two modes' shares of cases whose value changed between two runs of the "
+                "same configuration."
             )
             lines.append("")
             lines.extend(f"- `{metric}`: {_fmt(value)}" for metric, value in floor.items())
