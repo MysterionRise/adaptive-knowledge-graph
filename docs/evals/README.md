@@ -73,10 +73,18 @@ make eval-rehearsal EVAL_ARGS="--retrieval-only"     # citation metrics only, no
 ```
 
 Rehearsal runs write `latest-rehearsal.*` (or `latest-retrieval-rehearsal.*`),
-so the release evidence in `latest.*` stays put. The final split runs only at
-a release gate (`--split final`, or `make demo-eval` for every case). The case
-hash leaves out `stratum` and `split`, so reports from before version 3 can
-still be compared case by case.
+so the release evidence in `latest.*` stays put; git ignores these working
+files. Compare a run with the current rehearsal baseline, named on the sprint
+tracker, and commit a run's `history/` snapshot when it becomes evidence:
+
+```bash
+make eval-compare BASE=docs/evals/history/2026-11-03-71c6e19752f2.json \
+  HEAD=docs/evals/latest-retrieval-rehearsal.json
+```
+
+The final split runs only at a release gate (`--split final`, or
+`make demo-eval` for every case). The case hash leaves out `stratum` and
+`split`, so reports from before version 3 can still be compared case by case.
 
 ## Reproducible runs
 

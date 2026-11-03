@@ -184,3 +184,8 @@ logs/
 
 # Demo recordings are attached to the GitHub release (over the 1,000 KB pre-commit limit)
 docs/assets/demo/*.mp4
+
+# Working reports from retrieval-only and rehearsal runs; latest.* is the release evidence,
+# and runs worth keeping are committed as their docs/evals/history/ snapshot
+docs/evals/latest-*.json
+docs/evals/latest-*.md
