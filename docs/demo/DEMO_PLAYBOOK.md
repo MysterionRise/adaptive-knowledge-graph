@@ -108,7 +108,7 @@ Show:
 
 - streaming tokens
 - KG expansion on and off
-- expanded concepts
+- the graph concepts used for retrieval and the related ones
 - citations and scores
 
 Framing:

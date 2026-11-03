@@ -28,10 +28,10 @@ passage that shares no words with the question. This project explores two
 ideas on top of that structure:
 
 - **Knowledge-graph-enhanced RAG.** Concepts and their relationships are
-  extracted from each book into Neo4j. Before retrieval, the question is
-  expanded with neighbouring concepts from the graph, and every answer cites the
-  passages it used. An evaluation harness measures whether the expansion
-  actually helps.
+  extracted from each book into Neo4j. Concepts recognised in the question are
+  added to the keyword half of the hybrid search, their graph neighbours are
+  shown as related concepts, and every answer cites the passages it used. An
+  evaluation harness measures whether the graph actually helps.
 - **Adaptive practice.** Quizzes are generated from the same passages, and a
   Bayesian Knowledge Tracing (BKT) model updates per-concept mastery after each
   answer so the next quiz targets a suitable difficulty.
@@ -43,8 +43,8 @@ data stays in a local SQLite file.
 ## Features
 
 - **Cited answers.** Answers are grounded in retrieved passages with numbered
-  citations, source snippets, the expanded concepts and the textbook
-  attribution. They can be streamed token by token over server-sent events.
+  citations, source snippets, the graph concepts used for retrieval, their
+  related concepts and the textbook attribution. They can be streamed token by token over server-sent events.
 - **Knowledge graph explorer.** Concepts, with glossary definitions and aliases
   where the book provides them, and the textbook modules that cover them live
   in Neo4j with `PREREQ` (from glossary definitions), `RELATED`

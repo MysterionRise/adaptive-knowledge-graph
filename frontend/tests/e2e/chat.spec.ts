@@ -40,10 +40,12 @@ test.describe('Chat Page', () => {
 
     await expect(page.getByText('What caused the American Revolution?', { exact: true })).toBeVisible();
     await expect(page.getByText(answerText)).toBeVisible();
-    await expect(page.getByText('KG Expansion: 2 related concepts')).toBeVisible();
-    for (const concept of tutorAnswer.expanded_concepts) {
-      await expect(page.getByText(concept, { exact: true })).toBeVisible();
-    }
+    await expect(page.getByRole('list', { name: 'Used for retrieval (2)' }).getByRole('listitem')).toHaveText(
+      tutorAnswer.expanded_concepts
+    );
+    await expect(page.getByRole('list', { name: /^Related in the graph \(1\)/ }).getByRole('listitem')).toHaveText(
+      tutorAnswer.related_concepts
+    );
     await expect(page.getByText(tutorAnswer.attribution)).toBeVisible();
     await expect(page.getByText(`Model: ${tutorAnswer.model}`)).toBeVisible();
     await expect(page.getByText('KG expansion: ok')).toBeVisible();
@@ -156,7 +158,7 @@ test.describe('Chat Page', () => {
     );
   });
 
-  test('highlights the expanded concepts on the graph', async ({ page }) => {
+  test('highlights the used and related concepts on the graph', async ({ page }) => {
     await questionInput(page).fill('What caused the American Revolution?');
     await page.getByRole('button', { name: 'Send' }).click();
     await expect(page.getByText(answerText)).toBeVisible();
@@ -164,7 +166,7 @@ test.describe('Chat Page', () => {
     await page.getByRole('button', { name: 'View on Graph' }).click();
 
     await expect(page).toHaveURL('/graph');
-    await expect(page.getByText(/Highlighting 2 concepts/)).toBeVisible();
+    await expect(page.getByText(/Highlighting 3 concepts/)).toBeVisible();
   });
 });
 

@@ -27,6 +27,7 @@ const kgAnswer: QuestionResponse = {
     { text: 'Source two', score: 0.8 },
   ],
   expanded_concepts: ['Stamp Act', 'Boston Tea Party'],
+  related_concepts: Array.from({ length: 10 }, (_, index) => `Neighbour ${index + 1}`),
   retrieved_count: 8,
   model: 'llama3.1:8b',
   attribution: 'OpenStax',
@@ -37,6 +38,7 @@ const plainAnswer: QuestionResponse = {
   answer: 'Colonists opposed British taxes.',
   sources: [{ text: 'Source one', score: 0.9 }],
   expanded_concepts: null,
+  related_concepts: null,
   retrieved_count: 5,
 };
 
@@ -112,7 +114,7 @@ describe('ComparisonPage', () => {
 
       compare('  How do prices form?  ');
 
-      await screen.findByText('Why KG Expansion Matters');
+      await screen.findByText('How KG Expansion Works');
       expect(mockAskQuestion).toHaveBeenCalledTimes(2);
       expect(mockAskQuestion).toHaveBeenCalledWith(
         { question: 'How do prices form?', use_kg_expansion: true, top_k: 5 },
@@ -133,15 +135,21 @@ describe('ComparisonPage', () => {
 
       const kg = await screen.findByRole('region', { name: 'With KG Expansion' });
       expect(within(kg).getByTestId('markdown')).toHaveTextContent('**Taxation** without representation');
-      expect(within(kg).getByText('Expanded Concepts (2):')).toBeInTheDocument();
+      expect(within(kg).getByText('Concepts used (2):')).toBeInTheDocument();
       expect(within(kg).getByText('Boston Tea Party')).toBeInTheDocument();
+      expect(
+        within(kg).getByText(
+          'Related in the graph, not searched: Neighbour 1, Neighbour 2, Neighbour 3, Neighbour 4, Neighbour 5, Neighbour 6, Neighbour 7, Neighbour 8 and 2 more'
+        )
+      ).toBeInTheDocument();
       expect(within(kg).getByText('Retrieved Chunks').nextSibling).toHaveTextContent('8');
       expect(within(kg).getByText('Concepts Used').nextSibling).toHaveTextContent('2');
       expect(within(kg).getByText(/Based on 2 sources from the knowledge base/)).toBeInTheDocument();
 
       const plain = plainPanel();
       expect(within(plain).getByTestId('markdown')).toHaveTextContent('Colonists opposed British taxes.');
-      expect(within(plain).queryByText(/Expanded Concepts/)).not.toBeInTheDocument();
+      expect(within(plain).queryByText(/Concepts used/)).not.toBeInTheDocument();
+      expect(within(plain).queryByText(/Related in the graph/)).not.toBeInTheDocument();
       expect(within(plain).getByText('Concepts Used').nextSibling).toHaveTextContent('0');
       expect(within(plain).getByText(/Based on 1 source from the knowledge base/)).toBeInTheDocument();
     });
@@ -181,7 +189,7 @@ describe('ComparisonPage', () => {
       expect(alert).toHaveTextContent('Unable to get this answer.');
       expect(alert).toHaveTextContent('The server did not respond within 180 seconds.');
       expect(within(kgPanel()).getByTestId('markdown')).toBeInTheDocument();
-      expect(screen.getByText('Why KG Expansion Matters')).toBeInTheDocument();
+      expect(screen.getByText('How KG Expansion Works')).toBeInTheDocument();
     });
 
     it('retries only the failed answer', async () => {
@@ -220,7 +228,7 @@ describe('ComparisonPage', () => {
       for (const alert of screen.getAllByRole('alert')) {
         expect(alert).toHaveTextContent('An internal error occurred');
       }
-      expect(screen.queryByText('Why KG Expansion Matters')).not.toBeInTheDocument();
+      expect(screen.queryByText('How KG Expansion Works')).not.toBeInTheDocument();
     });
 
     it('describes unexpected errors generically', async () => {

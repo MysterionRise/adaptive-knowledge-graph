@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ChatPage from '@/app/chat/page';
 import { apiClient, type StreamCallbacks } from '@/lib/api-client';
@@ -43,6 +43,7 @@ interface StreamedAnswer {
   answer: string;
   sources?: Source[];
   expanded_concepts?: string[] | null;
+  related_concepts?: string[] | null;
   /** Omitted (like a pre-v0.4.0 backend) unless given. */
   kg_expansion_status?: KGExpansionStatus;
   retrieved_count?: number;
@@ -56,6 +57,7 @@ function mockStreamResponse({
   answer,
   sources = [],
   expanded_concepts = [],
+  related_concepts,
   kg_expansion_status,
   retrieved_count = 0,
   window_expanded_count,
@@ -68,6 +70,7 @@ function mockStreamResponse({
         type: 'metadata',
         sources,
         expanded_concepts,
+        related_concepts,
         kg_expansion_status,
         retrieved_count,
         window_expanded_count,
@@ -395,16 +398,54 @@ describe('ChatPage', () => {
   });
 
   describe('Response Display', () => {
-    it('displays expanded concepts when present', async () => {
-      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1', 'Concept 2', 'Concept 3'] });
+    it('lists the graph concepts used for retrieval and the related ones', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        expanded_concepts: ['Concept 1', 'Concept 2'],
+        related_concepts: ['Neighbour 1'],
+      });
 
       render(<ChatPage />);
       await ask('Question');
 
-      expect(await screen.findByText('KG Expansion: 3 related concepts')).toBeInTheDocument();
-      expect(screen.getByText('Concept 1')).toBeInTheDocument();
-      expect(screen.getByText('Concept 2')).toBeInTheDocument();
-      expect(screen.getByText('Concept 3')).toBeInTheDocument();
+      const used = await screen.findByRole('list', { name: 'Used for retrieval (2)' });
+      expect(within(used).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Concept 1',
+        'Concept 2',
+      ]);
+      const related = screen.getByRole('list', { name: 'Related in the graph (1) · not searched' });
+      expect(within(related).getByText('Neighbour 1')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /more$/ })).not.toBeInTheDocument();
+    });
+
+    it('shows the first eight related concepts until asked for the rest', async () => {
+      const related = Array.from({ length: 11 }, (_, index) => `Neighbour ${index + 1}`);
+      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1'], related_concepts: related });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      const list = await screen.findByRole('list', { name: /^Related in the graph \(11\)/ });
+      expect(within(list).getAllByRole('listitem')).toHaveLength(8);
+      expect(within(list).queryByText('Neighbour 9')).not.toBeInTheDocument();
+
+      const more = screen.getByRole('button', { name: 'Show 3 more' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(more);
+
+      expect(within(list).getAllByRole('listitem')).toHaveLength(11);
+      expect(screen.getByRole('button', { name: 'Show fewer' })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('shows no graph panel without graph concepts', async () => {
+      mockStreamResponse({ answer: 'Answer', expanded_concepts: null });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      expect(await screen.findByText('OpenStax US History')).toBeInTheDocument();
+      expect(screen.queryByText('Knowledge graph')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'View on Graph' })).not.toBeInTheDocument();
     });
 
     it('displays attribution and model', async () => {
@@ -601,8 +642,12 @@ describe('ChatPage', () => {
   });
 
   describe('View on Graph', () => {
-    it('navigates to graph page with the expanded concepts highlighted', async () => {
-      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1'] });
+    it('navigates to graph page with the used and related concepts highlighted', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        expanded_concepts: ['Concept 1'],
+        related_concepts: ['Neighbour 1', 'Concept 1'],
+      });
 
       render(<ChatPage />);
       await ask('Question');
@@ -610,7 +655,7 @@ describe('ChatPage', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'View on Graph' }));
 
       expect(mockPush).toHaveBeenCalledWith('/graph');
-      expect(useAppStore.getState().highlightedConcepts).toEqual(['Concept 1']);
+      expect(useAppStore.getState().highlightedConcepts).toEqual(['Concept 1', 'Neighbour 1']);
     });
   });
 

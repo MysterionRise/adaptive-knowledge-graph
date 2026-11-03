@@ -46,7 +46,7 @@ Restart the dev server after changing environment variables.
 | Route | Purpose |
 | --- | --- |
 | `/` | Home page with the graph summary |
-| `/chat` | KG-aware tutor with citations and expanded concepts |
+| `/chat` | KG-aware tutor with citations and the graph concepts behind each answer |
 | `/graph` | Cytoscape.js knowledge graph explorer |
 | `/comparison` | KG-expanded retrieval versus plain retrieval |
 | `/assessment` | Adaptive quiz and mastery workflow |
@@ -62,8 +62,9 @@ unexpected error shows an error page with **Try again**.
 - **Subject picker** lists the configured subjects. Subjects without seeded
   data are marked "Coming soon" and cannot be selected. The choice is saved in
   the browser (`localStorage` key `akg-preferences`) and survives a reload.
-- **AI Tutor** (`/chat`) streams answers and shows citations, source scores,
-  expanded concepts and a KG expansion toggle.
+- **AI Tutor** (`/chat`) streams answers and shows citations, a retrieval
+  summary, the graph concepts used for retrieval, their related concepts (not
+  searched) and a KG expansion toggle.
 - **Graph** colours edges by relationship type (`PREREQ`, `RELATED` and
   `COVERS`) and sizes nodes by importance.
 - **Assessment** generates topic-based questions, updates synthetic mastery

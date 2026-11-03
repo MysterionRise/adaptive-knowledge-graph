@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as `related_concepts` in `/ask`, `/ask/stream` and `/retrieve`.
   `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
   keyword query, and reports record it.
+- The AI Tutor's Knowledge graph panel lists the concepts used for retrieval
+  and, separately, the related concepts (the first eight, then "Show N more"),
+  and View on Graph highlights both. Compare explains how expansion works now
+  instead of claiming that it adds prerequisite and related concepts.
 - The case hash leaves out `stratum` and `split`, so every case keeps the hash
   it had in version 2 and earlier reports stay comparable.
 
