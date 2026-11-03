@@ -175,6 +175,27 @@ class TestRetrieveMode:
             # Should call search twice (kNN + BM25)
             assert retriever.client.search.call_count == 2
 
+    def test_hybrid_keyword_query_goes_to_bm25_only(self):
+        # KG expansion terms reach the keyword channel; the embedding sees the question (#282)
+        retriever = self._make_retriever()
+        with patch("backend.app.rag.retriever.settings") as mock_settings:
+            mock_settings.retrieval_mode = "hybrid"
+            mock_settings.rag_retrieval_top_k = 5
+            retriever.retrieve("the question", top_k=5, keyword_query="the question Stamp Act")
+        retriever.embedding_model.encode_query.assert_called_once_with("the question")
+        bodies = [call.kwargs["body"] for call in retriever.client.search.call_args_list]
+        bm25 = [b for b in bodies if "multi_match" in b["query"]]
+        assert bm25[0]["query"]["multi_match"]["query"] == "the question Stamp Act"
+
+    def test_knn_mode_embeds_the_keyword_query(self):
+        # knn mode has no keyword channel, so the expansion joins the embedded text
+        retriever = self._make_retriever()
+        with patch("backend.app.rag.retriever.settings") as mock_settings:
+            mock_settings.retrieval_mode = "knn"
+            mock_settings.rag_retrieval_top_k = 5
+            retriever.retrieve("the question", top_k=5, keyword_query="the question Stamp Act")
+        retriever.embedding_model.encode_query.assert_called_once_with("the question Stamp Act")
+
 
 @pytest.mark.unit
 class TestCreateCollection:

@@ -45,9 +45,12 @@ helper, so blocking and streaming answers cannot drift apart.
    the input.
 2. Resolve the subject from `config/subjects.yaml`, falling back to
    `default_subject` when none is given. An unknown subject returns `404`.
-3. Extract concepts from the question (spaCy NER and YAKE) and expand them with
-   their Neo4j neighbours, up to `RAG_KG_EXPANSION_HOPS`. If Neo4j fails, the
-   request continues without expansion. `kg_expansion_status` in the response
+3. Extract concepts from the question (spaCy NER and YAKE) and match them in
+   Neo4j. The recognised concepts join the keyword (BM25) query only; the kNN
+   query embeds the question. Their Neo4j neighbours, up to
+   `RAG_KG_EXPANSION_HOPS`, are returned as `related_concepts`, and
+   `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
+   keyword query. If Neo4j fails, the request continues without expansion. `kg_expansion_status` in the response
    (and in the stream's `metadata` event) is `ok`, `empty`, `failed` or
    `disabled`, so evaluations can tell a failed expansion from an empty one.
 4. Retrieve chunks from the subject's OpenSearch index. The default

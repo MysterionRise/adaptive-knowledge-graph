@@ -216,6 +216,7 @@ class OpenSearchRetriever:
         query: str,
         top_k: int | None = None,
         filter_dict: dict | None = None,
+        keyword_query: str | None = None,
     ) -> list[dict]:
         """
         Retrieve relevant chunks for a query.
@@ -225,9 +226,12 @@ class OpenSearchRetriever:
         - "hybrid": BM25 text search + kNN vector search with reciprocal rank fusion
 
         Args:
-            query: Query text
+            query: Query text; the kNN channel embeds it
             top_k: Number of results to return
             filter_dict: Optional metadata filters
+            keyword_query: Text for the BM25 channel when it differs from ``query``, such
+                as the question plus KG expansion terms (#282). In knn mode, which has no
+                keyword channel, it is embedded instead of ``query``.
 
         Returns:
             List of retrieved chunks with scores
@@ -235,8 +239,8 @@ class OpenSearchRetriever:
         top_k = top_k or settings.rag_retrieval_top_k
 
         if settings.retrieval_mode == "hybrid":
-            return self._retrieve_hybrid(query, top_k, filter_dict)
-        return self._retrieve_knn(query, top_k, filter_dict)
+            return self._retrieve_hybrid(query, top_k, filter_dict, keyword_query)
+        return self._retrieve_knn(keyword_query or query, top_k, filter_dict)
 
     def _retrieve_knn(
         self,
@@ -278,12 +282,14 @@ class OpenSearchRetriever:
         query: str,
         top_k: int,
         filter_dict: dict | None = None,
+        keyword_query: str | None = None,
     ) -> list[dict]:
         """
         Retrieve using BM25 + kNN with reciprocal rank fusion.
 
-        Runs both a BM25 text search and a kNN vector search, then merges
-        results using RRF for better diversity and relevance.
+        Runs both a BM25 text search (over ``keyword_query`` when given) and a kNN vector
+        search (over ``query``), then merges results using RRF for better diversity and
+        relevance.
         """
         query_embedding = self.embedding_model.encode_query(query)
         client = self._require_client()
@@ -305,7 +311,7 @@ class OpenSearchRetriever:
         # BM25 text search
         bm25_clause: dict = {
             "multi_match": {
-                "query": query,
+                "query": keyword_query or query,
                 "fields": ["text^3", "module_title^2", "section", "key_terms^2"],
                 "type": "best_fields",
                 "fuzziness": "AUTO",

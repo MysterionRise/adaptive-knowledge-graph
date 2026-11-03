@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- KG expansion feeds the keyword channel only
+  ([#282](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/282)).
+  It used to append every recognised concept and all their graph neighbours
+  (a median of 21 terms, led by the same hub concepts on most questions) to the
+  text that drove both BM25 and the query embedding, which lowered citation
+  hits below plain retrieval. Now the kNN channel embeds the question, BM25
+  gets the question plus the recognised concepts, and the neighbours come back
+  as `related_concepts` in `/ask`, `/ask/stream` and `/retrieve`.
+  `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
+  keyword query, and reports record it.
 - The case hash leaves out `stratum` and `split`, so every case keeps the hash
   it had in version 2 and earlier reports stay comparable.
 

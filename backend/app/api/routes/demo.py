@@ -394,6 +394,7 @@ PROVENANCE_RETRIEVAL_SETTINGS: tuple[str, ...] = (
     "rag_retrieval_top_k",
     "rag_kg_expansion",
     "rag_kg_expansion_hops",
+    "rag_kg_expansion_max_neighbours",
     "rag_chunk_size",
     "rag_chunk_overlap",
     "rag_window_retrieval",

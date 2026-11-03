@@ -204,6 +204,10 @@ class Settings(BaseSettings):
     rag_retrieval_top_k: int = 20
     rag_kg_expansion: bool = True
     rag_kg_expansion_hops: int = 1
+    # Graph neighbours of the recognised concepts added to the keyword (BM25) channel per
+    # question (#282). 0, the default, uses only the concepts recognised in the question: on
+    # the v0.3.0 golden set every neighbour budget tried lowered citation hits.
+    rag_kg_expansion_max_neighbours: int = 0
 
     # Retrieval mode for OpenSearch: "knn" (vector only) or "hybrid" (BM25 + kNN with RRF)
     retrieval_mode: Literal["knn", "hybrid"] = "hybrid"

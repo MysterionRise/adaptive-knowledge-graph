@@ -131,7 +131,8 @@ class TestKGExpanderFailedLookups:
         with patch.object(expander, "extract_concepts_from_query", return_value=["Tax", "Tea"]):
             result = expander.expand_query("Why tea?", {"Tax", "Tea"})
         assert result["failed_lookups"] == 1
-        assert set(result["expanded_concepts"]) == {"Tax", "Tea", "Tea Act"}
+        assert set(result["expanded_concepts"]) == {"Tax", "Tea"}
+        assert result["related_concepts"] == ["Tea Act"]
 
     def test_no_connection_counts_every_lookup_as_failed(self):
         expander = KGExpander(subject_id="us_history")
@@ -161,6 +162,28 @@ class TestRetrieveEndpoint:
         assert len(data["sources"]) == 3
         assert "answer" not in data
         llm_factory.assert_not_called()
+
+    def test_related_concepts_are_reported_but_only_the_expansion_reaches_bm25(
+        self, client, mock_retriever
+    ):
+        expander = _expander(["A"])
+        expander.expand_query.return_value["related_concepts"] = ["B", "C"]
+        with (
+            patch(f"{ASK}.get_retriever", return_value=mock_retriever),
+            patch(f"{ASK}.get_kg_expander", return_value=expander),
+            patch(f"{ASK}.get_known_concepts", return_value=frozenset({"A"})),
+        ):
+            response = client.post(
+                "/api/v1/retrieve",
+                json={"question": "What is photosynthesis?", "use_window_retrieval": False},
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["expanded_concepts"] == ["A"]
+        assert data["related_concepts"] == ["B", "C"]
+        call = mock_retriever.retrieve.call_args
+        assert call.args == ("What is photosynthesis?",)
+        assert call.kwargs["keyword_query"] == "q A"
 
     def test_no_content_is_404(self, client):
         retriever = MagicMock()
