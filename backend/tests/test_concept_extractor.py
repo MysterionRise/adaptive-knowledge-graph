@@ -262,6 +262,27 @@ class TestYakeStrategy:
             ("Slavery", pytest.approx(1 / 2.0)),
         ]
 
+    def test_numbered_names_keep_their_numeral(self):
+        # YAKE drops the "II": "World War" would otherwise resolve to "World War I"
+        extractor = ConceptExtractor(known_concepts={"World War I", "World War II"})
+        extractor._yake_extractor = MagicMock()
+        extractor._yake_extractor.extract_keywords.return_value = [("World War", 0.1)]
+
+        matches = extractor.extract_concepts(
+            "How did World War II change the home front?", strategy="yake"
+        )
+
+        assert [m.name for m in matches] == ["World War II"]
+
+    def test_real_yake_on_a_numbered_war(self):
+        extractor = ConceptExtractor(known_concepts={"World War I", "World War II", "Cold War"})
+
+        matches = extractor.extract_concepts(
+            "How did World War II change life on the American home front?", strategy="yake"
+        )
+
+        assert {m.name for m in matches} == {"World War II"}
+
     def test_yake_failure_returns_no_matches(self):
         extractor = ConceptExtractor(known_concepts=set(KNOWN))
         extractor._yake_extractor = MagicMock()

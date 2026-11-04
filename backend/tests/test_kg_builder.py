@@ -33,6 +33,7 @@ from backend.app.kg.normalize import (
     singularize,
     split_abbreviations,
     tokenize,
+    with_numerals,
 )
 from backend.app.kg.schema import RelationshipType
 from backend.app.kg.stopwords import is_valid_concept
@@ -319,16 +320,94 @@ class TestProperNouns:
     def test_other_words_are_not_proper_nouns(self, word, why):
         assert not self.STATS.is_proper_noun(word), why
 
+    def test_title_case_lines_are_not_counted(self):
+        stats = _CaseStats.from_prose(
+            [
+                "Section Summary\n\nThe summary lists the main points.\n\n"
+                "The Stamp Act Crisis\n\nMerchants signed the agreements in New York."
+            ]
+        )
+
+        assert (stats.mentions["summary"], stats.capitalised["summary"]) == (1, 0)
+        assert stats.capitalised["crisis"] == 0
+        assert stats.capitalised["york"] == 1  # running text is still counted
+
+    def test_sentences_and_sentence_case_lines_are_counted(self):
+        stats = _CaseStats.from_prose(
+            ["Delegates met in Philadelphia.\n\nWhy delegates met in Philadelphia"]
+        )
+
+        assert stats.capitalised["philadelphia"] == 2
+
+    def test_name_parts(self):
+        stats = _CaseStats.from_prose(
+            [
+                "Colonists hated the Townshend Acts. Merchants resisted the Townshend duties. "
+                "Parliament repealed the Townshend Acts. In 1767 Charles Townshend proposed them.",
+            ]
+        )
+
+        assert stats.is_name_part("townshend")
+        assert not self.STATS.is_name_part("constitution")
+        assert not self.STATS.is_name_part("white")  # mostly lower-case
+        assert not self.STATS.is_name_part("unknown")
+
+
+@pytest.mark.unit
+class TestNumerals:
+    PROSE = (
+        "World War I began in 1914. Americans entered World War I late. "
+        "World War II began in 1939. The First World War ended in 1918."
+    )
+
+    def test_mostly_numbered_keyword_becomes_each_numbered_name(self):
+        assert with_numerals("World War", self.PROSE) == ["World War I", "World War II"]
+
+    def test_spelling_follows_the_text_and_cases_merge(self):
+        prose = "world war ii began. World War II ended. World War II changed everything."
+
+        assert with_numerals("world war", prose) == ["World War II"]
+
+    def test_mostly_unnumbered_keyword_is_kept(self):
+        prose = "The First World War ended. The Second World War began. World War II ended."
+
+        assert with_numerals("World War", prose) == ["World War"]
+
+    @pytest.mark.parametrize(
+        "prose",
+        [
+            "The Cold War shaped politics. The Cold War ended.",
+            "World Warfare I is not a numeral.",  # no whole-word match
+            "World War In the end.",  # "In" is not a numeral
+            "World War I-era housing",  # part of a compound
+        ],
+    )
+    def test_no_numbered_name(self, prose):
+        keyword = "Cold War" if "Cold" in prose else "World War"
+        assert with_numerals(keyword, prose) == [keyword]
+
+    def test_title_ix_and_henry_viii(self):
+        assert with_numerals("Title", "Title IX banned sex discrimination.") == ["Title IX"]
+        assert with_numerals("Henry", "Henry VIII broke with Rome.") == ["Henry VIII"]
+
 
 @pytest.mark.unit
 class TestMarkupExtraction:
     def test_extract_marked_terms(self):
         text = (
             'a land bridge we call **Beringia**{: data-type="term"}; the '
-            '**demand curve**{: data-type="term" .no-emphasis} and '
+            '**demand curve**{: data-type="term" .no-emphasis}, '
+            '**supply curve**{: data-type="term" .no .emphasis} and '
             '<span data-type="term">scarcity</span>, but not **bold text**.'
         )
-        assert extract_marked_terms(text) == ["Beringia", "demand curve", "scarcity"]
+        assert extract_marked_terms(text) == [
+            "Beringia",
+            "demand curve",
+            "supply curve",
+            "scarcity",
+        ]
+        assert extract_marked_terms(text, emphasised=True) == ["Beringia", "scarcity"]
+        assert extract_marked_terms(text, emphasised=False) == ["demand curve", "supply curve"]
 
     def test_extract_glossary(self):
         text = (
@@ -724,6 +803,66 @@ class TestBuildFromRecords:
 
         assert set(one_slot.concepts) == key_terms | {"Constitution"}
         assert {"Constitution", "Lincoln"} <= set(two_slots.concepts)
+
+    def test_numbered_names_stay_apart(self):
+        records = [
+            record(
+                "m1", "World War I began in 1914. The United States entered World War I in 1917."
+            ),
+            record("m2", "World War II began in 1939. Factories converted during World War II."),
+            record("m3", "The Cold War followed. The Cold War shaped politics."),
+        ]
+        _, kg = self.build(records, vocabulary=["World War", "Cold War"], always=[])
+
+        assert set(kg.concepts) == {"World War I", "World War II", "Cold War"}
+        assert kg.concepts["World War II"].source_modules == ["m2"]
+        assert kg.concepts["World War I"].frequency == 1  # "World War II" is not a mention
+
+    def test_real_yake_keeps_both_world_wars(self):
+        records = [
+            record(
+                "m1",
+                "World War I began in Europe in 1914. Americans debated World War I for years."
+                "\n\nThe United States entered World War I after German submarine attacks."
+                "\n\nSoldiers returned from World War I to a changed country.",
+            ),
+            record(
+                "m2",
+                "World War II began in Europe in 1939. Americans followed World War II closely."
+                "\n\nThe United States entered World War II after the attack on Pearl Harbor."
+                "\n\nFactories converted to war production during World War II.",
+            ),
+        ]
+        kg = KGBuilder().build_from_records(records)
+
+        assert {"World War I", "World War II"} <= set(kg.concepts)
+        assert "World War" not in kg.concepts
+
+    def test_unemphasised_name_parts_are_not_key_terms(self):
+        text = "\n\n".join(
+            [
+                'His chancellor, Charles **Townshend**{: data-type="term" .no-emphasis}, '
+                "proposed new duties.",
+                "Colonists hated the Townshend Acts. Merchants resisted the Townshend duties.",
+                "Parliament repealed the Townshend Acts in 1770.",
+                'Grenville introduced the **Stamp Act**{: data-type="term" .no-emphasis} in 1765.',
+            ]
+        )
+        # 70 modules: a word judged as a keyword must come from int(70 * 0.03) = 2 of them
+        records = [record(f"m{i}", f"Topic {i} prose.") for i in range(69)]
+        _, kg = self.build([*records, record("m69", text)], vocabulary=[], always=[])
+
+        assert "Townshend" not in kg.concepts
+        assert kg.concepts["Stamp Act"].key_term is True  # unemphasised, but not a name part
+
+    def test_emphasised_name_parts_stay_key_terms(self):
+        text = (
+            'Charles **Townshend**{: data-type="term"} proposed new duties. '
+            "Colonists hated the Townshend Acts. Merchants resisted the Townshend duties."
+        )
+        _, kg = self.build([record("m1", text)], vocabulary=[], always=[])
+
+        assert kg.concepts["Townshend"].key_term is True
 
     def test_two_character_key_terms_are_kept(self):
         text = (

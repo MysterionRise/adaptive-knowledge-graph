@@ -27,6 +27,7 @@ from typing import Literal
 import yake
 from loguru import logger
 
+from backend.app.kg.normalize import with_numerals
 from backend.app.kg.stopwords import is_stop_concept
 from backend.app.nlp.lexicon import ConceptLexicon, Resolution, lexicon_for
 
@@ -281,12 +282,13 @@ class ConceptExtractor:
                 # YAKE scores are lower = better, normalize to 0-1
                 normalized_score = 1.0 / (1.0 + yake_score)
 
-                # Check if keyword matches a known concept
-                resolution = lexicon.resolve(keyword)
-                if resolution:
-                    matches.append(
-                        ConceptMatch.from_resolution(resolution, normalized_score, "yake")
-                    )
+                # "World War" in "World War II": YAKE drops the numeral (#213)
+                for phrase in with_numerals(keyword, text):
+                    resolution = lexicon.resolve(phrase)
+                    if resolution:
+                        matches.append(
+                            ConceptMatch.from_resolution(resolution, normalized_score, "yake")
+                        )
 
         except Exception as e:
             logger.warning(f"YAKE extraction failed: {e}")
