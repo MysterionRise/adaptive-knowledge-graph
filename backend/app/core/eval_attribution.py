@@ -185,11 +185,12 @@ def attribution_lines(attribution: Mapping[str, Any]) -> list[str]:
             f"{len(entry.get('losses') or [])} | "
             f"{'n/a' if mean is None else mean} ({specificity.get('cases')} cases) |"
         )
+    flips = []
     for subject, entry in attribution.items():
         for kind in ("hits", "losses"):
             for record in entry.get(kind) or []:
                 explanation = record.get("explanation") or {}
                 summary = explanation.get("summary") or "no trace"
                 label = "hit" if kind == "hits" else "loss"
-                lines.append(f"- `{record['id']}` ({subject}, KG {label}): {summary}")
-    return lines
+                flips.append(f"- `{record['id']}` ({subject}, KG {label}): {summary}")
+    return [*lines, "", *flips] if flips else lines
