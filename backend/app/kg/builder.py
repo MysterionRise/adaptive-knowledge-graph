@@ -6,9 +6,11 @@ Builds a concept graph from OpenStax textbook records:
 1. Author-marked key terms (``**term**{: data-type="term"}``) and glossary
    definitions are read from the raw text; the text is then cleaned of markup and
    of end-of-section scaffolding (review questions, glossary, references).
-2. YAKE keywords from the cleaned prose complement the key terms. Every candidate
-   is normalised, stop-concept filtered and merged with its case/plural variants;
-   keyword fragments of longer concepts ("United" in "United States") are dropped.
+2. YAKE keywords from the cleaned prose complement the key terms; a keyword the text
+   mostly follows with a Roman numeral becomes the numbered names ("World War I",
+   "World War II"). Every candidate is normalised, stop-concept filtered and merged
+   with its case/plural variants; keyword fragments of longer concepts ("United" in
+   "United States") are dropped.
 3. The ``max_concepts`` best candidates become concept nodes. COVERS edges link
    modules to the concepts extracted from them; RELATED edges link concepts that
    share at least ``cooccurrence_threshold`` paragraphs; PREREQ edges come from
@@ -103,6 +105,10 @@ _WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['.\-][A-Za-z0-9]+)*")
 _PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[\"“‘(\[]?[A-Z0-9])|\n+")
 _LINE_END_RE = re.compile(r"(?<![.!?:;])[ \t]*\n")
+_SENTENCE_END_RE = re.compile(r"[.!?][\"'”’)\]]*$")
+# A Roman numeral that completes a name: "World War I", "World War II", "Title IX".
+_ROMAN_NUMERAL = r"(?:XI{0,3}|IX|IV|VI{0,3}|I{1,3})"
+_ROMAN_NUMERAL_RE = re.compile(_ROMAN_NUMERAL)
 # Keyword phrases that open with a number or a comparative/quantity modifier are
 # descriptions, not concepts ("Million African Americans", "Higher Price").
 _MODIFIER_PREFIX_RE = re.compile(
@@ -196,6 +202,8 @@ class _Candidate:
     aliases: set[str] = field(default_factory=set)
     modules: list[str] = field(default_factory=list)
     key_term: bool = False
+    emphasised: bool = False
+    """A key term shown in bold or defined in a glossary, not only marked ``no-emphasis``."""
     definition: str | None = None
     definition_module: str | None = None
     preferred: str | None = None
@@ -227,6 +235,7 @@ class _Candidate:
         self.aliases.update(other.aliases)
         self.modules.extend(module for module in other.modules if module not in self.modules)
         self.key_term = self.key_term or other.key_term
+        self.emphasised = self.emphasised or other.emphasised
 
 
 @dataclass
@@ -273,6 +282,23 @@ def _is_name_word(word: str) -> bool:
     return word[:1].isupper() and word.lower() not in FUNCTION_WORDS
 
 
+def _is_title_line(line: str) -> bool:
+    """
+    A line in Title Case that is not a sentence: "The Stamp Act Crisis", "Section Summary".
+
+    It does not end like a sentence, and it has at least two words other than function
+    words, all of them capitalised.
+    """
+    if _SENTENCE_END_RE.search(line.rstrip()):
+        return False
+    words = [
+        word
+        for word in _WORD_RE.findall(line)
+        if word[:1].isalpha() and word.lower() not in FUNCTION_WORDS
+    ]
+    return len(words) >= 2 and all(word[:1].isupper() for word in words)
+
+
 @dataclass
 class _CaseStats:
     """How single words are capitalised in running text, keyed by singular lower-case word."""
@@ -285,10 +311,17 @@ class _CaseStats:
 
     @classmethod
     def from_prose(cls, texts: Iterable[str]) -> "_CaseStats":
-        """Count mid-sentence mentions only, so a capital at the start of a sentence is ignored."""
+        """
+        Count mid-sentence mentions only, so a capital at the start of a sentence is ignored.
+
+        Title Case lines (headings, captions, table labels) are skipped: their capitals
+        say nothing about whether a word is a name.
+        """
         stats = cls()
         for text in texts:
-            for sentence in _SENTENCE_SPLIT_RE.split(text.replace("’", "'")):
+            lines = text.replace("’", "'").split("\n")
+            prose = "\n".join(line for line in lines if not _is_title_line(line))
+            for sentence in _SENTENCE_SPLIT_RE.split(prose):
                 matches = list(_WORD_RE.finditer(sentence))
                 for i in range(1, len(matches)):
                     word = matches[i].group()
@@ -310,6 +343,19 @@ class _CaseStats:
                     else:  # end of sentence or punctuation follows
                         stats.phrase_end[key] += 1
         return stats
+
+    def is_name_part(self, key: str) -> bool:
+        """
+        True for a word mostly written as part of a longer name: "Townshend" in "Townshend Acts".
+
+        It must be capitalised in most mid-sentence mentions, and at least
+        ``MAX_NAME_PART_RATIO`` of those mentions sit next to another capitalised word.
+        """
+        mentions, capitalised = self.mentions[key], self.capitalised[key]
+        if mentions == 0 or capitalised < MIN_CAPITALISED_RATIO * mentions:
+            return False
+        limit = MAX_NAME_PART_RATIO * capitalised
+        return self.after_name_word[key] >= limit or self.before_name_word[key] >= limit
 
     def is_proper_noun(self, key: str) -> bool:
         """
@@ -354,6 +400,9 @@ class _PhraseIndex:
             if is_acronym(surface):  # "START" must not match the verb "start"
                 variants.add((tuple(lower), tuple(words)))
                 continue
+            if _ROMAN_NUMERAL_RE.fullmatch(words[-1]):  # "World War I" has no plural
+                variants.add((tuple(lower), None))
+                continue
             last = lower[-1]
             forms = {last, singularize(last), last + "s", last + "es"}
             if last.endswith("y"):
@@ -387,6 +436,32 @@ class _PhraseIndex:
                 kept.append(occurrence)
                 end = occurrence.end
         return kept
+
+
+def _with_numerals(keyword: str, prose: str) -> list[str]:
+    """
+    The numbered names a keyword stands for: "World War" -> ["World War I", "World War II"].
+
+    YAKE treats words shorter than three letters as stop words, so it never ends a
+    keyword with "I" or "II" and both world wars come back as "World War". When most
+    mentions of the keyword in ``prose`` are followed by a Roman numeral, it is replaced
+    by each numbered name, spelled as in the text; otherwise it is returned unchanged.
+    """
+    words = keyword.split()
+    if not words:
+        return [keyword]
+    phrase = r"\s+".join(re.escape(word) for word in words)
+    mentions = len(re.findall(rf"(?<![\w-])(?i:{phrase})(?![\w-])", prose))
+    numbered = Counter(
+        match.group(0)
+        for match in re.finditer(rf"(?<![\w-])(?i:{phrase})\s+{_ROMAN_NUMERAL}(?![\w-])", prose)
+    )
+    if not numbered or 2 * sum(numbered.values()) < mentions:
+        return [keyword]
+    by_key: dict[str, Counter[str]] = {}
+    for name, count in numbered.items():
+        by_key.setdefault(concept_key(name), Counter())[" ".join(name.split())] += count
+    return [spellings.most_common(1)[0][0] for spellings in by_key.values()]
 
 
 def _contains(longer: list[str], shorter: list[str]) -> bool:
@@ -455,12 +530,17 @@ class KGBuilder:
         if not text.strip():
             return []
         try:
-            return [keyword for keyword, _score in self.keyword_extractor.extract_keywords(text)]
+            keywords = [
+                keyword for keyword, _score in self.keyword_extractor.extract_keywords(text)
+            ]
         except Exception as e:  # YAKE can fail on degenerate input
             logger.warning(f"YAKE extraction failed: {e}")
             return []
+        return [numbered for keyword in keywords for numbered in _with_numerals(keyword, prose)]
 
-    def _add_candidate(self, found: dict[str, _Candidate], raw: str, *, key_term: bool) -> None:
+    def _add_candidate(
+        self, found: dict[str, _Candidate], raw: str, *, key_term: bool, emphasised: bool = False
+    ) -> None:
         name, aliases = split_abbreviations(normalize_concept(raw))
         name = normalize_concept(name)
         # Author key terms may be short ("M1", "M2"); keywords keep min_concept_length.
@@ -475,10 +555,15 @@ class KGBuilder:
         (candidate.key_surfaces if key_term else candidate.surfaces)[name] += 1
         candidate.aliases.update(aliases)
         candidate.key_term = candidate.key_term or key_term
+        candidate.emphasised = candidate.emphasised or emphasised
 
-    def _candidates(self, prose: str, key_terms: Iterable[str]) -> dict[str, _Candidate]:
+    def _candidates(
+        self, prose: str, key_terms: Iterable[str], unemphasised: Iterable[str] = ()
+    ) -> dict[str, _Candidate]:
         found: dict[str, _Candidate] = {}
         for term in key_terms:
+            self._add_candidate(found, term, key_term=True, emphasised=True)
+        for term in unemphasised:
             self._add_candidate(found, term, key_term=True)
         for keyword in self._keywords(prose):
             self._add_candidate(found, keyword, key_term=False)
@@ -502,9 +587,13 @@ class KGBuilder:
         Returns:
             Concept display names, key terms first.
         """
-        marked = [*key_terms, *extract_marked_terms(text), *extract_glossary(text)]
+        marked = [
+            *key_terms,
+            *extract_marked_terms(text, emphasised=True),
+            *extract_glossary(text),
+        ]
         prose = clean_text(strip_structural_sections(text))
-        found = self._candidates(prose, marked)
+        found = self._candidates(prose, marked, extract_marked_terms(text, emphasised=False))
         occurrences = Counter(o.key for o in _PhraseIndex(found.values()).find(*_words(prose)))
         kept = self._drop_fragments(found, occurrences)
         return [c.name for c in sorted(kept.values(), key=lambda c: not c.key_term)]
@@ -578,8 +667,9 @@ class KGBuilder:
                 definitions.setdefault(key, (definition, module.module_id))
             prose = clean_text(strip_structural_sections(raw))
             prose_by_module[module.module_id] = prose
-            marked = [*module.key_terms, *extract_marked_terms(raw), *glossary]
-            for key, found in self._candidates(prose, marked).items():
+            marked = [*module.key_terms, *extract_marked_terms(raw, emphasised=True), *glossary]
+            unemphasised = extract_marked_terms(raw, emphasised=False)
+            for key, found in self._candidates(prose, marked, unemphasised).items():
                 found.modules.append(module.module_id)
                 candidates.setdefault(key, _Candidate(key=key)).merge(found)
         self._merge_acronyms(candidates)
@@ -707,11 +797,14 @@ class KGBuilder:
         """
         Pick the ``max_concepts`` best candidates.
 
-        Author key terms are always eligible. A YAKE-only phrase must be a top keyword
-        of at least ``MIN_KEYWORD_MODULE_RATIO`` of the modules and, in a corpus of at
-        least ``MIN_MODULES_FOR_DOCUMENT_RATIO`` modules, be mentioned in at most
-        ``MAX_KEYWORD_DOCUMENT_RATIO`` of them; fragments of longer concepts are
-        dropped. Candidates are ranked by the number of modules mentioning them.
+        Author key terms are always eligible, except a single word marked only with
+        ``no-emphasis`` that the text mostly writes as part of a longer name ("Charles
+        **Townshend**", "the Townshend Acts"), which is judged as a keyword. A YAKE-only
+        phrase must be a top keyword of at least ``MIN_KEYWORD_MODULE_RATIO`` of the
+        modules and, in a corpus of at least ``MIN_MODULES_FOR_DOCUMENT_RATIO`` modules,
+        be mentioned in at most ``MAX_KEYWORD_DOCUMENT_RATIO`` of them; fragments of
+        longer concepts are dropped. Candidates are ranked by the number of modules
+        mentioning them.
 
         Single-word keywords are mostly generic ("War", "Government", "White"), so they
         rank below key terms and multi-word phrases, with one exception: up to
@@ -719,6 +812,14 @@ class KGBuilder:
         proper nouns ("Constitution", "Congress", "Union", "Lincoln"), most widely
         mentioned first. Other single words only fill slots nothing else wants.
         """
+        for candidate in candidates.values():
+            if (
+                candidate.key_term
+                and not candidate.emphasised
+                and candidate.is_single_word
+                and case_stats.is_name_part(candidate.key)
+            ):
+                candidate.key_term = False
         min_modules = max(1, int(module_count * MIN_KEYWORD_MODULE_RATIO))
         eligible = {
             key: c for key, c in candidates.items() if c.key_term or len(c.modules) >= min_modules

@@ -71,6 +71,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Graph builder quality
+  ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213)):
+  - **Numbered names.** YAKE never ends a keyword with "I" or "II", so both
+    world wars were one concept, "World War". A keyword the text mostly
+    follows with a Roman numeral now becomes each numbered name ("World War
+    I", "World War II").
+  - **Headings.** Title Case lines (headings, captions, table labels) no
+    longer count in the statistics that decide whether a single word is a
+    proper noun.
+  - **Name fragments.** A single word marked as a key term only with the
+    `no-emphasis` class, and mostly written as part of a longer name, is
+    judged as an ordinary keyword. "Townshend" (from "Charles Townshend")
+    leaves the US History graph. Unemphasised terms such as "Stamp Act"
+    stay key terms.
+
+  On the seeded books, US History swaps "World War" and "Townshend" for "World
+  War I" and "World War II"; Economics keeps the same 200 concepts. Four
+  pending golden cases cover the world wars, the end of the Cold War and GDP.
 - Hosted Claude 5.x models through Anthropic's OpenAI-compatible endpoint
   answered every request with HTTP 400 ("`temperature` is deprecated for this
   model"), so answers, quizzes, recommendations and graph queries all failed

@@ -98,11 +98,16 @@ _INLINE_TAGS = frozenset(
 )
 
 # ``**term**{: data-type="term"}`` (kramdown) and ``<span data-type="term">term</span>`` (HTML).
-_MARKED_TERM_RE = re.compile(r"\*\*([^*\n]+?)\*\*\{:[^}\n]*data-type=\"term\"[^}\n]*\}")
+_MARKED_TERM_RE = re.compile(
+    r"\*\*(?P<term>[^*\n]+?)\*\*\{:(?P<attributes>[^}\n]*data-type=\"term\"[^}\n]*)\}"
+)
 _HTML_TERM_RE = re.compile(
-    r"<(?P<tag>[a-z]+)\b[^>]*\bdata-type=\"term\"[^>]*>(?P<term>[^<]{1,120})</(?P=tag)>",
+    r"<(?P<tag>[a-z]+)\b(?P<attributes>[^>]*\bdata-type=\"term\"[^>]*)>"
+    r"(?P<term>[^<]{1,120})</(?P=tag)>",
     re.IGNORECASE,
 )
+# The ``no-emphasis`` class, also written ``.no .emphasis``.
+_NO_EMPHASIS_RE = re.compile(r"\bno(?:-|\s+\.)emphasis\b", re.IGNORECASE)
 # Kramdown definition-list entry: "Beringia\n: an ancient land bridge ...".
 _GLOSSARY_ENTRY_RE = re.compile(
     r"(?m)^(?![ \t]*(?:[-*+][ \t]|[>|#]|\d+\.[ \t]))([^\n:]{2,80})\n:[ \t]+(.+)$"
@@ -341,10 +346,27 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
-def extract_marked_terms(text: str) -> list[str]:
-    """Author-marked key terms (``data-type="term"``) in order of appearance, unnormalised."""
-    terms = [match.group(1) for match in _MARKED_TERM_RE.finditer(text)]
-    terms.extend(match.group("term") for match in _HTML_TERM_RE.finditer(text))
+def extract_marked_terms(text: str, *, emphasised: bool | None = None) -> list[str]:
+    """
+    Author-marked key terms (``data-type="term"``) in order of appearance, unnormalised.
+
+    Args:
+        text: Raw OpenStax Markdown/HTML.
+        emphasised: None for every span; True for spans shown in bold; False for spans
+            with the ``no-emphasis`` class. The books use that class both where a term is
+            introduced ("introduced the **Stamp Act**") and for parts of names ("Charles
+            **Townshend**"), so it is weaker evidence than an emphasised term.
+
+    Returns:
+        The marked terms, stripped.
+    """
+    terms = [
+        match.group("term")
+        for pattern in (_MARKED_TERM_RE, _HTML_TERM_RE)
+        for match in pattern.finditer(text)
+        if emphasised is None
+        or emphasised != bool(_NO_EMPHASIS_RE.search(match.group("attributes")))
+    ]
     return [term.strip() for term in terms if term.strip()]
 
 

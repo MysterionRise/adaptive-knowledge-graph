@@ -586,3 +586,45 @@ cases:
     tags: ["source_conflict", "balanced_answer"]
     stratum: distribution
     split: final
+
+  # Pending since version 3 (#213): numbered wars, a later Cold War section and GDP.
+  - id: us_history_world_war_one_entry
+    subject: us_history
+    question: "Why did the United States enter World War I?"
+    expected_terms: ["Germany", "submarine", "neutrality", "Wilson"]
+    expected_sources:
+      - "American Isolationism and the European Origins of War"
+      - "The United States Prepares for War"
+    tags: ["answerable", "source_grounding"]
+    stratum: single_hop
+    split: pending
+
+  - id: us_history_world_war_two_home_front
+    subject: us_history
+    question: "How did World War II change life on the American home front?"
+    expected_terms: ["rationing", "women", "African Americans", "internment"]
+    expected_sources:
+      - "The Home Front"
+    tags: ["answerable", "source_grounding"]
+    stratum: single_hop
+    split: pending
+
+  - id: us_history_cold_war_end
+    subject: us_history
+    question: "How did the Cold War come to an end?"
+    expected_terms: ["Soviet", "Gorbachev", "Berlin Wall", "collapse"]
+    expected_sources:
+      - "A New World Order"
+    tags: ["answerable", "source_grounding"]
+    stratum: single_hop
+    split: pending
+
+  - id: economics_gdp_measurement
+    subject: economics
+    question: "How is GDP measured?"
+    expected_terms: ["consumption", "investment", "government spending", "net exports"]
+    expected_sources:
+      - "Measuring the Size of the Economy: Gross Domestic Product"
+    tags: ["answerable", "terminology"]
+    stratum: single_hop
+    split: pending
