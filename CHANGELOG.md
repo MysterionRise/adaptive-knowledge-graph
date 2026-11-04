@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Concepts in a question are resolved against the subject's concept names and
+  their stored aliases
+  ([#212](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/212)).
+  - **What matches:** "GDP" now finds "Gross Domestic Product", "recessions"
+    finds "Recession", and "the Stamp Act of 1765" finds "Stamp Act".
+  - **What no longer matches:** a single generic word, so "war" no longer
+    pulls in "Civil War" and "American" no longer pulls in "American River".
+  - **Ambiguity:** an alias shared by several concepts is left out of the
+    expansion.
+  - **Reporting:** `/ask`, `/ask/stream` and `/retrieve` report each span and
+    what it resolved to as `resolved_terms`.
 - KG expansion feeds the keyword channel only
   ([#282](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/282)).
   It used to append every recognised concept and all their graph neighbours

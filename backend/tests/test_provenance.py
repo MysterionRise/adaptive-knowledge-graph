@@ -128,7 +128,7 @@ class TestKGExpanderFailedLookups:
             RuntimeError("Neo4j down"),
         ]
         expander.neo4j_adapter = adapter
-        with patch.object(expander, "extract_concepts_from_query", return_value=["Tax", "Tea"]):
+        with patch.object(expander, "resolve_query", return_value=(["Tax", "Tea"], [])):
             result = expander.expand_query("Why tea?", {"Tax", "Tea"})
         assert result["failed_lookups"] == 1
         assert set(result["expanded_concepts"]) == {"Tax", "Tea"}
@@ -137,7 +137,7 @@ class TestKGExpanderFailedLookups:
     def test_no_connection_counts_every_lookup_as_failed(self):
         expander = KGExpander(subject_id="us_history")
         expander.neo4j_adapter = None
-        with patch.object(expander, "extract_concepts_from_query", return_value=["Tax"]):
+        with patch.object(expander, "resolve_query", return_value=(["Tax"], [])):
             result = expander.expand_query("Why tax?", {"Tax"})
         assert result["failed_lookups"] == 1
 
@@ -184,6 +184,50 @@ class TestRetrieveEndpoint:
         call = mock_retriever.retrieve.call_args
         assert call.args == ("What is photosynthesis?",)
         assert call.kwargs["keyword_query"] == "q A"
+
+    def test_resolved_terms_are_reported(self, client, mock_retriever):
+        expander = _expander(["Gross Domestic Product"])
+        expander.expand_query.return_value["resolved_terms"] = [
+            {
+                "surface": "GDP",
+                "canonical": "Gross Domestic Product",
+                "via": "alias",
+                "strategy": "ensemble",
+                "status": "resolved",
+            },
+            {
+                "surface": "capital stock",
+                "canonical": None,
+                "via": "alias",
+                "strategy": "ner",
+                "status": "ambiguous",
+                "candidates": ["Capital", "Physical Capital"],
+            },
+        ]
+        with (
+            patch(f"{ASK}.get_retriever", return_value=mock_retriever),
+            patch(f"{ASK}.get_kg_expander", return_value=expander),
+            patch(f"{ASK}.get_known_concepts", return_value=frozenset({"A"})),
+        ):
+            response = client.post(
+                "/api/v1/retrieve",
+                json={
+                    "question": "Does GDP count the capital stock?",
+                    "use_window_retrieval": False,
+                },
+            )
+        assert response.status_code == 200
+        terms = response.json()["resolved_terms"]
+        assert terms[0] == {
+            "surface": "GDP",
+            "canonical": "Gross Domestic Product",
+            "via": "alias",
+            "strategy": "ensemble",
+            "status": "resolved",
+            "candidates": None,
+        }
+        assert terms[1]["status"] == "ambiguous"
+        assert terms[1]["candidates"] == ["Capital", "Physical Capital"]
 
     def test_no_content_is_404(self, client):
         retriever = MagicMock()

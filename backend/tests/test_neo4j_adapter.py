@@ -1370,6 +1370,24 @@ class TestConceptLookup:
         assert names == {"Civil War", "Reconstruction"}
         assert "us_history_Concept" in mock_session.run.call_args[0][0]
 
+    def test_get_concept_aliases(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {"name": "Gross Domestic Product", "aliases": ["GDP", ""]},
+                {"name": "Recession", "aliases": []},
+                {"name": None, "aliases": ["orphan"]},
+            ]
+        )
+
+        assert adapter.get_concept_aliases() == {
+            "Gross Domestic Product": ["GDP"],
+            "Recession": [],
+        }
+        query = mock_session.run.call_args[0][0]
+        assert "economics_Concept" in query
+        assert "coalesce(c.aliases, [])" in query
+
     def test_concept_exists_matches_case_insensitively_and_ignores_leading_the(self):
         adapter, mock_session = _make_adapter(label_prefix="us_history")
         mock_session.run.return_value = _make_mock_result([{"found": True}])

@@ -71,6 +71,14 @@ def concept_key(name: str) -> str:
     return " ".join(tokens)
 
 
+def query_key(text: str) -> str:
+    """``concept_key`` of a span from a question, without a leading article.
+
+    "the Stamp Act" and "Stamp Acts" share the key of the concept "Stamp Act".
+    """
+    return concept_key(_LEADING_ARTICLE_RE.sub("", text.strip()))
+
+
 def _trim_edges(text: str) -> str:
     """Strip edge punctuation, and edge brackets only when they are unbalanced ("401(k)" stays)."""
     while True:
