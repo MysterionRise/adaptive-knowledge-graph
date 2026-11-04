@@ -104,7 +104,10 @@ If anyone other than you can reach the API, run it in production mode:
   source of truth for exactly which advisories are accepted. Every entry
   expires within 90 days and names its issue; a weekly dependency audit flags
   entries 30 days before they expire, and pull requests fail on any advisory
-  they add. Each upgrade has its own issue:
+  they add. For a fixable advisory in a transitive dependency that Dependabot
+  will not bump, see
+  [Fixing an advisory in a transitive dependency](CONTRIBUTING.md#fixing-an-advisory-in-a-transitive-dependency).
+  Each upgrade has its own issue:
   - `torch` 2.10, for two local-only advisories in features this project does
     not use (`torch.jit.script` and loading `.pt2` archives). The fixed
     releases switch the Linux wheels to CUDA 13, which is deferred to
