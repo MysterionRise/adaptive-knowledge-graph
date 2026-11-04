@@ -115,7 +115,11 @@ def rescore_report(
     rescored_report = dict(report)
     # The noise floor is a property of the run, not of the scorer: keep the one it recorded
     stored_floor = as_dict(report.get("summary")).get("noise_floor")
-    rescored_report["summary"] = _summarize(results, stored_floor)
+    expected = {
+        str(result.get("id")): list(cases[str(result.get("id"))].get("expected_sources") or [])
+        for result in results
+    }
+    rescored_report["summary"] = _summarize(results, stored_floor, expected)
     rescored_report["results"] = results
     rescored_report["rescoring"] = {
         "rescored_at": datetime.now(UTC).isoformat(),

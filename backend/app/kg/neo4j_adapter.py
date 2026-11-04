@@ -258,12 +258,16 @@ class Neo4jAdapter:
         ("Good" for "Demand") follow the associated ones. Ties go to the more important
         concept, then the name, so the LIMIT keeps the same neighbours.
 
+        ``edges`` and ``provenance`` describe the strongest path: each edge's type and its
+        ``provenance_source`` ("cooccurrence", "glossary", "cue_phrase"; empty when the
+        build did not record one), for the retrieval trace (#216).
+
         Args:
             concept_name: Name of the concept
             max_hops: Maximum number of relationship hops
 
         Returns:
-            Neighbour dicts: name, importance_score, key_term, weight
+            Neighbour dicts: name, importance_score, key_term, weight, edges, provenance
         """
         concept_label = self._get_label("Concept")
         hops = max(1, int(max_hops))  # interpolated into the query, so force an int
@@ -272,14 +276,23 @@ class Neo4jAdapter:
             MATCH path = (c:{concept_label} {{name: $name}})
                          -[:RELATED|PREREQ*1..{hops}]-(neighbor:{concept_label})
             WHERE neighbor <> c
-            WITH neighbor,
-                 max(reduce(w = 1.0, r IN relationships(path) |
+            WITH neighbor, path,
+                 reduce(w = 1.0, r IN relationships(path) |
                      w * CASE type(r) WHEN 'RELATED' THEN coalesce(r.weight, 0.0) ELSE 0.0 END
-                 )) AS weight
+                 ) AS path_weight
+            ORDER BY path_weight DESC, length(path)
+            WITH neighbor,
+                 collect({{
+                     weight: path_weight,
+                     edges: [r IN relationships(path) | type(r)],
+                     provenance: [r IN relationships(path) | coalesce(r.provenance_source, '')]
+                 }})[0] AS best
             RETURN neighbor.name as name,
                    neighbor.importance_score as importance_score,
                    neighbor.key_term as key_term,
-                   weight
+                   best.weight AS weight,
+                   best.edges AS edges,
+                   best.provenance AS provenance
             ORDER BY weight DESC, importance_score DESC, name
             LIMIT 20
             """

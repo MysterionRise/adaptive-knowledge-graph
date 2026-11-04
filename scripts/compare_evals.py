@@ -9,6 +9,9 @@ status), new and removed cases, and the paired head-versus-base counts per mode 
 (wins, ties, losses, discordant pairs and an exact sign test), next to each run's own
 KG-versus-plain counts and bootstrap intervals.
 
+When both runs of a flipped case kept retrieval traces (``evaluate_rag.py --trace``), the
+flip names the first retrieval stage where the two runs part (``first_divergent_stage``).
+
 When the two reports are repeats (same commit, settings, golden set, split, LLM and seed;
 see ``repeat_configuration``), the cases on which they disagree are the noise floor.
 --noise-floor FILE records it for the run mode (full or retrieval-only) in FILE, which
@@ -47,6 +50,7 @@ from backend.app.core.eval_stats import (
     outcome,
     paired_counts,
 )
+from backend.app.rag.trace import first_divergent_stage
 
 KG_CITATION_HIT_DROP_LIMIT = 2
 KG_MRR_DROP_LIMIT = 0.03
@@ -138,6 +142,10 @@ def compare(base: dict[str, Any], head: dict[str, Any]) -> dict[str, Any]:
                             "base": before,
                             "head": after,
                             "retrieval": field in RETRIEVAL_FIELDS,
+                            # None unless both runs kept traces (evaluate_rag.py --trace)
+                            "stage": first_divergent_stage(
+                                base_mode.get("trace"), head_mode.get("trace")
+                            ),
                         }
                     )
 
@@ -365,12 +373,21 @@ def format_markdown(base: dict[str, Any], head: dict[str, Any], result: dict[str
     lines.extend(_paired_sections(result))
     lines.extend(_noise_section(result))
     if result["flips"]:
-        lines.extend(["", "## Flips", "", "| Case | Mode | Field | Base | Head |"])
-        lines.append("| --- | --- | --- | --- | --- |")
+        lines.extend(
+            [
+                "",
+                "## Flips",
+                "",
+                "The first divergent stage needs traces in both runs (`evaluate_rag.py --trace`).",
+                "",
+                "| Case | Mode | Field | Base | Head | First divergent stage |",
+                "| --- | --- | --- | --- | --- | --- |",
+            ]
+        )
         for flip in result["flips"]:
             lines.append(
                 f"| {flip['id']} | {flip['mode']} | {flip['field']} | "
-                f"{flip['base']} | {flip['head']} |"
+                f"{flip['base']} | {flip['head']} | {flip.get('stage') or 'n/a'} |"
             )
     return "\n".join(lines) + "\n"
 

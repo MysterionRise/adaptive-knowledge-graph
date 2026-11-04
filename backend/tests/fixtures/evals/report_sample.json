@@ -218,6 +218,32 @@
       "noise_floor": null,
       "verdict": "no_difference",
       "claim": "No evidence of a difference in citation hit rate: KG 1.000, plain 0.800, difference +0.200 (95% CI +0.000 to +0.600) over 5 cases; KG cited better on 1 and plain on 0. KG is non-inferior at the -0.10 margin."
+    },
+    "kg_attribution": {
+      "economics": {
+        "compared": 3,
+        "hits": [
+          {
+            "id": "fixture_answerable_all_echo"
+          }
+        ],
+        "losses": [],
+        "specificity": {
+          "cases": 4,
+          "pairs": 6,
+          "mean_jaccard": 1.0
+        }
+      },
+      "us_history": {
+        "compared": 2,
+        "hits": [],
+        "losses": [],
+        "specificity": {
+          "cases": 2,
+          "pairs": 1,
+          "mean_jaccard": 1.0
+        }
+      }
     }
   },
   "results": [
@@ -715,9 +741,9 @@
     }
   ],
   "rescoring": {
-    "rescored_at": "2026-11-03T10:41:50.138459+00:00",
+    "rescored_at": "2026-11-04T13:25:46.030308+00:00",
     "harness": {
-      "git_sha": "26a7ea6aeaa63bb2db579178e701b73547d70d6f"
+      "git_sha": "505e288ff5d7258c0063ab20ab44a7a3b9c4d5a2"
     },
     "golden_set": {
       "path": "backend/tests/fixtures/evals/golden_sample.yaml",

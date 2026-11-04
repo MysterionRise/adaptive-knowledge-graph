@@ -27,6 +27,7 @@ from backend.app.core.settings import settings
 from backend.app.core.subjects import get_subject
 from backend.app.kg.neo4j_adapter import Neo4jAdapter, get_neo4j_adapter
 from backend.app.nlp.lexicon import ConceptLexicon, Resolution, lexicon_for
+from backend.app.rag.trace import NO_TRACE, RetrievalTrace
 
 # Concepts taken from one question at most
 MAX_QUERY_CONCEPTS = 5
@@ -219,32 +220,53 @@ class KGExpander:
         name). The joined terms are embedded for retrieval, so a set's per-process order
         here would make the same question retrieve differently after a restart.
         """
+        neighbours, failures = self._neighbours(concepts)
+        expanded = dict.fromkeys(concepts)  # an ordered set
+        for neighbour in neighbours:
+            expanded.setdefault(neighbour["concept"])
+        logger.info(f"Expanded {len(concepts)} concepts to {len(expanded)} using KG")
+        return list(expanded), failures
+
+    def _neighbours(self, concepts: list[str]) -> tuple[list[dict[str, Any]], int]:
+        """
+        The concepts' graph neighbours, each with what produced it, and the failed lookups.
+
+        Each neighbour appears once, from the first concept that reached it: ``concept``,
+        ``source`` (that concept), ``edges`` and ``provenance`` (the strongest path's edge
+        types and their provenance) and ``weight`` (its association score). The concepts
+        themselves are left out.
+        """
         if not self.neo4j_adapter:
             logger.warning("Neo4j not connected, cannot expand with KG")
-            return concepts, len(concepts)
+            return [], len(concepts)
 
-        expanded = dict.fromkeys(concepts)  # an ordered set
+        found: dict[str, dict[str, Any]] = {}
         failures = 0
-
         for concept in concepts:
             try:
-                # Get neighboring concepts
-                neighbors = self.neo4j_adapter.query_concept_neighbors(
+                neighbours = self.neo4j_adapter.query_concept_neighbors(
                     concept, max_hops=self.max_hops
                 )
-
-                for neighbor in neighbors:
-                    expanded.setdefault(neighbor["name"])
-
             except Exception as e:
                 failures += 1
                 logger.warning(f"Failed to expand concept '{concept}': {e}")
                 continue
+            for neighbour in neighbours:
+                name = neighbour["name"]
+                if name in found or name in concepts:
+                    continue
+                found[name] = {
+                    "concept": name,
+                    "source": concept,
+                    "edges": list(neighbour.get("edges") or []),
+                    "provenance": list(neighbour.get("provenance") or []),
+                    "weight": neighbour.get("weight"),
+                }
+        return list(found.values()), failures
 
-        logger.info(f"Expanded {len(concepts)} concepts to {len(expanded)} using KG")
-        return list(expanded), failures
-
-    def expand_query(self, query: str, all_concepts: Set[str]) -> dict:
+    def expand_query(
+        self, query: str, all_concepts: Set[str], trace: RetrievalTrace = NO_TRACE
+    ) -> dict:
         """
         Full query expansion pipeline.
 
@@ -257,6 +279,7 @@ class KGExpander:
         Args:
             query: Original query
             all_concepts: Set of all known concepts
+            trace: Records the resolve and expand stages (#216)
 
         Returns:
             Dict with original_query, extracted_concepts, expanded_concepts (the concepts
@@ -267,13 +290,20 @@ class KGExpander:
             expansion_count and failed_lookups (graph lookups that raised)
         """
         # Extract concepts from query
-        extracted, terms = self.resolve_query(query, all_concepts)
+        with trace.stage("resolve") as stage:
+            extracted, terms = self.resolve_query(query, all_concepts)
+            stage["terms"] = terms
+            stage["concepts"] = extracted
 
         # Look up their neighbours in the graph
-        expanded, failed_lookups = self._expand_with_kg(extracted)
-        recognised = set(extracted)
-        neighbours = [concept for concept in expanded if concept not in recognised]
-        used = list(extracted) + neighbours[: max(0, self.max_neighbours)]
+        with trace.stage("expand") as stage:
+            details, failed_lookups = self._neighbours(extracted)
+            neighbours = [detail["concept"] for detail in details]
+            used = list(extracted) + neighbours[: max(0, self.max_neighbours)]
+            stage["used"] = used
+            stage["related"] = neighbours
+            stage["neighbours"] = details
+            stage["failed_lookups"] = failed_lookups
 
         expanded_query = f"{query} {' '.join(used)}" if used else query
 

@@ -39,6 +39,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are repeats. The re-scoring fixture gains the new summary fields; scores are
   unchanged.
 
+- A retrieval trace per request
+  ([#216](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/216)):
+  - **Stages.** `resolve`, `expand`, `knn`, `bm25`, `fuse`, `window`, `rerank`
+    and `select`, each with its timing, keyed by `X-Request-ID`. `fuse` lists
+    every candidate's rank in each channel and each channel's contribution to
+    its score; `expand` records the concept, edge types and provenance behind
+    each graph neighbour.
+  - **Access.** `include_trace` on `/retrieve` (default on), `/ask` and
+    `/ask/stream` (default off; the stream sends it in the `metadata` event).
+    A serialised trace keeps an allowlist of fields: no prompt, no chunk text
+    beyond the 200-character preview, no hosts or keys. Tracing does not change
+    the retrieval.
+  - **Evaluation.** Reports gain a KG attribution section per subject: the
+    cases whose citation the graph caused or cost, and expansion specificity
+    (the mean Jaccard similarity of the expanded-concept sets across cases).
+    `evaluate_rag.py --trace` keeps the traces and explains each of those
+    cases; `compare_evals.py` names the first stage where a traced flip
+    starts. The re-scoring fixture gains the new summary field; scores are
+    unchanged.
+
 ### Changed
 
 - Concepts in a question are resolved against the subject's concept names and
