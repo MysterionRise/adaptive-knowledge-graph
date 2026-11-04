@@ -95,11 +95,13 @@ temperature 0. Start the API with:
 LLM_TEMPERATURE=0 LLM_SEED=42 make run-api
 ```
 
-`LLM_SEED` is sent to Ollama as `options.seed`. KG expansion is deterministic
-too: the question's concepts come first, then their neighbours ordered by
-importance and then by name, so the expanded query (which is embedded for
-retrieval) is the same in every API process. Two runs on the same seed and data
-should show no retrieval flips in `make eval-compare`. BGE-M3 loads a pinned
+`LLM_SEED` is sent to Ollama as `options.seed`. A full report lists a
+temperature other than 0 or a missing seed under "Protocol deviations". KG
+expansion is deterministic too: the question's concepts come first, then
+their neighbours ordered by importance and then by name, so the keyword query
+is the same in every API process. Two runs on the same seed and data should
+show no retrieval flips in `make eval-compare`; the noise floor below records
+how far they still disagree. BGE-M3 loads a pinned
 Hugging Face commit by default (`PINNED_MODEL_REVISIONS` in
 `backend/app/core/settings.py`), so an upstream model update cannot move the
 vectors. Pin the reranker, or another embedding model, with
@@ -195,7 +197,28 @@ when either report is partial or invalid, when one is a retrieval-only run and
 the other a full run, when KG citation hits on the compared cases drop by 2 or
 more, or when the KG expected-source MRR drops by 0.03 or more. Add
 `--out delta.md` to save the comparison or `--json` for machine-readable
-output.
+output. `--json` also carries each run's KG-minus-plain bootstrap intervals
+(`intervals`) and whether the two runs are repeats of each other (`repeat`).
+
+### Noise floor
+
+Two runs of one configuration measure the harness's own run-to-run
+variation. Run the same split twice against the same API, then record it:
+
+```bash
+make eval-rehearsal EVAL_ARGS="--out-dir /tmp/run1"
+make eval-rehearsal EVAL_ARGS="--out-dir /tmp/run2"
+make eval-noise-floor BASE=/tmp/run1/latest-rehearsal.json HEAD=/tmp/run2/latest-rehearsal.json
+```
+
+The last command refuses runs that are not repeats (another commit, golden
+set, split, retrieval setting, LLM, seed, embedding or reranker). For repeats,
+it stores the floor in `docs/evals/noise-floor.json`, keyed by run mode (`full`
+or `retrieval-only`). For each metric, the floor is the larger of the two
+modes' shares of cases whose value changed. Later reports apply the floor of
+their run mode when the LLM, embedding and reranker match. They record the
+floor in `summary.noise_floor` and use it in the primary endpoint's wording.
+Measure it again after a model, digest, sampling or device change.
 
 ## Re-scoring a report
 
@@ -301,9 +324,16 @@ the release notes and pull requests:
   KG better on 3 cases, plain better on 1, 45 ties (sign test p = 0.63)".
 - Never "KG beats plain by X %", "improves by X points" or a delta column.
 - Term recall is `answer_term_recall_non_echo`.
-- No comparative claim ("KG expansion helps") unless the discordant pairs
-  support it: until bootstrap intervals land, a sign-test p-value below 0.05 on
-  the pre-declared primary metric, and even then only for this set.
+- No comparative claim ("KG expansion helps") beyond the generated sentence
+  for the primary endpoint ("Primary endpoint" in `latest.md`,
+  `summary.primary_endpoint.claim`). That sentence says a mode cites better
+  only when the 95% bootstrap interval excludes zero and the difference is at
+  least the noise floor (`docs/evals/protocol.md`), and even then only for
+  this set.
+- Give an interval with any other difference. `latest.md` lists them under
+  "Intervals (KG minus plain, per case)", overall and per stratum, for
+  citation hit rate, MRR and non-echo term recall. An interval that includes
+  zero, or a difference below the floor, is "no evidence of a difference".
 
 Template for the README table, one row per metric:
 

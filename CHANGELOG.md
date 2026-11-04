@@ -20,6 +20,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Rehearsal runs write `latest-rehearsal.*`, and `check_demo_eval.py` and the
   demo status page do not accept them as release evidence. Reports record the
   split, the split seed and the protocol's hash.
+- Uncertainty in every evaluation report
+  ([#209](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/209)):
+  - **Intervals.** KG-minus-plain differences in citation hit rate, MRR and
+    non-echo term recall come with seeded 95% paired bootstrap intervals
+    (2000 resamples, standard library only), overall and per stratum
+    (`summary.intervals` and a table in `latest.md`).
+  - **Primary endpoint.** The report generates the sentence a release may
+    quote: the rates, the interval, the case counts and non-inferiority at the
+    −0.10 margin.
+  - **Noise floor.** `make eval-noise-floor` records it from two repeat runs
+    in `docs/evals/noise-floor.json`. Reports apply it when the LLM, embedding
+    and reranker match.
+  - **Protocol deviations.** A full report flags a temperature other than 0 or
+    a missing seed.
+
+  `compare_evals.py` prints each run's intervals and says whether the two runs
+  are repeats. The re-scoring fixture gains the new summary fields; scores are
+  unchanged.
 
 ### Changed
 

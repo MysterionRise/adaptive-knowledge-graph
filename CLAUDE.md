@@ -46,6 +46,7 @@ make build-windows SUBJECT=economics  # Chunk NEXT edges in Neo4j for one subjec
 make demo-eval                        # Golden-set evaluation against the running API
 make eval-rehearsal                   # Rehearsal split only, for pull-request deltas (docs/evals/protocol.md)
 make eval-compare BASE=a.json HEAD=b.json  # Compare two eval reports (exit 1 on a KG citation regression)
+make eval-noise-floor BASE=a.json HEAD=b.json  # Two repeat runs: record the noise floor in docs/evals/noise-floor.json
 make embedding-parity SUBJECT=us_history  # After an embedding-stack upgrade: re-embed 50 indexed chunks, exit 1 below cosine 0.999 (RERANKER=1 adds a reranker check)
 ```
 
@@ -88,7 +89,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 - `backend/app/nlp/llm_client.py` - Ollama + OpenRouter client
 - `backend/app/student/` - quiz generator, student service (BKT mastery, SQLite storage), recommendations
 - `frontend/components/KnowledgeGraph.tsx` - Cytoscape.js visualization
-- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two
+- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two. `backend/app/core/eval_stats.py` holds the paired statistics: sign test, seeded bootstrap intervals, the primary endpoint's generated claim and the noise floor (`docs/evals/protocol.md`)
 
 ## Environment Setup
 
