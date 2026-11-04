@@ -48,6 +48,7 @@ takes about 11 minutes. Useful options:
 | `--delay 2` | Minimum seconds between requests, overriding the pacing |
 | `--max-retries 5` | Retries per request after `429` |
 | `--retrieval-only` | Call `POST /api/v1/retrieve` instead of `/ask`: no LLM, citation metrics only, written to `latest-retrieval.json`/`.md` |
+| `--trace` | Keep each request's retrieval trace in the report; the "KG attribution" section then explains each KG-versus-plain citation flip, and `make eval-compare` names the stage where a flip starts |
 | `--ollama-url URL` | Where to read the model digest (default `LLM_OLLAMA_HOST`; while `PRIVACY_LOCAL_ONLY=true`, only a host the API accepts too: loopback, a private address, `ollama` or `host.docker.internal`) |
 | `--api-key KEY` | `X-API-Key` for the API (default `API_KEY` from `.env` or the environment); needed when the API has a key, because `/api/v1/demo/provenance` requires it |
 | `--no-history` | Do not write a `history/` snapshot |
@@ -199,6 +200,9 @@ more, or when the KG expected-source MRR drops by 0.03 or more. Add
 `--out delta.md` to save the comparison or `--json` for machine-readable
 output. `--json` also carries each run's KG-minus-plain bootstrap intervals
 (`intervals`) and whether the two runs are repeats of each other (`repeat`).
+When both runs of a flipped case kept traces (`--trace`), the flip names the
+first retrieval stage where the two runs part (`stage`): `resolve`,
+`expand`, `knn`, `bm25`, `fuse`, `window`, `rerank` or `select`.
 
 ### Noise floor
 
@@ -279,8 +283,42 @@ test until the fixture is regenerated on purpose.
   per-case verdict (win, tie, loss or mixed). The mean deltas stay in the JSON
   for older tooling but are not the figure to quote; see
   [Reporting a comparison](#reporting-a-comparison).
+- **KG attribution** (`summary.kg_attribution`), per subject:
+  - **Attributable hits and losses.** The cases where the KG run cites an
+    expected source and the plain run does not (hits), or the reverse
+    (losses). Both modes embed the question for kNN, so the difference comes
+    from the keyword channel, where the graph's concepts are added. With
+    `--trace`, each one is explained: the first retrieval stage where the two
+    runs part, the concepts added to the keyword query, and the expected
+    source's kNN, BM25 and fused ranks in each run.
+  - **Expansion specificity.** The mean Jaccard similarity of the
+    expanded-concept sets of every pair of cases whose KG run used a concept.
+    Near 1, every question expands to the same concepts (the hub problem
+    #282 measured); near 0, each expansion is specific to its question.
 - Latency per mode.
 - Failure counts per mode, expanded concepts and approximate answer length.
+
+### Retrieval traces
+
+`POST /api/v1/retrieve` returns a `trace` unless the request sets
+`"include_trace": false`; `/ask` and `/ask/stream` (in the `metadata` event)
+return one only with `"include_trace": true`. A trace is keyed by the
+request's `X-Request-ID` and lists the stages in order, each with
+`elapsed_ms`:
+
+| Stage | Records |
+| --- | --- |
+| `resolve` | The question's spans, what each resolved to, and the concepts |
+| `expand` | The concepts the keyword channel uses, and each graph neighbour with the concept, edge types and provenance that produced it |
+| `knn`, `bm25` | Each channel's ranked hits (chunk id, rank, score) |
+| `fuse` | Every candidate in fused order: its rank in each channel, each channel's contribution `1 / (60 + rank)`, and its chapter and section |
+| `window`, `rerank` | Whether they ran and what they changed |
+| `select` | The returned sources, with a 200-character preview |
+
+Tracing does not change the retrieval. A serialised trace keeps only these
+fields (`backend/app/rag/trace.py`): no prompt text, no chunk text beyond the
+preview, no hosts or keys. It never leaves the process otherwise, and it is
+unrelated to the LangSmith tracing that `PRIVACY_LOCAL_ONLY` refuses.
 
 ### How sources are matched
 

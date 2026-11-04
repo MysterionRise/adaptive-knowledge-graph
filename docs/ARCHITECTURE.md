@@ -70,6 +70,12 @@ helper, so blocking and streaming answers cannot drift apart.
    reranking fails, the original order is used.
 7. Generate the answer with a subject-specific prompt that restricts the model
    to the retrieved context and asks for numbered citations.
+
+With `include_trace` (on by default for `/retrieve`), the response carries a
+retrieval trace keyed by `X-Request-ID`: steps 2 to 6 as stages with their
+timings, each channel's ranks, the fusion contributions and what produced each
+graph neighbour (`backend/app/rag/trace.py`; see
+[evals/README.md](evals/README.md#retrieval-traces)).
 8. Return the answer, sources with scores, the expanded and related
    concepts, model, attribution and counts. On `/ask`, an unreachable LLM returns `503` and an
    empty or invalid LLM answer returns `502`. `/ask/stream` returns `503` only

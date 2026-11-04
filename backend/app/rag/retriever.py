@@ -15,11 +15,15 @@ from backend.app.core.settings import settings
 from backend.app.core.subjects import get_subject
 from backend.app.nlp.embeddings import get_embedding_model
 from backend.app.rag.index_fingerprint import fingerprint
+from backend.app.rag.trace import NO_TRACE, RetrievalTrace, hits
 
 # Sections that list other works instead of teaching the subject (US History's "Further
 # Reading" bibliography). Quizzes and reading lists skip them; question answering keeps the
 # whole index, which is what its evaluation measures.
 REFERENCE_SECTIONS = frozenset({"further reading"})
+
+RRF_K = 60
+"""Reciprocal rank fusion constant: a rank-r hit adds 1 / (RRF_K + r) to a chunk's score."""
 
 
 def is_reference_section(chunk: dict) -> bool:
@@ -217,6 +221,7 @@ class OpenSearchRetriever:
         top_k: int | None = None,
         filter_dict: dict | None = None,
         keyword_query: str | None = None,
+        trace: RetrievalTrace = NO_TRACE,
     ) -> list[dict]:
         """
         Retrieve relevant chunks for a query.
@@ -232,6 +237,8 @@ class OpenSearchRetriever:
             keyword_query: Text for the BM25 channel when it differs from ``query``, such
                 as the question plus KG expansion terms (#282). In knn mode, which has no
                 keyword channel, it is embedded instead of ``query``.
+            trace: Records the knn, bm25 and fuse stages (#216); the result is the same
+                with or without it.
 
         Returns:
             List of retrieved chunks with scores
@@ -239,16 +246,24 @@ class OpenSearchRetriever:
         top_k = top_k or settings.rag_retrieval_top_k
 
         if settings.retrieval_mode == "hybrid":
-            return self._retrieve_hybrid(query, top_k, filter_dict, keyword_query)
-        return self._retrieve_knn(keyword_query or query, top_k, filter_dict)
+            return self._retrieve_hybrid(query, top_k, filter_dict, keyword_query, trace)
+        return self._retrieve_knn(keyword_query or query, top_k, filter_dict, trace)
 
     def _retrieve_knn(
         self,
         query: str,
         top_k: int,
         filter_dict: dict | None = None,
+        trace: RetrievalTrace = NO_TRACE,
     ) -> list[dict]:
         """Retrieve using kNN vector search only."""
+        with trace.stage("knn") as stage:
+            results = self._knn_search(query, top_k, filter_dict)
+            stage["hits"] = hits(results["hits"]["hits"])
+        return self._format_results(results, "knn")
+
+    def _knn_search(self, query: str, top_k: int, filter_dict: dict | None) -> dict:
+        """The kNN channel's raw OpenSearch response for ``query``."""
         query_embedding = self.embedding_model.encode_query(query)
 
         knn_clause: dict = {
@@ -274,8 +289,7 @@ class OpenSearchRetriever:
 
         client = self._require_client()
         results: dict = client.search(index=self.index_name, body=search_body)
-
-        return self._format_results(results, "knn")
+        return results
 
     def _retrieve_hybrid(
         self,
@@ -283,6 +297,7 @@ class OpenSearchRetriever:
         top_k: int,
         filter_dict: dict | None = None,
         keyword_query: str | None = None,
+        trace: RetrievalTrace = NO_TRACE,
     ) -> list[dict]:
         """
         Retrieve using BM25 + kNN with reciprocal rank fusion.
@@ -291,46 +306,40 @@ class OpenSearchRetriever:
         search (over ``query``), then merges results using RRF for better diversity and
         relevance.
         """
-        query_embedding = self.embedding_model.encode_query(query)
-        client = self._require_client()
-
         # kNN vector search
-        knn_clause: dict = {
-            "knn": {
-                "embedding": {
-                    "vector": query_embedding,
-                    "k": top_k,
-                }
-            }
-        }
-        knn_query: dict = {"size": top_k, "query": knn_clause}
-        if filter_dict:
-            knn_query["query"] = {"bool": {"must": [knn_clause], "filter": [{"term": filter_dict}]}}
-        knn_results: dict = client.search(index=self.index_name, body=knn_query)
+        with trace.stage("knn") as stage:
+            knn_results = self._knn_search(query, top_k, filter_dict)
+            stage["hits"] = hits(knn_results["hits"]["hits"])
 
         # BM25 text search
-        bm25_clause: dict = {
-            "multi_match": {
-                "query": keyword_query or query,
-                "fields": ["text^3", "module_title^2", "section", "key_terms^2"],
-                "type": "best_fields",
-                "fuzziness": "AUTO",
+        with trace.stage("bm25") as stage:
+            bm25_clause: dict = {
+                "multi_match": {
+                    "query": keyword_query or query,
+                    "fields": ["text^3", "module_title^2", "section", "key_terms^2"],
+                    "type": "best_fields",
+                    "fuzziness": "AUTO",
+                }
             }
-        }
-        bm25_query: dict = {"size": top_k, "query": bm25_clause}
-        if filter_dict:
-            bm25_query["query"] = {
-                "bool": {"must": [bm25_clause], "filter": [{"term": filter_dict}]}
-            }
-        bm25_results: dict = client.search(index=self.index_name, body=bm25_query)
+            bm25_query: dict = {"size": top_k, "query": bm25_clause}
+            if filter_dict:
+                bm25_query["query"] = {
+                    "bool": {"must": [bm25_clause], "filter": [{"term": filter_dict}]}
+                }
+            client = self._require_client()
+            bm25_results: dict = client.search(index=self.index_name, body=bm25_query)
+            stage["hits"] = hits(bm25_results["hits"]["hits"])
 
         # Reciprocal rank fusion
-        merged = self._reciprocal_rank_fusion(
-            knn_hits=knn_results["hits"]["hits"],
-            bm25_hits=bm25_results["hits"]["hits"],
-            k=60,
-            top_k=top_k,
-        )
+        with trace.stage("fuse") as stage:
+            merged, contributions = self.fuse(
+                knn_hits=knn_results["hits"]["hits"],
+                bm25_hits=bm25_results["hits"]["hits"],
+                k=RRF_K,
+                top_k=top_k,
+            )
+            stage["k"] = RRF_K
+            stage["candidates"] = contributions
 
         logger.info(
             f"Hybrid retrieval: kNN={len(knn_results['hits']['hits'])}, "
@@ -343,30 +352,62 @@ class OpenSearchRetriever:
         self,
         knn_hits: list[dict],
         bm25_hits: list[dict],
-        k: int = 60,
+        k: int = RRF_K,
         top_k: int = 20,
     ) -> list[dict]:
         """Combine kNN and BM25 results using reciprocal rank fusion."""
+        return self.fuse(knn_hits, bm25_hits, k, top_k)[0]
+
+    def fuse(
+        self,
+        knn_hits: list[dict],
+        bm25_hits: list[dict],
+        k: int = RRF_K,
+        top_k: int = 20,
+    ) -> tuple[list[dict], list[dict]]:
+        """
+        Reciprocal rank fusion, with each candidate's contributions.
+
+        A chunk scores ``1 / (k + rank)`` in each channel that returned it, and the sum
+        orders the candidates. Returns the ``top_k`` chunks and, for every candidate in
+        fused order, its fused rank and score, its rank in each channel (None when that
+        channel did not return it) and each channel's share of the score (#216).
+        """
         scores: dict[str, float] = {}
         chunk_data: dict[str, dict] = {}
+        ranks: dict[str, dict[str, int]] = {}
 
-        for rank, hit in enumerate(knn_hits, start=1):
-            doc_id = hit["_id"]
-            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
-            if doc_id not in chunk_data:
-                chunk_data[doc_id] = hit
-
-        for rank, hit in enumerate(bm25_hits, start=1):
-            doc_id = hit["_id"]
-            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
-            if doc_id not in chunk_data:
-                chunk_data[doc_id] = hit
+        for channel, channel_hits in (("knn", knn_hits), ("bm25", bm25_hits)):
+            for rank, hit in enumerate(channel_hits, start=1):
+                doc_id = hit["_id"]
+                scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+                ranks.setdefault(doc_id, {}).setdefault(channel, rank)
+                if doc_id not in chunk_data:
+                    chunk_data[doc_id] = hit
 
         sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
 
-        return [
+        contributions = []
+        for fused_rank, doc_id in enumerate(sorted_ids, start=1):
+            channel_ranks = ranks[doc_id]
+            source = chunk_data[doc_id].get("_source") or {}
+            contributions.append(
+                {
+                    "id": doc_id,
+                    "rank": fused_rank,
+                    "score": scores[doc_id],
+                    "knn_rank": channel_ranks.get("knn"),
+                    "bm25_rank": channel_ranks.get("bm25"),
+                    "knn": 1.0 / (k + channel_ranks["knn"]) if "knn" in channel_ranks else 0.0,
+                    "bm25": 1.0 / (k + channel_ranks["bm25"]) if "bm25" in channel_ranks else 0.0,
+                    "chapter": source.get("chapter"),
+                    "section": source.get("section"),
+                }
+            )
+        merged = [
             self._hit_to_chunk(chunk_data[doc_id], scores[doc_id]) for doc_id in sorted_ids[:top_k]
         ]
+        return merged, contributions
 
     @staticmethod
     def _hit_to_chunk(hit: dict, score: float) -> dict:

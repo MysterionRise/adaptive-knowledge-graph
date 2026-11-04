@@ -77,7 +77,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 ## Key Modules
 
 - `backend/app/api/routes/` - REST endpoints package, mounted under `/api/v1`:
-  - `ask.py` - `/ask`, `/ask/stream`, `/retrieve` (retrieval only, no LLM; for `evaluate_rag.py --retrieval-only`)
+  - `ask.py` - `/ask`, `/ask/stream`, `/retrieve` (retrieval only, no LLM; for `evaluate_rag.py --retrieval-only`). `include_trace` returns the retrieval trace (`backend/app/rag/trace.py`: stages, timings, channel ranks, fusion contributions; on by default for `/retrieve` only)
   - `quiz.py` - `/quiz/generate`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/student/*`
   - `graph.py` - `/graph/stats`, `/graph/data`, `/graph/query`, `/graph/schema`, `/concepts/*`
   - `learning_path.py`, `subjects.py`, `demo.py` (`/demo/status`, `/demo/provenance`)
@@ -89,7 +89,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 - `backend/app/nlp/llm_client.py` - Ollama + OpenRouter client
 - `backend/app/student/` - quiz generator, student service (BKT mastery, SQLite storage), recommendations
 - `frontend/components/KnowledgeGraph.tsx` - Cytoscape.js visualization
-- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two. `backend/app/core/eval_stats.py` holds the paired statistics: sign test, seeded bootstrap intervals, the primary endpoint's generated claim and the noise floor (`docs/evals/protocol.md`)
+- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`, KG attribution per subject from `backend/app/core/eval_attribution.py`; `--trace` keeps retrieval traces); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two. `backend/app/core/eval_stats.py` holds the paired statistics: sign test, seeded bootstrap intervals, the primary endpoint's generated claim and the noise floor (`docs/evals/protocol.md`)
 
 ## Environment Setup
 

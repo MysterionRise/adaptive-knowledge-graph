@@ -35,6 +35,8 @@ from backend.app.core.subjects import SubjectConfig
 from backend.app.nlp.llm_client import get_llm_client
 from backend.app.rag.kg_expansion import get_kg_expander, get_known_concepts
 from backend.app.rag.retriever import get_retriever
+from backend.app.rag.trace import NO_TRACE, RetrievalTrace
+from backend.app.rag.trace import sources as trace_sources
 
 router = APIRouter(tags=["Q&A"])
 
@@ -113,6 +115,14 @@ class QuestionRequest(BaseModel):
         default=1, description="Chunks before/after to include in window", ge=0, le=3
     )
     top_k: int = Field(default=5, description="Number of chunks to retrieve", ge=1, le=20)
+    include_trace: bool | None = Field(
+        default=None,
+        description=(
+            "Return the retrieval trace: each stage (resolve, expand, knn, bm25, fuse, "
+            "window, rerank, select) with its timing, the channel ranks and the fusion "
+            "contributions. Default: on for /retrieve, off for /ask and /ask/stream."
+        ),
+    )
 
 
 class ResolvedTerm(BaseModel):
@@ -170,6 +180,7 @@ class QuestionResponse(BaseModel):
     window_expanded_count: int | None = None  # Chunks after window expansion
     model: str
     attribution: str
+    trace: dict | None = None  # The retrieval trace when include_trace is on (#216)
 
 
 class RetrieveResponse(BaseModel):
@@ -183,6 +194,15 @@ class RetrieveResponse(BaseModel):
     kg_expansion_status: KGExpansionStatus = Field(description=KG_EXPANSION_STATUS_DESCRIPTION)
     retrieved_count: int
     window_expanded_count: int | None = None
+    trace: dict | None = None  # The retrieval trace; on unless include_trace is false (#216)
+
+
+def _new_trace(body: QuestionRequest, request: Request, default: bool) -> RetrievalTrace:
+    """The request's trace, keyed by its X-Request-ID, or NO_TRACE when tracing is off."""
+    wanted = default if body.include_trace is None else body.include_trace
+    if not wanted:
+        return NO_TRACE
+    return RetrievalTrace(getattr(request.state, "request_id", None))
 
 
 @router.post(
@@ -207,7 +227,7 @@ async def ask_question(body: QuestionRequest, request: Request):
     ensure_no_markup(body.question, field="question")
     try:
         logger.info("Question: {} (subject: {})", body.question, body.subject or "default")
-        ctx = await _retrieve_context(body)
+        ctx = await _retrieve_context(body, _new_trace(body, request, default=False))
         subject_config = ctx.subject_config
 
         # Step 3: Generate answer using LLM with subject-specific prompts
@@ -240,6 +260,7 @@ async def ask_question(body: QuestionRequest, request: Request):
             window_expanded_count=ctx.window_expanded_count,
             model=answer_result["model"],
             attribution=subject_config.attribution,
+            trace=ctx.trace.to_dict(),
         )
 
     except HTTPException:
@@ -271,6 +292,7 @@ class _RetrievalContext:
     retrieved_chunks: list[dict]
     initial_count: int
     window_expanded_count: int | None
+    trace: RetrievalTrace = NO_TRACE
 
 
 def _terms(terms: list[dict]) -> list[ResolvedTerm] | None:
@@ -314,7 +336,7 @@ class _Expansion:
     terms: list[dict] = field(default_factory=list)  # how the question's spans resolved
 
 
-def _expand_query(subject_id: str, question: str) -> _Expansion:
+def _expand_query(subject_id: str, question: str, trace: RetrievalTrace = NO_TRACE) -> _Expansion:
     """Expand the question with KG concepts for the keyword channel (blocking: Neo4j + NLP)."""
     all_concepts = get_known_concepts(subject_id)
     if not all_concepts:
@@ -323,7 +345,7 @@ def _expand_query(subject_id: str, question: str) -> _Expansion:
         return _Expansion([], [], question, "failed")
 
     expander = get_kg_expander(subject_id)
-    expansion_result = expander.expand_query(question, all_concepts)
+    expansion_result = expander.expand_query(question, all_concepts, trace=trace)
     expanded_concepts: list[str] = expansion_result["expanded_concepts"]
     related: list[str] = expansion_result.get("related_concepts") or []
     logger.info(
@@ -347,7 +369,11 @@ def _expand_query(subject_id: str, question: str) -> _Expansion:
 
 
 def _retrieve_chunks(
-    subject_id: str, query: str, top_k: int, keyword_query: str | None = None
+    subject_id: str,
+    query: str,
+    top_k: int,
+    keyword_query: str | None = None,
+    trace: RetrievalTrace = NO_TRACE,
 ) -> list[dict]:
     """Retrieve chunks from OpenSearch (blocking: embedding + search).
 
@@ -355,7 +381,7 @@ def _retrieve_chunks(
     KG expansion terms) goes to the BM25 channel.
     """
     retriever = get_retriever(subject_id)
-    return retriever.retrieve(query, top_k=top_k, keyword_query=keyword_query)
+    return retriever.retrieve(query, top_k=top_k, keyword_query=keyword_query, trace=trace)
 
 
 def _expand_window(chunks: list[dict], window_size: int) -> tuple[list[dict], int | None]:
@@ -394,8 +420,13 @@ def _expand_window(chunks: list[dict], window_size: int) -> tuple[list[dict], in
     return expanded_chunks, sum(r.get("chunk_count", 1) for r in window_results)
 
 
-async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
-    """Shared retrieval logic for both regular and streaming ask endpoints."""
+async def _retrieve_context(
+    body: QuestionRequest, trace: RetrievalTrace = NO_TRACE
+) -> _RetrievalContext:
+    """Shared retrieval logic for the ask, streaming and retrieval-only endpoints.
+
+    ``trace`` records each stage (#216); the retrieval is the same with it or NO_TRACE.
+    """
     subject_config = get_subject_or_404(body.subject)
     subject_id = subject_config.id
 
@@ -404,7 +435,7 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
 
     if body.use_kg_expansion and settings.rag_kg_expansion:
         try:
-            expansion = await run_in_threadpool(_expand_query, subject_id, body.question)
+            expansion = await run_in_threadpool(_expand_query, subject_id, body.question, trace)
         except Exception as e:
             expansion = _Expansion([], [], body.question, "failed")
             logger.warning("KG expansion failed, continuing without it: {}", e)
@@ -413,7 +444,7 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
     retrieval_top_k = settings.rag_retrieval_top_k if settings.reranker_enabled else body.top_k
     keyword_query = expansion.keyword_query if expansion.keyword_query != body.question else None
     retrieved_chunks = await run_in_threadpool(
-        _retrieve_chunks, subject_id, body.question, retrieval_top_k, keyword_query
+        _retrieve_chunks, subject_id, body.question, retrieval_top_k, keyword_query, trace
     )
 
     if not retrieved_chunks:
@@ -423,25 +454,38 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
     window_expanded_count = None
 
     # Step 2b: Window expansion
-    if (
-        body.use_window_retrieval
-        and settings.rag_window_retrieval
-        and settings.vector_backend in ("neo4j", "hybrid")
-    ):
-        try:
-            retrieved_chunks, window_expanded_count = await run_in_threadpool(
-                _expand_window, retrieved_chunks, body.window_size
-            )
-            if window_expanded_count is not None:
-                logger.info(f"Window expansion: {initial_count} -> {window_expanded_count} chunks")
-        except Exception as e:
-            logger.warning("Window retrieval failed, using original chunks: {}", e)
+    with trace.stage("window") as stage:
+        stage["ran"] = False
+        if (
+            body.use_window_retrieval
+            and settings.rag_window_retrieval
+            and settings.vector_backend in ("neo4j", "hybrid")
+        ):
+            try:
+                retrieved_chunks, window_expanded_count = await run_in_threadpool(
+                    _expand_window, retrieved_chunks, body.window_size
+                )
+                if window_expanded_count is not None:
+                    logger.info(
+                        f"Window expansion: {initial_count} -> {window_expanded_count} chunks"
+                    )
+                    stage.update(
+                        ran=True, chunks_in=initial_count, chunks_out=window_expanded_count
+                    )
+            except Exception as e:
+                logger.warning("Window retrieval failed, using original chunks: {}", e)
 
     # Step 2c: Rerank chunks (if enabled)
-    if settings.reranker_enabled:
-        retrieved_chunks = await run_in_threadpool(
-            _maybe_rerank, body.question, retrieved_chunks, body.top_k
-        )
+    with trace.stage("rerank") as stage:
+        stage["ran"] = settings.reranker_enabled
+        if settings.reranker_enabled:
+            retrieved_chunks = await run_in_threadpool(
+                _maybe_rerank, body.question, retrieved_chunks, body.top_k
+            )
+            stage["order"] = [chunk.get("id") for chunk in retrieved_chunks]
+
+    with trace.stage("select") as stage:
+        stage["sources"] = trace_sources(retrieved_chunks)
 
     return _RetrievalContext(
         subject_config=subject_config,
@@ -452,13 +496,16 @@ async def _retrieve_context(body: QuestionRequest) -> _RetrievalContext:
         retrieved_chunks=retrieved_chunks,
         initial_count=initial_count,
         window_expanded_count=window_expanded_count,
+        trace=trace,
     )
 
 
-async def _retrieve_context_or_http_error(body: QuestionRequest, label: str) -> _RetrievalContext:
+async def _retrieve_context_or_http_error(
+    body: QuestionRequest, label: str, trace: RetrievalTrace = NO_TRACE
+) -> _RetrievalContext:
     """Run retrieval and map its failures to HTTP errors (streaming and retrieval-only)."""
     try:
-        return await _retrieve_context(body)
+        return await _retrieve_context(body, trace)
     except HTTPException:
         raise
     except ContentNotFoundError:
@@ -489,13 +536,16 @@ async def retrieve_sources(body: QuestionRequest, request: Request):
     KG expansion, OpenSearch retrieval, window expansion and reranking behave exactly as in
     /ask, and the response carries the same sources. Used by
     `scripts/evaluate_rag.py --retrieval-only` for cheap retrieval comparisons; it shares
-    the /ask rate limit (RATE_LIMIT_ASK) and access rules.
+    the /ask rate limit (RATE_LIMIT_ASK) and access rules. The response carries the
+    retrieval trace unless `include_trace` is false.
 
     Errors: 404 unknown subject or no relevant content, 422 invalid input (including
     HTML markup), 503 search backend unavailable.
     """
     ensure_no_markup(body.question, field="question")
-    ctx = await _retrieve_context_or_http_error(body, "retrieval-only request")
+    ctx = await _retrieve_context_or_http_error(
+        body, "retrieval-only request", _new_trace(body, request, default=True)
+    )
     return RetrieveResponse(
         question=body.question,
         sources=_format_sources(ctx.retrieved_chunks),
@@ -505,6 +555,7 @@ async def retrieve_sources(body: QuestionRequest, request: Request):
         kg_expansion_status=ctx.kg_expansion_status,
         retrieved_count=ctx.initial_count,
         window_expanded_count=ctx.window_expanded_count,
+        trace=ctx.trace.to_dict(),
     )
 
 
@@ -533,29 +584,34 @@ async def ask_question_stream(body: QuestionRequest, request: Request):
     `error` event is sent before [DONE].
     """
     ensure_no_markup(body.question, field="question")
-    ctx = await _retrieve_context_or_http_error(body, "streaming ask retrieval")
+    ctx = await _retrieve_context_or_http_error(
+        body, "streaming ask retrieval", _new_trace(body, request, default=False)
+    )
 
     subject_config = ctx.subject_config
     sources = _format_sources(ctx.retrieved_chunks)
     llm_client = get_llm_client()
     context_texts = [chunk["text"] for chunk in ctx.retrieved_chunks]
 
+    metadata: dict = {
+        "type": "metadata",
+        "sources": sources,
+        "expanded_concepts": ctx.expanded_concepts or None,
+        "related_concepts": ctx.related_concepts or None,
+        "resolved_terms": ctx.resolved_terms or None,
+        "kg_expansion_status": ctx.kg_expansion_status,
+        "retrieved_count": ctx.initial_count,
+        "window_expanded_count": ctx.window_expanded_count,
+        "model": llm_client.model_name,
+        "attribution": subject_config.attribution,
+    }
+    trace = ctx.trace.to_dict()
+    if trace is not None:  # include_trace: the metadata event carries it
+        metadata["trace"] = trace
+
     async def event_stream():
         # First event: metadata
-        yield _sse_event(
-            {
-                "type": "metadata",
-                "sources": sources,
-                "expanded_concepts": ctx.expanded_concepts or None,
-                "related_concepts": ctx.related_concepts or None,
-                "resolved_terms": ctx.resolved_terms or None,
-                "kg_expansion_status": ctx.kg_expansion_status,
-                "retrieved_count": ctx.initial_count,
-                "window_expanded_count": ctx.window_expanded_count,
-                "model": llm_client.model_name,
-                "attribution": subject_config.attribution,
-            }
-        )
+        yield _sse_event(metadata)
 
         # Stream answer tokens
         received_text = False

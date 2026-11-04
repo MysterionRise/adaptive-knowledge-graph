@@ -15,7 +15,10 @@ latest.* stays put, and the final split only at a release gate.
 The summary adds KG-minus-plain differences with seeded bootstrap intervals, overall and
 per stratum, the protocol's primary endpoint with the claim its numbers allow, and the
 noise floor recorded in docs/evals/noise-floor.json when it applies to this run's
-configuration (scripts/compare_evals.py --noise-floor measures it).
+configuration (scripts/compare_evals.py --noise-floor measures it), and the KG attribution
+per subject: the cases whose citation the graph caused or cost, and how specific the
+expansions are. --trace keeps each request's retrieval trace, which explains each of those
+cases (backend/app/core/eval_attribution.py).
 
 Requests are paced to the API's /api/v1/ask rate limit (default 10/minute, so about one
 request every 6.25 s; every case asks twice, with and without KG expansion) and HTTP 429
@@ -28,6 +31,7 @@ Usage:
     poetry run python scripts/evaluate_rag.py --delay 0   # API started with RATE_LIMIT_ENABLED=false
     poetry run python scripts/evaluate_rag.py --retrieval-only   # /api/v1/retrieve, no LLM
     poetry run python scripts/evaluate_rag.py --split rehearsal  # development cases only
+    poetry run python scripts/evaluate_rag.py --retrieval-only --trace  # with retrieval traces
 """
 
 import argparse
@@ -37,7 +41,6 @@ import os
 import re
 import subprocess
 import time
-import unicodedata
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -47,6 +50,7 @@ from typing import Any
 import httpx
 import yaml
 
+from backend.app.core.eval_attribution import attribution_lines, kg_attribution, source_matches
 from backend.app.core.eval_report import (
     as_dict,
     configuration_differences,
@@ -60,6 +64,7 @@ from backend.app.core.eval_stats import (
     primary_endpoint,
 )
 from backend.app.core.privacy import ollama_host_problem
+from backend.app.rag.trace import sanitize as sanitize_trace
 
 REPORT_SCHEMA_VERSION = 2
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
@@ -154,30 +159,6 @@ def _non_echo_term_recall(answer: str, question: str, terms: list[str]) -> float
 # The title fields of an /ask source (and of an ingested record) that expected sources match.
 # The text preview is deliberately not one of them: a citation counts only when it names the
 # expected section, not when its first 200 characters happen to mention the topic.
-SOURCE_TITLE_FIELDS = ("chapter", "section", "module_title")
-_TITLE_TRANSLATION = str.maketrans(
-    {"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "-", "\u2014": "-"}
-)
-
-
-def normalize_title(title: object) -> str:
-    """Case-, quote-, dash- and whitespace-insensitive form of a title for comparison."""
-    text = unicodedata.normalize("NFKC", str(title or "")).translate(_TITLE_TRANSLATION)
-    return " ".join(text.casefold().split())
-
-
-def source_matches(source: Mapping[str, Any], expected: str) -> bool:
-    """Whether a source's chapter, section or module title is the expected title.
-
-    Matching is exact after :func:`normalize_title`; the golden-set test checks that every
-    expected source names 1-3 ingested modules.
-    """
-    wanted = normalize_title(expected)
-    return bool(wanted) and any(
-        normalize_title(source.get(field)) == wanted for field in SOURCE_TITLE_FIELDS
-    )
-
-
 def _source_match_rank(sources: list[dict[str, Any]], expected_sources: list[str]) -> int | None:
     """1-based rank of the first source that matches any expected source title, else None."""
     if not expected_sources:
@@ -452,8 +433,12 @@ def _ask(
     pacer: Pacer | None = None,
     max_retries: int = 5,
     retrieval_only: bool = False,
+    trace: bool = False,
 ) -> dict[str, Any]:
-    """Ask one case in one mode; keep the answer and sources so the run can be re-scored."""
+    """Ask one case in one mode; keep the answer and sources so the run can be re-scored.
+
+    With ``trace``, the API returns its retrieval trace (#216), which the result keeps.
+    """
     endpoint = "retrieve" if retrieval_only else "ask"
     started = time.perf_counter()
     try:
@@ -465,6 +450,7 @@ def _ask(
                 "subject": case["subject"],
                 "use_kg_expansion": use_kg,
                 "top_k": 5,
+                "include_trace": trace,
             },
             pacer or Pacer(0.0),
             max_retries,
@@ -527,6 +513,8 @@ def score_response(
         "expanded_concepts": payload.get("expanded_concepts") or [],
         "sources": sources,
     }
+    if payload.get("trace"):  # --trace runs; allowlisted again before it is stored
+        result["trace"] = sanitize_trace(payload["trace"])
     if retrieval_only:
         return result
 
@@ -583,12 +571,15 @@ def _delta(kg: float | None, plain: float | None, digits: int = 3) -> float | No
 
 
 def _summarize(
-    results: list[dict[str, Any]], noise_floor: Mapping[str, Any] | None = None
+    results: list[dict[str, Any]],
+    noise_floor: Mapping[str, Any] | None = None,
+    expected_by_id: Mapping[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     """Aggregate metrics per mode. Answer metrics are None in a retrieval-only run.
 
     ``noise_floor`` is what ``noise_floor_for`` found for the run; the primary endpoint's
-    claim uses its citation-hit floor when it applies.
+    claim uses its citation-hit floor when it applies. ``expected_by_id`` (each case's
+    expected sources) lets the KG attribution explain traced flips.
     """
 
     def successful(mode: str) -> list[dict[str, Any]]:
@@ -680,6 +671,8 @@ def _summarize(
             "intervals": interval_summary(results),
             "noise_floor": dict(noise_floor) if noise_floor is not None else None,
             "primary_endpoint": primary_endpoint(results, _floor(noise_floor, "citation_hit")),
+            # KG-attributable hits and losses per subject, and expansion specificity (#216)
+            "kg_attribution": kg_attribution(results, expected_by_id),
         }
     )
     return summary
@@ -781,7 +774,9 @@ def _fmt(value: Any) -> str:
 
 
 # Summary entries the Markdown report shows as sections rather than as bullet lines
-SUMMARY_SECTIONS = frozenset({"paired", "intervals", "noise_floor", "primary_endpoint"})
+SUMMARY_SECTIONS = frozenset(
+    {"paired", "intervals", "noise_floor", "primary_endpoint", "kg_attribution"}
+)
 
 
 def _paired_table(paired: Mapping[str, Any]) -> list[str]:
@@ -926,6 +921,7 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
         if key not in SUMMARY_SECTIONS:
             lines.append(f"- `{key}`: {value}")
     lines.extend(_paired_table(report["summary"].get("paired") or {}))
+    lines.extend(attribution_lines(report["summary"].get("kg_attribution") or {}))
 
     lines.extend(
         [
@@ -1177,6 +1173,12 @@ def main() -> None:
         help="Call /api/v1/retrieve (no LLM): citation metrics only, written to latest-retrieval.*",
     )
     parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="Keep each request's retrieval trace (#216) in the report; the KG attribution "
+        "section then explains each KG-versus-plain citation flip",
+    )
+    parser.add_argument(
         "--ollama-url",
         default=None,
         help="Ollama URL for the model digest (default: LLM_OLLAMA_HOST; a loopback or "
@@ -1245,8 +1247,19 @@ def main() -> None:
 
         results: list[dict[str, Any]] = []
         for index, case in enumerate(cases, start=1):
-            kg = _ask(client, api_url, case, True, pacer, args.max_retries, args.retrieval_only)
-            plain = _ask(client, api_url, case, False, pacer, args.max_retries, args.retrieval_only)
+            kg, plain = (
+                _ask(
+                    client,
+                    api_url,
+                    case,
+                    use_kg,
+                    pacer,
+                    args.max_retries,
+                    args.retrieval_only,
+                    trace=args.trace,
+                )
+                for use_kg in (True, False)
+            )
             results.append(
                 {
                     "id": case["id"],
@@ -1315,6 +1328,7 @@ def main() -> None:
             "delay_seconds": delay,
             "max_retries": args.max_retries,
             "retrieval_only": args.retrieval_only,
+            "trace": args.trace,
             "split": args.split,
             "available_subjects": available,
             "skipped_subjects": skipped_subjects,
@@ -1323,7 +1337,11 @@ def main() -> None:
         "summary": {},
         "results": results,
     }
-    report["summary"] = _summarize(results, noise_floor_for(report, Path(args.noise_floor)))
+    report["summary"] = _summarize(
+        results,
+        noise_floor_for(report, Path(args.noise_floor)),
+        {case["id"]: list(case.get("expected_sources") or []) for case in cases},
+    )
 
     for path in write_reports(Path(args.out_dir), report, history=not args.no_history):
         print(f"Wrote {path}")
