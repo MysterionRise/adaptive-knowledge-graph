@@ -1,0 +1,231 @@
+{
+  "full": {
+    "measured_on": "2026-11-03",
+    "runs": [
+      "2026-11-03T10:53:35.485255+00:00",
+      "2026-11-03T11:00:26.608386+00:00"
+    ],
+    "server_git_sha": "26a7ea6aeaa63bb2db579178e701b73547d70d6f",
+    "split": "rehearsal",
+    "cases": 24,
+    "configuration": {
+      "run_mode": "full",
+      "embedding": {
+        "model": "BAAI/bge-m3",
+        "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+        "resolved_device": "cpu"
+      },
+      "reranker": {
+        "model": "BAAI/bge-reranker-v2-m3",
+        "revision": null,
+        "enabled": false
+      },
+      "llm": {
+        "mode": "local",
+        "model": "llama3.1:8b-instruct-q4_K_M",
+        "ollama_digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+        "temperature": 0.0,
+        "seed": 42
+      }
+    },
+    "floor": {
+      "citation_hit": 0.0,
+      "mrr": 0.0,
+      "answer_term_recall": 0.042,
+      "answer_term_recall_non_echo": 0.042,
+      "unsupported_refusal": 0.0,
+      "prompt_injection_resisted": 0.0
+    },
+    "modes": {
+      "kg": {
+        "citation_hit": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "mrr": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "answer_term_recall": {
+          "pairs": 24,
+          "changed": 1,
+          "rate": 0.042,
+          "changed_cases": [
+            "economics_antitrust"
+          ]
+        },
+        "answer_term_recall_non_echo": {
+          "pairs": 24,
+          "changed": 1,
+          "rate": 0.042,
+          "changed_cases": [
+            "economics_antitrust"
+          ]
+        },
+        "unsupported_refusal": {
+          "pairs": 2,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "prompt_injection_resisted": {
+          "pairs": 2,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        }
+      },
+      "plain": {
+        "citation_hit": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "mrr": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "answer_term_recall": {
+          "pairs": 24,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "answer_term_recall_non_echo": {
+          "pairs": 24,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "unsupported_refusal": {
+          "pairs": 2,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "prompt_injection_resisted": {
+          "pairs": 2,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        }
+      }
+    }
+  },
+  "retrieval-only": {
+    "measured_on": "2026-11-03",
+    "runs": [
+      "2026-11-03T10:39:50.718789+00:00",
+      "2026-11-03T10:45:45.255504+00:00"
+    ],
+    "server_git_sha": "26a7ea6aeaa63bb2db579178e701b73547d70d6f",
+    "split": "rehearsal",
+    "cases": 24,
+    "configuration": {
+      "run_mode": "retrieval-only",
+      "embedding": {
+        "model": "BAAI/bge-m3",
+        "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+        "resolved_device": "cpu"
+      },
+      "reranker": {
+        "model": "BAAI/bge-reranker-v2-m3",
+        "revision": null,
+        "enabled": false
+      }
+    },
+    "floor": {
+      "citation_hit": 0.0,
+      "mrr": 0.0,
+      "answer_term_recall": null,
+      "answer_term_recall_non_echo": null,
+      "unsupported_refusal": null,
+      "prompt_injection_resisted": null
+    },
+    "modes": {
+      "kg": {
+        "citation_hit": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "mrr": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "answer_term_recall": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        },
+        "answer_term_recall_non_echo": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        },
+        "unsupported_refusal": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        },
+        "prompt_injection_resisted": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        }
+      },
+      "plain": {
+        "citation_hit": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "mrr": {
+          "pairs": 22,
+          "changed": 0,
+          "rate": 0.0,
+          "changed_cases": []
+        },
+        "answer_term_recall": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        },
+        "answer_term_recall_non_echo": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        },
+        "unsupported_refusal": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        },
+        "prompt_injection_resisted": {
+          "pairs": 0,
+          "changed": 0,
+          "rate": null,
+          "changed_cases": []
+        }
+      }
+    }
+  }
+}
