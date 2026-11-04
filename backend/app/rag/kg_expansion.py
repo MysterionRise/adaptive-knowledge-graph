@@ -215,9 +215,9 @@ class KGExpander:
         """Expand concepts; also return how many graph lookups failed (Neo4j errors).
 
         The order is reproducible: the query's concepts first, then each one's neighbours
-        in the order Neo4j returns them (strongest link first, then importance and name). The
-        joined terms are embedded for retrieval, so a set's per-process order here would
-        make the same question retrieve differently after a restart.
+        in the order Neo4j returns them (strongest association first, then importance and
+        name). The joined terms are embedded for retrieval, so a set's per-process order
+        here would make the same question retrieve differently after a restart.
         """
         if not self.neo4j_adapter:
             logger.warning("Neo4j not connected, cannot expand with KG")

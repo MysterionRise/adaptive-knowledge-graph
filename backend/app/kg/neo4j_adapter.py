@@ -251,9 +251,11 @@ class Neo4jAdapter:
         """
         Query neighboring concepts, the most strongly linked first.
 
-        Paths follow RELATED and PREREQ edges only. A neighbour's ``weight`` is the
-        strongest path to it, a path's weight the product of its edge weights (a RELATED
-        edge's weight is its association score, #291). Ties go to the more important
+        Paths follow RELATED and PREREQ edges only. A neighbour's ``weight`` is its
+        strongest association: over the paths to it, the product of the RELATED edge
+        weights (association scores, #291). A PREREQ edge has a fixed weight rather than
+        a score, so it counts as 0 here, and neighbours linked only through prerequisites
+        ("Good" for "Demand") follow the associated ones. Ties go to the more important
         concept, then the name, so the LIMIT keeps the same neighbours.
 
         Args:
@@ -271,8 +273,9 @@ class Neo4jAdapter:
                          -[:RELATED|PREREQ*1..{hops}]-(neighbor:{concept_label})
             WHERE neighbor <> c
             WITH neighbor,
-                 max(reduce(w = 1.0, r IN relationships(path) | w * coalesce(r.weight, 0.0)))
-                     AS weight
+                 max(reduce(w = 1.0, r IN relationships(path) |
+                     w * CASE type(r) WHEN 'RELATED' THEN coalesce(r.weight, 0.0) ELSE 0.0 END
+                 )) AS weight
             RETURN neighbor.name as name,
                    neighbor.importance_score as importance_score,
                    neighbor.key_term as key_term,

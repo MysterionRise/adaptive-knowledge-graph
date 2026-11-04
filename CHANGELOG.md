@@ -84,8 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     "Quantity Demanded" and "Demand Curve" instead of "Aggregate Demand" and
     "Asset".
   - **Neighbour order.** Graph neighbours, and so `related_concepts`, follow
-    RELATED and PREREQ edges only and come strongest link first, then by
-    importance.
+    RELATED and PREREQ edges only and come strongest association first;
+    neighbours linked only as prerequisites follow, by importance. "Demand"
+    now leads with "Supply", "Elasticity" and "Demand Curve", where it led
+    with "Price", "Firm" and "Market".
   - **Build report.** It records the builder's parameters, the share of
     concepts without concept edges and the median degree.
 

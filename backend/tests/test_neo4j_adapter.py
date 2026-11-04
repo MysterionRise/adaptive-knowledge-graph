@@ -321,6 +321,8 @@ class TestQueryConceptNeighbors:
         # keeps the same neighbours
         assert "ORDER BY weight DESC, importance_score DESC, name" in cypher_call[0][0]
         assert "[:RELATED|PREREQ*1..2]" in cypher_call[0][0]  # not through Module nodes
+        # only association scores rank; a PREREQ edge's fixed weight does not
+        assert "CASE type(r) WHEN 'RELATED' THEN" in cypher_call[0][0]
 
     def test_empty_results(self):
         adapter, mock_session = _make_adapter(label_prefix="bio")

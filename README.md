@@ -128,7 +128,7 @@ pipeline:
    concept, and an alias shared by several concepts is left out;
    `resolved_terms` in the response shows how each span resolved. Their graph
    neighbours within `RAG_KG_EXPANSION_HOPS` (default 1), the most strongly
-   linked first, come back as `related_concepts`, and
+   associated first, come back as `related_concepts`, and
    `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
    keyword query too: on the golden set, adding neighbours lowered citation
    hits (#282). If Neo4j is unavailable, the pipeline continues without
