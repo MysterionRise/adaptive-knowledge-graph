@@ -3,12 +3,13 @@ Graph quality report for a built knowledge graph (scripts/build_knowledge_graph.
 
 One Markdown document per build, written next to the JSON copy under data/processed/build/,
 so a seed leaves a record of what the builder produced before any of it is quoted: how many
-concepts carry a glossary definition or aliases, how many relationships of each type and
-provenance there are, which concepts dominate by degree, whether the PREREQ graph has cycles
+concepts carry a glossary definition or aliases, how many have no concept edges at all, how
+many relationships of each type and provenance there are, which concepts dominate by degree, whether the PREREQ graph has cycles
 (a learning path cannot order one) and which concepts look like noise. The repository tracks
 no graph data, so this report and GET /api/v1/graph/stats are the places to cite.
 """
 
+import statistics
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -101,6 +102,10 @@ def graph_report(
             degree[rel.source] += 1
             degree[rel.target] += 1
     top = sorted(concepts, key=lambda c: (-degree[c.name], -c.importance_score, c.name))
+    unlinked = sum(1 for c in concepts if not degree[c.name])
+    median_degree = (
+        f"{statistics.median(degree[c.name] for c in concepts):g}" if concepts else "n/a"
+    )
     noise = sorted(concepts, key=lambda c: (c.frequency, c.importance_score, c.name))
     cycles = prereq_cycles(kg)
 
@@ -122,6 +127,8 @@ def graph_report(
         f"| With a glossary definition | {_share(defined, total)} |",
         f"| With aliases | {_share(aliased, total)} |",
         f"| Single-word names | {_share(single_word, total)} |",
+        f"| Without PREREQ or RELATED edges | {_share(unlinked, total)} |",
+        f"| Median degree (PREREQ and RELATED) | {median_degree} |",
         "",
         "## Relationships",
         "",

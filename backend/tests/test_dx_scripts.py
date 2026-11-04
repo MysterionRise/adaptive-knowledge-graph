@@ -586,13 +586,21 @@ def test_build_knowledge_graph_writes_the_report_without_neo4j(tmp_path, monkeyp
     report = (processed / "build" / "graph_report_us_history.md").read_text(encoding="utf-8")
     assert report.startswith("# Knowledge graph report: us_history\n")
     assert "Builder options: max_concepts=200" in report
+    assert "related_method=npmi, cooccurrence_threshold=2, related_top_k=8" in report
     assert "| Stamp Act |" in report
     assert "| PREREQ | glossary |" in report
     assert (processed / "build" / "knowledge_graph_us_history.json").is_file()
 
 
 class _TunableBuilder:
-    def __init__(self, max_concepts=200, *, cooccurrence_threshold=5, prereq_patterns=False):
+    def __init__(
+        self,
+        max_concepts=200,
+        *,
+        cooccurrence_threshold=2,
+        related_top_k=8,
+        prereq_patterns=False,
+    ):
         pass
 
 
@@ -608,6 +616,8 @@ def test_builder_options_follow_flags_then_env(monkeypatch):
     monkeypatch.delenv("KG_COOCCURRENCE_THRESHOLD", raising=False)
     monkeypatch.delenv("KG_COOCCURRENCE_THRESHOLD_US_HISTORY", raising=False)
     monkeypatch.delenv("KG_PREREQ_PATTERNS", raising=False)
+    monkeypatch.delenv("KG_RELATED_TOP_K", raising=False)
+    monkeypatch.delenv("KG_RELATED_TOP_K_US_HISTORY", raising=False)
     assert bkg.builder_options("us_history", None, False) == {}
 
     monkeypatch.setenv("KG_COOCCURRENCE_THRESHOLD", "4")
@@ -619,6 +629,12 @@ def test_builder_options_follow_flags_then_env(monkeypatch):
         "cooccurrence_threshold": 7,
         "prereq_patterns": True,
     }
+    monkeypatch.setenv("KG_RELATED_TOP_K_US_HISTORY", "6")
+    assert bkg.builder_options("us_history", None, False) == {
+        "cooccurrence_threshold": 3,
+        "related_top_k": 6,
+    }
+    assert bkg.builder_options("us_history", None, False, 4)["related_top_k"] == 4
     monkeypatch.setenv("KG_COOCCURRENCE_THRESHOLD", "many")
     with pytest.raises(SystemExit, match="must be an integer"):
         bkg.builder_options("economics", None, False)

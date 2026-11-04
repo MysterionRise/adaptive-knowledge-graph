@@ -47,8 +47,9 @@ data stays in a local SQLite file.
   related concepts and the textbook attribution. They can be streamed token by token over server-sent events.
 - **Knowledge graph explorer.** Concepts, with glossary definitions and aliases
   where the book provides them, and the textbook modules that cover them live
-  in Neo4j with `PREREQ` (from glossary definitions), `RELATED`
-  (co-occurrence) and `COVERS` relationships. The UI shows them in an
+  in Neo4j with `PREREQ` (from glossary definitions), `RELATED` (each
+  concept's strongest associations by paragraph co-occurrence) and `COVERS`
+  relationships. The UI shows them in an
   interactive Cytoscape.js graph, and the API serves prerequisite chains and
   learning paths. The graph is rebuilt by `make seed`, which writes a quality
   report per build; `GET /api/v1/graph/stats` has the live counts.
@@ -125,8 +126,9 @@ pipeline:
    concepts are added to the keyword (BM25) query; the vector query embeds the
    question as asked. A single generic word such as "war" matches no longer
    concept, and an alias shared by several concepts is left out;
-   `resolved_terms` in the response shows how each span resolved. Their graph neighbours within `RAG_KG_EXPANSION_HOPS`
-   (default 1) come back as `related_concepts`, and
+   `resolved_terms` in the response shows how each span resolved. Their graph
+   neighbours within `RAG_KG_EXPANSION_HOPS` (default 1), the most strongly
+   associated first, come back as `related_concepts`, and
    `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
    keyword query too: on the golden set, adding neighbours lowered citation
    hits (#282). If Neo4j is unavailable, the pipeline continues without

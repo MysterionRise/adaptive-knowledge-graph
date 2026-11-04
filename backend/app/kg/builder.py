@@ -12,18 +12,21 @@ Builds a concept graph from OpenStax textbook records:
    with its case/plural variants; keyword fragments of longer concepts ("United" in
    "United States") are dropped.
 3. The ``max_concepts`` best candidates become concept nodes. COVERS edges link
-   modules to the concepts extracted from them; RELATED edges link concepts that
-   share at least ``cooccurrence_threshold`` paragraphs; PREREQ edges come from
-   glossary definitions (a concept named in another concept's definition is its
+   modules to the concepts extracted from them; RELATED edges link each concept to
+   its strongest associations by normalised pointwise mutual information over
+   paragraphs (at least ``cooccurrence_threshold`` shared paragraphs, at most
+   ``related_top_k`` partners chosen per concept); PREREQ edges come from glossary
+   definitions (a concept named in another concept's definition is its
    prerequisite) and, optionally, from cue phrases such as "builds on".
 4. Importance is PageRank over the RELATED/PREREQ graph.
 """
 
+import math
 import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import networkx as nx
 from loguru import logger
@@ -61,6 +64,7 @@ from backend.app.kg.stopwords import (
 
 __all__ = [
     "DEFAULT_COOCCURRENCE_THRESHOLD",
+    "DEFAULT_RELATED_TOP_K",
     "KGBuilder",
     "PREREQ_PATTERNS",
     "STOP_CONCEPTS",
@@ -68,8 +72,17 @@ __all__ = [
     "is_stop_concept",
 ]
 
-DEFAULT_COOCCURRENCE_THRESHOLD = 5
-"""Paragraphs two concepts must share before they get a RELATED edge."""
+DEFAULT_COOCCURRENCE_THRESHOLD = 2
+"""Paragraphs two concepts must share before they can get a RELATED edge."""
+
+DEFAULT_RELATED_TOP_K = 8
+"""Strongest associations each concept chooses for its RELATED edges."""
+
+RELATED_DEGREE_LIMIT = 3
+"""No concept gets more than this many times ``related_top_k`` RELATED edges."""
+
+RELATED_METHOD = "npmi"
+"""How RELATED edges are scored, recorded in their provenance and the build report."""
 
 MAX_KEYWORD_WORDS = 4
 """Longest YAKE phrase kept; author-marked key terms are not limited."""
@@ -438,6 +451,70 @@ class _PhraseIndex:
         return kept
 
 
+def _associations(
+    present_by_paragraph: list[set[str]], *, min_count: int, top_k: int
+) -> dict[tuple[str, str], tuple[float, int]]:
+    """
+    RELATED edges by association strength: ``{(a, b): (npmi, shared paragraphs)}``, a < b.
+
+    A pair's score is its normalised pointwise mutual information over paragraphs,
+    ``log(p(a, b) / (p(a) p(b))) / -log(p(a, b))``: 1 when two concepts only ever
+    appear together, 0 when they meet as often as chance predicts. A raw count would
+    link the most frequent concepts to everything ("Price", "Firm") and leave rarer,
+    specific pairs ("Stamp Act" and "Sons of Liberty") unlinked.
+
+    A pair needs ``min_count`` shared paragraphs and a positive score. Each concept
+    chooses its ``top_k`` strongest partners, and a pair chosen by either side becomes
+    an edge. Edges are then accepted strongest first while both ends have fewer than
+    ``RELATED_DEGREE_LIMIT * top_k`` edges, so a concept many others choose stays
+    bounded. Ties break on the shared count, then the keys, so the result does not
+    depend on the paragraph order.
+    """
+    total = len(present_by_paragraph)
+    paragraphs: Counter[str] = Counter()
+    shared: Counter[tuple[str, str]] = Counter()
+    for present in present_by_paragraph:
+        ordered = sorted(present)
+        paragraphs.update(ordered)
+        for i, first in enumerate(ordered):
+            for second in ordered[i + 1 :]:
+                shared[(first, second)] += 1
+
+    scores: dict[tuple[str, str], float] = {}
+    for (first, second), count in shared.items():
+        if count < min_count:
+            continue
+        joint = count / total
+        if joint == 1.0:  # both concepts in every paragraph
+            scores[(first, second)] = 1.0
+            continue
+        expected = (paragraphs[first] / total) * (paragraphs[second] / total)
+        npmi = math.log(joint / expected) / -math.log(joint)
+        if npmi > 0:
+            scores[(first, second)] = npmi
+
+    def strength(pair: tuple[str, str]) -> tuple[float, int, tuple[str, str]]:
+        return (-scores[pair], -shared[pair], pair)
+
+    partners: dict[str, list[tuple[str, str]]] = {}
+    for pair in scores:
+        for key in pair:
+            partners.setdefault(key, []).append(pair)
+    chosen = {pair for pairs in partners.values() for pair in sorted(pairs, key=strength)[:top_k]}
+
+    limit = RELATED_DEGREE_LIMIT * top_k
+    degree: Counter[str] = Counter()
+    edges: dict[tuple[str, str], tuple[float, int]] = {}
+    for pair in sorted(chosen, key=strength):
+        first, second = pair
+        if degree[first] >= limit or degree[second] >= limit:
+            continue
+        degree[first] += 1
+        degree[second] += 1
+        edges[pair] = (scores[pair], shared[pair])
+    return edges
+
+
 def _contains(longer: list[str], shorter: list[str]) -> bool:
     """True when the key ``shorter`` is a contiguous word run of the key ``longer``."""
     size = len(shorter)
@@ -456,6 +533,7 @@ class KGBuilder:
         max_concepts: int = 200,
         *,
         cooccurrence_threshold: int = DEFAULT_COOCCURRENCE_THRESHOLD,
+        related_top_k: int = DEFAULT_RELATED_TOP_K,
         prereq_definitions: bool = True,
         prereq_patterns: bool = False,
         min_concept_length: int = 3,
@@ -465,7 +543,11 @@ class KGBuilder:
 
         Args:
             max_concepts: Maximum number of concepts to keep.
-            cooccurrence_threshold: Paragraphs two concepts must share for a RELATED edge.
+            cooccurrence_threshold: Paragraphs two concepts must share before they can
+                get a RELATED edge.
+            related_top_k: Strongest associations (by NPMI) each concept chooses for its
+                RELATED edges; no concept gets more than ``RELATED_DEGREE_LIMIT`` times
+                as many.
             prereq_definitions: Create PREREQ edges from glossary definitions: a concept
                 named in another concept's definition is its prerequisite ("quantity
                 demanded" -> "equilibrium"). Precise on the OpenStax books, so on by default.
@@ -480,8 +562,11 @@ class KGBuilder:
             raise ValueError("max_concepts must be at least 1")
         if cooccurrence_threshold < 1:
             raise ValueError("cooccurrence_threshold must be at least 1")
+        if related_top_k < 1:
+            raise ValueError("related_top_k must be at least 1")
         self.max_concepts = max_concepts
         self.cooccurrence_threshold = cooccurrence_threshold
+        self.related_top_k = related_top_k
         self.prereq_definitions = prereq_definitions
         self.prereq_patterns = prereq_patterns
         self.min_concept_length = min_concept_length
@@ -495,6 +580,20 @@ class KGBuilder:
             top=20,  # Top keywords per document
             features=None,
         )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        """The settings that shape the graph, for the build report."""
+        return {
+            "max_concepts": self.max_concepts,
+            "min_concept_length": self.min_concept_length,
+            "related_method": RELATED_METHOD,
+            "cooccurrence_threshold": self.cooccurrence_threshold,
+            "related_top_k": self.related_top_k,
+            "related_max_degree": RELATED_DEGREE_LIMIT * self.related_top_k,
+            "prereq_definitions": self.prereq_definitions,
+            "prereq_patterns": self.prereq_patterns,
+        }
 
     # ------------------------------------------------------------------ extraction
 
@@ -840,36 +939,37 @@ class KGBuilder:
         self, present_by_paragraph: list[set[str]], names: dict[str, str]
     ) -> None:
         """
-        Create RELATED edges between concepts that share paragraphs.
+        Create RELATED edges between strongly associated concepts (see ``_associations``).
+
+        The edge weight is the association score (NPMI, 0-1).
 
         Args:
             present_by_paragraph: Concept keys found in each paragraph.
             names: Concept key -> display name.
         """
-        cooccurrence: Counter[tuple[str, str]] = Counter()
-        for present in present_by_paragraph:
-            ordered = sorted(present)
-            for i, first in enumerate(ordered):
-                for second in ordered[i + 1 :]:
-                    cooccurrence[(first, second)] += 1
-
-        threshold = self.cooccurrence_threshold
-        related = 0
-        for (first, second), count in sorted(cooccurrence.items()):
-            if count < threshold:
-                continue
+        edges = _associations(
+            present_by_paragraph, min_count=self.cooccurrence_threshold, top_k=self.related_top_k
+        )
+        for (first, second), (score, count) in sorted(edges.items()):
             self.kg.add_relationship(
                 Relationship(
                     source=names[first],
                     target=names[second],
                     type=RelationshipType.RELATED,
-                    weight=min(count / 10.0, 1.0),  # Normalize to 0-1
+                    weight=round(score, 4),
                     confidence=0.7,  # Medium confidence for co-occurrence
                     evidence=None,
+                    provenance={
+                        "source": "cooccurrence",
+                        "method": RELATED_METHOD,
+                        "paragraphs": str(count),
+                    },
                 )
             )
-            related += 1
-        logger.info(f"Mined {related} RELATED relationships (threshold={threshold})")
+        logger.info(
+            f"Mined {len(edges)} RELATED relationships ({RELATED_METHOD}, "
+            f"min {self.cooccurrence_threshold} paragraphs, top {self.related_top_k})"
+        )
 
     @staticmethod
     def _definition_prereqs(
