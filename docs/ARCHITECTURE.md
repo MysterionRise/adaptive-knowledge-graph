@@ -50,9 +50,10 @@ helper, so blocking and streaming answers cannot drift apart.
    (`backend/app/nlp/lexicon.py`): a name beats an alias, plurals and a
    leading article are ignored, a single generic word never matches a longer
    concept, and an alias of several concepts is ambiguous and left out. The
-   response's `resolved_terms` lists each span and what it resolved to. The recognised concepts join the keyword (BM25) query only; the kNN
-   query embeds the question. Their Neo4j neighbours, up to
-   `RAG_KG_EXPANSION_HOPS`, are returned as `related_concepts`, and
+   response's `resolved_terms` lists each span and what it resolved to. The
+   recognised concepts join the keyword (BM25) query only; the kNN query embeds
+   the question. Their Neo4j neighbours, up to `RAG_KG_EXPANSION_HOPS` and the
+   most strongly linked first, are returned as `related_concepts`, and
    `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
    keyword query. If Neo4j fails, the request continues without expansion.
    `kg_expansion_status` in the response (and in the stream's `metadata`

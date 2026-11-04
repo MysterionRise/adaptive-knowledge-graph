@@ -12,8 +12,9 @@
 # they accept requests (a running container is not necessarily a ready one).
 #
 # Environment: NEO4J_BOLT_PORT / OPENSEARCH_PORT (host ports, see infra/compose/compose.yaml),
-# DATA_PROCESSED_DIR, STUDENT_PROFILES_DB (backend settings), KG_COOCCURRENCE_THRESHOLD[_<SUBJECT>]
-# and KG_PREREQ_PATTERNS=1 (graph tuning, see scripts/build_knowledge_graph.py).
+# DATA_PROCESSED_DIR, STUDENT_PROFILES_DB (backend settings), KG_COOCCURRENCE_THRESHOLD[_<SUBJECT>],
+# KG_RELATED_TOP_K[_<SUBJECT>] and KG_PREREQ_PATTERNS=1 (graph tuning, see
+# scripts/build_knowledge_graph.py).
 # ============================================================
 
 set -euo pipefail

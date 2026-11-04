@@ -6,6 +6,7 @@ kg/stopwords.py and kg/markup.py. YAKE is replaced by a deterministic fake in
 most tests so the expected concepts are exact; a few tests run the real YAKE.
 """
 
+import random
 from unittest.mock import MagicMock
 
 import networkx as nx
@@ -13,9 +14,12 @@ import pytest
 
 from backend.app.kg.builder import (
     DEFAULT_COOCCURRENCE_THRESHOLD,
+    DEFAULT_RELATED_TOP_K,
     PREREQ_PATTERNS,
+    RELATED_DEGREE_LIMIT,
     STOP_CONCEPTS,
     KGBuilder,
+    _associations,
     _CaseStats,
     _with_numerals,
     is_stop_concept,
@@ -353,6 +357,94 @@ class TestProperNouns:
         assert not self.STATS.is_name_part("unknown")
 
 
+def paragraphs(*groups: tuple[int, set[str]]) -> list[set[str]]:
+    """``(count, concepts)`` groups expanded into that many paragraphs."""
+    return [set(concepts) for count, concepts in groups for _ in range(count)]
+
+
+@pytest.mark.unit
+class TestAssociations:
+    def test_rare_but_exclusive_pair_gets_an_edge(self):
+        present = paragraphs(
+            (2, {"sons of liberty", "stamp act"}),
+            *((3, {"congress", f"topic {i}"}) for i in range(10)),
+        )
+
+        found = _associations(present, min_count=2, top_k=8)
+
+        # two shared paragraphs, under the old five-paragraph rule; they never appear apart
+        assert found[("sons of liberty", "stamp act")] == (1.0, 2)
+
+    def test_pairs_below_the_count_or_at_chance_get_no_edge(self):
+        present = paragraphs(
+            (1, {"a", "b"}),  # one shared paragraph
+            (2, {"c", "hub"}),
+            (6, {"hub"}),
+            (2, {"c"}),
+        )
+
+        found = _associations(present, min_count=2, top_k=8)
+
+        assert ("a", "b") not in found
+        # "c" is in 4 of 11 paragraphs and "hub" in 8, so 2 together is below chance
+        assert ("c", "hub") not in found
+
+    def test_each_concept_keeps_its_strongest_partners(self):
+        # "a" meets b1..b4; each b also has an exclusive partner, its own first choice
+        present = paragraphs(
+            *((2 + i, {"a", f"b{i}"}) for i in range(1, 5)),
+            *((10, {f"b{i}", f"c{i}"}) for i in range(1, 5)),
+            (20, {"filler"}),
+        )
+
+        found = _associations(present, min_count=2, top_k=1)
+
+        assert [pair for pair in found if "a" in pair] == [("a", "b4")]
+        assert {("b1", "c1"), ("b2", "c2"), ("b3", "c3"), ("b4", "c4")} <= set(found)
+
+    def test_a_pair_chosen_by_either_side_is_an_edge(self):
+        present = paragraphs(
+            *((2, {"hub", f"leaf{i}"}) for i in range(4)), (8, {"hub"}), (8, {"other"})
+        )
+
+        found = _associations(present, min_count=2, top_k=2)
+
+        # the hub chooses two leaves, but every leaf chooses the hub (the limit is 6)
+        assert sorted(found) == [("hub", f"leaf{i}") for i in range(4)]
+
+    def test_a_hub_stays_capped(self):
+        # 40 concepts each meet the hub twice; concept i also appears alone i times,
+        # so lower i means a stronger association
+        present = paragraphs(
+            *((2, {"hub", f"c{i:02}"}) for i in range(40)),
+            *((i, {f"c{i:02}"}) for i in range(1, 40)),
+        )
+
+        found = _associations(present, min_count=2, top_k=2)
+
+        hub_edges = sorted(pair for pair in found if "hub" in pair)
+        assert len(hub_edges) == RELATED_DEGREE_LIMIT * 2
+        assert hub_edges == [(f"c{i:02}", "hub") for i in range(6)]  # the strongest six
+
+    def test_output_does_not_depend_on_paragraph_order(self):
+        present = paragraphs(
+            (3, {"stamp act", "sons of liberty", "boston"}),
+            (2, {"tea act", "boston", "harbor"}),
+            (4, {"congress", "constitution"}),
+            (2, {"congress", "stamp act"}),
+            (5, {"constitution"}),
+        )
+        shuffled = [set(p) for p in present]
+        random.Random(291).shuffle(shuffled)
+
+        assert _associations(shuffled, min_count=2, top_k=2) == _associations(
+            present, min_count=2, top_k=2
+        )
+
+    def test_no_paragraphs(self):
+        assert _associations([], min_count=2, top_k=8) == {}
+
+
 @pytest.mark.unit
 class TestNumerals:
     PROSE = (
@@ -596,31 +688,54 @@ class TestBuildFromRecords:
         assert ("m2", "Townshend Acts") in covers
         assert ("m2", "Stamp Act") not in covers  # mentioned, but not extracted, in m2
 
-    def test_related_edges_need_threshold_shared_paragraphs(self):
-        assert DEFAULT_COOCCURRENCE_THRESHOLD == 5
+    def test_related_edges_score_association(self):
+        assert (DEFAULT_COOCCURRENCE_THRESHOLD, DEFAULT_RELATED_TOP_K) == (2, 8)
         _, kg = self.build()
 
         related = {frozenset((r.source, r.target)): r for r in edges(kg, RelationshipType.RELATED)}
-        assert set(related) == {frozenset({"Stamp Act", "Sons of Liberty"})}
-        edge = next(iter(related.values()))
-        assert edge.weight == pytest.approx(0.6)  # 6 shared paragraphs / 10
+        assert set(related) == {
+            frozenset({"Stamp Act", "Sons of Liberty"}),
+            frozenset({"Boston", "British Goods"}),
+        }
+        # "Boston" and "British Goods" only ever appear together: two paragraphs are enough
+        assert related[frozenset({"Boston", "British Goods"})].weight == 1.0
+        edge = related[frozenset({"Stamp Act", "Sons of Liberty"})]
+        assert 0.0 < edge.weight < 1.0
         assert edge.confidence == 0.7
+        assert edge.provenance == {"source": "cooccurrence", "method": "npmi", "paragraphs": "6"}
 
     def test_cooccurrence_threshold_is_configurable(self):
-        _, strict = self.build(cooccurrence_threshold=50)
+        _, strict = self.build(cooccurrence_threshold=3)
         _, loose = self.build(cooccurrence_threshold=1)
 
-        assert edges(strict, RelationshipType.RELATED) == []
-        loose_pairs = {
-            frozenset((r.source, r.target)) for r in edges(loose, RelationshipType.RELATED)
+        def pairs(kg):
+            return {frozenset((r.source, r.target)) for r in edges(kg, RelationshipType.RELATED)}
+
+        assert pairs(strict) == {frozenset({"Stamp Act", "Sons of Liberty"})}
+        # They share a paragraph, but the Stamp Act is in most paragraphs: no association
+        assert frozenset({"Stamp Act", "Townshend Acts"}) not in pairs(loose)
+
+    def test_parameters_for_the_report(self):
+        builder = KGBuilder(related_top_k=5)
+
+        assert builder.parameters == {
+            "max_concepts": 200,
+            "min_concept_length": 3,
+            "related_method": "npmi",
+            "cooccurrence_threshold": DEFAULT_COOCCURRENCE_THRESHOLD,
+            "related_top_k": 5,
+            "related_max_degree": RELATED_DEGREE_LIMIT * 5,
+            "prereq_definitions": True,
+            "prereq_patterns": False,
         }
-        assert frozenset({"Stamp Act", "Townshend Acts"}) in loose_pairs
 
     def test_invalid_parameters(self):
         with pytest.raises(ValueError, match="max_concepts"):
             KGBuilder(max_concepts=0)
         with pytest.raises(ValueError, match="cooccurrence_threshold"):
             KGBuilder(cooccurrence_threshold=0)
+        with pytest.raises(ValueError, match="related_top_k"):
+            KGBuilder(related_top_k=0)
 
     def test_prereq_edges_from_glossary_definitions(self):
         _, kg = self.build()

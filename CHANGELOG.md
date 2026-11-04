@@ -68,6 +68,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of claiming that it adds prerequisite and related concepts.
 - The case hash leaves out `stratum` and `split`, so every case keeps the hash
   it had in version 2 and earlier reports stay comparable.
+- RELATED edges link each concept to its strongest associations
+  ([#291](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/291)):
+  - **Scoring.** A pair of concepts is scored by normalised pointwise mutual
+    information over paragraphs, no longer by a raw count of five shared
+    paragraphs. A pair needs two shared paragraphs (`KG_COOCCURRENCE_THRESHOLD`
+    keeps that meaning; its default drops from 5 to 2). Each concept chooses
+    its 8 strongest partners (`--related-top-k`, `KG_RELATED_TOP_K[_<SUBJECT>]`),
+    and no concept gets more than 24 RELATED edges. The edge weight is the
+    score, and the edge records the method and the shared paragraph count.
+  - **Seeded books.** In US History, concepts without concept edges fall from
+    40% to 8%, and "American Revolution" has related concepts and enters
+    `/graph`'s top 100. In Economics, the largest hub falls from 127 neighbours
+    to 37 (RELATED plus glossary PREREQ edges), and "Price" leads with
+    "Quantity Demanded" and "Demand Curve" instead of "Aggregate Demand" and
+    "Asset".
+  - **Neighbour order.** Graph neighbours, and so `related_concepts`, follow
+    RELATED and PREREQ edges only and come strongest link first, then by
+    importance.
+  - **Build report.** It records the builder's parameters, the share of
+    concepts without concept edges and the median degree.
 
 ### Fixed
 

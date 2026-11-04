@@ -317,8 +317,10 @@ class TestQueryConceptNeighbors:
         cypher_call = mock_session.run.call_args
         assert "bio_Concept" in cypher_call[0][0]
         assert cypher_call[1]["name"] == "Photosynthesis"
-        # Ties on importance are broken by name, so the LIMIT keeps the same neighbours
-        assert "ORDER BY importance_score DESC, name" in cypher_call[0][0]
+        # The strongest links first; ties go to importance, then the name, so the LIMIT
+        # keeps the same neighbours
+        assert "ORDER BY weight DESC, importance_score DESC, name" in cypher_call[0][0]
+        assert "[:RELATED|PREREQ*1..2]" in cypher_call[0][0]  # not through Module nodes
 
     def test_empty_results(self):
         adapter, mock_session = _make_adapter(label_prefix="bio")

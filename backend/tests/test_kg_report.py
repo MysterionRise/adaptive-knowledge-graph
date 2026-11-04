@@ -79,6 +79,8 @@ class TestGraphReport:
         assert "| With a glossary definition | 2 (50%) |" in report
         assert "| With aliases | 1 (25%) |" in report
         assert "| Single-word names | 2 (50%) |" in report
+        assert "| Without PREREQ or RELATED edges | 0 (0%) |" in report
+        assert "| Median degree (PREREQ and RELATED) | 2 |" in report  # degrees 3, 2, 2, 1
         # Relationships by type and provenance
         assert "| PREREQ | glossary | 2 |" in report
         assert "| PREREQ | pattern | 1 |" in report
@@ -94,6 +96,16 @@ class TestGraphReport:
         assert report.index("| Parliament | 1 | 0.100 | no | no |") > report.index("## Noise")
         assert report.endswith("\n") and not report.endswith("\n\n")
 
+    def test_counts_concepts_without_concept_edges(self):
+        kg = _graph()
+        kg.add_concept(_concept("Electoral College"))
+        kg.add_relationship(_rel("m2", "Electoral College", RelationshipType.COVERS))
+
+        report = graph_report(kg, subject_id="us_history", source="x", records=1, options={})
+
+        assert "| Without PREREQ or RELATED edges | 1 (20%) |" in report  # COVERS does not count
+        assert "| Median degree (PREREQ and RELATED) | 2 |" in report
+
     def test_empty_graph_reports_without_failing(self):
         report = graph_report(
             KnowledgeGraph(), subject_id="empty", source="x.jsonl", records=0, options={}
@@ -102,6 +114,8 @@ class TestGraphReport:
         assert "| Author key terms | n/a |" in report
         assert "| PREREQ | - | 0 |" in report
         assert "Builder options: defaults" in report
+        assert "| Without PREREQ or RELATED edges | n/a |" in report
+        assert "| Median degree (PREREQ and RELATED) | n/a |" in report
         assert "No cycles: every PREREQ chain can be ordered." in report
         assert "| - | none | - | - | - | - | - |" in report
         assert "| none | - | - | - | - |" in report

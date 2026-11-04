@@ -4,10 +4,10 @@ Build knowledge graph from normalized textbook data.
 This script:
 1. Loads normalized JSONL data
 2. Extracts concepts and relationships using KGBuilder
-3. Writes a JSON copy and a graph quality report (graph_report_<subject>.md: concept
-   counts and shares, relationships by type and provenance, top concepts by degree,
-   PREREQ cycles, noise candidates) to data/processed/build/ (ignored by git; nothing
-   reads them at runtime)
+3. Writes a JSON copy and a graph quality report (graph_report_<subject>.md: the builder's
+   parameters, concept counts and shares, connectivity, relationships by type and
+   provenance, top concepts by degree, PREREQ cycles, noise candidates) to
+   data/processed/build/ (ignored by git; nothing reads them at runtime)
 4. Persists the graph to Neo4j
 5. Outputs statistics and top concepts
 
@@ -15,17 +15,21 @@ Usage:
     poetry run python scripts/build_knowledge_graph.py
     poetry run python scripts/build_knowledge_graph.py --subject economics --clear
     poetry run python scripts/build_knowledge_graph.py --subject us_history --max-concepts 300
-    poetry run python scripts/build_knowledge_graph.py --subject us_history --cooccurrence-threshold 3
+    poetry run python scripts/build_knowledge_graph.py --subject us_history --related-top-k 6
     poetry run python scripts/build_knowledge_graph.py --subject economics --no-persist  # report only
 
 Without --clear the script asks whether to clear the subject's existing nodes when it runs in a
 terminal, and keeps them (MERGE on top) when it does not. Exits non-zero on failure.
 
-Builder tuning (passed only when the installed KGBuilder supports it):
-    --cooccurrence-threshold N   paragraphs two concepts must share for a RELATED edge; defaults to
-                                 KG_COOCCURRENCE_THRESHOLD_<SUBJECT>, then KG_COOCCURRENCE_THRESHOLD,
-                                 then the builder default (so `make seed` can be tuned per subject:
-                                 KG_COOCCURRENCE_THRESHOLD_US_HISTORY=3 make seed)
+Builder tuning (passed only when the installed KGBuilder supports it). RELATED edges link each
+concept to its strongest associations by NPMI over paragraphs:
+    --cooccurrence-threshold N   paragraphs two concepts must share before they can be RELATED;
+                                 defaults to KG_COOCCURRENCE_THRESHOLD_<SUBJECT>, then
+                                 KG_COOCCURRENCE_THRESHOLD, then the builder default (so `make seed`
+                                 can be tuned per subject: KG_COOCCURRENCE_THRESHOLD_US_HISTORY=3 make seed)
+    --related-top-k N            strongest associations each concept chooses; defaults to
+                                 KG_RELATED_TOP_K_<SUBJECT>, then KG_RELATED_TOP_K, then the builder
+                                 default
     --prereq-patterns            also derive PREREQ edges from cue phrases (KG_PREREQ_PATTERNS=1)
 """
 
@@ -70,9 +74,9 @@ def _should_clear(subject_id: str, clear_flag: bool) -> bool:
     return response.strip().lower() == "yes"
 
 
-def _env_threshold(subject_id: str) -> int | None:
-    """KG_COOCCURRENCE_THRESHOLD_<SUBJECT>, then KG_COOCCURRENCE_THRESHOLD."""
-    for name in (f"KG_COOCCURRENCE_THRESHOLD_{subject_id.upper()}", "KG_COOCCURRENCE_THRESHOLD"):
+def _env_int(subject_id: str, variable: str) -> int | None:
+    """``<variable>_<SUBJECT>``, then ``<variable>``."""
+    for name in (f"{variable}_{subject_id.upper()}", variable):
         value = os.environ.get(name, "").strip()
         if value:
             try:
@@ -83,15 +87,20 @@ def _env_threshold(subject_id: str) -> int | None:
 
 
 def builder_options(
-    subject_id: str, cooccurrence_threshold: int | None, prereq_patterns: bool
+    subject_id: str,
+    cooccurrence_threshold: int | None,
+    prereq_patterns: bool,
+    related_top_k: int | None = None,
 ) -> dict[str, Any]:
     """KGBuilder keyword options the caller asked for, limited to what this builder accepts."""
     requested: dict[str, Any] = {}
-    threshold = (
-        cooccurrence_threshold if cooccurrence_threshold is not None else _env_threshold(subject_id)
-    )
-    if threshold is not None:
-        requested["cooccurrence_threshold"] = threshold
+    for name, flag, variable in (
+        ("cooccurrence_threshold", cooccurrence_threshold, "KG_COOCCURRENCE_THRESHOLD"),
+        ("related_top_k", related_top_k, "KG_RELATED_TOP_K"),
+    ):
+        value = flag if flag is not None else _env_int(subject_id, variable)
+        if value is not None:
+            requested[name] = value
     if prereq_patterns or os.environ.get("KG_PREREQ_PATTERNS", "").strip() == "1":
         requested["prereq_patterns"] = True
 
@@ -129,8 +138,15 @@ def main() -> None:
         "--cooccurrence-threshold",
         type=int,
         default=None,
-        help="Paragraphs two concepts must share for a RELATED edge "
+        help="Paragraphs two concepts must share before they can be RELATED "
         "(default: KG_COOCCURRENCE_THRESHOLD[_<SUBJECT>] or the builder default)",
+    )
+    parser.add_argument(
+        "--related-top-k",
+        type=int,
+        default=None,
+        help="Strongest associations each concept chooses for its RELATED edges "
+        "(default: KG_RELATED_TOP_K[_<SUBJECT>] or the builder default)",
     )
     parser.add_argument(
         "--prereq-patterns",
@@ -163,7 +179,9 @@ def main() -> None:
     logger.info(f"Loaded {len(records)} text records from {jsonl_path}")
 
     # Build knowledge graph
-    options = builder_options(subject_id, args.cooccurrence_threshold, args.prereq_patterns)
+    options = builder_options(
+        subject_id, args.cooccurrence_threshold, args.prereq_patterns, args.related_top_k
+    )
     if options:
         logger.info(f"KGBuilder options: {options}")
     builder = KGBuilder(max_concepts=args.max_concepts, **options)
@@ -195,7 +213,8 @@ def main() -> None:
             subject_id=subject_id,
             source=str(jsonl_path),
             records=len(records),
-            options={"max_concepts": args.max_concepts, **options},
+            options=getattr(builder, "parameters", None)
+            or {"max_concepts": args.max_concepts, **options},
         ),
         encoding="utf-8",
     )

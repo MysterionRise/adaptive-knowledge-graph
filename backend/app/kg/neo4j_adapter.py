@@ -249,24 +249,35 @@ class Neo4jAdapter:
 
     def query_concept_neighbors(self, concept_name: str, max_hops: int = 1) -> list[dict]:
         """
-        Query neighboring concepts.
+        Query neighboring concepts, the most strongly linked first.
+
+        Paths follow RELATED and PREREQ edges only. A neighbour's ``weight`` is the
+        strongest path to it, a path's weight the product of its edge weights (a RELATED
+        edge's weight is its association score, #291). Ties go to the more important
+        concept, then the name, so the LIMIT keeps the same neighbours.
 
         Args:
             concept_name: Name of the concept
             max_hops: Maximum number of relationship hops
 
         Returns:
-            List of neighbor concept dicts
+            Neighbour dicts: name, importance_score, key_term, weight
         """
         concept_label = self._get_label("Concept")
         hops = max(1, int(max_hops))  # interpolated into the query, so force an int
         with self._get_session() as session:
             query = f"""
-            MATCH (c:{concept_label} {{name: $name}})-[r*1..{hops}]-(neighbor:{concept_label})
-            RETURN DISTINCT neighbor.name as name,
+            MATCH path = (c:{concept_label} {{name: $name}})
+                         -[:RELATED|PREREQ*1..{hops}]-(neighbor:{concept_label})
+            WHERE neighbor <> c
+            WITH neighbor,
+                 max(reduce(w = 1.0, r IN relationships(path) | w * coalesce(r.weight, 0.0)))
+                     AS weight
+            RETURN neighbor.name as name,
                    neighbor.importance_score as importance_score,
-                   neighbor.key_term as key_term
-            ORDER BY importance_score DESC, name
+                   neighbor.key_term as key_term,
+                   weight
+            ORDER BY weight DESC, importance_score DESC, name
             LIMIT 20
             """
             result = session.run(query, name=concept_name)
