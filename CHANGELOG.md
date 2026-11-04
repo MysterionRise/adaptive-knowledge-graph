@@ -96,7 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Numbered names.** YAKE never ends a keyword with "I" or "II", so both
     world wars were one concept, "World War". A keyword the text mostly
     follows with a Roman numeral now becomes each numbered name ("World War
-    I", "World War II").
+    I", "World War II"), in the graph and in questions, so "World War II" in
+    a question no longer also matches "World War I".
   - **Headings.** Title Case lines (headings, captions, table labels) no
     longer count in the statistics that decide whether a single word is a
     proper noun.

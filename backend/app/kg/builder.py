@@ -39,12 +39,14 @@ from backend.app.kg.markup import (
     strip_structural_sections,
 )
 from backend.app.kg.normalize import (
+    ROMAN_NUMERAL,
     concept_key,
     display_name,
     is_acronym,
     normalize_concept,
     singularize,
     split_abbreviations,
+    with_numerals,
 )
 from backend.app.kg.schema import (
     ConceptNode,
@@ -119,9 +121,7 @@ _PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[\"“‘(\[]?[A-Z0-9])|\n+")
 _LINE_END_RE = re.compile(r"(?<![.!?:;])[ \t]*\n")
 _SENTENCE_END_RE = re.compile(r"[.!?][\"'”’)\]]*$")
-# A Roman numeral that completes a name: "World War I", "World War II", "Title IX".
-_ROMAN_NUMERAL = r"(?:XI{0,3}|IX|IV|VI{0,3}|I{1,3})"
-_ROMAN_NUMERAL_RE = re.compile(_ROMAN_NUMERAL)
+_ROMAN_NUMERAL_RE = re.compile(ROMAN_NUMERAL)
 # Keyword phrases that open with a number or a comparative/quantity modifier are
 # descriptions, not concepts ("Million African Americans", "Higher Price").
 _MODIFIER_PREFIX_RE = re.compile(
@@ -451,32 +451,6 @@ class _PhraseIndex:
         return kept
 
 
-def _with_numerals(keyword: str, prose: str) -> list[str]:
-    """
-    The numbered names a keyword stands for: "World War" -> ["World War I", "World War II"].
-
-    YAKE treats words shorter than three letters as stop words, so it never ends a
-    keyword with "I" or "II" and both world wars come back as "World War". When most
-    mentions of the keyword in ``prose`` are followed by a Roman numeral, it is replaced
-    by each numbered name, spelled as in the text; otherwise it is returned unchanged.
-    """
-    words = keyword.split()
-    if not words:
-        return [keyword]
-    phrase = r"\s+".join(re.escape(word) for word in words)
-    mentions = len(re.findall(rf"(?<![\w-])(?i:{phrase})(?![\w-])", prose))
-    numbered = Counter(
-        match.group(0)
-        for match in re.finditer(rf"(?<![\w-])(?i:{phrase})\s+{_ROMAN_NUMERAL}(?![\w-])", prose)
-    )
-    if not numbered or 2 * sum(numbered.values()) < mentions:
-        return [keyword]
-    by_key: dict[str, Counter[str]] = {}
-    for name, count in numbered.items():
-        by_key.setdefault(concept_key(name), Counter())[" ".join(name.split())] += count
-    return [spellings.most_common(1)[0][0] for spellings in by_key.values()]
-
-
 def _associations(
     present_by_paragraph: list[set[str]], *, min_count: int, top_k: int
 ) -> dict[tuple[str, str], tuple[float, int]]:
@@ -635,7 +609,7 @@ class KGBuilder:
         except Exception as e:  # YAKE can fail on degenerate input
             logger.warning(f"YAKE extraction failed: {e}")
             return []
-        return [numbered for keyword in keywords for numbered in _with_numerals(keyword, prose)]
+        return [numbered for keyword in keywords for numbered in with_numerals(keyword, prose)]
 
     def _add_candidate(
         self, found: dict[str, _Candidate], raw: str, *, key_term: bool, emphasised: bool = False

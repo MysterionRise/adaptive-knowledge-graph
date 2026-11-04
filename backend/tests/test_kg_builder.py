@@ -21,7 +21,6 @@ from backend.app.kg.builder import (
     KGBuilder,
     _associations,
     _CaseStats,
-    _with_numerals,
     is_stop_concept,
 )
 from backend.app.kg.markup import (
@@ -38,6 +37,7 @@ from backend.app.kg.normalize import (
     singularize,
     split_abbreviations,
     tokenize,
+    with_numerals,
 )
 from backend.app.kg.schema import RelationshipType
 from backend.app.kg.stopwords import is_valid_concept
@@ -453,17 +453,17 @@ class TestNumerals:
     )
 
     def test_mostly_numbered_keyword_becomes_each_numbered_name(self):
-        assert _with_numerals("World War", self.PROSE) == ["World War I", "World War II"]
+        assert with_numerals("World War", self.PROSE) == ["World War I", "World War II"]
 
     def test_spelling_follows_the_text_and_cases_merge(self):
         prose = "world war ii began. World War II ended. World War II changed everything."
 
-        assert _with_numerals("world war", prose) == ["World War II"]
+        assert with_numerals("world war", prose) == ["World War II"]
 
     def test_mostly_unnumbered_keyword_is_kept(self):
         prose = "The First World War ended. The Second World War began. World War II ended."
 
-        assert _with_numerals("World War", prose) == ["World War"]
+        assert with_numerals("World War", prose) == ["World War"]
 
     @pytest.mark.parametrize(
         "prose",
@@ -476,11 +476,11 @@ class TestNumerals:
     )
     def test_no_numbered_name(self, prose):
         keyword = "Cold War" if "Cold" in prose else "World War"
-        assert _with_numerals(keyword, prose) == [keyword]
+        assert with_numerals(keyword, prose) == [keyword]
 
     def test_title_ix_and_henry_viii(self):
-        assert _with_numerals("Title", "Title IX banned sex discrimination.") == ["Title IX"]
-        assert _with_numerals("Henry", "Henry VIII broke with Rome.") == ["Henry VIII"]
+        assert with_numerals("Title", "Title IX banned sex discrimination.") == ["Title IX"]
+        assert with_numerals("Henry", "Henry VIII broke with Rome.") == ["Henry VIII"]
 
 
 @pytest.mark.unit
