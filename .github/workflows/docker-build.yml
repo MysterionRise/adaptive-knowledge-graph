@@ -1,6 +1,7 @@
 name: Docker Build
 
-# Advisory: builds the CPU API image when something it depends on changes.
+# Advisory: builds the CPU API image and the frontend image when something they
+# depend on changes.
 # The paths filter means this check does not run on every PR, so it must not
 # become a required status check while the filter is in place.
 on:
@@ -8,6 +9,7 @@ on:
     branches: [main]
     # Everything the CPU image COPYs (see infra/docker/api.cpu.Dockerfile), plus the
     # build inputs themselves. The image does not copy data/.
+    # Frontend image COPYs frontend/ (see infra/docker/frontend.Dockerfile).
     paths:
       - "infra/docker/**"
       - "pyproject.toml"
@@ -16,6 +18,7 @@ on:
       - "backend/**"
       - "config/**"
       - "scripts/**"
+      - "frontend/**"
       - ".dockerignore"
       - ".github/workflows/docker-build.yml"
   workflow_dispatch:
@@ -52,3 +55,18 @@ jobs:
           actual=$(docker run --rm adaptive-kg-api:ci python -c 'from importlib.metadata import version; print(version("adaptive-knowledge-graph"))')
           echo "image reports ${actual}; pyproject.toml says ${expected}"
           [ "${actual}" = "${expected}" ]
+
+  build-frontend:
+    name: Build frontend image (advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build infra/docker/frontend.Dockerfile (no push)
+        run: docker build --file infra/docker/frontend.Dockerfile --tag adaptive-kg-frontend:ci .
+
+      - name: Show image size
+        run: docker image ls adaptive-kg-frontend:ci
