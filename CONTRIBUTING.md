@@ -76,10 +76,13 @@ that can reach it. The torch version bump is tracked separately (#207).
 
 The weekly dependency audit opens or updates a tracking issue titled
 "Dependency audit: open advisories and expiring allowlist entries" when
-`osv-scanner` finds fixable advisories on `main`, or when an allowlist entry
-expires within 30 days (see `.github/workflows/dependency-audit.yml`). Dependabot
-only bumps packages it declares, so a transitive package named in that issue
-will not appear in the weekly version-update groups.
+`osv-scanner` finds an advisory on `main` that no allowlist covers, whether or
+not a fixed release exists, or when an allowlist entry expires within 30 days
+(see `.github/workflows/dependency-audit.yml`). The weekly version-update
+groups only bump packages the project declares directly, in `pyproject.toml`
+and `frontend/package.json`, so a transitive package named in that issue will
+not appear in them. Dependabot security updates sometimes open a fix pull
+request for it; check for one before updating by hand.
 
 Clear it with a deliberate lockfile update for the package that needs the
 fixed release:
@@ -92,10 +95,19 @@ poetry update <package>
 cd frontend && npm update <package>
 ```
 
-Open one pull request per lockfile for deliberate upgrades, so
-`poetry.lock` and `frontend/package-lock.json` changes are reviewed and
-merged separately (see the lockfile merge order in
+Both commands stay within the range the parent package allows, so if the fixed
+release is outside that range the lockfile does not change. In that case, bump
+the parent package to a release that allows the fix, or, for npm, add an
+`overrides` entry to `frontend/package.json` and say why in the pull request.
+
+Keep a deliberate upgrade to one lockfile, and merge lockfile changes one at a
+time: if another open pull request changes the same lockfile, update your
+branch and re-lock after it merges (see
 [#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164)).
+If the package is part of the embedding stack (`torch`, `transformers`,
+`sentence-transformers`, `tokenizers`), also run `make embedding-parity`
+against a seeded index and paste the result into the pull request (see
+[docs/evals/README.md](docs/evals/README.md)).
 The required **Dependency Audit (new advisories)** job compares the change to
 the base branch and fails only if the pull request adds an advisory; see
 [docs/TESTING.md](docs/TESTING.md).
