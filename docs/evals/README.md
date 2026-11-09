@@ -5,7 +5,10 @@ This directory holds the latest KG-RAG evaluation report and, in
 tracking. The harness compares knowledge-graph-expanded retrieval with plain
 retrieval on the golden set in
 [`data/evals/golden_qa.yaml`](../../data/evals/golden_qa.yaml): 53 questions,
-27 for US History and 26 for Economics.
+27 for US History and 26 for Economics. Since version 3 every question has a
+stratum and belongs to the rehearsal or the final split; the
+[evaluation protocol](protocol.md) says how they were drawn, which split to
+use when, and the bar a release has to meet.
 
 ## Running it
 
@@ -45,9 +48,11 @@ takes about 11 minutes. Useful options:
 | `--delay 2` | Minimum seconds between requests, overriding the pacing |
 | `--max-retries 5` | Retries per request after `429` |
 | `--retrieval-only` | Call `POST /api/v1/retrieve` instead of `/ask`: no LLM, citation metrics only, written to `latest-retrieval.json`/`.md` |
+| `--trace` | Keep each request's retrieval trace in the report; the "KG attribution" section then explains each KG-versus-plain citation flip, and `make eval-compare` names the stage where a flip starts |
 | `--ollama-url URL` | Where to read the model digest (default `LLM_OLLAMA_HOST`; while `PRIVACY_LOCAL_ONLY=true`, only a host the API accepts too: loopback, a private address, `ollama` or `host.docker.internal`) |
 | `--api-key KEY` | `X-API-Key` for the API (default `API_KEY` from `.env` or the environment); needed when the API has a key, because `/api/v1/demo/provenance` requires it |
 | `--no-history` | Do not write a `history/` snapshot |
+| `--split rehearsal` | Only rehearsal (and pending) cases, written to `latest-rehearsal.json`/`.md`; `final` runs the held-out cases, `all` (default) every case; see the [protocol](protocol.md) |
 
 With Make, pass them through `EVAL_ARGS`:
 
@@ -56,7 +61,31 @@ make eval-rag EVAL_ARGS="--subject economics --limit 3"
 ```
 
 `check_demo_eval.py` rejects partial reports (for example from `--limit`)
-unless you pass `--allow-partial`, and always rejects retrieval-only reports.
+unless you pass `--allow-partial`, and always rejects retrieval-only and
+rehearsal-split reports.
+
+### Rehearsal and final splits
+
+While developing, evaluate the rehearsal split and compare it with a baseline:
+
+```bash
+make eval-rehearsal                                  # --split rehearsal
+make eval-rehearsal EVAL_ARGS="--retrieval-only"     # citation metrics only, no LLM
+```
+
+Rehearsal runs write `latest-rehearsal.*` (or `latest-retrieval-rehearsal.*`),
+so the release evidence in `latest.*` stays put; git ignores these working
+files. Compare a run with the current rehearsal baseline, named on the sprint
+tracker, and commit a run's `history/` snapshot when it becomes evidence:
+
+```bash
+make eval-compare BASE=docs/evals/history/2026-11-03-71c6e19752f2.json \
+  HEAD=docs/evals/latest-retrieval-rehearsal.json
+```
+
+The final split runs only at a release gate (`--split final`, or
+`make demo-eval` for every case). The case hash leaves out `stratum` and
+`split`, so reports from before version 3 can still be compared case by case.
 
 ## Reproducible runs
 
@@ -67,11 +96,13 @@ temperature 0. Start the API with:
 LLM_TEMPERATURE=0 LLM_SEED=42 make run-api
 ```
 
-`LLM_SEED` is sent to Ollama as `options.seed`. KG expansion is deterministic
-too: the question's concepts come first, then their neighbours ordered by
-importance and then by name, so the expanded query (which is embedded for
-retrieval) is the same in every API process. Two runs on the same seed and data
-should show no retrieval flips in `make eval-compare`. BGE-M3 loads a pinned
+`LLM_SEED` is sent to Ollama as `options.seed`. A full report lists a
+temperature other than 0 or a missing seed under "Protocol deviations". KG
+expansion is deterministic too: the question's concepts come first, then
+their neighbours ordered by importance and then by name, so the keyword query
+is the same in every API process. Two runs on the same seed and data should
+show no retrieval flips in `make eval-compare`; the noise floor below records
+how far they still disagree. BGE-M3 loads a pinned
 Hugging Face commit by default (`PINNED_MODEL_REVISIONS` in
 `backend/app/core/settings.py`), so an upstream model update cannot move the
 vectors. Pin the reranker, or another embedding model, with
@@ -167,7 +198,31 @@ when either report is partial or invalid, when one is a retrieval-only run and
 the other a full run, when KG citation hits on the compared cases drop by 2 or
 more, or when the KG expected-source MRR drops by 0.03 or more. Add
 `--out delta.md` to save the comparison or `--json` for machine-readable
-output.
+output. `--json` also carries each run's KG-minus-plain bootstrap intervals
+(`intervals`) and whether the two runs are repeats of each other (`repeat`).
+When both runs of a flipped case kept traces (`--trace`), the flip names the
+first retrieval stage where the two runs part (`stage`): `resolve`,
+`expand`, `knn`, `bm25`, `fuse`, `window`, `rerank` or `select`.
+
+### Noise floor
+
+Two runs of one configuration measure the harness's own run-to-run
+variation. Run the same split twice against the same API, then record it:
+
+```bash
+make eval-rehearsal EVAL_ARGS="--out-dir /tmp/run1"
+make eval-rehearsal EVAL_ARGS="--out-dir /tmp/run2"
+make eval-noise-floor BASE=/tmp/run1/latest-rehearsal.json HEAD=/tmp/run2/latest-rehearsal.json
+```
+
+The last command refuses runs that are not repeats (another commit, golden
+set, split, retrieval setting, LLM, seed, embedding or reranker). For repeats,
+it stores the floor in `docs/evals/noise-floor.json`, keyed by run mode (`full`
+or `retrieval-only`). For each metric, the floor is the larger of the two
+modes' shares of cases whose value changed. Later reports apply the floor of
+their run mode when the LLM, embedding and reranker match. They record the
+floor in `summary.noise_floor` and use it in the primary endpoint's wording.
+Measure it again after a model, digest, sampling or device change.
 
 ## Re-scoring a report
 
@@ -228,8 +283,42 @@ test until the fixture is regenerated on purpose.
   per-case verdict (win, tie, loss or mixed). The mean deltas stay in the JSON
   for older tooling but are not the figure to quote; see
   [Reporting a comparison](#reporting-a-comparison).
+- **KG attribution** (`summary.kg_attribution`), per subject:
+  - **Attributable hits and losses.** The cases where the KG run cites an
+    expected source and the plain run does not (hits), or the reverse
+    (losses). Both modes embed the question for kNN, so the difference comes
+    from the keyword channel, where the graph's concepts are added. With
+    `--trace`, each one is explained: the first retrieval stage where the two
+    runs part, the concepts added to the keyword query, and the expected
+    source's kNN, BM25 and fused ranks in each run.
+  - **Expansion specificity.** The mean Jaccard similarity of the
+    expanded-concept sets of every pair of cases whose KG run used a concept.
+    Near 1, every question expands to the same concepts (the hub problem
+    #282 measured); near 0, each expansion is specific to its question.
 - Latency per mode.
 - Failure counts per mode, expanded concepts and approximate answer length.
+
+### Retrieval traces
+
+`POST /api/v1/retrieve` returns a `trace` unless the request sets
+`"include_trace": false`; `/ask` and `/ask/stream` (in the `metadata` event)
+return one only with `"include_trace": true`. A trace is keyed by the
+request's `X-Request-ID` and lists the stages in order, each with
+`elapsed_ms`:
+
+| Stage | Records |
+| --- | --- |
+| `resolve` | The question's spans, what each resolved to, and the concepts |
+| `expand` | The concepts the keyword channel uses, and each graph neighbour with the concept, edge types and provenance that produced it |
+| `knn`, `bm25` | Each channel's ranked hits (chunk id, rank, score) |
+| `fuse` | Every candidate in fused order: its rank in each channel, each channel's contribution `1 / (60 + rank)`, and its chapter and section |
+| `window`, `rerank` | Whether they ran and what they changed |
+| `select` | The returned sources, with a 200-character preview |
+
+Tracing does not change the retrieval. A serialised trace keeps only these
+fields (`backend/app/rag/trace.py`): no prompt text, no chunk text beyond the
+preview, no hosts or keys. It never leaves the process otherwise, and it is
+unrelated to the LangSmith tracing that `PRIVACY_LOCAL_ONLY` refuses.
 
 ### How sources are matched
 
@@ -273,9 +362,16 @@ the release notes and pull requests:
   KG better on 3 cases, plain better on 1, 45 ties (sign test p = 0.63)".
 - Never "KG beats plain by X %", "improves by X points" or a delta column.
 - Term recall is `answer_term_recall_non_echo`.
-- No comparative claim ("KG expansion helps") unless the discordant pairs
-  support it: until bootstrap intervals land, a sign-test p-value below 0.05 on
-  the pre-declared primary metric, and even then only for this set.
+- No comparative claim ("KG expansion helps") beyond the generated sentence
+  for the primary endpoint ("Primary endpoint" in `latest.md`,
+  `summary.primary_endpoint.claim`). That sentence says a mode cites better
+  only when the 95% bootstrap interval excludes zero and the difference is at
+  least the noise floor (`docs/evals/protocol.md`), and even then only for
+  this set.
+- Give an interval with any other difference. `latest.md` lists them under
+  "Intervals (KG minus plain, per case)", overall and per stratum, for
+  citation hit rate, MRR and non-echo term recall. An interval that includes
+  zero, or a difference below the floor, is "no evidence of a difference".
 
 Template for the README table, one row per metric:
 

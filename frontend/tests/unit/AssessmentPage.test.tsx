@@ -27,26 +27,12 @@ jest.mock('@/components/Quiz', () => {
   };
 });
 
-// Mock the SubjectPicker component
-jest.mock('@/components/SubjectPicker', () => {
-  return function MockSubjectPicker() {
-    return <div data-testid="subject-picker">Subject Picker Mock</div>;
-  };
-});
-
 describe('AssessmentPage', () => {
   beforeEach(() => {
     mockSearchParams.delete('topic');
   });
 
   describe('Page Structure', () => {
-    it('renders the page container with correct styling', () => {
-      const { container } = render(<AssessmentPage />);
-
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toHaveClass('min-h-screen', 'bg-gray-50');
-    });
-
     it('renders the content wrapper with max-width', () => {
       const { container } = render(<AssessmentPage />);
 
@@ -70,21 +56,6 @@ describe('AssessmentPage', () => {
 
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent('Adaptive Assessment Engine');
-      expect(heading).toHaveClass('text-3xl', 'font-extrabold', 'text-gray-900');
-    });
-
-    it('renders the subtitle', () => {
-      render(<AssessmentPage />);
-
-      expect(
-        screen.getByText('Generated dynamically from trusted knowledge sources')
-      ).toHaveClass('text-gray-600');
-    });
-
-    it('renders the SubjectPicker', () => {
-      render(<AssessmentPage />);
-
-      expect(screen.getByTestId('subject-picker')).toBeInTheDocument();
     });
   });
 

@@ -44,7 +44,9 @@ make build-kg SUBJECT=economics       # Build that subject's knowledge graph in 
 make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch (RECREATE=1 drops the index first)
 make build-windows SUBJECT=economics  # Chunk NEXT edges in Neo4j for one subject (only for opt-in window retrieval)
 make demo-eval                        # Golden-set evaluation against the running API
+make eval-rehearsal                   # Rehearsal split only, for pull-request deltas (docs/evals/protocol.md)
 make eval-compare BASE=a.json HEAD=b.json  # Compare two eval reports (exit 1 on a KG citation regression)
+make eval-noise-floor BASE=a.json HEAD=b.json  # Two repeat runs: record the noise floor in docs/evals/noise-floor.json
 make embedding-parity SUBJECT=us_history  # After an embedding-stack upgrade: re-embed 50 indexed chunks, exit 1 below cosine 0.999 (RERANKER=1 adds a reranker check)
 ```
 
@@ -66,7 +68,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 **Key flow for Q&A (`POST /api/v1/ask`, streaming `POST /api/v1/ask/stream`):**
 
 1. Validate input (markup in questions or invalid fields: 422, without echoing input) and resolve the subject from `config/subjects.yaml` (no subject: `default_subject`; unknown subject: 404).
-2. KG expansion: extract concepts (spaCy NER + YAKE), match them in Neo4j, add neighbours within `RAG_KG_EXPANSION_HOPS`. The response's `kg_expansion_status` is `ok`, `empty`, `failed` (Neo4j error; the request continues) or `disabled`.
+2. KG expansion: extract concepts (spaCy NER + YAKE) and resolve them against the subject's concept names and aliases (`backend/app/nlp/lexicon.py`; no generic single-word matches, ambiguous aliases left out, reported as `resolved_terms`). The recognised concepts join the BM25 query only (the kNN channel embeds the question); their neighbours within `RAG_KG_EXPANSION_HOPS` (strongest association first) come back as `related_concepts`, and `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some to the BM25 query. The response's `kg_expansion_status` is `ok`, `empty`, `failed` (Neo4j error; the request continues) or `disabled`.
 3. OpenSearch retrieval: hybrid BM25 + kNN fused with reciprocal rank fusion (`RETRIEVAL_MODE=hybrid`, default) or kNN only.
 4. Optional window retrieval: opt-in, needs `VECTOR_BACKEND=neo4j` or `hybrid` and NEXT edges between chunks (built by `make build-windows`, not by the standard seed).
 5. Optional reranking: `backend/app/rag/reranker.py` (cross-encoder `BAAI/bge-reranker-v2-m3`), opt-in via `RERANKER_ENABLED=true`; retrieves `RAG_RETRIEVAL_TOP_K` candidates and keeps `top_k`.
@@ -75,7 +77,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 ## Key Modules
 
 - `backend/app/api/routes/` - REST endpoints package, mounted under `/api/v1`:
-  - `ask.py` - `/ask`, `/ask/stream`, `/retrieve` (retrieval only, no LLM; for `evaluate_rag.py --retrieval-only`)
+  - `ask.py` - `/ask`, `/ask/stream`, `/retrieve` (retrieval only, no LLM; for `evaluate_rag.py --retrieval-only`). `include_trace` returns the retrieval trace (`backend/app/rag/trace.py`: stages, timings, channel ranks, fusion contributions; on by default for `/retrieve` only)
   - `quiz.py` - `/quiz/generate`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/student/*`
   - `graph.py` - `/graph/stats`, `/graph/data`, `/graph/query`, `/graph/schema`, `/concepts/*`
   - `learning_path.py`, `subjects.py`, `demo.py` (`/demo/status`, `/demo/provenance`)
@@ -87,7 +89,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 - `backend/app/nlp/llm_client.py` - Ollama + OpenRouter client
 - `backend/app/student/` - quiz generator, student service (BKT mastery, SQLite storage), recommendations
 - `frontend/components/KnowledgeGraph.tsx` - Cytoscape.js visualization
-- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two
+- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`, KG attribution per subject from `backend/app/core/eval_attribution.py`; `--trace` keeps retrieval traces); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two. `backend/app/core/eval_stats.py` holds the paired statistics: sign test, seeded bootstrap intervals, the primary endpoint's generated claim and the noise floor (`docs/evals/protocol.md`)
 
 ## Environment Setup
 
@@ -96,7 +98,7 @@ Defaults work without a `.env`; copy `.env.example` to `.env` to override. Key v
 - `APP_ENV=development` (default: no API key, loud warning) or `production` (refuses to start without `API_KEY` or with `*` in `CORS_ORIGINS`/`CORS_ALLOW_METHODS`/`CORS_ALLOW_HEADERS`; `/docs`, `/redoc`, `/openapi.json` off unless `API_DOCS_ENABLED=true`). Protected routes (`/student/*`, `/quiz/generate-adaptive`, `/quiz/recommendations`, `/graph/query`, `/demo/provenance`) need `X-API-Key` when a key is set. `API_KEY` must be printable ASCII without surrounding whitespace (and at least 16 characters in production), or startup fails; a whitespace-only key counts as no key. `API_DOCS_ENABLED` unset or empty follows the `APP_ENV` default; `true`/`false` force it
 - `TRUST_PROXY_HEADERS=true` keys rate limits on the right-most `X-Forwarded-For` hop; only behind a proxy that appends the client IP
 - `PRIVACY_LOCAL_ONLY=true` (default) - requires `LLM_MODE=local`, a loopback/private `LLM_OLLAMA_HOST` and a non-cloud `LLM_LOCAL_MODEL`, and refuses LangSmith tracing variables; startup fails otherwise (checks in `backend/app/core/privacy.py`). The API also disables LangSmith tracing at runtime and sets `HF_HUB_OFFLINE=1` once its models are cached
-- `LLM_MODE=local` - Ollama (default); `remote` = OpenRouter, `hybrid` = Ollama with OpenRouter fallback
+- `LLM_MODE=local` - Ollama (default); `remote` = the OpenAI-compatible endpoint at `OPENROUTER_BASE_URL` (OpenRouter by default), `hybrid` = Ollama with that fallback. `OPENROUTER_SEND_TEMPERATURE=false` leaves `temperature` out of remote requests (needed for Claude 5.x via `https://api.anthropic.com/v1`)
 - `EMBEDDING_DEVICE=auto` - picks cuda, then mps, then cpu for BGE-M3 (`RERANKER_DEVICE` accepts the same values); `EMBEDDING_MODEL_REVISION` / `RERANKER_MODEL_REVISION` pin Hugging Face revisions. Unset, BGE-M3 loads the commit in `PINNED_MODEL_REVISIONS` (`backend/app/core/settings.py`) and the reranker its default branch; `main` follows the branch. New OpenSearch indexes record the embedding stack in their mapping's `_meta` (`backend/app/rag/index_fingerprint.py`), and `make doctor` fails when it no longer matches
 - `LLM_SEED` - sampling seed sent to Ollama (unset by default); evaluations use `LLM_TEMPERATURE=0` and a fixed seed
 - `GIT_SHA` - commit reported by `/api/v1/demo/provenance` (`make run-api` and `scripts/compose.sh` set it from git; default `unknown`)
@@ -110,7 +112,7 @@ Removed backend settings (ignored if still present in an old `.env`): `API_HOST`
 
 Backend tests are in `backend/tests/` with shared mocks in `conftest.py`; see `docs/TESTING.md`. An autouse `network_guard` fixture fails any non-loopback connection or DNS lookup. Markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`, `@pytest.mark.tribunal`.
 
-The tribunal suite (`backend/tests/test_tribunal_prosecution.py`) encodes the findings of the archived adversarial review in `docs/archive/tribunal-2026-02/`. `xfail_strict = true`: when a known defect is fixed, remove its `xfail` marker in the same change. The remaining strict xfails are linked to #73 (per-learner identity) and #74 (server-side grading). CI runs the regular suite on Python 3.11-3.13 with `-m "not tribunal"` and the tribunal suite in its own job (advisory until the v0.3.0 release makes it required). The required status check on `main` is `All Checks Passed`; see `docs/TESTING.md` for the job list.
+The tribunal suite (`backend/tests/test_tribunal_prosecution.py`) encodes the findings of the archived adversarial review in `docs/archive/tribunal-2026-02/`. `xfail_strict = true`: when a known defect is fixed, remove its `xfail` marker in the same change. The remaining strict xfails are linked to #73 (per-learner identity) and #74 (server-side grading). CI runs the regular suite on Python 3.11-3.13 with `-m "not tribunal"` and the tribunal suite in its own job (required since v0.3.0). The required status check on `main` is `All Checks Passed`; see `docs/TESTING.md` for the job list.
 
 Coverage targets `backend/app`, excluding tests and `__init__.py`; CI's Tests job and `make test-fast` fail below 75% (`--cov-fail-under=75`).
 

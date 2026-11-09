@@ -10,7 +10,8 @@ demo status page (/api/v1/demo/status) applies too:
   golden-set hash, the LLM and its Ollama digest, the embedding and reranker models with
   their revision fields and devices, the allowlisted retrieval settings and per-subject
   concept and chunk counts;
-- it is a full answer run (not --retrieval-only, and not partial unless --allow-partial);
+- it is a full answer run (not --retrieval-only, not the rehearsal split, and not partial
+  unless --allow-partial);
 - every request (both modes) returned 200 and no KG expansion failed, recomputed from the
   per-case results rather than trusted from the report's flag.
 

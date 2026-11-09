@@ -13,8 +13,8 @@ inputs:
     required: true
   install-args:
     description: >-
-      Extra arguments for `poetry sync`, for example "--only dev" or
-      "--without pyirt,pybkt". They are part of the cache key.
+      Extra arguments for `poetry sync`, for example "--only dev". They are
+      part of the cache key.
     required: false
     default: ""
   poetry-version:

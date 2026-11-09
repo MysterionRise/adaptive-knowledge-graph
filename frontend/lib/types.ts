@@ -49,10 +49,15 @@ export interface QuestionResponse {
   question: string;
   answer: string;
   sources: Source[];
+  /** Graph concepts added to the keyword search: the ones recognised in the question. */
   expanded_concepts?: string[] | null;
+  /** Their graph neighbours, not searched; omitted by backends older than v0.4.0. */
+  related_concepts?: string[] | null;
   /** Omitted by backends older than v0.4.0. */
   kg_expansion_status?: KGExpansionStatus;
   retrieved_count: number;
+  /** Chunks after window expansion; null when window retrieval is off. */
+  window_expanded_count?: number | null;
   model: string;
   attribution: string;
 }
@@ -64,9 +69,10 @@ export interface StreamMetadata {
   type: 'metadata';
   sources?: Source[];
   expanded_concepts?: string[] | null;
+  related_concepts?: string[] | null;
   kg_expansion_status?: KGExpansionStatus;
   retrieved_count?: number;
-  window_expanded_count?: number;
+  window_expanded_count?: number | null;
   model?: string;
   attribution?: string;
 }

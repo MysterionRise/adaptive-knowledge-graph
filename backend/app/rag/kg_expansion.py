@@ -6,26 +6,55 @@ for better retrieval. This is what differentiates us from vanilla RAG.
 
 How it works:
 - Concepts are extracted from the query with the ConceptExtractor ensemble
-  (spaCy NER + YAKE keywords matched against the subject's concept names),
-  falling back to plain substring matching
+  (spaCy NER + YAKE spans resolved against the subject's concept names and
+  aliases, #212), falling back to whole-word matching of the names and aliases
 - Each extracted concept is expanded with its neighbours in the subject's
   graph, up to RAG_KG_EXPANSION_HOPS hops
 
-A subject's concept names are cached per subject (``get_known_concepts``) and
-passed to the shared extractor on each call, so concurrent requests for
-different subjects never see each other's concepts.
+A subject's concept lexicon (names and aliases) is cached per subject
+(``get_known_concepts``) and passed to the shared extractor on each call, so
+concurrent requests for different subjects never see each other's concepts.
 """
 
 import threading
 import time
 from collections.abc import Set
-from typing import Literal
+from typing import Any, Literal
 
 from loguru import logger
 
 from backend.app.core.settings import settings
 from backend.app.core.subjects import get_subject
 from backend.app.kg.neo4j_adapter import Neo4jAdapter, get_neo4j_adapter
+from backend.app.nlp.lexicon import ConceptLexicon, Resolution, lexicon_for
+from backend.app.rag.trace import NO_TRACE, RetrievalTrace
+
+# Concepts taken from one question at most
+MAX_QUERY_CONCEPTS = 5
+
+
+def resolved_term(
+    surface: str,
+    canonical: str | None,
+    via: str,
+    strategy: str,
+    candidates: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """One entry of ``resolved_terms``: a span of the question and what it resolved to."""
+    term: dict[str, Any] = {
+        "surface": surface,
+        "canonical": canonical,
+        "via": via,
+        "strategy": strategy,
+        "status": "resolved" if canonical is not None else "ambiguous",
+    }
+    if canonical is None:
+        term["candidates"] = list(candidates)
+    return term
+
+
+def _lexicon(concepts: Set[str]) -> ConceptLexicon:
+    return concepts if isinstance(concepts, ConceptLexicon) else lexicon_for(frozenset(concepts))
 
 
 class KGExpander:
@@ -36,12 +65,15 @@ class KGExpander:
         max_hops: int | None = None,
         extraction_strategy: Literal["simple", "ensemble", "ner", "yake"] = "ensemble",
         subject_id: str | None = None,
+        max_neighbours: int | None = None,
     ):
         """
         Initialize KG expander.
 
         Args:
             max_hops: Maximum hops in graph for expansion
+            max_neighbours: Graph neighbours added to the keyword query
+                (default RAG_KG_EXPANSION_MAX_NEIGHBOURS)
             extraction_strategy: Concept extraction strategy
                 - "simple": Original substring matching
                 - "ensemble": Multi-strategy extraction (NER + YAKE)
@@ -51,6 +83,9 @@ class KGExpander:
                 (None = default_subject from config/subjects.yaml)
         """
         self.max_hops = max_hops or settings.rag_kg_expansion_hops
+        self.max_neighbours = (
+            settings.rag_kg_expansion_max_neighbours if max_neighbours is None else max_neighbours
+        )
         self.extraction_strategy = extraction_strategy
         self.subject_id = subject_id
         self.neo4j_adapter: Neo4jAdapter | None = None
@@ -78,18 +113,30 @@ class KGExpander:
         """
         Extract concept names from query.
 
-        Uses multi-strategy extraction when available, falls back to substring matching.
+        Uses multi-strategy extraction when available, falls back to whole-word matching.
 
         Args:
             query: User query text
-            all_concepts: Set of all known concept names (a frozenset reused
-                across calls, as ``get_known_concepts`` returns, is filtered once)
+            all_concepts: The subject's concepts: a ``ConceptLexicon`` (names and aliases,
+                as ``get_known_concepts`` returns) or a set of names
 
         Returns:
             List of concept names found in query
         """
+        return self.resolve_query(query, all_concepts)[0]
+
+    def resolve_query(
+        self, query: str, all_concepts: Set[str]
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        """The concepts a question names, and how each span resolved (``resolved_terms``).
+
+        An ambiguous span (an alias of several concepts) is reported in the terms but is
+        not a concept of the question.
+        """
         if self.extraction_strategy == "simple":
-            return self._extract_simple(query, all_concepts)
+            return self._resolve_simple(query, all_concepts)
+
+        terms: list[dict[str, Any]] = []
 
         # Use enhanced concept extraction
         try:
@@ -102,34 +149,56 @@ class KGExpander:
                     strategy=self.extraction_strategy
                     if self.extraction_strategy in ("ner", "yake")
                     else "ensemble",
-                    top_k=5,
+                    top_k=MAX_QUERY_CONCEPTS,
                     known_concepts=all_concepts,
                 )
-                found_concepts = [m.name for m in matches]
+                terms = [
+                    resolved_term(
+                        m.original_text or m.name,
+                        m.name if m.status == "resolved" else None,
+                        m.via,
+                        m.strategy,
+                        m.candidates,
+                    )
+                    for m in matches
+                ]
+                found_concepts = [m.name for m in matches if m.status == "resolved"]
 
                 if found_concepts:
                     logger.info(
                         f"Enhanced extraction ({self.extraction_strategy}): "
                         f"found {len(found_concepts)} concepts"
                     )
-                    return found_concepts
+                    return found_concepts, terms
 
         except Exception as e:
             logger.warning(f"Enhanced extraction failed, using simple: {e}")
 
         # Fallback to simple extraction
-        return self._extract_simple(query, all_concepts)
+        found, simple_terms = self._resolve_simple(query, all_concepts)
+        return found, terms + simple_terms
+
+    def _resolve_simple(
+        self, query: str, all_concepts: Set[str]
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        """Every concept name or alias in the question as whole words, longest first."""
+        resolutions: list[Resolution] = _lexicon(all_concepts).find_in(query)
+        found = [r.canonical for r in resolutions if r.canonical is not None]
+        found = found[:MAX_QUERY_CONCEPTS]
+        terms = [
+            resolved_term(r.surface, r.canonical, r.via, "simple", r.candidates)
+            for r in resolutions
+            if r.canonical is None or r.canonical in found
+        ]
+        return found, terms
 
     def _extract_simple(self, query: str, all_concepts: Set[str]) -> list[str]:
-        """Original simple substring matching.
+        """Whole-word matching of the concept names and aliases (the fallback strategy).
 
         Longer (more specific) matches come first, and ties are broken by name, so the
         result does not depend on the set's iteration order, which differs per process.
         """
-        query_lower = query.lower()
-        found_concepts = [concept for concept in all_concepts if concept.lower() in query_lower]
-        found_concepts.sort(key=lambda concept: (-len(concept), concept))
-        return found_concepts[:5]  # Max 5 concepts from query
+        return self._resolve_simple(query, all_concepts)[0]
 
     def expand_with_kg(self, concepts: list[str]) -> list[str]:
         """
@@ -147,66 +216,105 @@ class KGExpander:
         """Expand concepts; also return how many graph lookups failed (Neo4j errors).
 
         The order is reproducible: the query's concepts first, then each one's neighbours
-        in the order Neo4j returns them (``ORDER BY importance_score DESC, name``). The
-        joined terms are embedded for retrieval, so a set's per-process order here would
-        make the same question retrieve differently after a restart.
+        in the order Neo4j returns them (strongest association first, then importance and
+        name). The joined terms are embedded for retrieval, so a set's per-process order
+        here would make the same question retrieve differently after a restart.
+        """
+        neighbours, failures = self._neighbours(concepts)
+        expanded = dict.fromkeys(concepts)  # an ordered set
+        for neighbour in neighbours:
+            expanded.setdefault(neighbour["concept"])
+        logger.info(f"Expanded {len(concepts)} concepts to {len(expanded)} using KG")
+        return list(expanded), failures
+
+    def _neighbours(self, concepts: list[str]) -> tuple[list[dict[str, Any]], int]:
+        """
+        The concepts' graph neighbours, each with what produced it, and the failed lookups.
+
+        Each neighbour appears once, from the first concept that reached it: ``concept``,
+        ``source`` (that concept), ``edges`` and ``provenance`` (the strongest path's edge
+        types and their provenance) and ``weight`` (its association score). The concepts
+        themselves are left out.
         """
         if not self.neo4j_adapter:
             logger.warning("Neo4j not connected, cannot expand with KG")
-            return concepts, len(concepts)
+            return [], len(concepts)
 
-        expanded = dict.fromkeys(concepts)  # an ordered set
+        found: dict[str, dict[str, Any]] = {}
         failures = 0
-
         for concept in concepts:
             try:
-                # Get neighboring concepts
-                neighbors = self.neo4j_adapter.query_concept_neighbors(
+                neighbours = self.neo4j_adapter.query_concept_neighbors(
                     concept, max_hops=self.max_hops
                 )
-
-                for neighbor in neighbors:
-                    expanded.setdefault(neighbor["name"])
-
             except Exception as e:
                 failures += 1
                 logger.warning(f"Failed to expand concept '{concept}': {e}")
                 continue
+            for neighbour in neighbours:
+                name = neighbour["name"]
+                if name in found or name in concepts:
+                    continue
+                found[name] = {
+                    "concept": name,
+                    "source": concept,
+                    "edges": list(neighbour.get("edges") or []),
+                    "provenance": list(neighbour.get("provenance") or []),
+                    "weight": neighbour.get("weight"),
+                }
+        return list(found.values()), failures
 
-        logger.info(f"Expanded {len(concepts)} concepts to {len(expanded)} using KG")
-        return list(expanded), failures
-
-    def expand_query(self, query: str, all_concepts: Set[str]) -> dict:
+    def expand_query(
+        self, query: str, all_concepts: Set[str], trace: RetrievalTrace = NO_TRACE
+    ) -> dict:
         """
         Full query expansion pipeline.
+
+        The expansion feeds the keyword (BM25) channel only; the kNN channel embeds the
+        question itself (#282). Adding every neighbour to the embedded text pulled retrieval
+        toward the same high-degree hub concepts on most questions, so by default only the
+        concepts recognised in the question are used, and their graph neighbours are
+        returned as ``related_concepts`` for display.
 
         Args:
             query: Original query
             all_concepts: Set of all known concepts
+            trace: Records the resolve and expand stages (#216)
 
         Returns:
-            Dict with original_query, extracted_concepts, expanded_concepts, expanded_query,
+            Dict with original_query, extracted_concepts, expanded_concepts (the concepts
+            the retrieval uses: the recognised ones plus at most ``max_neighbours``
+            neighbours), related_concepts (their graph neighbours, in Neo4j's order),
+            expanded_query (the keyword-channel text: the question plus expanded_concepts),
+            resolved_terms (each span of the question and what it resolved to, #212),
             expansion_count and failed_lookups (graph lookups that raised)
         """
         # Extract concepts from query
-        extracted = self.extract_concepts_from_query(query, all_concepts)
+        with trace.stage("resolve") as stage:
+            extracted, terms = self.resolve_query(query, all_concepts)
+            stage["terms"] = terms
+            stage["concepts"] = extracted
 
-        # Expand using KG
-        expanded, failed_lookups = self._expand_with_kg(extracted)
+        # Look up their neighbours in the graph
+        with trace.stage("expand") as stage:
+            details, failed_lookups = self._neighbours(extracted)
+            neighbours = [detail["concept"] for detail in details]
+            used = list(extracted) + neighbours[: max(0, self.max_neighbours)]
+            stage["used"] = used
+            stage["related"] = neighbours
+            stage["neighbours"] = details
+            stage["failed_lookups"] = failed_lookups
 
-        # Build expanded query
-        if expanded:
-            expanded_terms = " ".join(expanded)
-            expanded_query = f"{query} {expanded_terms}"
-        else:
-            expanded_query = query
+        expanded_query = f"{query} {' '.join(used)}" if used else query
 
         return {
             "original_query": query,
             "extracted_concepts": extracted,
-            "expanded_concepts": expanded,
+            "expanded_concepts": used,
+            "related_concepts": neighbours,
+            "resolved_terms": terms,
             "expanded_query": expanded_query,
-            "expansion_count": len(expanded) - len(extracted),
+            "expansion_count": len(used) - len(extracted),
             "failed_lookups": failed_lookups,
         }
 
@@ -251,34 +359,28 @@ def get_kg_expander(subject_id: str | None = None) -> KGExpander:
         return expander
 
 
-def get_all_concepts_from_neo4j(subject_id: str | None = None) -> set[str]:
-    """
-    Get all concept names of a subject's knowledge graph.
-
-    Args:
-        subject_id: Subject identifier (None = default_subject from config/subjects.yaml)
-
-    Returns:
-        Set of concept names (empty if Neo4j is unavailable)
-    """
+def get_concept_lexicon_from_neo4j(subject_id: str | None = None) -> ConceptLexicon:
+    """A subject's concept names and stored aliases (empty if Neo4j is unavailable)."""
     try:
-        return get_neo4j_adapter(subject_id).get_all_concept_names()
+        return ConceptLexicon(get_neo4j_adapter(subject_id).get_concept_aliases())
     except Exception as e:
         logger.error(f"Failed to load concepts from Neo4j: {e}")
-        return set()
+        return ConceptLexicon({})
 
 
 # Concept names change only when a subject is re-seeded, so they are cached per
 # subject instead of being loaded from Neo4j on every question.
 KNOWN_CONCEPTS_CACHE_TTL_SECONDS = 300.0
-_known_concepts_cache: dict[str, tuple[float, frozenset[str]]] = {}
+_known_concepts_cache: dict[str, tuple[float, ConceptLexicon]] = {}
 _known_concepts_locks: dict[str, threading.Lock] = {}
 _known_concepts_registry_lock = threading.Lock()
 
 
-def get_known_concepts(subject_id: str | None = None) -> frozenset[str]:
+def get_known_concepts(subject_id: str | None = None) -> ConceptLexicon:
     """
-    Get a subject's concept names, cached for KNOWN_CONCEPTS_CACHE_TTL_SECONDS.
+    Get a subject's concept lexicon, cached for KNOWN_CONCEPTS_CACHE_TTL_SECONDS.
+
+    The lexicon is the set of concept names and also resolves their aliases (#212).
 
     Each subject has its own entry and its own load lock, so concurrent requests
     for one subject load it once and other subjects are not blocked. An empty
@@ -289,7 +391,7 @@ def get_known_concepts(subject_id: str | None = None) -> frozenset[str]:
         subject_id: Subject identifier (None = default_subject from config/subjects.yaml)
 
     Returns:
-        Frozen set of concept names (the same object until the entry expires)
+        The concept lexicon (the same object until the entry expires)
     """
     resolved_id = get_subject(subject_id).id
 
@@ -306,10 +408,13 @@ def get_known_concepts(subject_id: str | None = None) -> frozenset[str]:
         if cached is not None and time.monotonic() - cached[0] < KNOWN_CONCEPTS_CACHE_TTL_SECONDS:
             return cached[1]
 
-        concepts = frozenset(get_all_concepts_from_neo4j(resolved_id))
+        concepts = get_concept_lexicon_from_neo4j(resolved_id)
         if concepts:
             _known_concepts_cache[resolved_id] = (time.monotonic(), concepts)
-            logger.info(f"Cached {len(concepts)} concept names for subject {resolved_id}")
+            logger.info(
+                f"Cached {len(concepts)} concept names and {concepts.alias_count} aliases "
+                f"for subject {resolved_id}"
+            )
         return concepts
 
 

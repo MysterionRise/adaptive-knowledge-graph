@@ -30,6 +30,9 @@ export interface FakeCy {
   destroy: jest.Mock;
   style: jest.Mock;
   on: jest.Mock;
+  /** Returns undefined until a test gives it a node (`getElementById.mockReturnValue(fakeNode(...))`). */
+  getElementById: jest.Mock;
+  animate: jest.Mock;
 }
 
 function collection(items: Item[]): FakeCollection {
@@ -64,6 +67,8 @@ export function createCytoscapeMock() {
       fit: jest.fn(),
       destroy: jest.fn(),
       style: jest.fn(() => ({ update: styleUpdate })),
+      getElementById: jest.fn(),
+      animate: jest.fn(),
       on: jest.fn((event: string, selectorOrHandler: unknown, handler?: unknown) => {
         const key = typeof selectorOrHandler === 'string' ? `${event} ${selectorOrHandler}` : event;
         handlers[key] = (handler ?? selectorOrHandler) as (event: unknown) => void;

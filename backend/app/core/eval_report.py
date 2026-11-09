@@ -9,14 +9,19 @@ A report is demo-ready only if it:
   digest, the embedding and reranker models with their revision fields and devices (an
   enabled reranker must have loaded), the allowlisted retrieval settings and per-subject
   concept and chunk counts;
-- is a full answer run (not --retrieval-only, and not partial unless allowed);
+- is a full answer run (not --retrieval-only, not the rehearsal split, and not partial
+  unless allowed);
 - shows every request (both modes) returning 200 and zero KG-expansion failures,
   recomputed from the per-case results rather than trusted from the report's flag;
 - has at least ``min_successful_cases`` successful KG and plain cases.
 
+It also describes a run's configuration for the noise floor (#209): which runs are
+repeats of each other, and which runs a recorded floor applies to.
+
 This module only reads the report; it imports no settings and opens no connections.
 """
 
+from collections.abc import Mapping
 from typing import Any, cast
 
 MIN_SCHEMA_VERSION = 2
@@ -126,8 +131,12 @@ def report_errors(
 ) -> list[str]:
     """Why ``report`` is not demo-ready (empty when it is)."""
     errors = provenance_errors(report)
-    if as_dict(report.get("run_config")).get("retrieval_only"):
+    run_config = as_dict(report.get("run_config"))
+    if run_config.get("retrieval_only"):
         errors.append("report comes from a retrieval-only run (--retrieval-only)")
+    if run_config.get("split") == "rehearsal":
+        # Release evidence is the final split or every case (docs/evals/protocol.md)
+        errors.append("report comes from the rehearsal split (--split rehearsal)")
     if not allow_partial and is_partial(report):
         errors.append("report comes from a partial run (--subject/--limit/unavailable subject)")
     if not report.get("environment_valid"):
@@ -139,3 +148,73 @@ def report_errors(
         if successful < min_successful_cases:
             errors.append(f"{mode}_successful_cases {successful} < {min_successful_cases}")
     return errors
+
+
+def run_mode(report: dict[str, Any]) -> str:
+    """``full`` or ``retrieval-only``."""
+    return "retrieval-only" if as_dict(report.get("run_config")).get("retrieval_only") else "full"
+
+
+def noise_configuration(report: dict[str, Any]) -> dict[str, Any]:
+    """What a noise floor depends on: the run mode, the LLM and the embedding and reranker.
+
+    The commit and the retrieval settings are left out on purpose: a floor measured once
+    applies to later commits until one of these changes (docs/evals/protocol.md).
+    """
+    provenance = as_dict(report.get("provenance"))
+    server = as_dict(provenance.get("server"))
+    embedding, reranker = as_dict(server.get("embedding")), as_dict(server.get("reranker"))
+    configuration: dict[str, Any] = {
+        "run_mode": run_mode(report),
+        "embedding": {key: embedding.get(key) for key in ("model", "revision", "resolved_device")},
+        "reranker": {key: reranker.get(key) for key in ("model", "revision", "enabled")},
+    }
+    if configuration["run_mode"] == "full":
+        llm = as_dict(provenance.get("llm"))
+        configuration["llm"] = {
+            "mode": as_dict(server.get("llm")).get("mode"),
+            **{key: llm.get(key) for key in ("model", "ollama_digest", "temperature", "seed")},
+        }
+    return configuration
+
+
+def repeat_configuration(report: dict[str, Any]) -> dict[str, Any]:
+    """What two runs must share to be repeats of each other: the noise configuration plus
+    the server commit, the golden set, the split and the retrieval settings."""
+    provenance = as_dict(report.get("provenance"))
+    server = as_dict(provenance.get("server"))
+    return {
+        **noise_configuration(report),
+        "server_git_sha": server.get("git_sha"),
+        "golden_set_sha256": as_dict(provenance.get("golden_set")).get("sha256"),
+        "split": as_dict(report.get("run_config")).get("split") or "all",
+        "retrieval": as_dict(server.get("retrieval")),
+    }
+
+
+def configuration_differences(
+    left: Mapping[str, Any], right: Mapping[str, Any], prefix: str = ""
+) -> list[str]:
+    """``path: left != right`` for every value two configurations do not share."""
+    differences: list[str] = []
+    for key in sorted(left.keys() | right.keys()):
+        path = f"{prefix}{key}"
+        a, b = left.get(key), right.get(key)
+        if isinstance(a, Mapping) and isinstance(b, Mapping):
+            differences.extend(configuration_differences(a, b, f"{path}."))
+        elif a != b:
+            differences.append(f"{path}: {a!r} != {b!r}")
+    return differences
+
+
+def protocol_deviations(report: dict[str, Any]) -> list[str]:
+    """Where a full run departs from the protocol's sampling: temperature 0 and a seed."""
+    if run_mode(report) != "full":
+        return []
+    llm = as_dict(as_dict(report.get("provenance")).get("llm"))
+    deviations: list[str] = []
+    if llm.get("temperature") not in (0, 0.0):
+        deviations.append(f"LLM temperature {llm.get('temperature')!r}, not 0 (LLM_TEMPERATURE=0)")
+    if llm.get("seed") is None:
+        deviations.append("no LLM seed (set LLM_SEED)")
+    return deviations

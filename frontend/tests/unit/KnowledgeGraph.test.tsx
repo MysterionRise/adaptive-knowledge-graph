@@ -17,12 +17,24 @@ const lastCy = (): any => mockCyInstances[mockCyInstances.length - 1];
 const tapNode = (cy: FakeCy, node: ReturnType<typeof fakeNode>) =>
   act(() => cy.handlers['tap node']({ target: node }));
 
+/**
+ * Type `query` into the concept search box and submit the form. The search input offers the
+ * concept names in a datalist, which makes it a combobox (HTML-AAM), not a searchbox.
+ */
+const searchFor = (query: string) => {
+  fireEvent.change(screen.getByRole('combobox', { name: 'Find a concept' }), {
+    target: { value: query },
+  });
+  fireEvent.submit(screen.getByRole('search'));
+};
+
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
   ZoomIn: () => <svg data-testid="zoom-in-icon" />,
   ZoomOut: () => <svg data-testid="zoom-out-icon" />,
   Maximize2: () => <svg data-testid="maximize-icon" />,
   RotateCcw: () => <svg data-testid="rotate-icon" />,
+  Search: () => <svg data-testid="search-icon" />,
 }));
 
 describe('KnowledgeGraph Component', () => {
@@ -41,6 +53,7 @@ describe('KnowledgeGraph Component', () => {
   };
 
   const mockOnNodeClick = jest.fn();
+  const mockOnBackgroundClick = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -63,6 +76,7 @@ describe('KnowledgeGraph Component', () => {
       expect(screen.getByText('Covers')).toBeInTheDocument();
       expect(screen.getByText('Related')).toBeInTheDocument();
       expect(screen.getByText('Highlighted')).toBeInTheDocument();
+      expect(screen.getByText('Selected')).toBeInTheDocument();
     });
 
     it('renders zoom control buttons', () => {
@@ -82,12 +96,13 @@ describe('KnowledgeGraph Component', () => {
       expect(container.firstChild).toHaveClass('custom-class');
     });
 
-    it('renders cytoscape container with minimum height', () => {
+    it('fills the height of its container', () => {
       const { container } = render(<KnowledgeGraph data={mockGraphData} />);
 
       const cytoscapeContainer = container.querySelector('.cytoscape-container');
       expect(cytoscapeContainer).toBeInTheDocument();
-      expect(cytoscapeContainer).toHaveStyle({ minHeight: '600px' });
+      expect(cytoscapeContainer).toHaveClass('h-full', 'w-full');
+      expect(cytoscapeContainer).not.toHaveAttribute('style');
     });
   });
 
@@ -151,44 +166,70 @@ describe('KnowledgeGraph Component', () => {
       expect(canvasContainer.style.cursor).toBe('');
     });
 
-    it('reports a clicked node and shows its details', () => {
+    it('reports a clicked node with its details', () => {
       render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
 
       tapNode(lastCy(), fakeNode('concept-1', 'American Revolution', 0.9, 3));
 
-      expect(mockOnNodeClick).toHaveBeenCalledWith('concept-1', 'American Revolution');
-      expect(screen.getByText('Selected Concept')).toBeInTheDocument();
-      expect(screen.getByText('90%')).toBeInTheDocument();
-      expect(screen.getByText('3')).toBeInTheDocument();
+      expect(mockOnNodeClick).toHaveBeenCalledWith('concept-1', 'American Revolution', {
+        importance: 0.9,
+        connections: 3,
+      });
     });
 
-    it('clears the selection when the background is clicked', () => {
+    it('selects a clicked node and fades the rest of the graph', () => {
       render(<KnowledgeGraph data={mockGraphData} />);
+      const cy = lastCy();
+      const node = fakeNode('concept-1', 'American Revolution', 0.9, 3);
+
+      tapNode(cy, node);
+
+      expect(cy.nodes().removeClass).toHaveBeenCalledWith('selected highlighted faded');
+      expect(node.addClass).toHaveBeenCalledWith('selected');
+      expect(cy.nodes().not).toHaveBeenCalledWith(node);
+      expect(cy.nodes().addClass).toHaveBeenCalledWith('faded');
+      expect(cy.edges().addClass).toHaveBeenCalledWith('faded');
+    });
+
+    it('reports a click on the background', () => {
+      render(<KnowledgeGraph data={mockGraphData} onBackgroundClick={mockOnBackgroundClick} />);
       const cy = lastCy();
       tapNode(cy, fakeNode('concept-1', 'American Revolution', 0.9));
 
       act(() => cy.handlers.tap({ target: cy }));
 
-      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
+      expect(mockOnBackgroundClick).toHaveBeenCalledTimes(1);
+      expect(cy.nodes().removeClass).toHaveBeenLastCalledWith('selected highlighted faded');
     });
 
-    it('keeps the selection when a click on the background hits an element', () => {
-      render(<KnowledgeGraph data={mockGraphData} />);
+    it('ignores a background click that hits an element', () => {
+      render(<KnowledgeGraph data={mockGraphData} onBackgroundClick={mockOnBackgroundClick} />);
       const cy = lastCy();
       tapNode(cy, fakeNode('concept-1', 'American Revolution', 0.9));
 
       act(() => cy.handlers.tap({ target: {} }));
 
-      expect(screen.getByText('Selected Concept')).toBeInTheDocument();
+      expect(mockOnBackgroundClick).not.toHaveBeenCalled();
     });
 
-    it('clears the selection with the reset control', () => {
-      render(<KnowledgeGraph data={mockGraphData} />);
+    it('reports the reset control as a background click', () => {
+      render(<KnowledgeGraph data={mockGraphData} onBackgroundClick={mockOnBackgroundClick} />);
       tapNode(lastCy(), fakeNode('concept-1', 'American Revolution', 0.9));
 
       fireEvent.click(screen.getByRole('button', { name: /reset view/i }));
 
-      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
+      expect(mockOnBackgroundClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the label of an edge while the pointer is over it', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      const edge = { addClass: jest.fn(), removeClass: jest.fn() };
+
+      lastCy().handlers['mouseover edge']({ target: edge });
+      expect(edge.addClass).toHaveBeenCalledWith('hover');
+
+      lastCy().handlers['mouseout edge']({ target: edge });
+      expect(edge.removeClass).toHaveBeenCalledWith('hover');
     });
   });
 
@@ -201,7 +242,7 @@ describe('KnowledgeGraph Component', () => {
 
       expect(cytoscape).toHaveBeenCalledTimes(1);
       expect(cy.destroy).not.toHaveBeenCalled();
-      expect(screen.getByText('Selected Concept')).toBeInTheDocument();
+      expect(mockOnNodeClick).toHaveBeenCalledTimes(1);
     });
 
     it('does not rebuild the graph when the parent passes a new click handler', () => {
@@ -218,11 +259,14 @@ describe('KnowledgeGraph Component', () => {
       expect(cytoscape).toHaveBeenCalledTimes(1);
       expect(cy.destroy).not.toHaveBeenCalled();
       // The graph calls the latest handler
-      expect(secondHandler).toHaveBeenCalledWith('concept-2', 'Declaration of Independence');
+      expect(secondHandler).toHaveBeenCalledWith('concept-2', 'Declaration of Independence', {
+        importance: 0.85,
+        connections: 2,
+      });
       expect(firstHandler).not.toHaveBeenCalled();
     });
 
-    it('rebuilds the graph for new data and drops the old selection', () => {
+    it('rebuilds the graph for new data', () => {
       const { rerender } = render(<KnowledgeGraph data={mockGraphData} />);
       const firstCy = lastCy();
       tapNode(firstCy, fakeNode('concept-1', 'American Revolution', 0.9));
@@ -236,7 +280,6 @@ describe('KnowledgeGraph Component', () => {
       expect(cytoscape).toHaveBeenCalledTimes(2);
       expect(firstCy.destroy).toHaveBeenCalledTimes(1);
       expect(lastCy().options.elements.nodes).toEqual(newData.nodes);
-      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
     });
 
     it('recolours the nodes for a new theme without rebuilding the graph', () => {
@@ -276,6 +319,32 @@ describe('KnowledgeGraph Component', () => {
 
       expect(node.width(element({ importance: 1 }))).toBe(70);
       expect(node.height(element({ importance: 0 }))).toBe(47.5); // missing importance = 0.5
+    });
+
+    it('wraps node labels under the node', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      const node = styleOf('node');
+
+      expect(node['text-wrap']).toBe('wrap');
+      expect(node['text-max-width']).toBe('96px');
+      expect(node['text-valign']).toBe('bottom');
+    });
+
+    it('reserves room for the labels in the layout', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+
+      expect(lastCy().options.layout).toMatchObject({
+        name: 'cose-bilkent',
+        nodeDimensionsIncludeLabels: true,
+      });
+    });
+
+    it('shows edge labels only on hover or selection', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+
+      expect(styleOf('edge')).not.toHaveProperty('label');
+      expect(styleOf('edge.hover').label).toBe('data(label)');
+      expect(styleOf('edge.highlighted').label).toBe('data(label)');
     });
 
     it.each([
@@ -358,6 +427,132 @@ describe('KnowledgeGraph Component', () => {
     });
   });
 
+  describe('Concept Search', () => {
+    it('offers every concept name as a suggestion', () => {
+      const { container } = render(<KnowledgeGraph data={mockGraphData} />);
+
+      const input = screen.getByRole('combobox', { name: 'Find a concept' });
+      const datalist = container.querySelector(`datalist`) as HTMLDataListElement;
+      expect(input).toHaveAttribute('list', datalist.id);
+      expect(Array.from(datalist.options).map((option) => option.value)).toEqual([
+        'American Revolution',
+        'Declaration of Independence',
+        'Constitution',
+        'Civil War',
+      ]);
+    });
+
+    it('selects the concept with the searched name and zooms to it', () => {
+      render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
+      const cy = lastCy();
+      const node = fakeNode('concept-3', 'Constitution', 0.95, 2);
+      cy.getElementById.mockReturnValue(node);
+
+      searchFor('constitution');
+
+      expect(cy.getElementById).toHaveBeenCalledWith('concept-3');
+      expect(node.addClass).toHaveBeenCalledWith('selected');
+      expect(cy.animate).toHaveBeenCalledWith(
+        { center: { eles: node }, zoom: 1.5 },
+        { duration: 300 }
+      );
+      expect(mockOnNodeClick).toHaveBeenCalledWith('concept-3', 'Constitution', {
+        importance: 0.95,
+        connections: 2,
+      });
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    });
+
+    it('submits the search with the find button', () => {
+      render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
+      const cy = lastCy();
+      cy.getElementById.mockReturnValue(fakeNode('concept-4', 'Civil War', 0.88));
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Find a concept' }), {
+        target: { value: 'Civil War' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Find concept' }));
+
+      expect(cy.getElementById).toHaveBeenCalledWith('concept-4');
+      expect(mockOnNodeClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the current zoom when it is closer than the search zoom', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      const cy = lastCy();
+      cy.zoom.mockReturnValue(2);
+      cy.getElementById.mockReturnValue(fakeNode('concept-3', 'Constitution', 0.95));
+
+      searchFor('Constitution');
+
+      expect(cy.animate).toHaveBeenCalledWith(expect.objectContaining({ zoom: 2 }), {
+        duration: 300,
+      });
+    });
+
+    it('finds a concept by part of its name', () => {
+      render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
+      const cy = lastCy();
+      cy.getElementById.mockReturnValue(fakeNode('concept-2', 'Declaration of Independence', 0.85));
+
+      searchFor('declaration');
+
+      expect(cy.getElementById).toHaveBeenCalledWith('concept-2');
+      expect(mockOnNodeClick).toHaveBeenCalledWith(
+        'concept-2',
+        'Declaration of Independence',
+        expect.anything()
+      );
+    });
+
+    it('prefers the concept whose whole name matches', () => {
+      const data: GraphData = {
+        nodes: [
+          { data: { id: 'a', label: 'American Revolution', importance: 0.9 } },
+          { data: { id: 'b', label: 'Revolution', importance: 0.5 } },
+        ],
+        edges: [],
+      };
+      render(<KnowledgeGraph data={data} />);
+      const cy = lastCy();
+      cy.getElementById.mockReturnValue(fakeNode('b', 'Revolution', 0.5));
+
+      searchFor('revolution');
+
+      expect(cy.getElementById).toHaveBeenCalledWith('b');
+    });
+
+    it('reports when no concept matches', () => {
+      render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
+      const cy = lastCy();
+
+      searchFor('Photosynthesis');
+
+      expect(screen.getByRole('status')).toHaveTextContent('No concept matches “Photosynthesis”');
+      expect(cy.getElementById).not.toHaveBeenCalled();
+      expect(cy.animate).not.toHaveBeenCalled();
+      expect(mockOnNodeClick).not.toHaveBeenCalled();
+    });
+
+    it('clears the search message with the reset control', () => {
+      render(<KnowledgeGraph data={mockGraphData} />);
+      searchFor('Photosynthesis');
+
+      fireEvent.click(screen.getByRole('button', { name: /reset view/i }));
+
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    });
+
+    it('ignores an empty search', () => {
+      render(<KnowledgeGraph data={mockGraphData} onNodeClick={mockOnNodeClick} />);
+
+      searchFor('   ');
+
+      expect(lastCy().getElementById).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toHaveTextContent('');
+    });
+  });
+
   describe('Text Alternative', () => {
     it('labels the canvas with the size of the graph', () => {
       render(<KnowledgeGraph data={mockGraphData} />);
@@ -417,6 +612,7 @@ describe('KnowledgeGraph Component', () => {
       expect(screen.getByRole('button', { name: /zoom out/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /fit to view/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /reset view/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Find concept' })).toBeInTheDocument();
     });
 
     it('has tooltip titles on buttons', () => {
@@ -426,14 +622,6 @@ describe('KnowledgeGraph Component', () => {
       expect(screen.getByTitle('Zoom Out')).toBeInTheDocument();
       expect(screen.getByTitle('Fit to View')).toBeInTheDocument();
       expect(screen.getByTitle('Reset View')).toBeInTheDocument();
-    });
-  });
-
-  describe('Selected Node Info Panel', () => {
-    it('does not show selected node info initially', () => {
-      render(<KnowledgeGraph data={mockGraphData} />);
-
-      expect(screen.queryByText('Selected Concept')).not.toBeInTheDocument();
     });
   });
 
@@ -457,10 +645,32 @@ describe('KnowledgeGraph Component', () => {
       expect(screen.queryByText('Covers')).not.toBeInTheDocument();
     });
 
+    it('does not display Related when graph data has no RELATED edges', () => {
+      const graphDataWithoutRelated = {
+        ...mockGraphData,
+        edges: mockGraphData.edges.filter((edge) => edge.data.type !== 'RELATED'),
+      };
+      render(<KnowledgeGraph data={graphDataWithoutRelated} />);
+
+      expect(screen.queryByText('Related')).not.toBeInTheDocument();
+      expect(screen.getByText('Prerequisite')).toBeInTheDocument();
+      expect(screen.getByText('Covers')).toBeInTheDocument();
+    });
+
+    it('always explains the highlighted and selected node colours', () => {
+      render(<KnowledgeGraph data={{ nodes: [], edges: [] }} />);
+
+      expect(screen.queryByText('Prerequisite')).not.toBeInTheDocument();
+      expect(screen.getByText('Highlighted')).toBeInTheDocument();
+      expect(screen.getByText('Selected')).toBeInTheDocument();
+    });
+
     it('uses the highlighted node color for the legend swatch', () => {
       render(<KnowledgeGraph data={mockGraphData} />);
 
       expect(screen.getByText('Highlighted').previousElementSibling).toHaveClass('bg-amber-500');
+      expect(screen.getByText('Selected').previousElementSibling).toHaveClass('bg-emerald-500');
+      expect(screen.getByText('Prerequisite').previousElementSibling).toHaveClass('bg-red-500');
     });
   });
 });

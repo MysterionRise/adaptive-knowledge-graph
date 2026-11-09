@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from backend.app.core.exceptions import LLMConnectionError, LLMGenerationError
+from backend.app.core.exceptions import LLMConnectionError, LLMGenerationError, LLMTimeoutError
 from backend.app.nlp import llm_client as llm_client_module
 from backend.app.nlp.llm_client import (
     LLMClient,
@@ -48,6 +48,7 @@ def llm_settings():
         mock_settings.openrouter_base_url = "https://openrouter.ai/api/v1"
         mock_settings.openrouter_model = REMOTE_MODEL
         mock_settings.openrouter_verify_ssl = True
+        mock_settings.openrouter_send_temperature = True
         mock_settings.privacy_local_only = False
         mock_settings.llm_temperature = 0.1
         mock_settings.llm_seed = None
@@ -383,6 +384,19 @@ class TestGenerateOpenRouter:
         assert payload["messages"][1] == {"role": "user", "content": "user prompt"}
         assert payload["temperature"] == 0.2
         assert payload["max_tokens"] == 512
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("stream", [False, True])
+    async def test_temperature_is_left_out_when_the_provider_rejects_it(self, stream):
+        # OPENROUTER_SEND_TEMPERATURE=false, for Claude 5.x on Anthropic's endpoint
+        llm_client_module.settings.openrouter_send_temperature = False
+        client = _make_client(mode="remote", api_key="sk-test-123")
+
+        _, payload, _, _ = client._openrouter_request("user prompt", None, 0.3, 512, stream=stream)
+
+        assert "temperature" not in payload
+        assert payload["max_tokens"] == 512
+        assert payload.get("stream", False) is stream
 
     @pytest.mark.asyncio
     async def test_no_system_prompt_omits_system_message(self):
@@ -1334,3 +1348,59 @@ class TestBuildPrompts:
 
         assert "[1]" not in result["user_prompt"]
         assert "Q?" in result["user_prompt"]
+
+
+# ===========================================================================
+# Timeouts: a model that does not answer in time is an LLM failure (503), not a 500
+# ===========================================================================
+
+
+def _timing_out_session() -> AsyncMock:
+    """A ClientSession whose post() times out, as aiohttp's total timeout does."""
+    session = AsyncMock()
+    session.post = MagicMock(side_effect=TimeoutError())
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=False)
+    return session
+
+
+@pytest.mark.unit
+class TestTimeouts:
+    """aiohttp raises TimeoutError (not ClientError) when the total timeout elapses; it must map to
+    an LLM error so /ask answers 503 and hybrid mode can fall back, and it is not retried."""
+
+    @pytest.mark.asyncio
+    async def test_ollama_generate_timeout(self):
+        client = _make_client(mode="local")
+        with patch("aiohttp.ClientSession", return_value=_timing_out_session()) as session_cls:
+            with pytest.raises(LLMTimeoutError, match="Ollama did not answer within"):
+                await client._generate_ollama("prompt", None, 0.1)
+        assert session_cls.call_count == 1  # not retried
+
+    @pytest.mark.asyncio
+    async def test_ollama_stream_timeout(self):
+        client = _make_client(mode="local")
+        with patch("aiohttp.ClientSession", return_value=_timing_out_session()):
+            with pytest.raises(LLMTimeoutError, match="Ollama did not answer within"):
+                async for _ in client._stream_ollama("prompt", None, 0.1):
+                    pass  # pragma: no cover
+
+    @pytest.mark.asyncio
+    async def test_openrouter_generate_timeout(self):
+        client = _make_client(mode="remote", api_key="sk-test")
+        with patch("aiohttp.ClientSession", return_value=_timing_out_session()) as session_cls:
+            with pytest.raises(LLMTimeoutError, match="hosted model did not answer within"):
+                await client._generate_openrouter("prompt", None, 0.1, 1024)
+        assert session_cls.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_openrouter_stream_timeout(self):
+        client = _make_client(mode="remote", api_key="sk-test")
+        with patch("aiohttp.ClientSession", return_value=_timing_out_session()):
+            with pytest.raises(LLMTimeoutError, match="hosted model did not answer within"):
+                async for _ in client._stream_openrouter("prompt", None, 0.1, 1024):
+                    pass  # pragma: no cover
+
+    def test_timeout_is_an_llm_generation_error(self):
+        """Routes map LLMGenerationError to 503; a timeout must not fall through to 500."""
+        assert issubclass(LLMTimeoutError, LLMGenerationError)

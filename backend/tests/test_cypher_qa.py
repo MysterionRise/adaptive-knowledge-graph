@@ -615,6 +615,20 @@ class TestLLMSelection:
         assert llm.openai_api_key.get_secret_value() == "sk-or-test"
         assert llm.temperature == 0.0
 
+    def test_remote_temperature_can_be_left_out(self, monkeypatch):
+        # OPENROUTER_SEND_TEMPERATURE=false: langchain-openai omits a None temperature
+        from backend.app.core.settings import settings
+
+        monkeypatch.setattr(settings, "llm_mode", "remote")
+        monkeypatch.setattr(settings, "openrouter_api_key", "sk-ant-test")
+        monkeypatch.setattr(settings, "openrouter_send_temperature", False)
+
+        llm = CypherQAService().llm
+
+        assert isinstance(llm, ChatOpenAI)
+        assert llm.temperature is None
+        assert "temperature" not in llm._default_params
+
 
 class TestLoggingUntrustedText:
     """Errors and Cypher often contain braces (JSON bodies, map literals).

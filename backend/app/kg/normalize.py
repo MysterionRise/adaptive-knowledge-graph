@@ -10,6 +10,7 @@ singular/plural variants, and a readable display form.
 
 import html
 import re
+from collections import Counter
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:['.\-][a-z0-9]+)*")
 _EDGE_QUOTES_RE = re.compile(r"(?<!\w)[\"'`´“”‘’]+|[\"'`´“”‘’]+(?!\w)")
@@ -29,6 +30,9 @@ _MINOR_WORDS = frozenset(
     | {"or", "per", "the", "to", "v.", "via", "von", "vs", "vs.", "with"}
 )
 _WORD_PART_RE = re.compile(r"([-/])")
+
+ROMAN_NUMERAL = r"(?:XI{0,3}|IX|IV|VI{0,3}|I{1,3})"
+"""A Roman numeral that completes a name: "World War I", "World War II", "Title IX"."""
 
 
 def tokenize(text: str) -> list[str]:
@@ -69,6 +73,14 @@ def concept_key(name: str) -> str:
         head = tokens.index("of", 1) - 1
         tokens[head] = singularize(tokens[head])
     return " ".join(tokens)
+
+
+def query_key(text: str) -> str:
+    """``concept_key`` of a span from a question, without a leading article.
+
+    "the Stamp Act" and "Stamp Acts" share the key of the concept "Stamp Act".
+    """
+    return concept_key(_LEADING_ARTICLE_RE.sub("", text.strip()))
 
 
 def _trim_edges(text: str) -> str:
@@ -119,6 +131,32 @@ def split_abbreviations(name: str) -> tuple[str, list[str]]:
         lambda match: "" if match.group(1) in acronyms else match.group(0), name
     )
     return _WHITESPACE_RE.sub(" ", base).strip(), acronyms
+
+
+def with_numerals(keyword: str, text: str) -> list[str]:
+    """
+    The numbered names a keyword stands for: "World War" -> ["World War I", "World War II"].
+
+    YAKE treats words shorter than three letters as stop words, so it never ends a
+    keyword with "I" or "II" and both world wars come back as "World War". When most
+    mentions of the keyword in ``text`` are followed by a Roman numeral, it is replaced
+    by each numbered name, spelled as in the text; otherwise it is returned unchanged.
+    """
+    words = keyword.split()
+    if not words:
+        return [keyword]
+    phrase = r"\s+".join(re.escape(word) for word in words)
+    mentions = len(re.findall(rf"(?<![\w-])(?i:{phrase})(?![\w-])", text))
+    numbered = Counter(
+        match.group(0)
+        for match in re.finditer(rf"(?<![\w-])(?i:{phrase})\s+{ROMAN_NUMERAL}(?![\w-])", text)
+    )
+    if not numbered or 2 * sum(numbered.values()) < mentions:
+        return [keyword]
+    by_key: dict[str, Counter[str]] = {}
+    for name, count in numbered.items():
+        by_key.setdefault(concept_key(name), Counter())[" ".join(name.split())] += count
+    return [spellings.most_common(1)[0][0] for spellings in by_key.values()]
 
 
 def is_acronym(name: str) -> bool:

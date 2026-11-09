@@ -8,7 +8,6 @@ test.describe('Graph Visualization Page', () => {
     await expect(
       page.getByRole('heading', { name: 'Knowledge Graph Visualization' })
     ).toBeVisible();
-    await expect(page.getByText('Explore concepts and their relationships')).toBeVisible();
   });
 
   test('renders the graph returned by the API', async ({ page, api }) => {
@@ -51,9 +50,35 @@ test.describe('Graph Visualization Page', () => {
     await page.goto('/graph');
 
     await expect(page.getByRole('heading', { name: 'Legend' })).toBeVisible();
-    for (const entry of ['Prerequisite', 'Covers', 'Related', 'Highlighted']) {
+    for (const entry of ['Prerequisite', 'Covers', 'Related', 'Highlighted', 'Selected']) {
       await expect(page.getByText(entry, { exact: true })).toBeVisible();
     }
+  });
+
+  test('finds a concept with the search box', async ({ page }) => {
+    await page.goto('/graph');
+    await expect(page.locator('.cytoscape-container canvas').first()).toBeVisible();
+
+    // The search input suggests the concept names from a datalist, so its role is combobox
+    const search = page.getByRole('combobox', { name: 'Find a concept' });
+    await search.fill('Constitution');
+    await search.press('Enter');
+
+    await expect(page.getByRole('heading', { name: 'Selected Concept' })).toBeVisible();
+    await expect(page.getByText('Importance 90% · 1 connection')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ask AI Tutor About This' })).toBeVisible();
+  });
+
+  test('reports a concept that is not on the graph', async ({ page }) => {
+    await page.goto('/graph');
+    await expect(page.locator('.cytoscape-container canvas').first()).toBeVisible();
+
+    const search = page.getByRole('combobox', { name: 'Find a concept' });
+    await search.fill('Photosynthesis');
+    await search.press('Enter');
+
+    await expect(page.getByRole('status')).toHaveText('No concept matches “Photosynthesis”');
+    await expect(page.getByRole('heading', { name: 'Selected Concept' })).toHaveCount(0);
   });
 
   test('offers zoom and view controls', async ({ page }) => {

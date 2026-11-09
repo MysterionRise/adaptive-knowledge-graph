@@ -13,6 +13,7 @@ import pytest
 
 import backend.app.nlp.concept_extractor as concept_extractor_module
 from backend.app.nlp.concept_extractor import ConceptExtractor, ConceptMatch, get_concept_extractor
+from backend.app.nlp.lexicon import ConceptLexicon
 
 KNOWN = {"Stamp Act", "Sons of Liberty", "Civil War", "World War", "Slavery"}
 
@@ -119,8 +120,12 @@ class TestMatchToKnown:
             ("stamp act", "Stamp Act"),  # exact, case-insensitive
             ("The Stamp Act of 1765", "Stamp Act"),  # known concept inside the span
             ("the Civil War and slavery", "Civil War"),  # longest contained concept wins
-            ("War", "Civil War"),  # span inside a known concept: shortest, then alphabetical
-            ("liberty", "Sons of Liberty"),
+            ("the civil wars", "Civil War"),  # plural and leading article ignored
+            ("World War Two", "World War"),
+            # A single generic word never matches a longer concept (#212)
+            ("War", None),
+            ("liberty", None),
+            ("sons of", "Sons of Liberty"),  # two words: the shortest containing concept
             ("a matter of fact", None),  # no "act" inside "fact"
             ("   ", None),
             ("Photosynthesis", None),
@@ -187,6 +192,30 @@ class TestNerStrategy:
         assert by_name["Sons of Liberty"].score == 0.6
         assert all(m.strategy == "ner" for m in matches)
 
+    def test_aliases_resolve_and_shared_aliases_are_ambiguous(self):
+        lexicon = ConceptLexicon(
+            {
+                "Gross Domestic Product": ["GDP"],
+                "Capital": ["capital stock"],
+                "Physical Capital": ["capital stock"],
+            }
+        )
+        nlp = fake_nlp(ents=[("GDP", "ORG")], noun_chunks=["the capital stock"])
+        matches = extractor_with_nlp(nlp, known=set()).extract_concepts(
+            "...", strategy="ner", known_concepts=lexicon
+        )
+
+        resolved, ambiguous = matches  # resolved concepts sort before ambiguous spans
+        assert (resolved.name, resolved.via, resolved.status) == (
+            "Gross Domestic Product",
+            "alias",
+            "resolved",
+        )
+        assert resolved.original_text == "GDP"
+        assert ambiguous.status == "ambiguous"
+        assert ambiguous.name == "the capital stock"
+        assert ambiguous.candidates == ("Capital", "Physical Capital")
+
     def test_dates_amounts_and_stop_spans_are_skipped(self):
         nlp = fake_nlp(ents=[("1765", "DATE"), ("Summary", "WORK_OF_ART"), ("Slavery", "ORG")])
         matches = extractor_with_nlp(nlp, known=KNOWN | {"1765"}).extract_concepts("...", "ner")
@@ -232,6 +261,27 @@ class TestYakeStrategy:
             ("Stamp Act", pytest.approx(1 / 1.25)),
             ("Slavery", pytest.approx(1 / 2.0)),
         ]
+
+    def test_numbered_names_keep_their_numeral(self):
+        # YAKE drops the "II": "World War" would otherwise resolve to "World War I"
+        extractor = ConceptExtractor(known_concepts={"World War I", "World War II"})
+        extractor._yake_extractor = MagicMock()
+        extractor._yake_extractor.extract_keywords.return_value = [("World War", 0.1)]
+
+        matches = extractor.extract_concepts(
+            "How did World War II change the home front?", strategy="yake"
+        )
+
+        assert [m.name for m in matches] == ["World War II"]
+
+    def test_real_yake_on_a_numbered_war(self):
+        extractor = ConceptExtractor(known_concepts={"World War I", "World War II", "Cold War"})
+
+        matches = extractor.extract_concepts(
+            "How did World War II change life on the American home front?", strategy="yake"
+        )
+
+        assert {m.name for m in matches} == {"World War II"}
 
     def test_yake_failure_returns_no_matches(self):
         extractor = ConceptExtractor(known_concepts=set(KNOWN))

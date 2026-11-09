@@ -4,8 +4,9 @@
 `<date>-<content hash>.json`, next to `../latest.json`. The name comes from the
 report's content, not from a branch SHA, so a squash merge cannot orphan it.
 
-Commit the snapshots that serve as evidence, such as a release baseline, and
-compare any two reports with:
+Commit the snapshots that serve as evidence, such as a release baseline or
+the two repeat runs behind `../noise-floor.json` (its `runs` field gives their
+`generated_at`), and compare any two reports with:
 
 ```bash
 make eval-compare BASE=docs/evals/history/<base>.json HEAD=docs/evals/latest.json

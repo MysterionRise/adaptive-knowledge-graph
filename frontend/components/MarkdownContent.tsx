@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 
 // LLM answers are untrusted: react-markdown never renders raw HTML and drops unsafe URLs.
@@ -21,19 +22,31 @@ const components: Components = {
 interface MarkdownContentProps {
   children: string;
   className?: string;
+  /**
+   * Rendered after the Markdown, at the end of the last paragraph (e.g. a streaming cursor). The
+   * last paragraph becomes inline so the node sits on its final line.
+   */
+  trailing?: ReactNode;
 }
 
 /**
  * Renders an LLM answer written in Markdown (paragraphs, lists, emphasis, code).
  */
-export default function MarkdownContent({ children, className = '' }: MarkdownContentProps) {
+export default function MarkdownContent({
+  children,
+  className = '',
+  trailing,
+}: MarkdownContentProps) {
+  const hasTrailing = trailing != null;
   return (
     <div
-      className={`space-y-3 break-words text-sm leading-relaxed text-gray-800 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-200 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_li]:mt-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-gray-100 [&_pre]:p-3 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 ${className}`}
+      className={`space-y-3 break-words leading-relaxed text-gray-800 ${hasTrailing ? '[&>p:last-of-type]:inline ' : ''}[&_blockquote]:border-l-4 [&_blockquote]:border-gray-200 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_li]:mt-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-gray-100 [&_pre]:p-3 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 ${className}`}
     >
       <Markdown components={components} disallowedElements={DISALLOWED_ELEMENTS} unwrapDisallowed>
         {children}
       </Markdown>
+      {/* `contents`: no box of its own, so the paragraph stack's spacing does not apply to it */}
+      {hasTrailing && <span className="contents">{trailing}</span>}
     </div>
   );
 }

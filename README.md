@@ -8,7 +8,7 @@ with cited answers and adaptive quizzes, running entirely on your own machine.
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
 [![Node 24 LTS](https://img.shields.io/badge/node-24%20LTS-339933.svg)](.node-version)
 
-<!-- hero image: added in the v0.3.0 release PR (#104) -->
+![The AI tutor answering a US History question with numbered citations, the related concepts found in the knowledge graph and an open source passage](docs/assets/demo/03-chat-citations.png)
 
 Adaptive Knowledge Graph combines a [Neo4j](https://neo4j.com/) knowledge graph,
 hybrid BM25 and vector search in [OpenSearch](https://opensearch.org/) and a
@@ -28,10 +28,10 @@ passage that shares no words with the question. This project explores two
 ideas on top of that structure:
 
 - **Knowledge-graph-enhanced RAG.** Concepts and their relationships are
-  extracted from each book into Neo4j. Before retrieval, the question is
-  expanded with neighbouring concepts from the graph, and every answer cites the
-  passages it used. An evaluation harness measures whether the expansion
-  actually helps.
+  extracted from each book into Neo4j. Concepts recognised in the question are
+  added to the keyword half of the hybrid search, their graph neighbours are
+  shown as related concepts, and every answer cites the passages it used. An
+  evaluation harness measures whether the graph actually helps.
 - **Adaptive practice.** Quizzes are generated from the same passages, and a
   Bayesian Knowledge Tracing (BKT) model updates per-concept mastery after each
   answer so the next quiz targets a suitable difficulty.
@@ -43,12 +43,13 @@ data stays in a local SQLite file.
 ## Features
 
 - **Cited answers.** Answers are grounded in retrieved passages with numbered
-  citations, source snippets, the expanded concepts and the textbook
-  attribution. They can be streamed token by token over server-sent events.
+  citations, source snippets, the graph concepts used for retrieval, their
+  related concepts and the textbook attribution. They can be streamed token by token over server-sent events.
 - **Knowledge graph explorer.** Concepts, with glossary definitions and aliases
   where the book provides them, and the textbook modules that cover them live
-  in Neo4j with `PREREQ` (from glossary definitions), `RELATED`
-  (co-occurrence) and `COVERS` relationships. The UI shows them in an
+  in Neo4j with `PREREQ` (from glossary definitions), `RELATED` (each
+  concept's strongest associations by paragraph co-occurrence) and `COVERS`
+  relationships. The UI shows them in an
   interactive Cytoscape.js graph, and the API serves prerequisite chains and
   learning paths. The graph is rebuilt by `make seed`, which writes a quality
   report per build; `GET /api/v1/graph/stats` has the live counts.
@@ -120,9 +121,18 @@ pipeline:
    default); an unknown subject returns `404`.
 2. **Expand the question with the knowledge graph.** spaCy named-entity
    recognition and YAKE keyword extraction find concepts in the question. They
-   are matched against the subject's concepts in Neo4j, and neighbours within
-   `RAG_KG_EXPANSION_HOPS` (default 1) are added to the query. If Neo4j is
-   unavailable, the pipeline continues without expansion. The response's
+   are matched against the subject's concept names and aliases in Neo4j
+   ("GDP", "recessions" and "the Stamp Act" all match), and the recognised
+   concepts are added to the keyword (BM25) query; the vector query embeds the
+   question as asked. A single generic word such as "war" matches no longer
+   concept, and an alias shared by several concepts is left out;
+   `resolved_terms` in the response shows how each span resolved. Their graph
+   neighbours within `RAG_KG_EXPANSION_HOPS` (default 1), the most strongly
+   associated first, come back as `related_concepts`, and
+   `RAG_KG_EXPANSION_MAX_NEIGHBOURS` (default 0) adds some of them to the
+   keyword query too: on the golden set, adding neighbours lowered citation
+   hits (#282). If Neo4j is unavailable, the pipeline continues without
+   expansion. The response's
    `kg_expansion_status` says what happened: `ok`, `empty` (nothing matched),
    `failed` or `disabled`.
 3. **Retrieve with hybrid search.** OpenSearch runs a BM25 query over chunk
@@ -158,12 +168,24 @@ Approximate memory use of the full local stack:
 
 - **Memory:** 16 GB RAM minimum, which is tight (close other applications);
   32 GB recommended.
+- **Docker Desktop (macOS, Windows):** Neo4j and OpenSearch run inside
+  Docker's virtual machine, so its memory limit (Settings, Resources) must
+  hold both, about 5–6 GB, plus any other containers you run. When it is too
+  small, Docker stops one of them with exit code 137 in the middle of a
+  session. 8 GB is enough for this stack alone; give Docker more if other
+  projects' containers run at the same time.
 - **Disk:** about 20 GB free for Docker images, the Ollama model, the BGE-M3
   download (about 2.3 GB) and the indices.
 - **GPU:** optional. `EMBEDDING_DEVICE=auto` uses CUDA or Apple Silicon (MPS)
   when available and falls back to CPU.
 - **Time:** the first seed downloads the embedding model and embeds about
-  19,000 chunks. On CPU this takes tens of minutes.
+  16,600 chunks. On CPU this takes tens of minutes.
+
+Measured on an Apple M1 Max laptop (64 GB, embeddings on Apple Silicon) on
+27 October 2026, from a fresh clone: `make quickstart` took about 10 minutes,
+of which the seed took 9. The Poetry and npm caches and the embedding model
+were already on the machine; a first run on a new machine adds their
+downloads.
 
 ## Quickstart
 
@@ -298,7 +320,7 @@ need:
 | `CORS_ORIGINS`, `CORS_ALLOW_METHODS`, `CORS_ALLOW_HEADERS` | `http://localhost:3000,http://localhost:3001`; `GET,POST,OPTIONS`; `Content-Type,X-API-Key,X-Request-ID` | Comma-separated CORS allow-lists. |
 | `TRUST_PROXY_HEADERS` | `false` | Keys rate limits on the right-most `X-Forwarded-For` hop. Enable it only behind a proxy that appends the client IP. |
 | `PRIVACY_LOCAL_ONLY` | `true` | Keeps questions, textbook context and usage data local. While it is `true` the API refuses to start unless `LLM_MODE=local`, `LLM_OLLAMA_HOST` is loopback or private (`localhost`, `ollama`, `host.docker.internal`, `host.containers.internal`, a private IP, or a name resolving only to those), `LLM_LOCAL_MODEL` is not an Ollama cloud model (`-cloud`, `:cloud`) and no LangSmith tracing variable (`LANGSMITH_TRACING`, `LANGCHAIN_TRACING_V2`, ...) is on. The API also runs the Hugging Face Hub offline once its models are cached. |
-| `LLM_MODE` | `local` | `local` uses Ollama. `remote` uses OpenRouter (`OPENROUTER_API_KEY`). `hybrid` tries Ollama and falls back to OpenRouter. Both remote modes send questions and retrieved excerpts to the provider and require `PRIVACY_LOCAL_ONLY=false`. |
+| `LLM_MODE` | `local` | `local` uses Ollama. `remote` uses the OpenAI-compatible chat-completions endpoint at `OPENROUTER_BASE_URL` (OpenRouter by default; any provider with that API works) with `OPENROUTER_API_KEY` and `OPENROUTER_MODEL`. `hybrid` tries Ollama and falls back to that endpoint. Both remote modes send questions and retrieved excerpts to the provider and require `PRIVACY_LOCAL_ONLY=false`; the demo status page then reports the hosted model as the one that answers. For Claude 5.x through Anthropic (`OPENROUTER_BASE_URL=https://api.anthropic.com/v1`), also set `OPENROUTER_SEND_TEMPERATURE=false`: those models reject any temperature but their default. |
 | `EMBEDDING_DEVICE` | `auto` | `auto` picks `cuda`, then `mps`, then `cpu`. Set a device to override. |
 | `LLM_LOCAL_MODEL` | `llama3.1:8b-instruct-q4_K_M` | Ollama model tag. |
 | `LLM_OLLAMA_HOST` | `http://localhost:11434` | Ollama URL. |
@@ -348,10 +370,28 @@ when `environment_valid` is `true`: every request returned `200` and KG
 expansion never failed. `make eval-compare BASE=… HEAD=…` compares two
 reports case by case.
 
-<!-- eval table: filled in the release PR (#104) with the template and wording
-rule in docs/evals/README.md#reporting-a-comparison: per-arm rates plus
-win/tie/loss and the sign test, term recall is answer_term_recall_non_echo,
-no delta column -->
+The table reports the run behind [`docs/evals/latest.json`](docs/evals/latest.json)
+(golden set version 2, 53 cases, `llama3.1:8b-instruct-q4_K_M`, hybrid
+retrieval without the reranker; commit, models and data counts are in the
+report's provenance). Each case is asked in both modes, so the paired counts
+carry the comparison, not the difference between the two rates; see
+[Reporting a comparison](docs/evals/README.md#reporting-a-comparison).
+
+| Metric | KG | Plain | KG wins | Ties | Plain wins | Sign test p |
+| --- | --- | --- | --- | --- | --- | --- |
+| Citation hit rate | 0.714 | 0.816 | 2 | 40 | 7 | 0.18 |
+| Expected-source MRR | 0.574 | 0.608 | 11 | 28 | 14 | 0.69 |
+| Term recall (non-echo) | 0.645 | 0.640 | 10 | 32 | 11 | 1.00 |
+| Unsupported refusal rate | 1.000 | 1.000 | 0 | 4 | 0 | n/a |
+| Prompt-injection resistance | 0.750 | 0.750 | 0 | 4 | 0 | n/a |
+
+On this run no metric shows a difference the discordant pairs support. The
+largest, citation hit rate, is 2 KG wins against 7 plain wins (sign test
+p = 0.18), so KG expansion is not shown to help or hurt on this set.
+
+Each rate is over the cases that define the metric; a win means that mode did
+better on that case. A difference between the rates is a claim only when the
+discordant pairs support it.
 
 The metrics are heuristic (keyword and source-title matching). They are meant
 for regression tracking, not as a benchmark; see

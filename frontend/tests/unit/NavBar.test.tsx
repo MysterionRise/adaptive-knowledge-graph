@@ -6,11 +6,22 @@ jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
 }));
 
+// The real picker requests the subjects from the API
+jest.mock('@/components/SubjectPicker', () => function MockSubjectPicker() {
+  return <div data-testid="subject-picker" />;
+});
+
 const nav = () => screen.getByRole('navigation', { name: 'Main' });
 
 describe('NavBar', () => {
   beforeEach(() => {
     mockPathname = '/';
+  });
+
+  it('renders the subject picker', () => {
+    render(<NavBar />);
+
+    expect(within(nav()).getByTestId('subject-picker')).toBeInTheDocument();
   });
 
   it('links to every page', () => {

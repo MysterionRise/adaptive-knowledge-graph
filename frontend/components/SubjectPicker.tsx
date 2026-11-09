@@ -206,7 +206,7 @@ export default function SubjectPicker({ className = '' }: SubjectPickerProps) {
             role="listbox"
             aria-label="Subjects"
             onKeyDown={handleListKeyDown}
-            className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 animate-in fade-in slide-in-from-top-1 duration-150"
+            className="absolute top-full right-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1"
           >
             {subjects.map((subject, index) => {
               const available = isSubjectAvailable(subject);

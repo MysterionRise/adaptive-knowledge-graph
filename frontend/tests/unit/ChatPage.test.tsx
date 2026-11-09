@@ -1,10 +1,10 @@
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ChatPage from '@/app/chat/page';
 import { apiClient, type StreamCallbacks } from '@/lib/api-client';
 import { ApiError } from '@/lib/api-errors';
 import { useAppStore } from '@/lib/store';
-import type { Source } from '@/lib/types';
+import type { KGExpansionStatus, Source } from '@/lib/types';
 
 // Mock scrollIntoView (not implemented in jsdom)
 Element.prototype.scrollIntoView = jest.fn();
@@ -29,11 +29,9 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
-// Mock SubjectPicker
-jest.mock('@/components/SubjectPicker', () => {
-  return function MockSubjectPicker() {
-    return <div data-testid="subject-picker">Subject Picker</div>;
-  };
+// react-markdown is ESM-only; the real rendering is covered by the Playwright suite
+jest.mock('react-markdown', () => function MockMarkdown({ children }: { children: string }) {
+  return <div data-testid="markdown">{children}</div>;
 });
 
 const mockStream = apiClient.askQuestionStream as jest.Mock;
@@ -45,7 +43,11 @@ interface StreamedAnswer {
   answer: string;
   sources?: Source[];
   expanded_concepts?: string[] | null;
+  related_concepts?: string[] | null;
+  /** Omitted (like a pre-v0.4.0 backend) unless given. */
+  kg_expansion_status?: KGExpansionStatus;
   retrieved_count?: number;
+  window_expanded_count?: number | null;
   model?: string;
   attribution?: string;
 }
@@ -55,7 +57,10 @@ function mockStreamResponse({
   answer,
   sources = [],
   expanded_concepts = [],
+  related_concepts,
+  kg_expansion_status,
   retrieved_count = 0,
+  window_expanded_count,
   model = 'llama3.1:8b',
   attribution = 'OpenStax US History',
 }: StreamedAnswer) {
@@ -65,7 +70,10 @@ function mockStreamResponse({
         type: 'metadata',
         sources,
         expanded_concepts,
+        related_concepts,
+        kg_expansion_status,
         retrieved_count,
+        window_expanded_count,
         model,
         attribution,
       });
@@ -110,7 +118,6 @@ describe('ChatPage', () => {
       render(<ChatPage />);
 
       expect(screen.getByRole('heading', { level: 1, name: 'AI Tutor Chat' })).toBeInTheDocument();
-      expect(screen.getByText(/Ask questions about your selected subject/i)).toBeInTheDocument();
     });
 
     it('renders welcome message when no messages', () => {
@@ -391,16 +398,54 @@ describe('ChatPage', () => {
   });
 
   describe('Response Display', () => {
-    it('displays expanded concepts when present', async () => {
-      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1', 'Concept 2', 'Concept 3'] });
+    it('lists the graph concepts used for retrieval and the related ones', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        expanded_concepts: ['Concept 1', 'Concept 2'],
+        related_concepts: ['Neighbour 1'],
+      });
 
       render(<ChatPage />);
       await ask('Question');
 
-      expect(await screen.findByText('KG Expansion: 3 related concepts')).toBeInTheDocument();
-      expect(screen.getByText('Concept 1')).toBeInTheDocument();
-      expect(screen.getByText('Concept 2')).toBeInTheDocument();
-      expect(screen.getByText('Concept 3')).toBeInTheDocument();
+      const used = await screen.findByRole('list', { name: 'Used for retrieval (2)' });
+      expect(within(used).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Concept 1',
+        'Concept 2',
+      ]);
+      const related = screen.getByRole('list', { name: 'Related in the graph (1) · not searched' });
+      expect(within(related).getByText('Neighbour 1')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /more$/ })).not.toBeInTheDocument();
+    });
+
+    it('shows the first eight related concepts until asked for the rest', async () => {
+      const related = Array.from({ length: 11 }, (_, index) => `Neighbour ${index + 1}`);
+      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1'], related_concepts: related });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      const list = await screen.findByRole('list', { name: /^Related in the graph \(11\)/ });
+      expect(within(list).getAllByRole('listitem')).toHaveLength(8);
+      expect(within(list).queryByText('Neighbour 9')).not.toBeInTheDocument();
+
+      const more = screen.getByRole('button', { name: 'Show 3 more' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(more);
+
+      expect(within(list).getAllByRole('listitem')).toHaveLength(11);
+      expect(screen.getByRole('button', { name: 'Show fewer' })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('shows no graph panel without graph concepts', async () => {
+      mockStreamResponse({ answer: 'Answer', expanded_concepts: null });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      expect(await screen.findByText('OpenStax US History')).toBeInTheDocument();
+      expect(screen.queryByText('Knowledge graph')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'View on Graph' })).not.toBeInTheDocument();
     });
 
     it('displays attribution and model', async () => {
@@ -411,6 +456,60 @@ describe('ChatPage', () => {
 
       expect(await screen.findByText('OpenStax US History')).toBeInTheDocument();
       expect(screen.getByText(/Model: llama3.1:8b/i)).toBeInTheDocument();
+    });
+
+    it('renders the answer as Markdown', async () => {
+      mockStreamResponse({ answer: '**Taxation** without representation' });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      expect(await screen.findByTestId('markdown')).toHaveTextContent(
+        '**Taxation** without representation'
+      );
+    });
+  });
+
+  describe('Retrieval summary', () => {
+    it('shows what retrieval did', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        kg_expansion_status: 'ok',
+        retrieved_count: 2,
+        window_expanded_count: 4,
+      });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      const badge = await screen.findByText('KG expansion: ok');
+      expect(badge).toHaveAttribute('title', expect.stringMatching(/knowledge graph/));
+      expect(screen.getByText('2 chunks retrieved')).toBeInTheDocument();
+      expect(screen.getByText('· 4 after window expansion')).toBeInTheDocument();
+    });
+
+    it('omits the badge and the window count when the metadata has neither', async () => {
+      mockStreamResponse({ answer: 'Answer', retrieved_count: 1 });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      expect(await screen.findByText('1 chunk retrieved')).toBeInTheDocument();
+      expect(screen.queryByText(/^KG expansion:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/after window expansion/)).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['empty', 'KG expansion: no matches'],
+      ['failed', 'KG expansion: failed, plain retrieval'],
+      ['disabled', 'KG expansion: off'],
+    ] as const)('describes the %s status', async (status, label) => {
+      mockStreamResponse({ answer: 'Answer', kg_expansion_status: status });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      expect(await screen.findByText(label)).toBeInTheDocument();
     });
   });
 
@@ -425,26 +524,80 @@ describe('ChatPage', () => {
       },
     ];
 
-    it('toggles sources visibility', async () => {
+    it('opens the text of a source from its chip', async () => {
       mockStreamResponse({ answer: 'Answer', sources, retrieved_count: 1 });
 
       render(<ChatPage />);
       await ask('Question');
 
-      const toggle = await screen.findByRole('button', { name: 'Show Sources (1)' });
-      expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      fireEvent.click(toggle);
+      const chip = await screen.findByRole('button', { name: /^Source 1/ });
+      expect(chip).toHaveAccessibleName('Source 1 The Stamp Act');
+      expect(chip).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText('Source content here')).not.toBeInTheDocument();
+      fireEvent.click(chip);
 
-      expect(screen.getByText('Source content here')).toBeInTheDocument();
+      expect(chip).toHaveAttribute('aria-expanded', 'true');
+      const text = screen.getByText('Source content here');
+      expect(text.closest('div')).toHaveAttribute('id', chip.getAttribute('aria-controls'));
       expect(
         screen.getByText('Imperial Reforms and Colonial Protests, 1763-1774')
       ).toBeInTheDocument();
       expect(screen.getByText('The Stamp Act')).toBeInTheDocument();
-      expect(screen.getByText('Score: 95%')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Hide Sources (1)' })).toHaveAttribute(
+      // The retrieval score is not shown: with hybrid retrieval it is not a percentage
+      expect(screen.queryByText(/95%/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Show full text' })).not.toBeInTheDocument();
+
+      fireEvent.click(chip);
+      expect(chip).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText('Source content here')).not.toBeInTheDocument();
+    });
+
+    it('opens one source at a time', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        sources: [...sources, { text: 'Second source', score: 0.8, section: 'The Tea Act' }],
+        retrieved_count: 2,
+      });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      fireEvent.click(await screen.findByRole('button', { name: /^Source 1/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Source 2/ }));
+
+      expect(screen.getByRole('button', { name: /^Source 1/ })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      );
+      expect(screen.getByRole('button', { name: /^Source 2/ })).toHaveAttribute(
         'aria-expanded',
         'true'
       );
+      expect(screen.queryByText('Source content here')).not.toBeInTheDocument();
+      expect(screen.getByText('Second source')).toBeInTheDocument();
+    });
+
+    it('trims a long source text until the full text is asked for', async () => {
+      const longText = '0123456789'.repeat(26); // 260 characters
+      const preview = `${'0123456789'.repeat(24)}…`;
+      mockStreamResponse({
+        answer: 'Answer',
+        sources: [{ ...sources[0], text: longText }],
+        retrieved_count: 1,
+      });
+
+      render(<ChatPage />);
+      await ask('Question');
+
+      fireEvent.click(await screen.findByRole('button', { name: /^Source 1/ }));
+      expect(screen.getByText(preview)).toBeInTheDocument();
+      expect(screen.queryByText(longText)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show full text' }));
+      expect(screen.getByText(longText)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+      expect(screen.getByText(preview)).toBeInTheDocument();
     });
   });
 
@@ -467,9 +620,9 @@ describe('ChatPage', () => {
       render(<ChatPage />);
       await ask('Question');
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Show Sources (1)' }));
-      expect(screen.getByText('Preface')).toBeInTheDocument();
-      expect(screen.queryByText('•')).not.toBeInTheDocument();
+      expect(
+        await screen.findByRole('button', { name: 'Source 1 Preface' })
+      ).toBeInTheDocument();
     });
 
     it('falls back to the module title when a source has no chapter or section', async () => {
@@ -482,14 +635,19 @@ describe('ChatPage', () => {
       render(<ChatPage />);
       await ask('Question');
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Show Sources (1)' }));
-      expect(screen.getByText('US History - m49990')).toBeInTheDocument();
+      expect(
+        await screen.findByRole('button', { name: 'Source 1 US History - m49990' })
+      ).toBeInTheDocument();
     });
   });
 
   describe('View on Graph', () => {
-    it('navigates to graph page with the expanded concepts highlighted', async () => {
-      mockStreamResponse({ answer: 'Answer', expanded_concepts: ['Concept 1'] });
+    it('navigates to graph page with the used and related concepts highlighted', async () => {
+      mockStreamResponse({
+        answer: 'Answer',
+        expanded_concepts: ['Concept 1'],
+        related_concepts: ['Neighbour 1', 'Concept 1'],
+      });
 
       render(<ChatPage />);
       await ask('Question');
@@ -497,7 +655,7 @@ describe('ChatPage', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'View on Graph' }));
 
       expect(mockPush).toHaveBeenCalledWith('/graph');
-      expect(useAppStore.getState().highlightedConcepts).toEqual(['Concept 1']);
+      expect(useAppStore.getState().highlightedConcepts).toEqual(['Concept 1', 'Neighbour 1']);
     });
   });
 

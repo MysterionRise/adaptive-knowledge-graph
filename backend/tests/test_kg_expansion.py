@@ -22,7 +22,8 @@ import pytest
 
 import backend.app.nlp.concept_extractor as concept_extractor_module
 import backend.app.rag.kg_expansion as kg_expansion_module
-from backend.app.nlp.concept_extractor import ConceptExtractor
+from backend.app.nlp.concept_extractor import ConceptExtractor, ConceptMatch
+from backend.app.nlp.lexicon import ConceptLexicon
 from backend.app.rag.kg_expansion import KGExpander
 
 
@@ -83,6 +84,33 @@ class TestExtractSimple:
         result = expander.extract_concepts_from_query("What is photosynthesis?", set())
         assert result == []
 
+    def test_whole_words_only(self):
+        expander = KGExpander(extraction_strategy="simple")
+        result = expander.extract_concepts_from_query("Explain warfare and facts", {"War", "Act"})
+        assert result == []
+
+    def test_aliases_and_plurals_with_a_lexicon(self):
+        expander = KGExpander(extraction_strategy="simple")
+        lexicon = ConceptLexicon({"Gross Domestic Product": ["GDP"], "Recession": []})
+        concepts, terms = expander.resolve_query("Does GDP fall in recessions?", lexicon)
+        assert concepts == ["Recession", "Gross Domestic Product"]
+        assert terms == [
+            {
+                "surface": "recession",
+                "canonical": "Recession",
+                "via": "name",
+                "strategy": "simple",
+                "status": "resolved",
+            },
+            {
+                "surface": "gdp",
+                "canonical": "Gross Domestic Product",
+                "via": "alias",
+                "strategy": "simple",
+                "status": "resolved",
+            },
+        ]
+
 
 @pytest.mark.unit
 class TestExtractEnhanced:
@@ -112,8 +140,7 @@ class TestExtractEnhanced:
 
     def test_uses_enhanced_when_available(self):
         expander = KGExpander(extraction_strategy="ensemble")
-        mock_match = MagicMock()
-        mock_match.name = "photosynthesis"
+        mock_match = ConceptMatch(name="photosynthesis", score=0.9, strategy="ensemble")
         mock_extractor = MagicMock()
         mock_extractor.extract_concepts.return_value = [mock_match]
         expander._concept_extractor = mock_extractor
@@ -124,6 +151,51 @@ class TestExtractEnhanced:
         # The shared extractor gets the concepts per call and is never mutated
         mock_extractor.set_known_concepts.assert_not_called()
         assert mock_extractor.extract_concepts.call_args.kwargs["known_concepts"] is concepts
+
+
+@pytest.mark.unit
+class TestResolvedTerms:
+    """How each span of the question resolved, reported next to the concepts (#212)."""
+
+    def test_ambiguous_spans_are_reported_but_not_expanded(self):
+        expander = KGExpander(extraction_strategy="ensemble")
+        mock_extractor = MagicMock()
+        mock_extractor.extract_concepts.return_value = [
+            ConceptMatch("Stamp Act", 0.9, "ensemble", original_text="the Stamp Act"),
+            ConceptMatch(
+                "capital stock",
+                0.5,
+                "ner",
+                original_text="capital stock",
+                via="alias",
+                status="ambiguous",
+                candidates=("Capital", "Physical Capital"),
+            ),
+        ]
+        expander._concept_extractor = mock_extractor
+        expander.neo4j_adapter = MagicMock()
+        expander.neo4j_adapter.query_concept_neighbors.return_value = []
+
+        result = expander.expand_query("Why the Stamp Act and capital stock?", {"Stamp Act"})
+
+        assert result["extracted_concepts"] == ["Stamp Act"]
+        assert result["resolved_terms"] == [
+            {
+                "surface": "the Stamp Act",
+                "canonical": "Stamp Act",
+                "via": "name",
+                "strategy": "ensemble",
+                "status": "resolved",
+            },
+            {
+                "surface": "capital stock",
+                "canonical": None,
+                "via": "alias",
+                "strategy": "ner",
+                "status": "ambiguous",
+                "candidates": ["Capital", "Physical Capital"],
+            },
+        ]
 
 
 @pytest.mark.unit
@@ -190,11 +262,28 @@ class TestExpandQuery:
         concepts = {"photosynthesis", "mitosis"}
         result = expander.expand_query("Explain photosynthesis", concepts)
 
+        # By default only the recognised concepts reach the keyword query; their graph
+        # neighbours are reported as related (#282)
         assert result["original_query"] == "Explain photosynthesis"
-        assert "photosynthesis" in result["extracted_concepts"]
-        assert "chloroplast" in result["expanded_concepts"]
-        assert "photosynthesis" in result["expanded_query"]
-        assert "chloroplast" in result["expanded_query"]
+        assert result["extracted_concepts"] == ["photosynthesis"]
+        assert result["expanded_concepts"] == ["photosynthesis"]
+        assert result["related_concepts"] == ["chloroplast"]
+        assert result["expanded_query"] == "Explain photosynthesis photosynthesis"
+
+    def test_neighbour_budget_adds_neighbours_to_the_keyword_query(self):
+        expander = KGExpander(extraction_strategy="simple", max_neighbours=1)
+        mock_adapter = MagicMock()
+        mock_adapter.query_concept_neighbors.return_value = [
+            {"name": "chloroplast"},
+            {"name": "ATP"},
+        ]
+        expander.neo4j_adapter = mock_adapter
+
+        result = expander.expand_query("Explain photosynthesis", {"photosynthesis"})
+
+        assert result["expanded_concepts"] == ["photosynthesis", "chloroplast"]
+        assert result["related_concepts"] == ["chloroplast", "ATP"]
+        assert result["expanded_query"] == "Explain photosynthesis photosynthesis chloroplast"
 
     def test_no_expansion_when_no_concepts(self):
         expander = KGExpander(extraction_strategy="simple")
@@ -217,7 +306,12 @@ class TestExpandQuery:
         concepts = {"photosynthesis"}
         result = expander.expand_query("Explain photosynthesis", concepts)
 
-        # 1 extracted, expanded to 3 total -> 2 new concepts
+        # Neighbours are off by default: none of the 2 joins the query
+        assert result["expansion_count"] == 0
+        assert len(result["related_concepts"]) == 2
+
+        expander.max_neighbours = 5
+        result = expander.expand_query("Explain photosynthesis", concepts)
         assert result["expansion_count"] == 2
 
 
@@ -339,7 +433,7 @@ class TestKGExpanderInit:
 
 @pytest.mark.unit
 class TestFactories:
-    """get_kg_expander / get_all_concepts_from_neo4j resolve the default subject."""
+    """get_kg_expander / get_concept_lexicon_from_neo4j resolve the default subject."""
 
     @pytest.fixture(autouse=True)
     def _clear_registry(self):
@@ -412,31 +506,35 @@ class TestFactories:
             expander = get_kg_expander("us_history")
         assert expander.neo4j_adapter is None
 
-    def test_get_all_concepts_uses_subject_adapter(self):
-        from backend.app.rag.kg_expansion import get_all_concepts_from_neo4j
+    def test_get_concept_lexicon_uses_subject_adapter(self):
+        from backend.app.rag.kg_expansion import get_concept_lexicon_from_neo4j
 
         adapter = MagicMock()
-        adapter.get_all_concept_names.return_value = {"Civil War", "Reconstruction"}
+        adapter.get_concept_aliases.return_value = {
+            "Civil War": ["Civil Wars"],
+            "Reconstruction": [],
+        }
         with patch(
             "backend.app.rag.kg_expansion.get_neo4j_adapter", return_value=adapter
         ) as factory:
-            assert get_all_concepts_from_neo4j() == {"Civil War", "Reconstruction"}
-            assert get_all_concepts_from_neo4j("economics") == {"Civil War", "Reconstruction"}
+            assert get_concept_lexicon_from_neo4j() == {"Civil War", "Reconstruction"}
+            lexicon = get_concept_lexicon_from_neo4j("economics")
         assert [c.args for c in factory.call_args_list] == [(None,), ("economics",)]
+        assert lexicon.resolve("the civil wars").canonical == "Civil War"
 
-    def test_get_all_concepts_returns_empty_set_on_error(self):
-        from backend.app.rag.kg_expansion import get_all_concepts_from_neo4j
+    def test_get_concept_lexicon_is_empty_on_error(self):
+        from backend.app.rag.kg_expansion import get_concept_lexicon_from_neo4j
 
         with patch(
             "backend.app.rag.kg_expansion.get_neo4j_adapter",
             side_effect=RuntimeError("Neo4j down"),
         ):
-            assert get_all_concepts_from_neo4j("us_history") == set()
+            assert len(get_concept_lexicon_from_neo4j("us_history")) == 0
 
 
 def _adapter_with_concepts(names: set[str]) -> MagicMock:
     adapter = MagicMock()
-    adapter.get_all_concept_names.return_value = set(names)
+    adapter.get_concept_aliases.return_value = dict.fromkeys(names, [])
     adapter.query_concept_neighbors.return_value = []
     return adapter
 
@@ -466,10 +564,10 @@ class TestKnownConceptsCache:
         economics = kg_expansion_module.get_known_concepts("economics")
 
         assert first == frozenset(SUBJECT_CONCEPTS["us_history"])
-        assert second is first  # the same frozenset, so the extractor filters it once
+        assert second is first  # the same lexicon, built once
         assert economics == frozenset(SUBJECT_CONCEPTS["economics"])
-        adapters["us_history"].get_all_concept_names.assert_called_once()
-        adapters["economics"].get_all_concept_names.assert_called_once()
+        adapters["us_history"].get_concept_aliases.assert_called_once()
+        adapters["economics"].get_concept_aliases.assert_called_once()
 
     def test_none_resolves_the_default_subject(self, adapters):
         from backend.app.core.subjects import get_default_subject_id
@@ -478,7 +576,7 @@ class TestKnownConceptsCache:
         assert kg_expansion_module.get_known_concepts() is (
             kg_expansion_module.get_known_concepts(default_id)
         )
-        adapters[default_id].get_all_concept_names.assert_called_once()
+        adapters[default_id].get_concept_aliases.assert_called_once()
 
     def test_reloads_after_the_ttl(self, adapters):
         kg_expansion_module.get_known_concepts("economics")
@@ -487,22 +585,22 @@ class TestKnownConceptsCache:
             loaded_at - kg_expansion_module.KNOWN_CONCEPTS_CACHE_TTL_SECONDS - 1,
             concepts,
         )
-        adapters["economics"].get_all_concept_names.return_value = {"Inflation", "GDP"}
+        adapters["economics"].get_concept_aliases.return_value = {"Inflation": [], "GDP": []}
 
         assert kg_expansion_module.get_known_concepts("economics") == {"Inflation", "GDP"}
-        assert adapters["economics"].get_all_concept_names.call_count == 2
+        assert adapters["economics"].get_concept_aliases.call_count == 2
 
     def test_clear_forces_a_reload(self, adapters):
         kg_expansion_module.get_known_concepts("us_history")
         kg_expansion_module.clear_known_concepts_cache()
         kg_expansion_module.get_known_concepts("us_history")
 
-        assert adapters["us_history"].get_all_concept_names.call_count == 2
+        assert adapters["us_history"].get_concept_aliases.call_count == 2
 
     def test_empty_result_is_not_cached(self, adapters):
-        adapters["us_history"].get_all_concept_names.side_effect = [
+        adapters["us_history"].get_concept_aliases.side_effect = [
             RuntimeError("Neo4j down"),
-            {"Stamp Act"},
+            {"Stamp Act": []},
         ]
 
         assert kg_expansion_module.get_known_concepts("us_history") == frozenset()
@@ -514,7 +612,7 @@ class TestKnownConceptsCache:
 
     def test_concurrent_first_calls_load_once(self, adapters):
         barrier = threading.Barrier(8)
-        results: list[frozenset[str]] = []
+        results: list[ConceptLexicon] = []
 
         def request():
             barrier.wait(timeout=5)
@@ -528,7 +626,7 @@ class TestKnownConceptsCache:
 
         assert len(results) == 8
         assert all(result is results[0] for result in results)
-        adapters["us_history"].get_all_concept_names.assert_called_once()
+        adapters["us_history"].get_concept_aliases.assert_called_once()
 
 
 @pytest.mark.unit
@@ -563,7 +661,7 @@ class TestConcurrentSubjects:
 
         def ask(subject_id: str):
             try:
-                results[subject_id], _, _ = _expand_query(subject_id, question)
+                results[subject_id] = _expand_query(subject_id, question).concepts
             except BaseException as e:  # surfaced below
                 errors.append(e)
 

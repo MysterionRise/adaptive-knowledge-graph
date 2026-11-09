@@ -24,7 +24,7 @@ GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 	docker-build docker-up docker-down docker-logs docker-ps \
 	ingest-books build-kg index-rag pipeline-all embedding-parity \
 	run-api run-frontend dev-setup \
-	eval-rag eval-rag-api eval-compare eval-rescore \
+	eval-rag eval-rag-api eval-rehearsal eval-compare eval-noise-floor eval-rescore \
 	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval
 
 help: ## Show this help message
@@ -57,7 +57,7 @@ install: ## Install runtime dependencies (no dev tools)
 	poetry install --only main
 
 install-dev: ## Install all dependencies including dev tools, and the pre-commit hooks
-	poetry install --without pyirt,pybkt
+	poetry install
 	poetry run pre-commit install
 
 # Tests and code quality
@@ -140,12 +140,22 @@ eval-rag: ## Run the live API KG-RAG evaluation (paced to the /ask rate limit)
 
 eval-rag-api: eval-rag ## Alias for eval-rag
 
+eval-rehearsal: ## Evaluate the rehearsal split only (docs/evals/protocol.md), written to docs/evals/latest-rehearsal.*
+	poetry run python scripts/evaluate_rag.py --api-url $(API_URL) --split rehearsal $(EVAL_ARGS)
+
 eval-compare: ## Compare two eval reports: make eval-compare BASE=old.json HEAD=new.json (exit 1 on regression)
 	@if [ -z "$(BASE)" ] || [ -z "$(HEAD)" ]; then \
 		echo "Usage: make eval-compare BASE=docs/evals/history/<file>.json HEAD=docs/evals/latest.json"; \
 		exit 2; \
 	fi
 	poetry run python scripts/compare_evals.py "$(BASE)" "$(HEAD)"
+
+eval-noise-floor: ## Record the noise floor of two repeat runs: make eval-noise-floor BASE=run1.json HEAD=run2.json
+	@if [ -z "$(BASE)" ] || [ -z "$(HEAD)" ]; then \
+		echo "Usage: make eval-noise-floor BASE=<run 1>.json HEAD=<run 2>.json (two runs of one configuration)"; \
+		exit 2; \
+	fi
+	poetry run python scripts/compare_evals.py "$(BASE)" "$(HEAD)" --noise-floor docs/evals/noise-floor.json
 
 eval-rescore: ## Re-score an eval report from its stored answers: make eval-rescore REPORT=docs/evals/history/<file>.json (RESCORE_ARGS="--check")
 	@if [ -z "$(REPORT)" ]; then \

@@ -258,6 +258,59 @@ class TestGenerateFromTopic:
         mock_llm.generate.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_skips_a_further_reading_bibliography(self):
+        """A bibliography matches the topic through book titles; the quiz uses teaching text."""
+        gen, mock_llm, mock_retriever = _make_generator()
+        mock_retriever.retrieve.return_value = [
+            {
+                "text": "Wood, Gordon S. The Radicalism of the American Revolution. 1992.",
+                "id": "chunk_bib",
+                "section": "Further Reading",
+            },
+            {
+                "text": "The American Revolution began in 1775.",
+                "id": "chunk_1",
+                "section": "The Road to Independence",
+            },
+        ]
+        mock_llm.generate.return_value = json.dumps(
+            {
+                "questions": [
+                    {
+                        "text": "When did the American Revolution begin?",
+                        "options": [
+                            {"id": "a", "text": "1775"},
+                            {"id": "b", "text": "1776"},
+                            {"id": "c", "text": "1774"},
+                            {"id": "d", "text": "1777"},
+                        ],
+                        "correct_option_id": "a",
+                        "explanation": "It began in 1775.",
+                        "difficulty": "easy",
+                    }
+                ]
+            }
+        )
+
+        quiz = await gen.generate_from_topic("The American Revolution", num_questions=1)
+
+        prompt = mock_llm.generate.await_args.kwargs["prompt"]
+        assert "The American Revolution began in 1775." in prompt
+        assert "Gordon S." not in prompt
+        assert quiz.questions[0].source_chunk_id == "chunk_1"
+
+    @pytest.mark.asyncio
+    async def test_only_reference_sections_raises_content_not_found(self):
+        gen, mock_llm, mock_retriever = _make_generator()
+        mock_retriever.retrieve.return_value = [
+            {"text": "Wood, Gordon S. ...", "id": "chunk_bib", "section": "Further Reading"},
+        ]
+
+        with pytest.raises(ContentNotFoundError, match="No content found"):
+            await gen.generate_from_topic("Gordon Wood")
+        mock_llm.generate.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_llm_returns_invalid_json(self):
         gen, mock_llm, mock_retriever = _make_generator()
         mock_retriever.retrieve.return_value = [

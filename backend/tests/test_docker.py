@@ -182,6 +182,7 @@ def test_cpu_dockerfile():
     assert "USER app" in content
     assert "EXPOSE 8000" in content
     _assert_dependency_layer_is_cleaned(content)
+    _assert_project_is_registered(content)
 
 
 def _assert_dependency_layer_is_cleaned(content: str) -> None:
@@ -189,6 +190,15 @@ def _assert_dependency_layer_is_cleaned(content: str) -> None:
     assert "--mount=type=cache,target=/root/.cache" in content
     assert "rm -rf /opt/poetry" in content
     assert "apt-get purge -y --auto-remove" in content
+
+
+def _assert_project_is_registered(content: str) -> None:
+    # The dependency layer skips the root project (--no-root; the sources are copied later), so
+    # the image registers it afterwards, without dependencies, and app_version reports the
+    # pyproject version instead of 0.0.0+unknown (#104)
+    register = content.index("pip install --no-deps --no-cache-dir --editable .")
+    assert content.index("COPY --chown=app:app backend/ ./backend/") < register
+    assert register < content.index("USER app")
 
 
 def test_gpu_dockerfile():
@@ -206,6 +216,7 @@ def test_gpu_dockerfile():
     assert "CUDA_VISIBLE_DEVICES" in content
     assert "EXPOSE 8000" in content
     _assert_dependency_layer_is_cleaned(content)
+    _assert_project_is_registered(content)
 
 
 @pytest.mark.parametrize("dockerfile", [CPU_DOCKERFILE, GPU_DOCKERFILE], ids=["cpu", "gpu"])
@@ -233,14 +244,17 @@ def test_torch_is_cpu_only_on_linux_x86_64():
     torch_entries = [p for p in lock["package"] if p["name"] == "torch"]
     cpu_entry = next(p for p in torch_entries if p["version"].endswith("+cpu"))
     assert cpu_entry["source"]["reference"] == "pytorch-cpu"
-    assert (
-        cpu_entry["markers"]["main"] == 'sys_platform == "linux" and platform_machine == "x86_64"'
-    )
+    assert _main_marker(cpu_entry) == 'sys_platform == "linux" and platform_machine == "x86_64"'
     assert not any(name.startswith("nvidia-") for name in cpu_entry.get("dependencies", {}))
     pypi_entry = next(p for p in torch_entries if "source" not in p)
-    assert (
-        pypi_entry["markers"]["main"] == 'sys_platform != "linux" or platform_machine != "x86_64"'
-    )
+    assert _main_marker(pypi_entry) == 'sys_platform != "linux" or platform_machine != "x86_64"'
+
+
+def _main_marker(entry: dict) -> str:
+    # Poetry writes one string when only the main group constrains the package,
+    # and a per-group table when several groups do
+    markers = entry["markers"]
+    return markers["main"] if isinstance(markers, dict) else markers
 
 
 def test_setup_action_asserts_cpu_torch_instead_of_freeing_disk():
@@ -253,6 +267,20 @@ def test_setup_action_asserts_cpu_torch_instead_of_freeing_disk():
     ci = Path(".github/workflows/ci.yaml").read_text()
     assert "free-disk-space" not in ci
     assert ci.count('assert-cpu-torch: "true"') == 3  # type-check, tests, tribunal
+
+
+def test_all_checks_passed_gates_the_promoted_jobs():
+    """v0.3.0 made the tribunal, E2E, link-check and shellcheck jobs required (#104)."""
+    ci_text = Path(".github/workflows/ci.yaml").read_text()
+    jobs = yaml.safe_load(ci_text)["jobs"]
+    required = set(jobs["all-checks"]["needs"])
+    assert {"tribunal", "e2e-tests", "link-check", "shellcheck"} <= required
+    for job_id in required:
+        # A required job must run on every event and must fail the gate when it fails
+        assert "continue-on-error" not in jobs[job_id], job_id
+        assert "if" not in jobs[job_id], job_id
+        assert "advisory" not in jobs[job_id]["name"].lower(), job_id
+    assert "--without" not in ci_text  # the pyirt/pybkt groups are gone
 
 
 def test_frontend_dockerfile():

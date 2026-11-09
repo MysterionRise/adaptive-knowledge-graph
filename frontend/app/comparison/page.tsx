@@ -8,7 +8,7 @@ import { Loader2, Network, Sparkles } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import ErrorMessage from '@/components/ErrorMessage';
 import MarkdownContent from '@/components/MarkdownContent';
-import SubjectPicker from '@/components/SubjectPicker';
+import PageHeader from '@/components/PageHeader';
 
 type Variant = 'kg' | 'plain';
 
@@ -46,29 +46,14 @@ export default function ComparisonPage() {
   const currentSubject = useAppStore((state) => state.currentSubject);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                KG-RAG vs Regular RAG Comparison
-              </h1>
-              <p className="mt-2 text-gray-600">
-                See how knowledge graph expansion improves answer quality
-              </p>
-            </div>
-            <SubjectPicker />
-          </div>
-        </div>
-      </header>
+    <>
+      <PageHeader title="KG-RAG vs Regular RAG Comparison" />
 
       {/* Main Content: a new subject starts a fresh comparison (and cancels running ones) */}
       <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <ComparisonWorkspace key={currentSubject} subject={currentSubject} />
       </main>
-    </div>
+    </>
   );
 }
 
@@ -200,7 +185,7 @@ function ComparisonWorkspace({ subject }: { subject: string }) {
                 </h3>
               </div>
               <p className="text-sm text-green-700 mt-1">
-                Enhanced with knowledge graph relationships
+                Graph concepts added to the keyword search
               </p>
             </div>
             <div className="p-6">
@@ -225,7 +210,7 @@ function ComparisonWorkspace({ subject }: { subject: string }) {
                 </h3>
               </div>
               <p className="text-sm text-gray-700 mt-1">
-                Standard semantic search without KG
+                The same hybrid search, without the graph
               </p>
             </div>
             <div className="p-6">
@@ -244,23 +229,26 @@ function ComparisonWorkspace({ subject }: { subject: string }) {
       {hasAnswer && (
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-blue-900 mb-3">
-            Why KG Expansion Matters
+            How KG Expansion Works
           </h3>
           <div className="space-y-2 text-sm text-blue-800">
             <p>
-              <strong>Knowledge Graph Expansion</strong> improves answer quality by:
+              With <strong>knowledge graph expansion</strong> on:
             </p>
             <ul className="list-disc list-inside space-y-1 ml-4">
+              <li>Concepts named in the question are matched in the subject&apos;s knowledge graph.</li>
               <li>
-                Identifying prerequisite concepts needed to understand the answer
+                The matched concepts are added to the keyword half of the hybrid search; the
+                embedding half searches with the question as asked.
               </li>
               <li>
-                Including related concepts that provide additional context
+                Their graph neighbours are listed as related concepts but not searched: adding them
+                pulled retrieval off-topic in the evaluation.
               </li>
               <li>
-                Retrieving more comprehensive and relevant chunks from the textbook
+                Whether the graph improves answers is measured on a golden question set; Demo Status
+                shows the latest run.
               </li>
-              <li>Providing a more complete understanding of the topic</li>
             </ul>
           </div>
         </div>
@@ -297,20 +285,26 @@ interface ComparisonResultProps {
   showKGInfo: boolean;
 }
 
+/** Related concepts listed by name before "and N more". */
+const RELATED_PREVIEW_COUNT = 8;
+
 function ComparisonResult({ response, showKGInfo }: ComparisonResultProps) {
+  const related = response.related_concepts ?? [];
+  const hiddenRelated = related.length - RELATED_PREVIEW_COUNT;
+
   return (
     <div className="space-y-4">
       {/* Answer */}
       <div>
         <h4 className="text-sm font-semibold text-gray-700 mb-2">Answer:</h4>
-        <MarkdownContent>{response.answer}</MarkdownContent>
+        <MarkdownContent className="text-sm">{response.answer}</MarkdownContent>
       </div>
 
       {/* KG Expansion Info */}
       {showKGInfo && response.expanded_concepts && response.expanded_concepts.length > 0 && (
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
           <h4 className="text-sm font-semibold text-green-900 mb-2">
-            Expanded Concepts ({response.expanded_concepts.length}):
+            Concepts used ({response.expanded_concepts.length}):
           </h4>
           <div className="flex flex-wrap gap-1.5">
             {response.expanded_concepts.map((concept, idx) => (
@@ -322,6 +316,12 @@ function ComparisonResult({ response, showKGInfo }: ComparisonResultProps) {
               </span>
             ))}
           </div>
+          {related.length > 0 && (
+            <p className="mt-2 text-xs text-green-800">
+              {`Related in the graph, not searched: ${related.slice(0, RELATED_PREVIEW_COUNT).join(', ')}`}
+              {hiddenRelated > 0 && ` and ${hiddenRelated} more`}
+            </p>
+          )}
         </div>
       )}
 

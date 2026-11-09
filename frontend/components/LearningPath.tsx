@@ -3,7 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { describeError } from '@/lib/api-errors';
-import { masteryLevelOf } from '@/lib/mastery';
+import {
+  MASTERY_BAND_LABELS,
+  MASTERY_BAND_STYLES,
+  masteryBand,
+  masteryLevelOf,
+  type MasteryBand,
+} from '@/lib/mastery';
 import { useAppStore } from '@/lib/store';
 import type { LearningPathResponse } from '@/lib/types';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -34,8 +40,6 @@ interface LearningPathProps {
   className?: string;
 }
 
-type MasteryStatus = 'complete' | 'current' | 'pending';
-
 /** Prerequisites in learning order (furthest from the target first), then the target. */
 function buildSteps(path: LearningPathResponse, conceptName: string): LearningPathStep[] {
   const target = path.target_concept || conceptName;
@@ -53,28 +57,8 @@ function depthLabel(step: LearningPathStep): string {
   return step.depth === 1 ? 'Direct prerequisite' : `${step.depth} steps before the target`;
 }
 
-const getMasteryStatus = (mastery: number): MasteryStatus => {
-  if (mastery >= 0.7) return 'complete';
-  if (mastery >= 0.3) return 'current';
-  return 'pending';
-};
-
-const getMasteryColor = (status: MasteryStatus) => {
-  switch (status) {
-    case 'complete':
-      return 'text-emerald-500 bg-emerald-50 border-emerald-200';
-    case 'current':
-      return 'text-blue-500 bg-blue-50 border-blue-200';
-    case 'pending':
-      return 'text-gray-400 bg-gray-50 border-gray-200';
-  }
-};
-
-const getProgressBarColor = (mastery: number) => {
-  if (mastery >= 0.7) return 'bg-emerald-500';
-  if (mastery >= 0.4) return 'bg-blue-500';
-  return 'bg-gray-300';
-};
+// Order of the bands in the summary
+const SUMMARY_BANDS: MasteryBand[] = ['mastered', 'in_progress', 'to_learn'];
 
 export default function LearningPath({
   conceptName,
@@ -140,6 +124,7 @@ export default function LearningPath({
   }
 
   const masteryLevels = steps.map((step) => masteryLevelOf(masteryMap, step.name));
+  const bands = masteryLevels.map(masteryBand);
 
   return (
     <div className={`relative ${className}`}>
@@ -166,10 +151,11 @@ export default function LearningPath({
         <ol aria-label={`Learning path to ${concept}`}>
           {steps.map((step, idx) => {
             const mastery = masteryLevels[idx];
-            const status = getMasteryStatus(mastery);
+            const band = bands[idx];
+            const bandStyles = MASTERY_BAND_STYLES[band];
             const isLast = idx === steps.length - 1;
             const isTarget = step.isTarget;
-  
+
             return (
               <li key={step.name} className="relative pl-16 pb-6 last:pb-0">
                 {/* Node indicator */}
@@ -177,20 +163,20 @@ export default function LearningPath({
                   className={`absolute left-4 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
                     isTarget
                       ? 'bg-amber-500 border-amber-400'
-                      : status === 'complete'
+                      : band === 'mastered'
                       ? 'bg-emerald-500 border-emerald-400'
-                      : status === 'current'
+                      : band === 'in_progress'
                       ? 'bg-blue-500 border-blue-400'
                       : 'bg-white border-gray-300'
                   }`}
                   aria-hidden="true"
                 >
-                  {status === 'complete' && !isTarget && (
+                  {band === 'mastered' && !isTarget && (
                     <CheckCircle2 className="w-3 h-3 text-white" />
                   )}
                   {isTarget && <Target className="w-3 h-3 text-white" />}
                 </div>
-  
+
                 {/* Arrow connector */}
                 {!isLast && (
                   <ArrowDown
@@ -198,12 +184,12 @@ export default function LearningPath({
                     aria-hidden="true"
                   />
                 )}
-  
+
                 {/* Concept card: the title button covers the card, the actions sit above it */}
                 <div
                   className={`relative p-4 rounded-lg border-2 transition-all hover:shadow-md ${
                     onConceptClick ? 'cursor-pointer' : ''
-                  } ${isTarget ? 'border-amber-300 bg-amber-50' : getMasteryColor(status)}`}
+                  } ${isTarget ? 'border-amber-300 bg-amber-50' : bandStyles.chip}`}
                 >
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex-1">
@@ -229,27 +215,24 @@ export default function LearningPath({
                       </div>
                       <p className="text-xs text-gray-500 mt-1">{depthLabel(step)}</p>
                     </div>
-  
+
                     {/* Mastery percentage */}
                     <div className="text-right">
-                      <span className={`text-lg font-bold ${
-                        mastery >= 0.7 ? 'text-emerald-600' :
-                        mastery >= 0.4 ? 'text-blue-600' : 'text-gray-400'
-                      }`}>
+                      <span className={`text-lg font-bold ${bandStyles.text}`}>
                         {Math.round(mastery * 100)}%
                       </span>
                       <p className="text-xs text-gray-500">mastery</p>
                     </div>
                   </div>
-  
+
                   {/* Progress bar */}
                   <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-3" aria-hidden="true">
                     <div
-                      className={`h-full transition-all duration-500 ${getProgressBarColor(mastery)}`}
+                      className={`h-full transition-all duration-500 ${bandStyles.bar}`}
                       style={{ width: `${mastery * 100}%` }}
                     />
                   </div>
-  
+
                   {/* Actions */}
                   <div className="relative z-10 flex gap-2">
                     <button
@@ -282,27 +265,18 @@ export default function LearningPath({
       <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-emerald-500" aria-hidden="true" />
-              <span className="text-gray-600">Mastered</span>
-              <span className="font-semibold text-gray-900">
-                {masteryLevels.filter((m) => m >= 0.7).length}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-blue-500" aria-hidden="true" />
-              <span className="text-gray-600">In Progress</span>
-              <span className="font-semibold text-gray-900">
-                {masteryLevels.filter((m) => m >= 0.3 && m < 0.7).length}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-gray-300" aria-hidden="true" />
-              <span className="text-gray-600">To Learn</span>
-              <span className="font-semibold text-gray-900">
-                {masteryLevels.filter((m) => m < 0.3).length}
-              </span>
-            </div>
+            {SUMMARY_BANDS.map((band) => (
+              <div key={band} className="flex items-center gap-1.5">
+                <div
+                  className={`w-3 h-3 rounded-full ${MASTERY_BAND_STYLES[band].bar}`}
+                  aria-hidden="true"
+                />
+                <span className="text-gray-600">{MASTERY_BAND_LABELS[band]}</span>
+                <span className="font-semibold text-gray-900">
+                  {bands.filter((b) => b === band).length}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -809,7 +809,7 @@ function QuizSession({ subject, initialTopic }: { subject: string; initialTopic?
                 <Dialog
                     labelledBy={ids.results}
                     onClose={handleCloseResults}
-                    panelClassName="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl transform animate-in fade-in zoom-in duration-300 max-h-[90vh] overflow-y-auto relative"
+                    panelClassName="bg-white rounded-2xl p-8 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto relative"
                 >
                     {/* Close button */}
                     <button

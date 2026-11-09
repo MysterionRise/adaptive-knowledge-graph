@@ -6,22 +6,27 @@ Builds a concept graph from OpenStax textbook records:
 1. Author-marked key terms (``**term**{: data-type="term"}``) and glossary
    definitions are read from the raw text; the text is then cleaned of markup and
    of end-of-section scaffolding (review questions, glossary, references).
-2. YAKE keywords from the cleaned prose complement the key terms. Every candidate
-   is normalised, stop-concept filtered and merged with its case/plural variants;
-   keyword fragments of longer concepts ("United" in "United States") are dropped.
+2. YAKE keywords from the cleaned prose complement the key terms; a keyword the text
+   mostly follows with a Roman numeral becomes the numbered names ("World War I",
+   "World War II"). Every candidate is normalised, stop-concept filtered and merged
+   with its case/plural variants; keyword fragments of longer concepts ("United" in
+   "United States") are dropped.
 3. The ``max_concepts`` best candidates become concept nodes. COVERS edges link
-   modules to the concepts extracted from them; RELATED edges link concepts that
-   share at least ``cooccurrence_threshold`` paragraphs; PREREQ edges come from
-   glossary definitions (a concept named in another concept's definition is its
+   modules to the concepts extracted from them; RELATED edges link each concept to
+   its strongest associations by normalised pointwise mutual information over
+   paragraphs (at least ``cooccurrence_threshold`` shared paragraphs, at most
+   ``related_top_k`` partners chosen per concept); PREREQ edges come from glossary
+   definitions (a concept named in another concept's definition is its
    prerequisite) and, optionally, from cue phrases such as "builds on".
 4. Importance is PageRank over the RELATED/PREREQ graph.
 """
 
+import math
 import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import networkx as nx
 from loguru import logger
@@ -34,12 +39,14 @@ from backend.app.kg.markup import (
     strip_structural_sections,
 )
 from backend.app.kg.normalize import (
+    ROMAN_NUMERAL,
     concept_key,
     display_name,
     is_acronym,
     normalize_concept,
     singularize,
     split_abbreviations,
+    with_numerals,
 )
 from backend.app.kg.schema import (
     ConceptNode,
@@ -57,6 +64,7 @@ from backend.app.kg.stopwords import (
 
 __all__ = [
     "DEFAULT_COOCCURRENCE_THRESHOLD",
+    "DEFAULT_RELATED_TOP_K",
     "KGBuilder",
     "PREREQ_PATTERNS",
     "STOP_CONCEPTS",
@@ -64,8 +72,17 @@ __all__ = [
     "is_stop_concept",
 ]
 
-DEFAULT_COOCCURRENCE_THRESHOLD = 5
-"""Paragraphs two concepts must share before they get a RELATED edge."""
+DEFAULT_COOCCURRENCE_THRESHOLD = 2
+"""Paragraphs two concepts must share before they can get a RELATED edge."""
+
+DEFAULT_RELATED_TOP_K = 8
+"""Strongest associations each concept chooses for its RELATED edges."""
+
+RELATED_DEGREE_LIMIT = 3
+"""No concept gets more than this many times ``related_top_k`` RELATED edges."""
+
+RELATED_METHOD = "npmi"
+"""How RELATED edges are scored, recorded in their provenance and the build report."""
 
 MAX_KEYWORD_WORDS = 4
 """Longest YAKE phrase kept; author-marked key terms are not limited."""
@@ -103,6 +120,8 @@ _WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['.\-][A-Za-z0-9]+)*")
 _PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[\"“‘(\[]?[A-Z0-9])|\n+")
 _LINE_END_RE = re.compile(r"(?<![.!?:;])[ \t]*\n")
+_SENTENCE_END_RE = re.compile(r"[.!?][\"'”’)\]]*$")
+_ROMAN_NUMERAL_RE = re.compile(ROMAN_NUMERAL)
 # Keyword phrases that open with a number or a comparative/quantity modifier are
 # descriptions, not concepts ("Million African Americans", "Higher Price").
 _MODIFIER_PREFIX_RE = re.compile(
@@ -196,6 +215,8 @@ class _Candidate:
     aliases: set[str] = field(default_factory=set)
     modules: list[str] = field(default_factory=list)
     key_term: bool = False
+    emphasised: bool = False
+    """A key term shown in bold or defined in a glossary, not only marked ``no-emphasis``."""
     definition: str | None = None
     definition_module: str | None = None
     preferred: str | None = None
@@ -227,6 +248,7 @@ class _Candidate:
         self.aliases.update(other.aliases)
         self.modules.extend(module for module in other.modules if module not in self.modules)
         self.key_term = self.key_term or other.key_term
+        self.emphasised = self.emphasised or other.emphasised
 
 
 @dataclass
@@ -273,6 +295,23 @@ def _is_name_word(word: str) -> bool:
     return word[:1].isupper() and word.lower() not in FUNCTION_WORDS
 
 
+def _is_title_line(line: str) -> bool:
+    """
+    A line in Title Case that is not a sentence: "The Stamp Act Crisis", "Section Summary".
+
+    It does not end like a sentence, and it has at least two words other than function
+    words, all of them capitalised.
+    """
+    if _SENTENCE_END_RE.search(line.rstrip()):
+        return False
+    words = [
+        word
+        for word in _WORD_RE.findall(line)
+        if word[:1].isalpha() and word.lower() not in FUNCTION_WORDS
+    ]
+    return len(words) >= 2 and all(word[:1].isupper() for word in words)
+
+
 @dataclass
 class _CaseStats:
     """How single words are capitalised in running text, keyed by singular lower-case word."""
@@ -285,10 +324,17 @@ class _CaseStats:
 
     @classmethod
     def from_prose(cls, texts: Iterable[str]) -> "_CaseStats":
-        """Count mid-sentence mentions only, so a capital at the start of a sentence is ignored."""
+        """
+        Count mid-sentence mentions only, so a capital at the start of a sentence is ignored.
+
+        Title Case lines (headings, captions, table labels) are skipped: their capitals
+        say nothing about whether a word is a name.
+        """
         stats = cls()
         for text in texts:
-            for sentence in _SENTENCE_SPLIT_RE.split(text.replace("’", "'")):
+            lines = text.replace("’", "'").split("\n")
+            prose = "\n".join(line for line in lines if not _is_title_line(line))
+            for sentence in _SENTENCE_SPLIT_RE.split(prose):
                 matches = list(_WORD_RE.finditer(sentence))
                 for i in range(1, len(matches)):
                     word = matches[i].group()
@@ -310,6 +356,19 @@ class _CaseStats:
                     else:  # end of sentence or punctuation follows
                         stats.phrase_end[key] += 1
         return stats
+
+    def is_name_part(self, key: str) -> bool:
+        """
+        True for a word mostly written as part of a longer name: "Townshend" in "Townshend Acts".
+
+        It must be capitalised in most mid-sentence mentions, and at least
+        ``MAX_NAME_PART_RATIO`` of those mentions sit next to another capitalised word.
+        """
+        mentions, capitalised = self.mentions[key], self.capitalised[key]
+        if mentions == 0 or capitalised < MIN_CAPITALISED_RATIO * mentions:
+            return False
+        limit = MAX_NAME_PART_RATIO * capitalised
+        return self.after_name_word[key] >= limit or self.before_name_word[key] >= limit
 
     def is_proper_noun(self, key: str) -> bool:
         """
@@ -354,6 +413,9 @@ class _PhraseIndex:
             if is_acronym(surface):  # "START" must not match the verb "start"
                 variants.add((tuple(lower), tuple(words)))
                 continue
+            if _ROMAN_NUMERAL_RE.fullmatch(words[-1]):  # "World War I" has no plural
+                variants.add((tuple(lower), None))
+                continue
             last = lower[-1]
             forms = {last, singularize(last), last + "s", last + "es"}
             if last.endswith("y"):
@@ -389,6 +451,70 @@ class _PhraseIndex:
         return kept
 
 
+def _associations(
+    present_by_paragraph: list[set[str]], *, min_count: int, top_k: int
+) -> dict[tuple[str, str], tuple[float, int]]:
+    """
+    RELATED edges by association strength: ``{(a, b): (npmi, shared paragraphs)}``, a < b.
+
+    A pair's score is its normalised pointwise mutual information over paragraphs,
+    ``log(p(a, b) / (p(a) p(b))) / -log(p(a, b))``: 1 when two concepts only ever
+    appear together, 0 when they meet as often as chance predicts. A raw count would
+    link the most frequent concepts to everything ("Price", "Firm") and leave rarer,
+    specific pairs ("Stamp Act" and "Sons of Liberty") unlinked.
+
+    A pair needs ``min_count`` shared paragraphs and a positive score. Each concept
+    chooses its ``top_k`` strongest partners, and a pair chosen by either side becomes
+    an edge. Edges are then accepted strongest first while both ends have fewer than
+    ``RELATED_DEGREE_LIMIT * top_k`` edges, so a concept many others choose stays
+    bounded. Ties break on the shared count, then the keys, so the result does not
+    depend on the paragraph order.
+    """
+    total = len(present_by_paragraph)
+    paragraphs: Counter[str] = Counter()
+    shared: Counter[tuple[str, str]] = Counter()
+    for present in present_by_paragraph:
+        ordered = sorted(present)
+        paragraphs.update(ordered)
+        for i, first in enumerate(ordered):
+            for second in ordered[i + 1 :]:
+                shared[(first, second)] += 1
+
+    scores: dict[tuple[str, str], float] = {}
+    for (first, second), count in shared.items():
+        if count < min_count:
+            continue
+        joint = count / total
+        if joint == 1.0:  # both concepts in every paragraph
+            scores[(first, second)] = 1.0
+            continue
+        expected = (paragraphs[first] / total) * (paragraphs[second] / total)
+        npmi = math.log(joint / expected) / -math.log(joint)
+        if npmi > 0:
+            scores[(first, second)] = npmi
+
+    def strength(pair: tuple[str, str]) -> tuple[float, int, tuple[str, str]]:
+        return (-scores[pair], -shared[pair], pair)
+
+    partners: dict[str, list[tuple[str, str]]] = {}
+    for pair in scores:
+        for key in pair:
+            partners.setdefault(key, []).append(pair)
+    chosen = {pair for pairs in partners.values() for pair in sorted(pairs, key=strength)[:top_k]}
+
+    limit = RELATED_DEGREE_LIMIT * top_k
+    degree: Counter[str] = Counter()
+    edges: dict[tuple[str, str], tuple[float, int]] = {}
+    for pair in sorted(chosen, key=strength):
+        first, second = pair
+        if degree[first] >= limit or degree[second] >= limit:
+            continue
+        degree[first] += 1
+        degree[second] += 1
+        edges[pair] = (scores[pair], shared[pair])
+    return edges
+
+
 def _contains(longer: list[str], shorter: list[str]) -> bool:
     """True when the key ``shorter`` is a contiguous word run of the key ``longer``."""
     size = len(shorter)
@@ -407,6 +533,7 @@ class KGBuilder:
         max_concepts: int = 200,
         *,
         cooccurrence_threshold: int = DEFAULT_COOCCURRENCE_THRESHOLD,
+        related_top_k: int = DEFAULT_RELATED_TOP_K,
         prereq_definitions: bool = True,
         prereq_patterns: bool = False,
         min_concept_length: int = 3,
@@ -416,7 +543,11 @@ class KGBuilder:
 
         Args:
             max_concepts: Maximum number of concepts to keep.
-            cooccurrence_threshold: Paragraphs two concepts must share for a RELATED edge.
+            cooccurrence_threshold: Paragraphs two concepts must share before they can
+                get a RELATED edge.
+            related_top_k: Strongest associations (by NPMI) each concept chooses for its
+                RELATED edges; no concept gets more than ``RELATED_DEGREE_LIMIT`` times
+                as many.
             prereq_definitions: Create PREREQ edges from glossary definitions: a concept
                 named in another concept's definition is its prerequisite ("quantity
                 demanded" -> "equilibrium"). Precise on the OpenStax books, so on by default.
@@ -431,8 +562,11 @@ class KGBuilder:
             raise ValueError("max_concepts must be at least 1")
         if cooccurrence_threshold < 1:
             raise ValueError("cooccurrence_threshold must be at least 1")
+        if related_top_k < 1:
+            raise ValueError("related_top_k must be at least 1")
         self.max_concepts = max_concepts
         self.cooccurrence_threshold = cooccurrence_threshold
+        self.related_top_k = related_top_k
         self.prereq_definitions = prereq_definitions
         self.prereq_patterns = prereq_patterns
         self.min_concept_length = min_concept_length
@@ -447,6 +581,20 @@ class KGBuilder:
             features=None,
         )
 
+    @property
+    def parameters(self) -> dict[str, Any]:
+        """The settings that shape the graph, for the build report."""
+        return {
+            "max_concepts": self.max_concepts,
+            "min_concept_length": self.min_concept_length,
+            "related_method": RELATED_METHOD,
+            "cooccurrence_threshold": self.cooccurrence_threshold,
+            "related_top_k": self.related_top_k,
+            "related_max_degree": RELATED_DEGREE_LIMIT * self.related_top_k,
+            "prereq_definitions": self.prereq_definitions,
+            "prereq_patterns": self.prereq_patterns,
+        }
+
     # ------------------------------------------------------------------ extraction
 
     def _keywords(self, prose: str) -> list[str]:
@@ -455,12 +603,17 @@ class KGBuilder:
         if not text.strip():
             return []
         try:
-            return [keyword for keyword, _score in self.keyword_extractor.extract_keywords(text)]
+            keywords = [
+                keyword for keyword, _score in self.keyword_extractor.extract_keywords(text)
+            ]
         except Exception as e:  # YAKE can fail on degenerate input
             logger.warning(f"YAKE extraction failed: {e}")
             return []
+        return [numbered for keyword in keywords for numbered in with_numerals(keyword, prose)]
 
-    def _add_candidate(self, found: dict[str, _Candidate], raw: str, *, key_term: bool) -> None:
+    def _add_candidate(
+        self, found: dict[str, _Candidate], raw: str, *, key_term: bool, emphasised: bool = False
+    ) -> None:
         name, aliases = split_abbreviations(normalize_concept(raw))
         name = normalize_concept(name)
         # Author key terms may be short ("M1", "M2"); keywords keep min_concept_length.
@@ -475,10 +628,15 @@ class KGBuilder:
         (candidate.key_surfaces if key_term else candidate.surfaces)[name] += 1
         candidate.aliases.update(aliases)
         candidate.key_term = candidate.key_term or key_term
+        candidate.emphasised = candidate.emphasised or emphasised
 
-    def _candidates(self, prose: str, key_terms: Iterable[str]) -> dict[str, _Candidate]:
+    def _candidates(
+        self, prose: str, key_terms: Iterable[str], unemphasised: Iterable[str] = ()
+    ) -> dict[str, _Candidate]:
         found: dict[str, _Candidate] = {}
         for term in key_terms:
+            self._add_candidate(found, term, key_term=True, emphasised=True)
+        for term in unemphasised:
             self._add_candidate(found, term, key_term=True)
         for keyword in self._keywords(prose):
             self._add_candidate(found, keyword, key_term=False)
@@ -502,9 +660,13 @@ class KGBuilder:
         Returns:
             Concept display names, key terms first.
         """
-        marked = [*key_terms, *extract_marked_terms(text), *extract_glossary(text)]
+        marked = [
+            *key_terms,
+            *extract_marked_terms(text, emphasised=True),
+            *extract_glossary(text),
+        ]
         prose = clean_text(strip_structural_sections(text))
-        found = self._candidates(prose, marked)
+        found = self._candidates(prose, marked, extract_marked_terms(text, emphasised=False))
         occurrences = Counter(o.key for o in _PhraseIndex(found.values()).find(*_words(prose)))
         kept = self._drop_fragments(found, occurrences)
         return [c.name for c in sorted(kept.values(), key=lambda c: not c.key_term)]
@@ -578,8 +740,9 @@ class KGBuilder:
                 definitions.setdefault(key, (definition, module.module_id))
             prose = clean_text(strip_structural_sections(raw))
             prose_by_module[module.module_id] = prose
-            marked = [*module.key_terms, *extract_marked_terms(raw), *glossary]
-            for key, found in self._candidates(prose, marked).items():
+            marked = [*module.key_terms, *extract_marked_terms(raw, emphasised=True), *glossary]
+            unemphasised = extract_marked_terms(raw, emphasised=False)
+            for key, found in self._candidates(prose, marked, unemphasised).items():
                 found.modules.append(module.module_id)
                 candidates.setdefault(key, _Candidate(key=key)).merge(found)
         self._merge_acronyms(candidates)
@@ -707,11 +870,14 @@ class KGBuilder:
         """
         Pick the ``max_concepts`` best candidates.
 
-        Author key terms are always eligible. A YAKE-only phrase must be a top keyword
-        of at least ``MIN_KEYWORD_MODULE_RATIO`` of the modules and, in a corpus of at
-        least ``MIN_MODULES_FOR_DOCUMENT_RATIO`` modules, be mentioned in at most
-        ``MAX_KEYWORD_DOCUMENT_RATIO`` of them; fragments of longer concepts are
-        dropped. Candidates are ranked by the number of modules mentioning them.
+        Author key terms are always eligible, except a single word marked only with
+        ``no-emphasis`` that the text mostly writes as part of a longer name ("Charles
+        **Townshend**", "the Townshend Acts"), which is judged as a keyword. A YAKE-only
+        phrase must be a top keyword of at least ``MIN_KEYWORD_MODULE_RATIO`` of the
+        modules and, in a corpus of at least ``MIN_MODULES_FOR_DOCUMENT_RATIO`` modules,
+        be mentioned in at most ``MAX_KEYWORD_DOCUMENT_RATIO`` of them; fragments of
+        longer concepts are dropped. Candidates are ranked by the number of modules
+        mentioning them.
 
         Single-word keywords are mostly generic ("War", "Government", "White"), so they
         rank below key terms and multi-word phrases, with one exception: up to
@@ -719,6 +885,14 @@ class KGBuilder:
         proper nouns ("Constitution", "Congress", "Union", "Lincoln"), most widely
         mentioned first. Other single words only fill slots nothing else wants.
         """
+        for candidate in candidates.values():
+            if (
+                candidate.key_term
+                and not candidate.emphasised
+                and candidate.is_single_word
+                and case_stats.is_name_part(candidate.key)
+            ):
+                candidate.key_term = False
         min_modules = max(1, int(module_count * MIN_KEYWORD_MODULE_RATIO))
         eligible = {
             key: c for key, c in candidates.items() if c.key_term or len(c.modules) >= min_modules
@@ -765,36 +939,37 @@ class KGBuilder:
         self, present_by_paragraph: list[set[str]], names: dict[str, str]
     ) -> None:
         """
-        Create RELATED edges between concepts that share paragraphs.
+        Create RELATED edges between strongly associated concepts (see ``_associations``).
+
+        The edge weight is the association score (NPMI, 0-1).
 
         Args:
             present_by_paragraph: Concept keys found in each paragraph.
             names: Concept key -> display name.
         """
-        cooccurrence: Counter[tuple[str, str]] = Counter()
-        for present in present_by_paragraph:
-            ordered = sorted(present)
-            for i, first in enumerate(ordered):
-                for second in ordered[i + 1 :]:
-                    cooccurrence[(first, second)] += 1
-
-        threshold = self.cooccurrence_threshold
-        related = 0
-        for (first, second), count in sorted(cooccurrence.items()):
-            if count < threshold:
-                continue
+        edges = _associations(
+            present_by_paragraph, min_count=self.cooccurrence_threshold, top_k=self.related_top_k
+        )
+        for (first, second), (score, count) in sorted(edges.items()):
             self.kg.add_relationship(
                 Relationship(
                     source=names[first],
                     target=names[second],
                     type=RelationshipType.RELATED,
-                    weight=min(count / 10.0, 1.0),  # Normalize to 0-1
+                    weight=round(score, 4),
                     confidence=0.7,  # Medium confidence for co-occurrence
                     evidence=None,
+                    provenance={
+                        "source": "cooccurrence",
+                        "method": RELATED_METHOD,
+                        "paragraphs": str(count),
+                    },
                 )
             )
-            related += 1
-        logger.info(f"Mined {related} RELATED relationships (threshold={threshold})")
+        logger.info(
+            f"Mined {len(edges)} RELATED relationships ({RELATED_METHOD}, "
+            f"min {self.cooccurrence_threshold} paragraphs, top {self.related_top_k})"
+        )
 
     @staticmethod
     def _definition_prereqs(

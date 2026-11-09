@@ -261,8 +261,28 @@ class TestRemediationBlock:
         assert materials[0].relevance_score == 0.92
         assert materials[1].text == "Limits form the foundation of calculus."
 
-        # Verify retrieve was called with the concept and top_k=2
-        mock_retriever.retrieve.assert_called_once_with(query="calculus", top_k=2)
+        # Verify retrieve was called with the concept and a few candidates beyond top_k=2
+        mock_retriever.retrieve.assert_called_once_with(query="calculus", top_k=5)
+
+    @pytest.mark.asyncio
+    async def test_reading_materials_skip_reference_sections(self):
+        """A "Further Reading" bibliography is not offered as reading material."""
+        svc, _, mock_retriever, _, _, mock_session = _build_mocks()
+
+        mock_session.run.return_value = [{"name": "prereq", "importance": 0.5}]
+        mock_retriever.retrieve.return_value = [
+            {"text": "Wood, Gordon S. The Radicalism of ...", "section": "Further Reading"},
+            {"text": "The Stamp Act taxed printed paper.", "section": "The Stamp Act"},
+            {"text": "Bailyn, Bernard. The Ideological ...", "section": "further reading "},
+            {"text": "Colonists boycotted British goods.", "section": "Colonial Protest"},
+            {"text": "A third teaching passage.", "section": "Townshend Acts"},
+        ]
+
+        questions = [_make_question("stamp act", correct=False)]
+        result = await svc.generate_recommendations("topic", questions)
+
+        materials = result.remediation[0].reading_materials
+        assert [m.section for m in materials] == ["The Stamp Act", "Colonial Protest"]
 
     @pytest.mark.asyncio
     async def test_no_remediation_for_advancement_path(self):

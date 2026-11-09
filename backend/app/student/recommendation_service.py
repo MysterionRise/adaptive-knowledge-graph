@@ -12,7 +12,7 @@ from loguru import logger
 from backend.app.core.subjects import get_subject
 from backend.app.kg.neo4j_adapter import Neo4jAdapter, get_neo4j_adapter
 from backend.app.nlp.llm_client import LLMClient, get_llm_client
-from backend.app.rag.retriever import OpenSearchRetriever, get_retriever
+from backend.app.rag.retriever import OpenSearchRetriever, get_retriever, is_reference_section
 from backend.app.student.student_service import StudentService, get_student_service
 from backend.app.ui_payloads.recommendations import (
     AdvancementBlock,
@@ -241,7 +241,12 @@ class RecommendationService:
     def _fetch_reading_materials(self, concept: str, top_k: int = 2) -> list[ReadingMaterial]:
         """Fetch reading material chunks from OpenSearch."""
         try:
-            chunks = self.retriever.retrieve(query=concept, top_k=top_k)
+            # A few extra candidates, so that skipping reference sections still leaves top_k
+            chunks = [
+                chunk
+                for chunk in self.retriever.retrieve(query=concept, top_k=top_k + 3)
+                if not is_reference_section(chunk)
+            ][:top_k]
             return [
                 ReadingMaterial(
                     text=chunk["text"],

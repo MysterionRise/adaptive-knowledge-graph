@@ -58,8 +58,9 @@ test.describe('Comparison Page', () => {
     await expect(kgPanel(page).locator('strong')).toHaveText('With prerequisite context:');
     await expect(kgPanel(page).getByRole('listitem')).toHaveText(tutorAnswer.expanded_concepts);
     await expect(plainPanel(page).getByText(plainRagAnswer)).toBeVisible();
-    await expect(kgPanel(page).getByText('Expanded Concepts (2):')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Why KG Expansion Matters' })).toBeVisible();
+    await expect(kgPanel(page).getByText('Concepts used (2):')).toBeVisible();
+    await expect(kgPanel(page).getByText('Related in the graph, not searched: Townshend Acts')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'How KG Expansion Works' })).toBeVisible();
 
     const payloads = api.calls('POST /ask').map((request) => request.postDataJSON());
     expect(payloads).toHaveLength(2);
@@ -84,7 +85,7 @@ test.describe('Comparison Page', () => {
       await expect(panel.getByRole('alert')).toContainText('Unable to get this answer.');
       await expect(panel.getByRole('alert')).toContainText('An internal error occurred');
     }
-    await expect(page.getByRole('heading', { name: 'Why KG Expansion Matters' })).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'How KG Expansion Works' })).toBeHidden();
   });
 
   test('keeps one answer when the other fails and retries the failed one', async ({ page, api }) => {

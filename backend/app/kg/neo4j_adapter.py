@@ -249,24 +249,51 @@ class Neo4jAdapter:
 
     def query_concept_neighbors(self, concept_name: str, max_hops: int = 1) -> list[dict]:
         """
-        Query neighboring concepts.
+        Query neighboring concepts, the most strongly linked first.
+
+        Paths follow RELATED and PREREQ edges only. A neighbour's ``weight`` is its
+        strongest association: over the paths to it, the product of the RELATED edge
+        weights (association scores, #291). A PREREQ edge has a fixed weight rather than
+        a score, so it counts as 0 here, and neighbours linked only through prerequisites
+        ("Good" for "Demand") follow the associated ones. Ties go to the more important
+        concept, then the name, so the LIMIT keeps the same neighbours.
+
+        ``edges`` and ``provenance`` describe the strongest path: each edge's type and its
+        ``provenance_source`` ("cooccurrence", "glossary", "cue_phrase"; empty when the
+        build did not record one), for the retrieval trace (#216).
 
         Args:
             concept_name: Name of the concept
             max_hops: Maximum number of relationship hops
 
         Returns:
-            List of neighbor concept dicts
+            Neighbour dicts: name, importance_score, key_term, weight, edges, provenance
         """
         concept_label = self._get_label("Concept")
         hops = max(1, int(max_hops))  # interpolated into the query, so force an int
         with self._get_session() as session:
             query = f"""
-            MATCH (c:{concept_label} {{name: $name}})-[r*1..{hops}]-(neighbor:{concept_label})
-            RETURN DISTINCT neighbor.name as name,
+            MATCH path = (c:{concept_label} {{name: $name}})
+                         -[:RELATED|PREREQ*1..{hops}]-(neighbor:{concept_label})
+            WHERE neighbor <> c
+            WITH neighbor, path,
+                 reduce(w = 1.0, r IN relationships(path) |
+                     w * CASE type(r) WHEN 'RELATED' THEN coalesce(r.weight, 0.0) ELSE 0.0 END
+                 ) AS path_weight
+            ORDER BY path_weight DESC, length(path)
+            WITH neighbor,
+                 collect({{
+                     weight: path_weight,
+                     edges: [r IN relationships(path) | type(r)],
+                     provenance: [r IN relationships(path) | coalesce(r.provenance_source, '')]
+                 }})[0] AS best
+            RETURN neighbor.name as name,
                    neighbor.importance_score as importance_score,
-                   neighbor.key_term as key_term
-            ORDER BY importance_score DESC, name
+                   neighbor.key_term as key_term,
+                   best.weight AS weight,
+                   best.edges AS edges,
+                   best.provenance AS provenance
+            ORDER BY weight DESC, importance_score DESC, name
             LIMIT 20
             """
             result = session.run(query, name=concept_name)
@@ -279,6 +306,20 @@ class Neo4jAdapter:
         with self._get_session() as session:
             result = session.run(f"MATCH (c:{concept_label}) RETURN c.name AS name")
             return {record["name"] for record in result if record["name"]}
+
+    def get_concept_aliases(self) -> dict[str, list[str]]:
+        """Every concept name in this adapter's (subject's) graph with its stored aliases."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            result = session.run(
+                f"MATCH (c:{concept_label}) RETURN c.name AS name, "
+                "coalesce(c.aliases, []) AS aliases"
+            )
+            return {
+                record["name"]: [alias for alias in record["aliases"] or [] if alias]
+                for record in result
+                if record["name"]
+            }
 
     def count_concepts(self) -> int:
         """Number of concepts in this adapter's (subject's) graph (one count query)."""

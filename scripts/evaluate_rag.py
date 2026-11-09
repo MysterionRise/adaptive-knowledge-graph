@@ -8,7 +8,17 @@ reports under docs/evals/ (latest.json/latest.md, plus a snapshot in docs/evals/
 Every report records its provenance (the server's /api/v1/demo/provenance, the Ollama
 model digest and the golden-set hash), a hash per case and each answer with its sources,
 so a run can be re-scored and compared with scripts/compare_evals.py. Cases are selected
-by the subjects /api/v1/subjects reports as available.
+by the subjects /api/v1/subjects reports as available, and by --split (docs/evals/protocol.md):
+rehearsal cases while developing, written to latest-rehearsal.* so the release evidence in
+latest.* stays put, and the final split only at a release gate.
+
+The summary adds KG-minus-plain differences with seeded bootstrap intervals, overall and
+per stratum, the protocol's primary endpoint with the claim its numbers allow, and the
+noise floor recorded in docs/evals/noise-floor.json when it applies to this run's
+configuration (scripts/compare_evals.py --noise-floor measures it), and the KG attribution
+per subject: the cases whose citation the graph caused or cost, and how specific the
+expansions are. --trace keeps each request's retrieval trace, which explains each of those
+cases (backend/app/core/eval_attribution.py).
 
 Requests are paced to the API's /api/v1/ask rate limit (default 10/minute, so about one
 request every 6.25 s; every case asks twice, with and without KG expansion) and HTTP 429
@@ -20,6 +30,8 @@ Usage:
     poetry run python scripts/evaluate_rag.py --subject economics --limit 3 --out-dir /tmp/eval
     poetry run python scripts/evaluate_rag.py --delay 0   # API started with RATE_LIMIT_ENABLED=false
     poetry run python scripts/evaluate_rag.py --retrieval-only   # /api/v1/retrieve, no LLM
+    poetry run python scripts/evaluate_rag.py --split rehearsal  # development cases only
+    poetry run python scripts/evaluate_rag.py --retrieval-only --trace  # with retrieval traces
 """
 
 import argparse
@@ -29,7 +41,6 @@ import os
 import re
 import subprocess
 import time
-import unicodedata
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -39,8 +50,21 @@ from typing import Any
 import httpx
 import yaml
 
-from backend.app.core.eval_stats import paired_summary
+from backend.app.core.eval_attribution import attribution_lines, kg_attribution, source_matches
+from backend.app.core.eval_report import (
+    as_dict,
+    configuration_differences,
+    noise_configuration,
+    protocol_deviations,
+)
+from backend.app.core.eval_stats import (
+    interval_summary,
+    interval_table,
+    paired_summary,
+    primary_endpoint,
+)
 from backend.app.core.privacy import ollama_host_problem
+from backend.app.rag.trace import sanitize as sanitize_trace
 
 REPORT_SCHEMA_VERSION = 2
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
@@ -50,9 +74,20 @@ def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# Labels about a case rather than its definition (#206): a case hashes the same with or
+# without them, so reports from before golden set v3 stay comparable case by case.
+CASE_LABEL_FIELDS = frozenset({"stratum", "split"})
+
+
+def _file_sha256(path: Path) -> str | None:
+    """SHA-256 of a file, or None when it does not exist."""
+    return _sha256_bytes(path.read_bytes()) if path.is_file() else None
+
+
 def _case_hash(case: dict[str, Any]) -> str:
     """Hash of a golden case's definition (question, expectations, tags), key-order independent."""
-    canonical = json.dumps(case, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    definition = {key: value for key, value in case.items() if key not in CASE_LABEL_FIELDS}
+    canonical = json.dumps(definition, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return _sha256_bytes(canonical.encode("utf-8"))
 
 
@@ -124,30 +159,6 @@ def _non_echo_term_recall(answer: str, question: str, terms: list[str]) -> float
 # The title fields of an /ask source (and of an ingested record) that expected sources match.
 # The text preview is deliberately not one of them: a citation counts only when it names the
 # expected section, not when its first 200 characters happen to mention the topic.
-SOURCE_TITLE_FIELDS = ("chapter", "section", "module_title")
-_TITLE_TRANSLATION = str.maketrans(
-    {"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "-", "\u2014": "-"}
-)
-
-
-def normalize_title(title: object) -> str:
-    """Case-, quote-, dash- and whitespace-insensitive form of a title for comparison."""
-    text = unicodedata.normalize("NFKC", str(title or "")).translate(_TITLE_TRANSLATION)
-    return " ".join(text.casefold().split())
-
-
-def source_matches(source: Mapping[str, Any], expected: str) -> bool:
-    """Whether a source's chapter, section or module title is the expected title.
-
-    Matching is exact after :func:`normalize_title`; the golden-set test checks that every
-    expected source names 1-3 ingested modules.
-    """
-    wanted = normalize_title(expected)
-    return bool(wanted) and any(
-        normalize_title(source.get(field)) == wanted for field in SOURCE_TITLE_FIELDS
-    )
-
-
 def _source_match_rank(sources: list[dict[str, Any]], expected_sources: list[str]) -> int | None:
     """1-based rank of the first source that matches any expected source title, else None."""
     if not expected_sources:
@@ -422,8 +433,12 @@ def _ask(
     pacer: Pacer | None = None,
     max_retries: int = 5,
     retrieval_only: bool = False,
+    trace: bool = False,
 ) -> dict[str, Any]:
-    """Ask one case in one mode; keep the answer and sources so the run can be re-scored."""
+    """Ask one case in one mode; keep the answer and sources so the run can be re-scored.
+
+    With ``trace``, the API returns its retrieval trace (#216), which the result keeps.
+    """
     endpoint = "retrieve" if retrieval_only else "ask"
     started = time.perf_counter()
     try:
@@ -435,6 +450,7 @@ def _ask(
                 "subject": case["subject"],
                 "use_kg_expansion": use_kg,
                 "top_k": 5,
+                "include_trace": trace,
             },
             pacer or Pacer(0.0),
             max_retries,
@@ -497,6 +513,8 @@ def score_response(
         "expanded_concepts": payload.get("expanded_concepts") or [],
         "sources": sources,
     }
+    if payload.get("trace"):  # --trace runs; allowlisted again before it is stored
+        result["trace"] = sanitize_trace(payload["trace"])
     if retrieval_only:
         return result
 
@@ -552,8 +570,17 @@ def _delta(kg: float | None, plain: float | None, digits: int = 3) -> float | No
     return None if kg is None or plain is None else round(kg - plain, digits)
 
 
-def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate metrics per mode. Answer metrics are None in a retrieval-only run."""
+def _summarize(
+    results: list[dict[str, Any]],
+    noise_floor: Mapping[str, Any] | None = None,
+    expected_by_id: Mapping[str, list[str]] | None = None,
+) -> dict[str, Any]:
+    """Aggregate metrics per mode. Answer metrics are None in a retrieval-only run.
+
+    ``noise_floor`` is what ``noise_floor_for`` found for the run; the primary endpoint's
+    claim uses its citation-hit floor when it applies. ``expected_by_id`` (each case's
+    expected sources) lets the KG attribution explain traced flips.
+    """
 
     def successful(mode: str) -> list[dict[str, Any]]:
         return [r for r in results if r[mode].get("status_code") == 200]
@@ -640,9 +667,57 @@ def _summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             "latency_ms_delta": round(kg_latency - plain_latency, 2),
             # Per-case KG-versus-plain counts: the figures to quote instead of the deltas
             "paired": paired_summary(results),
+            # KG minus plain with bootstrap intervals, overall and per stratum (#209)
+            "intervals": interval_summary(results),
+            "noise_floor": dict(noise_floor) if noise_floor is not None else None,
+            "primary_endpoint": primary_endpoint(results, _floor(noise_floor, "citation_hit")),
+            # KG-attributable hits and losses per subject, and expansion specificity (#216)
+            "kg_attribution": kg_attribution(results, expected_by_id),
         }
     )
     return summary
+
+
+def _floor(noise_floor: Mapping[str, Any] | None, metric: str) -> float | None:
+    """The metric's noise floor when one applies to the run, else None."""
+    if not noise_floor or not noise_floor.get("applies"):
+        return None
+    value = as_dict(noise_floor.get("floor")).get(metric)
+    return float(value) if value is not None else None
+
+
+def noise_floor_for(report: dict[str, Any], path: Path) -> dict[str, Any]:
+    """The noise floor recorded in ``path`` for this report's run mode, if it applies.
+
+    It applies only when it was measured with the same LLM, embedding and reranker (see
+    ``noise_configuration``); otherwise the reason is recorded instead.
+    """
+    configuration = noise_configuration(report)
+    run_mode = configuration["run_mode"]
+    try:
+        records = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"applies": False, "reason": f"no noise floor recorded in {path}"}
+    except json.JSONDecodeError as e:
+        return {"applies": False, "reason": f"unreadable noise floor in {path}: {e}"}
+    record = as_dict(as_dict(records).get(run_mode))
+    if not record:
+        return {"applies": False, "reason": f"no {run_mode} noise floor in {path}"}
+    differences = configuration_differences(as_dict(record.get("configuration")), configuration)
+    if differences:
+        return {
+            "applies": False,
+            "reason": f"the {run_mode} noise floor in {path} was measured with a different "
+            "configuration: " + "; ".join(differences),
+        }
+    return {
+        "applies": True,
+        "source": str(path),
+        "measured_on": record.get("measured_on"),
+        "server_git_sha": record.get("server_git_sha"),
+        "split": record.get("split"),
+        "floor": as_dict(record.get("floor")),
+    }
 
 
 def _validity(
@@ -698,6 +773,12 @@ def _fmt(value: Any) -> str:
     return "n/a" if value is None else str(value)
 
 
+# Summary entries the Markdown report shows as sections rather than as bullet lines
+SUMMARY_SECTIONS = frozenset(
+    {"paired", "intervals", "noise_floor", "primary_endpoint", "kg_attribution"}
+)
+
+
 def _paired_table(paired: Mapping[str, Any]) -> list[str]:
     """Markdown section with the per-case KG-versus-plain counts; empty without any."""
     if not paired:
@@ -722,6 +803,57 @@ def _paired_table(paired: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def _evidence_sections(report: dict[str, Any]) -> list[str]:
+    """The primary endpoint, the intervals and the noise floor (#209)."""
+    summary = as_dict(report.get("summary"))
+    lines: list[str] = []
+    endpoint = as_dict(summary.get("primary_endpoint"))
+    if endpoint:
+        lines.extend(
+            [
+                "",
+                "## Primary endpoint",
+                "",
+                str(endpoint.get("claim")),
+                "",
+                "The endpoint is the KG-minus-plain citation hit rate over the final-split "
+                "cases with expected sources (`docs/evals/protocol.md`); quote this sentence, "
+                "not a bare difference.",
+            ]
+        )
+    intervals = as_dict(summary.get("intervals"))
+    if intervals:
+        lines.extend(
+            [
+                "",
+                "## Intervals (KG minus plain, per case)",
+                "",
+                f"Paired bootstrap: {intervals.get('resamples')} resamples of the cases, seed "
+                f"{intervals.get('seed')}, percentile intervals. An interval that includes "
+                "zero is no evidence of a difference, and neither is a difference below the "
+                "noise floor. Citation hit and MRR count the cases with expected sources.",
+                "",
+                *interval_table(intervals),
+            ]
+        )
+    noise = as_dict(summary.get("noise_floor"))
+    if noise:
+        lines.extend(["", "## Noise floor", ""])
+        if noise.get("applies"):
+            floor = as_dict(noise.get("floor"))
+            lines.append(
+                f"Measured {noise.get('measured_on')} on `{str(noise.get('server_git_sha'))[:12]}` "
+                f"({noise.get('split')} split, `{noise.get('source')}`): per metric, the larger of "
+                "the two modes' shares of cases whose value changed between two runs of the "
+                "same configuration."
+            )
+            lines.append("")
+            lines.extend(f"- `{metric}`: {_fmt(value)}" for metric, value in floor.items())
+        else:
+            lines.append(f"Not applied: {noise.get('reason')}.")
+    return lines
+
+
 def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     run_config = report.get("run_config", {})
     lines = [
@@ -733,6 +865,10 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     ]
     if run_config.get("retrieval_only"):
         lines.append("Mode: `retrieval-only` (no LLM answers; answer metrics are n/a)")
+    if run_config.get("split") == "rehearsal":
+        lines.append("Split: `rehearsal` (development cases; not release evidence)")
+    elif run_config.get("split") == "final":
+        lines.append("Split: `final` (held-out cases; run only at a release gate)")
     if run_config.get("partial") or run_config.get("subjects") or run_config.get("limit"):
         skipped = run_config.get("skipped_subjects") or []
         lines.append(
@@ -744,6 +880,10 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     if reasons:
         lines.extend(["", "## Validity", ""])
         lines.extend(f"- {reason}" for reason in reasons)
+    deviations = protocol_deviations(report)
+    if deviations:
+        lines.extend(["", "## Protocol deviations", ""])
+        lines.extend(f"- {deviation}" for deviation in deviations)
 
     provenance = report.get("provenance") or {}
     server = provenance.get("server") or {}
@@ -775,11 +915,13 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
             f"{_fmt(subject.get('chunk_count'))} chunks"
         )
 
+    lines.extend(_evidence_sections(report))
     lines.extend(["", "## Summary", ""])
     for key, value in report["summary"].items():
-        if key != "paired":
+        if key not in SUMMARY_SECTIONS:
             lines.append(f"- `{key}`: {value}")
     lines.extend(_paired_table(report["summary"].get("paired") or {}))
+    lines.extend(attribution_lines(report["summary"].get("kg_attribution") or {}))
 
     lines.extend(
         [
@@ -833,18 +975,31 @@ def _write_markdown(report_path: Path, report: dict[str, Any]) -> None:
     report_path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
+# --split choices (#206, docs/evals/protocol.md): which golden-case splits each one runs.
+# Cases added since the last version bump are pending and count as rehearsal material.
+SPLIT_CASES = {
+    "all": None,
+    "rehearsal": frozenset({"rehearsal", "pending"}),
+    "final": frozenset({"final"}),
+}
+
+
 def _select_cases(
     cases: list[dict[str, Any]],
     subjects: list[str],
     limit: int | None,
     available: list[str] | None = None,
+    split: str = "all",
 ) -> list[dict[str, Any]]:
-    """Cases of the requested subjects (all when empty) that are available, up to ``limit``."""
+    """Cases of the requested subjects (all when empty) and split that are available, up to
+    ``limit``."""
+    splits = SPLIT_CASES[split]
     selected = [
         case
         for case in cases
         if (not subjects or case.get("subject") in subjects)
         and (available is None or case.get("subject") in available)
+        and (splits is None or case.get("split") in splits)
     ]
     return selected[:limit] if limit is not None else selected
 
@@ -952,8 +1107,12 @@ def _harness_git_sha() -> str:
         return "unknown"
 
 
-def _report_filenames(retrieval_only: bool) -> tuple[str, str]:
+def _report_filenames(retrieval_only: bool, split: str = "all") -> tuple[str, str]:
+    """latest.* for release evidence; retrieval-only and rehearsal runs get their own names,
+    so they never overwrite it."""
     stem = "latest-retrieval" if retrieval_only else "latest"
+    if split == "rehearsal":
+        stem += "-rehearsal"
     return f"{stem}.json", f"{stem}.md"
 
 
@@ -965,9 +1124,13 @@ def _history_path(history_dir: Path, report_json: str, generated_at: str) -> Pat
 
 
 def write_reports(out_dir: Path, report: dict[str, Any], history: bool = True) -> list[Path]:
-    """Write latest(.json|.md) (latest-retrieval.* for retrieval-only runs) and a history snapshot."""
+    """Write latest(.json|.md) and a history snapshot; retrieval-only runs write
+    latest-retrieval.*, and rehearsal-split runs add -rehearsal to the name."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    json_name, md_name = _report_filenames(bool(report["run_config"].get("retrieval_only")))
+    run_config = report["run_config"]
+    json_name, md_name = _report_filenames(
+        bool(run_config.get("retrieval_only")), run_config.get("split") or "all"
+    )
     report_json = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     json_path = out_dir / json_name
     md_path = out_dir / md_name
@@ -1010,6 +1173,12 @@ def main() -> None:
         help="Call /api/v1/retrieve (no LLM): citation metrics only, written to latest-retrieval.*",
     )
     parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="Keep each request's retrieval trace (#216) in the report; the KG attribution "
+        "section then explains each KG-versus-plain citation flip",
+    )
+    parser.add_argument(
         "--ollama-url",
         default=None,
         help="Ollama URL for the model digest (default: LLM_OLLAMA_HOST; a loopback or "
@@ -1024,6 +1193,24 @@ def main() -> None:
     parser.add_argument(
         "--no-history", action="store_true", help="Do not write a docs/evals/history snapshot"
     )
+    parser.add_argument(
+        "--split",
+        choices=sorted(SPLIT_CASES),
+        default="all",
+        help="Golden-case split (docs/evals/protocol.md): rehearsal (with pending cases) while "
+        "developing, final only at a release gate, all for every case (default)",
+    )
+    parser.add_argument(
+        "--protocol",
+        default="docs/evals/protocol.md",
+        help="Evaluation protocol whose hash the report records",
+    )
+    parser.add_argument(
+        "--noise-floor",
+        default="docs/evals/noise-floor.json",
+        help="Noise floors recorded by compare_evals.py --noise-floor; the report applies the "
+        "one for its run mode when it was measured with the same configuration",
+    )
     args = parser.parse_args()
 
     subjects = [s.strip() for value in args.subject for s in value.split(",") if s.strip()]
@@ -1033,8 +1220,8 @@ def main() -> None:
     cases_bytes = cases_path.read_bytes()
     golden = yaml.safe_load(cases_bytes.decode("utf-8")) or {}
     all_cases = list(golden.get("cases", []))
-    if not _select_cases(all_cases, subjects, args.limit):
-        parser.error(f"no cases match subject(s) {subjects} in {args.cases}")
+    if not _select_cases(all_cases, subjects, args.limit, split=args.split):
+        parser.error(f"no {args.split}-split cases match subject(s) {subjects} in {args.cases}")
 
     delay = _default_delay() if args.delay is None else max(0.0, args.delay)
     pacer = Pacer(delay)
@@ -1044,7 +1231,7 @@ def main() -> None:
     headers = {"X-API-Key": api_key} if api_key else None
     with httpx.Client(timeout=args.timeout, headers=headers) as client:
         available = _available_subjects(client, api_url)
-        cases = _select_cases(all_cases, subjects, args.limit, available)
+        cases = _select_cases(all_cases, subjects, args.limit, available, split=args.split)
         requested = sorted(
             {c["subject"] for c in all_cases if not subjects or c["subject"] in subjects}
         )
@@ -1060,14 +1247,27 @@ def main() -> None:
 
         results: list[dict[str, Any]] = []
         for index, case in enumerate(cases, start=1):
-            kg = _ask(client, api_url, case, True, pacer, args.max_retries, args.retrieval_only)
-            plain = _ask(client, api_url, case, False, pacer, args.max_retries, args.retrieval_only)
+            kg, plain = (
+                _ask(
+                    client,
+                    api_url,
+                    case,
+                    use_kg,
+                    pacer,
+                    args.max_retries,
+                    args.retrieval_only,
+                    trace=args.trace,
+                )
+                for use_kg in (True, False)
+            )
             results.append(
                 {
                     "id": case["id"],
                     "subject": case["subject"],
                     "question": case["question"],
                     "tags": case.get("tags", []),
+                    "stratum": case.get("stratum"),
+                    "split": case.get("split"),
                     "case_hash": _case_hash(case),
                     "kg": kg,
                     "plain": plain,
@@ -1116,6 +1316,8 @@ def main() -> None:
                 "sha256": _sha256_bytes(cases_bytes),
                 "version": golden.get("version"),
                 "cases": len(all_cases),
+                "split_seed": golden.get("split_seed"),
+                "protocol_sha256": _file_sha256(Path(args.protocol)),
             },
             "harness": {"git_sha": _harness_git_sha()},
         },
@@ -1126,13 +1328,20 @@ def main() -> None:
             "delay_seconds": delay,
             "max_retries": args.max_retries,
             "retrieval_only": args.retrieval_only,
+            "trace": args.trace,
+            "split": args.split,
             "available_subjects": available,
             "skipped_subjects": skipped_subjects,
             "partial": bool(subjects) or args.limit is not None or bool(skipped_subjects),
         },
-        "summary": _summarize(results),
+        "summary": {},
         "results": results,
     }
+    report["summary"] = _summarize(
+        results,
+        noise_floor_for(report, Path(args.noise_floor)),
+        {case["id"]: list(case.get("expected_sources") or []) for case in cases},
+    )
 
     for path in write_reports(Path(args.out_dir), report, history=not args.no_history):
         print(f"Wrote {path}")

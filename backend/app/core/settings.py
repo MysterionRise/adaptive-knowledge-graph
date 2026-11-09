@@ -173,6 +173,10 @@ class Settings(BaseSettings):
     openrouter_model: str = "mistralai/mixtral-8x7b-instruct"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_verify_ssl: bool = True
+    # False leaves `temperature` out of every remote request (answers, quizzes, recommendations
+    # and graph queries), so the provider applies the model's default. Claude 5.x models on
+    # Anthropic's OpenAI-compatible endpoint reject any other value with HTTP 400.
+    openrouter_send_temperature: bool = True
 
     # Embeddings
     embedding_model: str = "BAAI/bge-m3"
@@ -200,6 +204,10 @@ class Settings(BaseSettings):
     rag_retrieval_top_k: int = 20
     rag_kg_expansion: bool = True
     rag_kg_expansion_hops: int = 1
+    # Graph neighbours of the recognised concepts added to the keyword (BM25) channel per
+    # question (#282). 0, the default, uses only the concepts recognised in the question: on
+    # the v0.3.0 golden set every neighbour budget tried lowered citation hits.
+    rag_kg_expansion_max_neighbours: int = 0
 
     # Retrieval mode for OpenSearch: "knn" (vector only) or "hybrid" (BM25 + kNN with RRF)
     retrieval_mode: Literal["knn", "hybrid"] = "hybrid"

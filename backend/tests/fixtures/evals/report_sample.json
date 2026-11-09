@@ -162,6 +162,88 @@
         "discordant": 7,
         "sign_test_p": 0.0156
       }
+    },
+    "intervals": {
+      "resamples": 2000,
+      "seed": 209,
+      "confidence": 0.95,
+      "overall": {
+        "citation_hit": {
+          "pairs": 5,
+          "kg": 1.0,
+          "plain": 0.8,
+          "difference": 0.2,
+          "ci_low": 0.0,
+          "ci_high": 0.6,
+          "wins": 1,
+          "losses": 0
+        },
+        "mrr": {
+          "pairs": 5,
+          "kg": 1.0,
+          "plain": 0.6,
+          "difference": 0.4,
+          "ci_low": 0.1,
+          "ci_high": 0.7,
+          "wins": 3,
+          "losses": 0
+        },
+        "answer_term_recall_non_echo": {
+          "pairs": 6,
+          "kg": 0.917,
+          "plain": 0.431,
+          "difference": 0.486,
+          "ci_low": 0.278,
+          "ci_high": 0.653,
+          "wins": 5,
+          "losses": 0
+        }
+      },
+      "strata": {}
+    },
+    "noise_floor": null,
+    "primary_endpoint": {
+      "metric": "citation_hit_rate",
+      "cases": "unlabelled",
+      "pairs": 5,
+      "kg": 1.0,
+      "plain": 0.8,
+      "difference": 0.2,
+      "ci_low": 0.0,
+      "ci_high": 0.6,
+      "wins": 1,
+      "losses": 0,
+      "margin": -0.1,
+      "non_inferior": true,
+      "noise_floor": null,
+      "verdict": "no_difference",
+      "claim": "No evidence of a difference in citation hit rate: KG 1.000, plain 0.800, difference +0.200 (95% CI +0.000 to +0.600) over 5 cases; KG cited better on 1 and plain on 0. KG is non-inferior at the -0.10 margin."
+    },
+    "kg_attribution": {
+      "economics": {
+        "compared": 3,
+        "hits": [
+          {
+            "id": "fixture_answerable_all_echo"
+          }
+        ],
+        "losses": [],
+        "specificity": {
+          "cases": 4,
+          "pairs": 6,
+          "mean_jaccard": 1.0
+        }
+      },
+      "us_history": {
+        "compared": 2,
+        "hits": [],
+        "losses": [],
+        "specificity": {
+          "cases": 2,
+          "pairs": 1,
+          "mean_jaccard": 1.0
+        }
+      }
     }
   },
   "results": [
@@ -659,9 +741,9 @@
     }
   ],
   "rescoring": {
-    "rescored_at": "2026-10-20T19:11:50.009113+00:00",
+    "rescored_at": "2026-11-04T13:25:46.030308+00:00",
     "harness": {
-      "git_sha": "32754dfe3d4fe8b9d367ae8393531f52d37f271e"
+      "git_sha": "505e288ff5d7258c0063ab20ab44a7a3b9c4d5a2"
     },
     "golden_set": {
       "path": "backend/tests/fixtures/evals/golden_sample.yaml",

@@ -4,9 +4,11 @@
 
 import { Network, BarChart3 } from 'lucide-react';
 
-export function GraphSkeleton() {
+export function GraphSkeleton({ className = 'h-[600px]' }: { className?: string }) {
   return (
-    <div className="h-[600px] bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 animate-pulse">
+    <div
+      className={`${className} bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 animate-pulse`}
+    >
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="relative">

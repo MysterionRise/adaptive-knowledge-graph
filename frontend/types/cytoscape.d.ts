@@ -13,6 +13,7 @@ declare module 'cytoscape' {
     tile?: boolean;
     animate?: boolean | 'end' | 'during';
     animationDuration?: number;
+    nodeDimensionsIncludeLabels?: boolean;
     tilingPaddingVertical?: number;
     tilingPaddingHorizontal?: number;
     gravityRangeCompound?: number;

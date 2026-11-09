@@ -1,22 +1,23 @@
 'use client';
 
-import { Suspense, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { Suspense, useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { describeError, isAbortError } from '@/lib/api-errors';
-import type { QuestionResponse, StreamMetadata } from '@/lib/types';
+import type { KGExpansionStatus, QuestionResponse, Source, StreamMetadata } from '@/lib/types';
 import {
   Send,
   Loader2,
   Network,
-  BookOpen,
   ExternalLink,
   MapPin,
   AlertCircle,
   RefreshCw,
+  Cpu,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
-import SubjectPicker from '@/components/SubjectPicker';
+import MarkdownContent from '@/components/MarkdownContent';
+import PageHeader from '@/components/PageHeader';
 
 interface Message {
   id: number;
@@ -30,7 +31,17 @@ interface Message {
   error?: string;
 }
 
+/** The page fills the viewport below the nav bar; the conversation scrolls inside it. */
+const PAGE_HEIGHT = 'h-[calc(100dvh-theme(spacing.nav))]';
+
 const withoutFinalPeriod = (text: string) => text.replace(/\.+$/, '');
+
+type GraphConceptFields = Pick<QuestionResponse, 'expanded_concepts' | 'related_concepts'>;
+
+/** Concepts to highlight on the graph: the ones retrieval used, then their neighbours. */
+const graphConcepts = (response: GraphConceptFields) => [
+  ...new Set([...(response.expanded_concepts ?? []), ...(response.related_concepts ?? [])]),
+];
 
 function TypingIndicator() {
   return (
@@ -108,9 +119,10 @@ function ChatPageContent() {
             metadata = data;
             setIsThinking(false);
 
-            // Store expanded concepts for cross-page highlighting
-            if (data.expanded_concepts && data.expanded_concepts.length > 0) {
-              setHighlightedConcepts(data.expanded_concepts);
+            // Store the graph concepts for cross-page highlighting
+            const concepts = graphConcepts(data);
+            if (concepts.length > 0) {
+              setHighlightedConcepts(concepts);
             }
             setLastQuery(question);
           },
@@ -134,7 +146,10 @@ function ChatPageContent() {
           answer: message.content,
           sources: metadata?.sources ?? [],
           expanded_concepts: metadata?.expanded_concepts ?? null,
+          related_concepts: metadata?.related_concepts ?? null,
+          kg_expansion_status: metadata?.kg_expansion_status,
           retrieved_count: metadata?.retrieved_count ?? 0,
+          window_expanded_count: metadata?.window_expanded_count ?? null,
           model: metadata?.model ?? '',
           attribution: metadata?.attribution ?? '',
         },
@@ -226,49 +241,35 @@ function ChatPageContent() {
   const exampleQuestions = SUBJECT_EXAMPLES[currentSubject] || SUBJECT_EXAMPLES.us_history;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">AI Tutor Chat</h1>
-              <p className="text-sm text-gray-600">
-                Ask questions about your selected subject
-              </p>
-            </div>
+    <div className={`flex ${PAGE_HEIGHT} flex-col bg-gray-50`}>
+      {/* Header, with the KG expansion toggle: the label (and its text) names the checkbox */}
+      <PageHeader
+        title="AI Tutor Chat"
+        maxWidthClassName="max-w-5xl"
+        className="shrink-0"
+        actions={
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Network
+              className={`w-5 h-5 ${useKgExpansion ? 'text-primary-600' : 'text-gray-400'}`}
+              aria-hidden="true"
+            />
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={useKgExpansion}
+              onChange={(e) => setUseKgExpansion(e.target.checked)}
+            />
+            <span
+              aria-hidden="true"
+              className="relative w-11 h-6 bg-gray-200 peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-primary-300 rounded-full peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"
+            ></span>
+            <span className="text-sm font-medium text-gray-700">KG Expansion</span>
+          </label>
+        }
+      />
 
-            <div className="flex items-center gap-4">
-              {/* Subject Picker */}
-              <SubjectPicker />
-
-              {/* KG Expansion Toggle: the label (and its text) names the checkbox */}
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Network
-                  className={`w-5 h-5 ${useKgExpansion ? 'text-primary-600' : 'text-gray-400'}`}
-                  aria-hidden="true"
-                />
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={useKgExpansion}
-                  onChange={(e) => setUseKgExpansion(e.target.checked)}
-                />
-                <span
-                  aria-hidden="true"
-                  className="relative w-11 h-6 bg-gray-200 peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-primary-300 rounded-full peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"
-                ></span>
-                <span className="text-sm font-medium text-gray-700">
-                  KG Expansion
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Chat Area */}
-      <main id="main-content" className="flex-1 overflow-hidden flex flex-col max-w-5xl mx-auto w-full">
+      {/* Chat Area: min-h-0 lets the message list scroll instead of growing the page */}
+      <main id="main-content" className="flex min-h-0 flex-1 flex-col max-w-5xl mx-auto w-full">
         {/* Messages: a polite live region, busy while an answer streams in */}
         <div
           role="log"
@@ -312,7 +313,7 @@ function ChatPageContent() {
               >
                 <div
                   className={`max-w-3xl rounded-lg px-6 py-4 ${message.role === 'user'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-primary-600 text-white'
                       : 'bg-white border border-gray-200 shadow-sm'
                     }`}
                 >
@@ -339,7 +340,7 @@ function ChatPageContent() {
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-gray-200 bg-white px-4 py-4">
+        <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-4">
           <form onSubmit={handleSubmit} className="flex gap-3">
             <label htmlFor="chat-question" className="sr-only">
               Your question
@@ -369,7 +370,239 @@ function ChatPageContent() {
   );
 }
 
-// Assistant Message Component with expanded concepts and sources
+/** Pulsing block at the end of the answer while tokens stream in. */
+function StreamingCursor() {
+  return (
+    <span
+      className="ml-0.5 inline-block h-5 w-2 animate-pulse bg-primary-500 align-text-bottom"
+      aria-hidden="true"
+    />
+  );
+}
+
+// What KG expansion did for the question (the badge's class strings are literal so Tailwind
+// generates them)
+const KG_STATUS_BADGES: Record<
+  KGExpansionStatus,
+  { label: string; title: string; className: string }
+> = {
+  ok: {
+    label: 'KG expansion: ok',
+    title:
+      'Concepts from the question were found in the knowledge graph and added to the keyword search.',
+    className: 'rounded-full border px-2 py-0.5 border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  empty: {
+    label: 'KG expansion: no matches',
+    title: 'No concept from the question was found in the knowledge graph; plain retrieval was used.',
+    className: 'rounded-full border px-2 py-0.5 border-gray-200 bg-gray-50 text-gray-600',
+  },
+  failed: {
+    label: 'KG expansion: failed, plain retrieval',
+    title: 'The knowledge graph could not be queried, so the answer comes from plain retrieval.',
+    className: 'rounded-full border px-2 py-0.5 border-amber-200 bg-amber-50 text-amber-700',
+  },
+  disabled: {
+    label: 'KG expansion: off',
+    title: 'KG expansion was turned off for this question.',
+    className: 'rounded-full border px-2 py-0.5 border-gray-200 bg-gray-50 text-gray-600',
+  },
+};
+
+/** One line on what retrieval did: KG expansion outcome, chunk count, window expansion. */
+function RetrievalSummary({ response }: { response: QuestionResponse }) {
+  // Backends older than v0.4.0 send no status; an unknown value gets no badge either
+  const badge = response.kg_expansion_status
+    ? KG_STATUS_BADGES[response.kg_expansion_status]
+    : undefined;
+  const count = response.retrieved_count;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+      {badge && (
+        <span className={badge.className} title={badge.title}>
+          {badge.label}
+        </span>
+      )}
+      <span>{`${count} ${count === 1 ? 'chunk' : 'chunks'} retrieved`}</span>
+      {typeof response.window_expanded_count === 'number' && (
+        <span>{`· ${response.window_expanded_count} after window expansion`}</span>
+      )}
+    </div>
+  );
+}
+
+const SOURCE_PREVIEW_LENGTH = 240;
+
+const sourceTitle = (source: Source) => source.section ?? source.module_title ?? 'Source';
+// No score: with hybrid retrieval it is a rank-fusion value (at most about 0.03), not a
+// relevance percentage, so the numbering carries the order.
+
+/** Numbered source chips; at most one source's text is open at a time. */
+function SourceList({ sources }: { sources: Source[] }) {
+  const id = useId();
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [showFull, setShowFull] = useState(false);
+  const panelId = (index: number) => `${id}-source-${index}`;
+
+  const toggle = (index: number) => {
+    setOpenIndex((current) => (current === index ? null : index));
+    setShowFull(false);
+  };
+
+  const open = openIndex === null ? undefined : sources[openIndex];
+  const isLong = open !== undefined && open.text.length > SOURCE_PREVIEW_LENGTH;
+  const text =
+    open === undefined
+      ? ''
+      : isLong && !showFull
+        ? `${open.text.slice(0, SOURCE_PREVIEW_LENGTH).trimEnd()}…`
+        : open.text;
+
+  return (
+    <div>
+      <ul aria-label="Sources" className="flex flex-wrap gap-1.5">
+        {sources.map((source, index) => {
+          const isOpen = openIndex === index;
+          return (
+            <li key={index}>
+              <button
+                type="button"
+                onClick={() => toggle(index)}
+                aria-expanded={isOpen}
+                aria-controls={panelId(index)}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-left text-xs transition-colors ${
+                  isOpen
+                    ? 'border-primary-300 bg-primary-50 text-primary-900'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <span className="sr-only">Source </span>
+                <span className="rounded-full bg-gray-100 px-1.5 font-mono text-xs">{index + 1}</span>{' '}
+                <span>{sourceTitle(source)}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {open !== undefined && openIndex !== null && (
+        <div
+          id={panelId(openIndex)}
+          className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm"
+        >
+          {open.chapter && (
+            <div className="mb-2 text-xs font-medium text-gray-600">{open.chapter}</div>
+          )}
+          <p className="text-gray-700">{text}</p>
+          {isLong && (
+            <button
+              type="button"
+              onClick={() => setShowFull((current) => !current)}
+              className="mt-2 text-xs font-medium text-primary-700 hover:text-primary-800"
+            >
+              {showFull ? 'Show less' : 'Show full text'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Related concepts shown before "Show N more". */
+const RELATED_PREVIEW_COUNT = 8;
+
+/** The knowledge graph behind an answer: the concepts retrieval used and their neighbours. */
+function GraphConcepts({ response }: { response: QuestionResponse }) {
+  const router = useRouter();
+  const setHighlightedConcepts = useAppStore((state) => state.setHighlightedConcepts);
+  const id = useId();
+  const [showAllRelated, setShowAllRelated] = useState(false);
+
+  const used = response.expanded_concepts ?? [];
+  const related = response.related_concepts ?? [];
+  if (used.length === 0 && related.length === 0) return null;
+
+  const hiddenCount = related.length - RELATED_PREVIEW_COUNT;
+  const shownRelated =
+    showAllRelated || hiddenCount <= 0 ? related : related.slice(0, RELATED_PREVIEW_COUNT);
+
+  const handleViewOnGraph = () => {
+    setHighlightedConcepts(graphConcepts(response));
+    router.push('/graph');
+  };
+
+  return (
+    <div className="mt-4 space-y-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Network className="w-4 h-4 text-blue-600" aria-hidden="true" />
+          <span className="text-sm font-semibold text-blue-900">Knowledge graph</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleViewOnGraph}
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded transition-colors"
+        >
+          <MapPin className="w-3 h-3" aria-hidden="true" />
+          View on Graph
+        </button>
+      </div>
+
+      {used.length > 0 && (
+        <div>
+          <p id={`${id}-used`} className="mb-1 text-xs font-medium text-blue-900">
+            {`Used for retrieval (${used.length})`}
+          </p>
+          <ul aria-labelledby={`${id}-used`} className="flex flex-wrap gap-1.5">
+            {used.map((concept) => (
+              <li key={concept} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                {concept}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {related.length > 0 && (
+        <div>
+          <p id={`${id}-related`} className="mb-1 text-xs font-medium text-blue-900">
+            {`Related in the graph (${related.length})`}
+            <span className="font-normal text-blue-700"> · not searched</span>
+          </p>
+          <ul
+            id={`${id}-related-list`}
+            aria-labelledby={`${id}-related`}
+            className="flex flex-wrap gap-1.5"
+          >
+            {shownRelated.map((concept) => (
+              <li
+                key={concept}
+                className="px-2 py-1 border border-blue-200 bg-white text-blue-700 text-xs rounded-full"
+              >
+                {concept}
+              </li>
+            ))}
+          </ul>
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllRelated((current) => !current)}
+              aria-expanded={showAllRelated}
+              aria-controls={`${id}-related-list`}
+              className="mt-1.5 text-xs font-medium text-blue-700 hover:text-blue-900"
+            >
+              {showAllRelated ? 'Show fewer' : `Show ${hiddenCount} more`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Assistant Message Component with the graph concepts and sources
 interface AssistantMessageProps {
   content: string;
   response?: QuestionResponse;
@@ -387,29 +620,12 @@ function AssistantMessage({
   onRetry,
   retryDisabled,
 }: AssistantMessageProps) {
-  const router = useRouter();
-  const [showSources, setShowSources] = useState(false);
-  const setHighlightedConcepts = useAppStore((state) => state.setHighlightedConcepts);
-
-  const handleViewOnGraph = () => {
-    if (response?.expanded_concepts) {
-      setHighlightedConcepts(response.expanded_concepts);
-    }
-    router.push('/graph');
-  };
-
   return (
     <div className="space-y-4">
       {(content || isStreaming) && (
-        <p className="text-gray-800 whitespace-pre-wrap">
+        <MarkdownContent trailing={isStreaming ? <StreamingCursor /> : undefined}>
           {content}
-          {isStreaming && (
-            <span
-              className="inline-block w-2 h-5 bg-blue-500 animate-pulse ml-0.5 align-text-bottom"
-              aria-hidden="true"
-            />
-          )}
-        </p>
+        </MarkdownContent>
       )}
 
       {error && (
@@ -434,92 +650,26 @@ function AssistantMessage({
 
       {response && !isStreaming && (
         <>
-          {/* Expanded Concepts */}
-          {response.expanded_concepts && response.expanded_concepts.length > 0 && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Network className="w-4 h-4 text-blue-600" aria-hidden="true" />
-                  <span className="text-sm font-semibold text-blue-900">
-                    KG Expansion: {response.expanded_concepts.length} related concepts
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleViewOnGraph}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded transition-colors"
-                >
-                  <MapPin className="w-3 h-3" aria-hidden="true" />
-                  View on Graph
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {response.expanded_concepts.map((concept, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                  >
-                    {concept}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <RetrievalSummary response={response} />
+
+          <GraphConcepts response={response} />
 
           {/* Sources */}
           {response.sources && response.sources.length > 0 && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => setShowSources(!showSources)}
-                aria-expanded={showSources}
-                className="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-gray-900"
-              >
-                <BookOpen className="w-4 h-4" aria-hidden="true" />
-                <span>
-                  {showSources ? 'Hide' : 'Show'} Sources ({response.sources.length})
-                </span>
-              </button>
-
-              {showSources && (
-                <div className="mt-3 space-y-2">
-                  {response.sources.map((source, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex flex-wrap items-center gap-x-2 text-xs text-gray-600">
-                          {source.chapter && (
-                            <span className="font-medium">{source.chapter}</span>
-                          )}
-                          {source.chapter && source.section && <span aria-hidden="true">•</span>}
-                          {(source.section || (!source.chapter && source.module_title)) && (
-                            <span>{source.section || source.module_title}</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-500">
-                          Score: {((source.score ?? 0) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <p className="text-gray-700 text-sm">{source.text}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SourceList sources={response.sources} />
           )}
 
-          {/* Attribution */}
-          <div className="mt-4 pt-3 border-t border-gray-200">
-            <p className="text-xs text-gray-500 flex items-center gap-1">
-              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+          {/* Attribution and model */}
+          <footer className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
+            <span className="inline-flex items-center gap-1">
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
               {response.attribution}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              Model: {response.model}
-            </p>
-          </div>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Cpu className="h-3 w-3" aria-hidden="true" />
+              {`Model: ${response.model}`}
+            </span>
+          </footer>
         </>
       )}
     </div>
@@ -529,7 +679,7 @@ function AssistantMessage({
 export default function ChatPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+      <div className={`flex ${PAGE_HEIGHT} items-center justify-center bg-gray-50`}>
         <div className="flex items-center gap-2" role="status">
           <Loader2 className="w-8 h-8 animate-spin text-primary-600" aria-hidden="true" />
           <span className="text-gray-600">Loading chat...</span>

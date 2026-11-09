@@ -24,7 +24,11 @@ from tenacity import (
     wait_exponential,
 )
 
-from backend.app.core.exceptions import LLMConnectionError, LLMGenerationError
+from backend.app.core.exceptions import (
+    LLMConnectionError,
+    LLMGenerationError,
+    LLMTimeoutError,
+)
 from backend.app.core.settings import settings
 
 LLMProvider = Literal["local", "remote"]
@@ -271,6 +275,10 @@ class LLMClient:
                             raise LLMGenerationError(
                                 f"Ollama API error ({response.status}): {error_text}"
                             )
+            except TimeoutError as e:
+                raise LLMTimeoutError(
+                    f"Ollama did not answer within {settings.llm_timeout}s"
+                ) from e
             except aiohttp.ClientError as e:
                 raise LLMConnectionError(f"Ollama connection failed: {e}") from e
 
@@ -313,6 +321,10 @@ class LLMClient:
                                 break
                         except json.JSONDecodeError:
                             continue
+        except TimeoutError as e:
+            raise LLMTimeoutError(
+                f"Ollama did not answer within {settings.llm_stream_timeout}s"
+            ) from e
         except aiohttp.ClientError as e:
             raise LLMConnectionError(f"Ollama connection failed: {e}") from e
 
@@ -337,9 +349,10 @@ class LLMClient:
         payload: dict[str, Any] = {
             "model": self.remote_model,
             "messages": messages,
-            "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if settings.openrouter_send_temperature:
+            payload["temperature"] = temperature
         if stream:
             payload["stream"] = True
 
@@ -394,6 +407,10 @@ class LLMClient:
                             raise LLMGenerationError(
                                 f"OpenRouter API error ({response.status}): {error_text}"
                             )
+            except TimeoutError as e:
+                raise LLMTimeoutError(
+                    f"The hosted model did not answer within {settings.llm_timeout}s"
+                ) from e
             except aiohttp.ClientError as e:
                 raise LLMConnectionError(f"OpenRouter connection failed: {e}") from e
 
@@ -441,6 +458,10 @@ class LLMClient:
                                 yield token
                         except json.JSONDecodeError:
                             continue
+        except TimeoutError as e:
+            raise LLMTimeoutError(
+                f"The hosted model did not answer within {settings.llm_stream_timeout}s"
+            ) from e
         except aiohttp.ClientError as e:
             raise LLMConnectionError(f"OpenRouter connection failed: {e}") from e
 

@@ -317,8 +317,12 @@ class TestQueryConceptNeighbors:
         cypher_call = mock_session.run.call_args
         assert "bio_Concept" in cypher_call[0][0]
         assert cypher_call[1]["name"] == "Photosynthesis"
-        # Ties on importance are broken by name, so the LIMIT keeps the same neighbours
-        assert "ORDER BY importance_score DESC, name" in cypher_call[0][0]
+        # The strongest links first; ties go to importance, then the name, so the LIMIT
+        # keeps the same neighbours
+        assert "ORDER BY weight DESC, importance_score DESC, name" in cypher_call[0][0]
+        assert "[:RELATED|PREREQ*1..2]" in cypher_call[0][0]  # not through Module nodes
+        # only association scores rank; a PREREQ edge's fixed weight does not
+        assert "CASE type(r) WHEN 'RELATED' THEN" in cypher_call[0][0]
 
     def test_empty_results(self):
         adapter, mock_session = _make_adapter(label_prefix="bio")
@@ -1369,6 +1373,24 @@ class TestConceptLookup:
 
         assert names == {"Civil War", "Reconstruction"}
         assert "us_history_Concept" in mock_session.run.call_args[0][0]
+
+    def test_get_concept_aliases(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {"name": "Gross Domestic Product", "aliases": ["GDP", ""]},
+                {"name": "Recession", "aliases": []},
+                {"name": None, "aliases": ["orphan"]},
+            ]
+        )
+
+        assert adapter.get_concept_aliases() == {
+            "Gross Domestic Product": ["GDP"],
+            "Recession": [],
+        }
+        query = mock_session.run.call_args[0][0]
+        assert "economics_Concept" in query
+        assert "coalesce(c.aliases, [])" in query
 
     def test_concept_exists_matches_case_insensitively_and_ignores_leading_the(self):
         adapter, mock_session = _make_adapter(label_prefix="us_history")

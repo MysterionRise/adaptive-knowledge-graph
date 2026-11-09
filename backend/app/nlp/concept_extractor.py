@@ -12,28 +12,29 @@ Supports multiple strategies:
 
 Every strategy drops markup/structural stop concepts ("Data-Type", "Review
 Questions", …) using the shared vocabulary in ``backend.app.kg.stopwords``.
+
+The NER and YAKE strategies resolve their spans with a ``ConceptLexicon``
+(``backend.app.nlp.lexicon``): concept names and aliases, plurals and a leading article
+ignored, and no generic single word matched to a longer concept. Pass a lexicon as
+``known_concepts`` to match aliases; a plain set of names gets a lexicon without them.
 """
 
-import re
 from collections.abc import Set
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Literal
 
 import yake
 from loguru import logger
 
+from backend.app.kg.normalize import with_numerals
 from backend.app.kg.stopwords import is_stop_concept
+from backend.app.nlp.lexicon import ConceptLexicon, Resolution, lexicon_for
 
 # spaCy entity labels that never name a concept (dates, amounts, ordinals, …).
 _NON_CONCEPT_ENTITY_LABELS = frozenset(
     {"CARDINAL", "DATE", "MONEY", "ORDINAL", "PERCENT", "QUANTITY", "TIME"}
 )
-
-
-def _contains_phrase(text: str, phrase: str) -> bool:
-    """True when ``phrase`` occurs in ``text`` as whole words."""
-    return re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text) is not None
 
 
 @lru_cache(maxsize=32)
@@ -51,10 +52,25 @@ def _filter_known_cached(concepts: frozenset[str]) -> frozenset[str]:
 class ConceptMatch:
     """A matched concept with metadata."""
 
-    name: str
+    name: str  # the concept's name; for an ambiguous span, the span itself
     score: float  # Confidence/relevance score (0-1)
     strategy: str  # Which strategy found this
     original_text: str | None = None  # Original text span that matched
+    via: str = "name"  # "name" or "alias": what the span matched in the lexicon
+    status: str = "resolved"  # "ambiguous": an alias of several concepts, not a concept
+    candidates: tuple[str, ...] = ()  # the concepts an ambiguous span could mean
+
+    @classmethod
+    def from_resolution(cls, resolution: Resolution, score: float, strategy: str) -> "ConceptMatch":
+        return cls(
+            name=resolution.canonical or resolution.surface,
+            score=score,
+            strategy=strategy,
+            original_text=resolution.surface,
+            via=resolution.via,
+            status=resolution.status,
+            candidates=resolution.candidates,
+        )
 
 
 class ConceptExtractor:
@@ -193,16 +209,25 @@ class ConceptExtractor:
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
 
-        # Drop stop concepts (e.g. a fulltext hit on "Summary"), then sort and limit
+        # Drop stop concepts (e.g. a fulltext hit on "Summary"), then sort and limit;
+        # resolved concepts come before ambiguous spans
         matches = [match for match in matches if not is_stop_concept(match.name)]
-        matches.sort(key=lambda m: m.score, reverse=True)
+        matches.sort(key=lambda m: (m.status != "resolved", -m.score))
         return matches[:top_k]
 
     def _resolve_known(self, known_concepts: Set[str] | None) -> Set[str]:
         """The concepts to match against: the given ones (filtered) or the extractor's."""
         if known_concepts is None:
             return self.known_concepts
+        if isinstance(known_concepts, ConceptLexicon):
+            return known_concepts  # stop concepts are already left out
         return _filter_known_cached(frozenset(known_concepts))
+
+    def _lexicon(self, concepts: Set[str] | None) -> ConceptLexicon:
+        """The lexicon for ``concepts`` (None: the extractor's own known concepts)."""
+        if isinstance(concepts, ConceptLexicon):
+            return concepts
+        return lexicon_for(frozenset(self.known_concepts if concepts is None else concepts))
 
     def _extract_ner(self, text: str, concepts: Set[str] | None = None) -> list[ConceptMatch]:
         """Extract concepts using spaCy NER."""
@@ -212,6 +237,7 @@ class ConceptExtractor:
             return matches
 
         doc = self.spacy_nlp(text)
+        lexicon = self._lexicon(concepts)
 
         # Extract named entities
         for ent in doc.ents:
@@ -224,17 +250,10 @@ class ConceptExtractor:
             ent_text = ent.text.strip()
             if is_stop_concept(ent_text):
                 continue
-            matched_concept = self._match_to_known(ent_text, concepts)
-
-            if matched_concept:
-                matches.append(
-                    ConceptMatch(
-                        name=matched_concept,
-                        score=0.8,  # NER match confidence
-                        strategy="ner",
-                        original_text=ent_text,
-                    )
-                )
+            resolution = lexicon.resolve(ent_text)
+            if resolution:
+                # 0.8: NER match confidence
+                matches.append(ConceptMatch.from_resolution(resolution, 0.8, "ner"))
 
         # Also extract noun chunks as potential concepts
         for chunk in doc.noun_chunks:
@@ -242,22 +261,17 @@ class ConceptExtractor:
             if len(chunk_text) < 3 or is_stop_concept(chunk_text):
                 continue
 
-            matched_concept = self._match_to_known(chunk_text, concepts)
-            if matched_concept:
-                matches.append(
-                    ConceptMatch(
-                        name=matched_concept,
-                        score=0.6,  # Noun chunk confidence
-                        strategy="ner",
-                        original_text=chunk_text,
-                    )
-                )
+            resolution = lexicon.resolve(chunk_text)
+            if resolution:
+                # 0.6: noun chunk confidence
+                matches.append(ConceptMatch.from_resolution(resolution, 0.6, "ner"))
 
         return self._deduplicate(matches)
 
     def _extract_yake(self, text: str, concepts: Set[str] | None = None) -> list[ConceptMatch]:
         """Extract concepts using YAKE keyword extraction."""
         matches = []
+        lexicon = self._lexicon(concepts)
 
         try:
             keywords = self.yake_extractor.extract_keywords(text)
@@ -268,17 +282,13 @@ class ConceptExtractor:
                 # YAKE scores are lower = better, normalize to 0-1
                 normalized_score = 1.0 / (1.0 + yake_score)
 
-                # Check if keyword matches a known concept
-                matched_concept = self._match_to_known(keyword, concepts)
-                if matched_concept:
-                    matches.append(
-                        ConceptMatch(
-                            name=matched_concept,
-                            score=normalized_score,
-                            strategy="yake",
-                            original_text=keyword,
+                # "World War" in "World War II": YAKE drops the numeral (#213)
+                for phrase in with_numerals(keyword, text):
+                    resolution = lexicon.resolve(phrase)
+                    if resolution:
+                        matches.append(
+                            ConceptMatch.from_resolution(resolution, normalized_score, "yake")
                         )
-                    )
 
         except Exception as e:
             logger.warning(f"YAKE extraction failed: {e}")
@@ -405,58 +415,25 @@ class ConceptExtractor:
 
         # Fuse scores for concepts found by multiple strategies
         fused_matches = []
-        for concept_name, matches_list in all_matches.items():
+        for matches_list in all_matches.values():
             # Boost score for concepts found by multiple strategies
             strategy_count = len({m.strategy for m in matches_list})
             max_score = max(m.score for m in matches_list)
             boosted_score = min(1.0, max_score * (1 + 0.2 * (strategy_count - 1)))
 
-            fused_matches.append(
-                ConceptMatch(
-                    name=concept_name,
-                    score=boosted_score,
-                    strategy="ensemble",
-                    original_text=matches_list[0].original_text,
-                )
-            )
+            fused_matches.append(replace(matches_list[0], score=boosted_score, strategy="ensemble"))
 
         return fused_matches
 
     def _match_to_known(self, text: str, concepts: Set[str] | None = None) -> str | None:
         """
-        Match a text span to a known concept (case-insensitive, whole words).
+        The concept a text span names, or None (see ``ConceptLexicon.resolve``).
 
-        ``concepts`` overrides the extractor's ``known_concepts`` for this call.
-
-        An exact match wins; otherwise the longest known concept contained in the
-        span ("the Stamp Act of 1765" -> "Stamp Act"), then the shortest known
-        concept containing the span. Matching is on word boundaries, so "act" does
-        not match inside "fact", and ties are broken alphabetically so the result
-        does not depend on set iteration order.
+        ``concepts`` overrides the extractor's ``known_concepts`` for this call; pass a
+        ``ConceptLexicon`` to match aliases too. An ambiguous alias names no concept.
         """
-        text_lower = text.lower().strip()
-        if not text_lower:
-            return None
-
-        exact: list[str] = []
-        contained: list[str] = []
-        containing: list[str] = []
-        for concept in self.known_concepts if concepts is None else concepts:
-            concept_lower = concept.lower()
-            if concept_lower == text_lower:
-                exact.append(concept)  # several when names differ only in case
-            elif _contains_phrase(text_lower, concept_lower):
-                contained.append(concept)
-            elif _contains_phrase(concept_lower, text_lower):
-                containing.append(concept)
-
-        if exact:
-            return min(exact)
-        if contained:
-            return min(contained, key=lambda c: (-len(c), c))
-        if containing:
-            return min(containing, key=lambda c: (len(c), c))
-        return None
+        resolution = self._lexicon(concepts).resolve(text)
+        return resolution.canonical if resolution else None
 
     def _ensure_concept_embeddings(self):
         """Ensure concept embeddings are cached."""
