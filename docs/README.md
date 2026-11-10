@@ -14,6 +14,8 @@ configuration.
   commands CI runs.
 - [COMPLIANCE.md](COMPLIANCE.md): OpenStax licensing, privacy modes and what
   data the system stores.
+- [adaptivity/README.md](adaptivity/README.md): what the project may call
+  adaptive, what happens today, the evidence and the learner track.
 - [evals/README.md](evals/README.md): the evaluation harness and how to read
   its reports. The latest report is [evals/latest.md](evals/latest.md); it only
   counts as evidence when `environment_valid` is `true`.

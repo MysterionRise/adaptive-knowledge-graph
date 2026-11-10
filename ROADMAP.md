@@ -160,8 +160,39 @@ Waves W8 and W9, tracked in
   and the decisions-and-limitations case study
   ([#235](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/235)).
 
+## Learner track (alongside v0.5.0 to v0.7.0)
+
+[docs/adaptivity/README.md](docs/adaptivity/README.md) sets out what the
+project may call adaptive and which activities the evidence favours. The track
+is tracked in [#313](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/313). Its items are Should items in the milestones below:
+they may slip, and no domain tag waits for them.
+
+- **Today.** No behaviour passes the two tests for "adaptive": the
+  difficulty band is only requested in the prompt, and the BKT mastery
+  estimate is unfitted and client-reported.
+- **v0.5.0.** The counterfactual tests and the wording rule
+  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)).
+  The re-seed
+  ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215))
+  drops the textbook's review questions, which carry their answer keys, from
+  the retrieval chunks.
+- **v0.6.0.** A policy interface with decision records ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)), and a
+  seeded learner simulator built as a robust evaluation matrix, with a frozen
+  protocol and decision rule ([#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307)). It runs before the curated
+  prerequisite layer, so the cost of wrong edges is known when #223 starts.
+- **v0.7.0.** An attempt log with a server-set `assisted` flag
+  ([#308](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/308)), next to server-side grading
+  ([#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74)).
+  The textbook's review items as a held-out measurement pool ([#309](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/309)).
+  Per-distractor rationales with rendered citations and a correctness gate
+  ([#310](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/310)). The simulator's robustness worlds ([#311](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/311)).
+
 ## Later: unscheduled
 
+- A `frontier-v1` mastery loop over the curated prerequisite graph
+  ([#312](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/312)), built only if the simulator's decision rule supports it; then
+  a placement probe, an opt-in practice mode for the tutor and a pilot
+  protocol (checklist in [#313](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/313)).
 - Per-learner identity, roles and scoped permissions
   ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)),
   required before any pilot with learners.
@@ -184,6 +215,12 @@ Waves W8 and W9, tracked in
 - No proctoring.
 - No enterprise dashboard until identity, tenancy and audit logging exist.
 - No claim that LLM-estimated difficulty equals psychometric calibration.
+- No "adaptive" for a behaviour that fails the decision and validity tests in
+  [docs/adaptivity/README.md](docs/adaptivity/README.md), and no "beneficial"
+  without its evidence level ("in simulation" or "in a pilot").
+- No learning-gain claim without a pilot run under a frozen protocol;
+  performance with hints, sources or the tutor open is never reported as
+  learning.
 - No "expert-validated" claim for a domain without a recorded steward review.
 - No accuracy figure without a final-split run on the published golden set.
 - No "enterprise-ready", multi-tenant or compliance claim.
