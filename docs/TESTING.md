@@ -153,11 +153,12 @@ Advisory jobs (they report but do not block):
 - **npm audit:** part of the frontend job, advisory for the same reason.
 
 The live-stack integration suite runs locally with `make test-integration`.
-Separate workflows run CodeQL analysis, build the Docker images when their
-inputs change, and publish a GitHub Release for `vX.Y.Z` tags on `main`. A
-weekly dependency audit scans `main` and keeps one tracking issue up to date
-with the advisories outside the allowlists and the allowlist entries that
-expire within 30 days.
+Separate workflows run CodeQL analysis, build the Docker images — the CPU API
+image (infra/docker/api.cpu.Dockerfile) and the frontend image
+(infra/docker/frontend.Dockerfile) — when their inputs change, and publish a
+GitHub Release for `vX.Y.Z` tags on `main`. A weekly dependency audit scans
+`main` and keeps one tracking issue up to date with the advisories outside
+the allowlists and the allowlist entries that expire within 30 days.
 
 The allowlists are `osv-scanner.toml` (Python) and `frontend/osv-scanner.toml`
 (npm): osv-scanner applies the file next to each lockfile. Every entry needs a
