@@ -319,12 +319,16 @@ robustness extensions in [#311](https://github.com/MysterionRise/adaptive-knowle
 | World structure | A synthetic prerequisite DAG with prerequisite strength none, weak or strong. Learning is gated by prerequisites with some leak, and some learners hold knowledge that contradicts the DAG. The core world has no forgetting and no item difficulty. The robustness worlds ([#311](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/311)) add IRT-style responses, forgetting and item memorisation. |
 | The DAG the policy is given (crossed with the world) | The true DAG; precision 0.6 or 0.8; recall 0.6 or 0.8; 10 to 20% reversed edges; a chapter chain; no DAG; a degree-preserving shuffle |
 | Item-to-concept mapping | Correct, or with a set error rate (robustness extension) |
-| Policies | `random`; `textbook`; `ready-first`, a selection-only probe that picks the next concept whose prerequisites in the DAG it is given are estimated as mastered (it is not `frontier-v1`); `band-v1` (textbook order plus band difficulty); and an `oracle`, which is `ready-first` on the true DAG with the true learner state. `mastery-textbook` and `frontier-v1` with its DAG ablations plug in later ([#312](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/312)). |
+| Policies | `random`; `textbook`; `ready-first`, a selection-only probe that applies textbook order to the concepts that are not yet estimated as mastered and whose prerequisites in the DAG it is given are (it is not `frontier-v1`); `band-v1` (textbook order plus band difficulty); and an `oracle`, which is `ready-first` on the true DAG with the true learner state: the same rule with perfect information, not an upper bound. `mastery-textbook` and `frontier-v1` with its DAG ablations plug in later ([#312](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/312)). |
 | Effect of correctives, hints and feedback | Swept, including zero, to find the break-even point |
 
 **The probe.** `ready-first` is the policy that reads the DAG it is given, so
 the crossed DAG axis and the precision and recall sweep for #223 have
 something to measure. It has no correctives and no spaced mastery criterion.
+Its definition is a draft until the protocol is frozen. Taking the first
+unmastered concept whose given prerequisites are mastered would not do: that
+concept's prerequisites lie behind it in the book, so no DAG whose edges point
+forward in book order could change the choice.
 
 **Primary metric.** The mean, over a fixed and equally weighted set of slice
 concepts, of the true probability of answering a fresh item correctly. It is
