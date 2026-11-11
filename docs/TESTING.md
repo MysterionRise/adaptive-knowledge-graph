@@ -166,7 +166,39 @@ reason that names an issue and an `ignoreUntil` date at most 90 days out;
 `backend/tests/test_osv_audit.py` enforces both and checks that the torch
 features the reasons call unused stay unused. It also keeps transformers
 remote code, model saving, training and the `kernels` package out of the
-project.
+project. Both files hold only `[[IgnoredVulns]]` tables with the keys `id`,
+`ignoreUntil` and `reason`, which the same test file checks: what backs an
+entry goes into its reason.
+
+Every npm entry is accepted because its package is dev-only. Its reason starts
+with the package and every version the lock has of it (`braces 3.0.3 is a
+dev-only dependency ...`, or `glob 10.5.0 and 13.0.6 are dev-only dependencies
+...`) and says that the package is not in the production bundle. The same test
+file checks each reason:
+
+- **Lock.** In `frontend/package-lock.json`, every copy of the package, nested
+  ones included, is marked `"dev": true`, the locked versions are exactly the
+  stated ones, and the package is not a direct production dependency.
+- **Named tools.** A devDependency of the project that the reason names with a
+  version (`jest 30`, `tailwindcss 3`, `ESLint 9`) is locked at that version,
+  and installing it installs the package.
+- **Imports.** No file under `frontend/app`, `frontend/components`,
+  `frontend/lib` or `frontend/types` imports the package, because Next.js
+  bundles what the application imports.
+
+`backend/tests/test_docker.py` checks the image in
+`infra/docker/frontend.Dockerfile`. The build stage runs `npm prune
+--omit=dev` after `npm run build`, and after the prune it neither copies files
+in nor installs packages. The runtime stage starts from a base image, copies
+`/app/node_modules` from the build stage, copies nothing from another stage
+and installs no packages.
+
+A dependency update that changes a locked version of one of these packages, or
+the major version of a tool a reason names, fails the test until the reason is
+updated. Three things are not checked: whether the advisory is about the
+package its reason names (the suite is offline, so check that when you add an
+entry), code that a production dependency ships inside its own package (the
+lock lists packages, not their contents), and a build of the image.
 
 ## Evaluation
 

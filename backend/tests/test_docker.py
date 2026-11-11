@@ -290,6 +290,312 @@ def test_frontend_dockerfile():
     assert "ARG NEXT_PUBLIC_API_URL" in content
     assert "USER node" in content
     assert "EXPOSE 3000" in content
+    # frontend/osv-scanner.toml accepts advisories in dev-only packages because the image
+    # does not ship them (#254); test_osv_audit.py checks the lock side of that claim
+    assert _dev_dependency_violations(content) == []
+
+
+def _dockerfile_stages(content: str) -> list[tuple[str, str, list[str]]]:
+    """Split a Dockerfile into stages: (name in lower case, base image, instructions).
+
+    Comment lines are left out, continuation lines are joined and runs of whitespace become
+    one space, so each instruction is one line that starts with its keyword. Docker compares
+    stage names without regard to case.
+    """
+    code = "\n".join(line for line in content.splitlines() if not line.lstrip().startswith("#"))
+    stages: list[tuple[str, str, list[str]]] = []
+    for line in re.sub(r"\\[ \t]*\n", " ", code).splitlines():
+        instruction = " ".join(line.split())
+        stage = re.fullmatch(
+            r"FROM (?:--\S+ )*(?P<base>\S+)(?: AS (?P<name>\S+))?", instruction, re.IGNORECASE
+        )
+        if stage:
+            stages.append(((stage["name"] or "").lower(), stage["base"], []))
+        elif instruction and stages:
+            stages[-1][2].append(instruction)
+    return stages
+
+
+def _stage_steps(instructions: list[str]) -> list[str]:
+    """A stage in the order it runs: each shell command of a RUN, and every other instruction."""
+    steps = []
+    for instruction in instructions:
+        keyword, _, arguments = instruction.partition(" ")
+        if keyword.upper() == "RUN":
+            steps.extend(command.strip() for command in re.split(r"&&|\|\||[;|]", arguments))
+        else:
+            steps.append(f"{keyword.upper()} {arguments}")
+    return steps
+
+
+_NPM_INSTALL = re.compile(r"\bnpm (?:ci|install|i|add)\b")
+
+
+def _is_dev_prune(step: str) -> bool:
+    """Whether a shell command is ``npm prune --omit=dev``, with any other flags but no dry run."""
+    words = step.split()
+    return words[:2] == ["npm", "prune"] and "--omit=dev" in words and "--dry-run" not in words
+
+
+def _copies_the_pruned_modules(step: str) -> bool:
+    """Whether a step is the COPY of /app/node_modules from the build stage."""
+    words = step.split()
+    paths = [word for word in words[1:] if not word.startswith("--")]
+    return (
+        words[:1] == ["COPY"]
+        and "--from=build" in [word.lower() for word in words]
+        and paths == ["/app/node_modules", "./node_modules"]
+    )
+
+
+def _dev_dependency_violations(content: str) -> list[str]:
+    """List what would let dev dependencies into the frontend image.
+
+    The ``build`` stage runs ``npm prune --omit=dev`` after ``npm run build`` (the build
+    needs the dev dependencies) and, after the prune, neither copies files in nor installs
+    packages. The last stage, the image that ships, starts from an image and not from an
+    earlier stage, copies ``/app/node_modules`` from the ``build`` stage, copies nothing from
+    another stage, copies ``node_modules`` from nowhere else and installs no packages.
+
+    Only shell-form RUN instructions are read; a command this check does not recognise
+    counts as missing.
+    """
+    stages = _dockerfile_stages(content)
+    violations = []
+    build = _stage_steps(next((steps for name, _, steps in stages if name == "build"), []))
+    built = max(
+        (at for at, step in enumerate(build) if step.split()[:3] == ["npm", "run", "build"]),
+        default=-1,
+    )
+    pruned = max((at for at, step in enumerate(build) if _is_dev_prune(step)), default=-1)
+    if built < 0:
+        violations.append("the build stage does not run `npm run build`")
+    if pruned < 0:
+        violations.append("the build stage does not run `npm prune --omit=dev`")
+    elif pruned < built:
+        violations.append("`npm prune --omit=dev` runs before `npm run build`")
+    else:
+        violations.extend(
+            f"the build stage runs `{step}` after the prune"
+            for step in build[pruned + 1 :]
+            if step.startswith(("COPY ", "ADD ")) or _NPM_INSTALL.search(step)
+        )
+
+    _, base, instructions = stages[-1] if stages else ("", "", [])
+    if base.lower() in {name for name, _, _ in stages[:-1] if name}:
+        violations.append(f"the last stage starts from the `{base}` stage")
+    last = _stage_steps(instructions)
+    if not any(_copies_the_pruned_modules(step) for step in last):
+        violations.append("the last stage does not copy node_modules from the build stage")
+    for step in last:
+        if _copies_the_pruned_modules(step):
+            continue
+        if step.startswith(("COPY ", "ADD ")):
+            source = re.search(r" --from=(\S+)", step)
+            if source and source[1].lower() != "build":
+                violations.append(
+                    f"the last stage copies from outside the build stage with `{step}`"
+                )
+            elif re.search(r"\bnode_modules\b", step):
+                violations.append(f"the last stage also copies node_modules with `{step}`")
+        elif _NPM_INSTALL.search(step):
+            violations.append(f"the last stage installs packages with `{step}`")
+    return violations
+
+
+# The shape of infra/docker/frontend.Dockerfile, for the checks on _dev_dependency_violations
+_FRONTEND_STAGES = """\
+ARG NODE_IMAGE=node:24-bookworm-slim
+FROM ${NODE_IMAGE} AS deps
+WORKDIR /app
+RUN npm ci --no-audit --no-fund
+
+FROM ${NODE_IMAGE} AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+# The build needs the dev dependencies
+RUN npm run build \\
+    && npm prune --omit=dev --no-audit --no-fund
+
+FROM ${NODE_IMAGE} AS runtime
+WORKDIR /app
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/.next ./.next
+"""
+_BUILD_STAGE = "FROM ${NODE_IMAGE} AS build\n"
+_LAST_STAGE = "FROM ${NODE_IMAGE} AS runtime\n"
+_BUILD_AND_PRUNE = "RUN npm run build \\\n    && npm prune --omit=dev --no-audit --no-fund\n"
+_COPY_PRUNED = "COPY --from=build --chown=node:node /app/node_modules ./node_modules\n"
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        pytest.param(_COPY_PRUNED, _COPY_PRUNED, id="unchanged"),
+        pytest.param(
+            _COPY_PRUNED,
+            "COPY --chown=node:node --from=build /app/node_modules ./node_modules\n",
+            id="copy-flags-reordered",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm run build\nRUN npm prune --omit=dev --no-audit --no-fund\n",
+            id="prune-in-its-own-run",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm run build \\\n    && npm prune --no-audit --no-fund --omit=dev\n",
+            id="prune-flags-reordered",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            _BUILD_AND_PRUNE.rstrip("\n") + " \\\n    && rm -rf .next/cache\n",
+            id="cleanup-after-prune",
+        ),
+        pytest.param(
+            _BUILD_STAGE, "  from ${NODE_IMAGE} as Build\n", id="stage-name-in-another-case"
+        ),
+    ],
+)
+def test_dev_dependency_check_accepts(old, new):
+    assert _FRONTEND_STAGES.count(old) == 1
+    assert _dev_dependency_violations(_FRONTEND_STAGES.replace(old, new)) == []
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm run build\n",
+            ["the build stage does not run `npm prune --omit=dev`"],
+            id="no-prune",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm run build\n#    && npm prune --omit=dev --no-audit --no-fund\n",
+            ["the build stage does not run `npm prune --omit=dev`"],
+            id="prune-commented-out",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm run build \\\n    && npm prune --no-audit --no-fund\n",
+            ["the build stage does not run `npm prune --omit=dev`"],
+            id="prune-keeps-dev-dependencies",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm run build \\\n    && npm prune --omit=optional\n",
+            ["the build stage does not run `npm prune --omit=dev`"],
+            id="prune-omits-optional-only",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm run build \\\n    && npm prune --omit=dev --dry-run\n",
+            ["the build stage does not run `npm prune --omit=dev`"],
+            id="prune-dry-run",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            'RUN npm run build \\\n    && echo "npm prune --omit=dev"\n',
+            ["the build stage does not run `npm prune --omit=dev`"],
+            id="prune-only-echoed",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            "RUN npm prune --omit=dev --no-audit --no-fund \\\n    && npm run build\n",
+            ["`npm prune --omit=dev` runs before `npm run build`"],
+            id="prune-before-build",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE + "\n" + _LAST_STAGE + "WORKDIR /app\n",
+            "RUN npm run build\n\n" + _LAST_STAGE + "WORKDIR /app\nRUN npm prune --omit=dev\n",
+            ["the build stage does not run `npm prune --omit=dev`"],
+            id="prune-in-last-stage",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            _BUILD_AND_PRUNE.rstrip("\n") + " \\\n    && npm ci --no-audit --no-fund\n",
+            ["the build stage runs `npm ci --no-audit --no-fund` after the prune"],
+            id="install-after-prune",
+        ),
+        pytest.param(
+            _BUILD_AND_PRUNE,
+            _BUILD_AND_PRUNE + "COPY --from=deps /app/node_modules ./node_modules\n",
+            [
+                "the build stage runs `COPY --from=deps /app/node_modules ./node_modules` "
+                "after the prune"
+            ],
+            id="copy-after-prune",
+        ),
+        pytest.param(
+            _COPY_PRUNED,
+            "COPY --from=deps --chown=node:node /app/node_modules ./node_modules\n",
+            [
+                "the last stage does not copy node_modules from the build stage",
+                "the last stage copies from outside the build stage with "
+                "`COPY --from=deps --chown=node:node /app/node_modules ./node_modules`",
+            ],
+            id="node-modules-from-unpruned-stage",
+        ),
+        pytest.param(
+            _COPY_PRUNED,
+            _COPY_PRUNED + "COPY --from=deps /app/node_modules/.bin ./node_modules/.bin\n",
+            [
+                "the last stage copies from outside the build stage with "
+                "`COPY --from=deps /app/node_modules/.bin ./node_modules/.bin`"
+            ],
+            id="second-copy-from-unpruned-stage",
+        ),
+        pytest.param(
+            _COPY_PRUNED,
+            _COPY_PRUNED + "COPY --from=deps --chown=node:node /app ./\n",
+            [
+                "the last stage copies from outside the build stage with "
+                "`COPY --from=deps --chown=node:node /app ./`"
+            ],
+            id="parent-directory-from-unpruned-stage",
+        ),
+        pytest.param(
+            _COPY_PRUNED,
+            _COPY_PRUNED + "COPY frontend/node_modules ./node_modules\n",
+            [
+                "the last stage also copies node_modules with "
+                "`COPY frontend/node_modules ./node_modules`"
+            ],
+            id="node-modules-from-build-context",
+        ),
+        pytest.param(
+            _COPY_PRUNED,
+            _COPY_PRUNED + "RUN npm ci --no-audit --no-fund\n",
+            ["the last stage installs packages with `npm ci --no-audit --no-fund`"],
+            id="install-in-last-stage",
+        ),
+        pytest.param(
+            _LAST_STAGE,
+            "FROM deps AS runtime\n",
+            ["the last stage starts from the `deps` stage"],
+            id="last-stage-from-unpruned-stage",
+        ),
+        pytest.param(
+            _COPY_PRUNED,
+            "",
+            ["the last stage does not copy node_modules from the build stage"],
+            id="no-node-modules",
+        ),
+    ],
+)
+def test_dev_dependency_check_rejects(old, new, expected):
+    assert _FRONTEND_STAGES.count(old) == 1
+    assert _dev_dependency_violations(_FRONTEND_STAGES.replace(old, new)) == expected
+
+
+def test_dev_dependency_check_rejects_a_file_without_stages():
+    assert _dev_dependency_violations("# syntax=docker/dockerfile:1\n") == [
+        "the build stage does not run `npm run build`",
+        "the build stage does not run `npm prune --omit=dev`",
+        "the last stage does not copy node_modules from the build stage",
+    ]
 
 
 def test_dockerignore_exists():
