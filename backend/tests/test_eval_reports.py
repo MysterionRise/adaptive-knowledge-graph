@@ -492,6 +492,14 @@ def test_default_api_key_comes_from_the_settings(monkeypatch):
 
 
 class TestCheckDemoEval:
+    @pytest.fixture(autouse=True)
+    def pyproject(self, tmp_path, monkeypatch) -> Path:
+        """A pyproject.toml of the builders' app version, so a version bump breaks no test."""
+        path = tmp_path / "pyproject.toml"
+        path.write_text(f'[tool.poetry]\nversion = "{SERVER_PROVENANCE["app_version"]}"\n')
+        monkeypatch.setattr(check_demo_eval, "PYPROJECT", path)
+        return path
+
     def test_complete_valid_report_passes(self, tmp_path):
         summary = check_demo_eval.validate_report(_write(tmp_path, _report()), 1)
         assert summary["kg_successful_cases"] == 2
@@ -569,6 +577,86 @@ class TestCheckDemoEval:
         report["provenance"]["harness"]["git_sha"] = "b" * 40
         with pytest.raises(SystemExit, match="differs from the harness checkout"):
             check_demo_eval.validate_report(_write(tmp_path, report), 1)
+
+    def test_server_app_version_must_be_the_pyproject_version(self, tmp_path, pyproject):
+        # e.g. an editable install from before a version bump: the API reports the old version
+        reported = SERVER_PROVENANCE["app_version"]
+        pyproject.write_text('[tool.poetry]\nversion = "9.9.9"\n')
+        with pytest.raises(SystemExit) as error:
+            check_demo_eval.validate_report(_write(tmp_path, _report()), 1)
+        assert f"server app_version {reported} differs" in str(error.value)
+        assert "pyproject.toml version 9.9.9: run `poetry install`" in str(error.value)
+        assert "restart the API" in str(error.value)
+
+        report = _report()
+        report["provenance"]["server"]["app_version"] = "9.9.9"
+        assert check_demo_eval.validate_report(_write(tmp_path, report), 1)
+
+    @pytest.mark.parametrize("app_version", [None, "", "unknown"])
+    def test_server_app_version_is_required(self, tmp_path, app_version):
+        report = _report()
+        report["provenance"]["server"]["app_version"] = app_version
+        with pytest.raises(SystemExit, match="server app_version missing"):
+            check_demo_eval.validate_report(_write(tmp_path, report), 1)
+
+    def test_cli_exits_non_zero_when_the_app_version_differs(
+        self, tmp_path, pyproject, monkeypatch, capsys
+    ):
+        """`make demo-eval` ends with this command, so a stale editable install fails it."""
+        report = _write(tmp_path, _report())
+        monkeypatch.setattr("sys.argv", ["check_demo_eval.py", "--report", str(report)])
+        check_demo_eval.main()
+        assert "Eval report is demo-ready" in capsys.readouterr().out
+
+        pyproject.write_text('[tool.poetry]\nversion = "9.9.9"\n')
+        with pytest.raises(SystemExit) as error:
+            check_demo_eval.main()
+        assert error.value.code not in (0, None)
+        assert "differs from the pyproject.toml version 9.9.9" in str(error.value)
+
+    def test_uninstalled_source_tree_version_is_rejected(self, tmp_path):
+        report = _report()
+        report["provenance"]["server"]["app_version"] = "0.0.0+unknown"
+        with pytest.raises(SystemExit, match=r"app_version 0\.0\.0\+unknown differs"):
+            check_demo_eval.validate_report(_write(tmp_path, report), 1)
+
+    @pytest.mark.parametrize(
+        "content", [None, "not toml [", "[tool.poetry]\n", "[tool]\npoetry = 1\n"]
+    )
+    def test_app_version_needs_a_readable_pyproject_version(self, tmp_path, pyproject, content):
+        if content is None:
+            pyproject.unlink()
+        else:
+            pyproject.write_text(content)
+        assert check_demo_eval.pyproject_version(pyproject) is None
+        with pytest.raises(SystemExit, match="no tool.poetry.version in"):
+            check_demo_eval.validate_report(_write(tmp_path, _report()), 1)
+
+    def test_checkout_is_read_relative_to_a_root(self, tmp_path, monkeypatch):
+        """scripts/release_check.py passes the tree it checks; the default is the directory."""
+        monkeypatch.setattr(check_demo_eval, "PYPROJECT", Path("pyproject.toml"))
+        root = tmp_path / "tree"
+        (root / "data/evals").mkdir(parents=True)
+        # A version and a golden set that only this root has, never the repository
+        (root / "pyproject.toml").write_text('[tool.poetry]\nversion = "9.9.9"\n')
+        golden = root / GOLDEN_SET_PATH
+        golden.write_text("version: 3\ncases: []\n")
+        report = _report()
+        report["provenance"]["server"]["app_version"] = "9.9.9"
+        report["provenance"]["golden_set"]["sha256"] = evaluate_rag._sha256_bytes(
+            golden.read_bytes()
+        )
+        assert check_demo_eval.checkout_errors(report, root) == []
+        assert check_demo_eval.pyproject_version(root / "pyproject.toml") == "9.9.9"
+
+        elsewhere = tmp_path / "elsewhere"  # no pyproject.toml and no golden set here
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        errors = check_demo_eval.checkout_errors(report)
+        assert errors == [
+            "no tool.poetry.version in pyproject.toml: cannot check the app version",
+            f"golden set {GOLDEN_SET_PATH} not found",
+        ]
 
     def test_harness_commit_is_required(self, tmp_path):
         report = _report()

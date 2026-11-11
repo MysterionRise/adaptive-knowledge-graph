@@ -12,6 +12,7 @@ API_URL ?= http://localhost:$(API_PORT)
 EVAL_ARGS ?=
 BASE ?=
 HEAD ?=
+TAG ?=
 # Commit reported by /api/v1/demo/provenance (evaluation reports); the environment wins
 GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 
@@ -25,7 +26,8 @@ GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 	ingest-books build-kg index-rag pipeline-all embedding-parity \
 	run-api run-frontend dev-setup \
 	eval-rag eval-rag-api eval-rehearsal eval-compare eval-noise-floor eval-rescore \
-	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval
+	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval \
+	release-check
 
 help: ## Show this help message
 	@echo 'Usage: make [target] [SUBJECT=economics] [PROFILE=cpu|gpu|full]'
@@ -183,3 +185,7 @@ demo-client-reset: ## Reset transient client demo learner state
 demo-eval: ## Run the full live eval and validate the report
 	poetry run python scripts/evaluate_rag.py --api-url $(API_URL)
 	poetry run python scripts/check_demo_eval.py
+
+# Release
+release-check: ## Offline release gate: versions, changelog, placeholders, eval evidence, demo assets (TAG=vX.Y.Z)
+	poetry run python scripts/release_check.py $(if $(TAG),--tag $(TAG))
