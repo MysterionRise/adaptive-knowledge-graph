@@ -18,7 +18,7 @@ Ollama or model downloads.
 | Security and rate limits | `test_auth.py`, `test_exceptions.py`, `test_privacy.py`, `test_rate_limit.py`, `test_api_rate_limits.py` |
 | Retrieval, embeddings and graph | `test_retriever.py`, `test_window_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_embeddings.py`, `test_neo4j_adapter.py`, `test_cypher_qa.py`, `test_chunker.py` |
 | Knowledge-graph building and concept extraction | `test_kg_builder.py`, `test_kg_schema.py`, `test_concept_extractor.py` |
-| LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_recommendation_service.py` |
+| LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_student_counterfactual.py`, `test_student_bkt_properties.py`, `test_recommendation_service.py` |
 | Configuration and tooling | `test_settings.py`, `test_subjects.py`, `test_logging.py`, `test_docker.py`, `test_makefile.py`, `test_poetry.py`, `test_dx_scripts.py` |
 | Documentation wording ([adaptivity/README.md](adaptivity/README.md)) | `test_adaptivity_wording.py` |
 | Adversarial review | `test_tribunal_prosecution.py` |
