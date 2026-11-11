@@ -199,7 +199,7 @@ reranking, LLM generation and learner-model updates.
 
 ## Evaluation
 
-`scripts/evaluate_rag.py` runs the 53-question golden set in
+`scripts/evaluate_rag.py` runs the 57-question golden set in
 `data/evals/golden_qa.yaml` against a live API, once with KG expansion and
 once without, and tracks:
 

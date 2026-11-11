@@ -28,7 +28,7 @@ playbook.
 
 ## Done
 
-- The golden evaluation set covers 53 questions across US History and
+- The golden evaluation set covers 57 questions across US History and
   Economics, including unsupported-claim and prompt-injection cases.
 - The adversarial (tribunal) tests run as their own suite (`-m tribunal`,
   `make test-tribunal`) and CI job, separate from the regular tests.
@@ -54,29 +54,31 @@ playbook.
   the first valid evaluation run on golden set v2 reported in the README,
   containers that report their version, and the tribunal, E2E, link-check and
   shellcheck jobs promoted to required checks.
-
-## Now: v0.4.0 (November 2026)
-
-Wave W2, tracked in
-[#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164).
-
-- **v0.4.0, tagged by 22 November:** golden set v3 with strata, a
-  rehearsal/final split and a frozen protocol
+- **v0.4.0, evidence and graph quality (November 2026,
+  [#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164)):**
+  golden set v3 with strata, a rehearsal/final split and a frozen protocol
   ([#206](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/206));
-  torch 2.13 and the CUDA 13 image, gated on embedding parity
-  ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207));
-  the evidence-state index and the advisory evaluation-delta check
-  ([#208](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/208));
-  bootstrap intervals and a noise-floor rule
+  bootstrap intervals, a generated sentence for the primary endpoint and a
+  noise-floor rule
   ([#209](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/209));
-  the remaining dev-only frontend advisories re-justified
-  ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279));
-  the Cypher QA smoke test
-  ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
-  The two torch allowlist entries are resolved before 31 December 2026; the
-  three frontend entries expire on 31 January 2027.
+  KG expansion that feeds the keyword channel only, with graph neighbours
+  shown as related concepts
+  ([#282](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/282));
+  concept names and aliases resolved at query time, without generic-word
+  matches
+  ([#212](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/212)),
+  and builder fixes
+  ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213)),
+  closing
+  [#158](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/158);
+  RELATED edges by association strength
+  ([#291](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/291));
+  a retrieval trace per request and KG attribution in evaluation reports
+  ([#216](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/216));
+  and the first final-split run under the protocol, reported in the README.
+  <!-- FILL (confirm after the release session, then delete this comment: the final-split run exists and the README table reports it; "November 2026" above is the month of the tag; anything that merged before the tag and belongs in this entry is named, for example #252 or #254; and #253 moves here from the v0.5.0 list below if it merged before the tag) -->
 
-## Next: v0.5.0, meaning and lineage (December 2026)
+## Now: v0.5.0, meaning and lineage (December 2026)
 
 Waves W3 and W4, tracked in
 [#236](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/236).
@@ -84,12 +86,8 @@ Waves W3 and W4, tracked in
 - Versioned domain artifacts: dictionary, relationship map and source
   inventory with a validated loader and an idempotent overlay
   ([#211](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/211)).
-- Aliases and senses resolved at query time, no more generic-word matching
-  ([#212](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/212)),
-  and builder fixes
-  ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213)),
-  closing
-  [#158](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/158).
+  Telling the senses of an ambiguous alias apart, which v0.4.0 leaves out,
+  builds on them.
 - Curated US History and Economics dictionaries, AI-drafted and
   steward-reviewed
   ([#214](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/214)).
@@ -97,14 +95,34 @@ Waves W3 and W4, tracked in
   and an origin per citation
   ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)),
   the one planned re-seed.
-- A request-scoped answer trace with KG-attributable accounting
-  ([#216](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/216)).
 - Positioning docs
   ([#217](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/217)),
   learner-state counterfactual tests
   ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210))
   and the review log with governance docs
   ([#218](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/218)).
+- The evidence-state index and the advisory evaluation-delta check
+  ([#208](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/208),
+  closing
+  [#156](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/156)),
+  `make release-check` with a tag-time gate in the Release workflow
+  ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253))
+  and the Cypher QA smoke test
+  ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
+- torch 2.13 and the CUDA 13 GPU image, gated on embedding parity
+  ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207)),
+  merged right before the re-seed.
+- Six advisory allowlist entries remain: two for torch in `osv-scanner.toml`
+  and four for dev-only frontend tooling in `frontend/osv-scanner.toml`. Three
+  expire on 31 December 2026 (the torch pair,
+  [#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207);
+  braces,
+  [#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166))
+  and three on 31 January 2027 (deepmerge, glob and minimatch,
+  [#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
+  An entry is removed when its fix lands and is not extended without
+  re-checking the advisory.
+  <!-- FILL (the #207 decision: replace if #207 lands before the tag; then move the torch item above into the v0.4.0 entry under Done, and this item counts four entries, one of them expiring on 31 December 2026) -->
 
 ## Next: v0.6.0, showcase domain and playbook (January 2027)
 

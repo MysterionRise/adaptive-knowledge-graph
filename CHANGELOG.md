@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - YYYY-MM-DD
+
+<!-- FILL (release date: replace YYYY-MM-DD in the heading above with the day v0.4.0 is tagged, and give date-released in CITATION.cff the same date) -->
+
+Evidence and graph quality
+([#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164)).
+The evaluation now follows a frozen protocol (`docs/evals/protocol.md`):
+golden set version 3 has strata, a rehearsal split for development and a final
+split that runs only at a release gate, and each report generates the one
+comparative sentence a release may quote. Retrieval and the graph changed
+where the per-case results of the v0.3.0 run pointed
+([#282](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/282)).
+
+### Evidence
+
+<!-- FILL (one paragraph on the final-split run, from the header and "Provenance" of docs/evals/latest.md: its date, commit, split and number of cases, answer model with temperature and seed, and the snapshot file under docs/evals/history/; a valid report means every request returned 200 and no KG expansion failed; list any "Protocol deviations" the report names. This section is written for a run of the final split alone, 29 cases. A run of every case, which is what "make demo-eval" does, reports "Summary", "Paired comparison", the stratum rows of "Intervals" and "KG attribution" over all 57 cases: say so in this paragraph, and take the bar rows, the meaning and distribution rates and the KG losses below from the results whose "split" is "final" in docs/evals/latest.json) -->
+
+The README's evaluation table reports the same run as per-arm rates with
+win/tie/loss counts.
+
+The primary endpoint is the KG-minus-plain citation hit rate over the 27
+final-split cases that name expected sources. The report generates its
+sentence (`summary.primary_endpoint.claim`), quoted as written:
+
+<!-- FILL (the sentence under "Primary endpoint" in docs/evals/latest.md, as a block quote; add no other comparative claim) -->
+
+The bar the protocol sets for the KG arm on the final split:
+
+| Stratum | Bar | KG result |
+| --- | --- | --- |
+| `single_hop` | citation hit rate ≥ 0.80, at least 9 of 11 | <!-- FILL (KG citation hits out of 11, then "met" or "missed". "Intervals" in docs/evals/latest.md prints rates, not hit counts: multiply the KG rate of its single_hop row by that row's "With sources" count, which is kg times pairs under summary.intervals.strata.single_hop.citation_hit in latest.json) --> |
+| `multi_hop` | citation hit rate ≥ 0.60, at least 5 of 8 | <!-- FILL (KG citation hits out of 8, then "met" or "missed": the KG rate of the multi_hop row of "Intervals" times that row's "With sources" count) --> |
+| `unanswerable` | every case refused, 2 of 2 | <!-- FILL (KG refusals out of 2, then "met" or "missed": kg_unsupported_refusal_rate under "Summary" times 2, in a report of the final split alone) --> |
+| `adversarial` | every injection resisted, 2 of 2 | <!-- FILL (KG injections resisted out of 2, then "met" or "missed": kg_prompt_injection_resistance_rate under "Summary" times 2, in a report of the final split alone) --> |
+
+`meaning` (2 cases) and `distribution` (4 cases) have no bar and are reported
+only:
+<!-- FILL (the KG and plain citation hit rates of the meaning and distribution rows of "Intervals" in docs/evals/latest.md) -->
+
+KG citation losses are the final-split cases where plain retrieval cites an
+expected source and KG retrieval does not:
+
+<!-- FILL (one bullet per "KG loss" line under "KG attribution" in docs/evals/latest.md, from a run that kept its traces: the case id and the explanation its trace gives; or the sentence "None on this run.") -->
+
+### Upgrading
+
+From 0.3.0, with data seeded by that release:
+
+- **Rebuild the graph of both seeded subjects.** The concepts
+  ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213))
+  and the RELATED edges
+  ([#291](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/291))
+  changed, and `make seed` skips a subject that already has a graph. Run
+  `make build-kg SUBJECT=us_history` and `make build-kg SUBJECT=economics`,
+  and answer `yes` when the build asks whether to clear the existing data (in
+  a script: `poetry run python scripts/build_knowledge_graph.py --subject <id> --clear`).
+  Without clearing, the build merges into the old graph, so removed concepts
+  such as "World War" and the old RELATED edges stay. Then restart the API,
+  which caches each subject's concept names and aliases for 5 minutes.
+- **No re-index.** Ingestion, chunking and the OpenSearch index mapping are
+  unchanged, so the stored embeddings stay. The lock moves
+  sentence-transformers from 6.1 to 6.2 and transformers from 5.20 to 5.22:
+  after `poetry install`, `make doctor` fails when an index no longer matches
+  the installed embedding stack, and `make embedding-parity SUBJECT=…`
+  compares stored vectors with new ones.
+  <!-- FILL (embedding parity measured in the release session: the min cosine that "make embedding-parity SUBJECT=us_history RERANKER=1" and "make embedding-parity SUBJECT=economics RERANKER=1" print for an index built by 0.3.0, as one sentence. The maintainer's comment of 2 November on pull request #278 records the same check for these lock versions, without the reranker check: cite it if the session does not repeat the measurement) -->
+- **Window retrieval.** Clearing a subject's graph also removes its Chunk
+  nodes and NEXT edges. If you use `VECTOR_BACKEND=neo4j` or `hybrid`, run
+  `make build-windows SUBJECT=…` again after the rebuild.
+- **`KG_COOCCURRENCE_THRESHOLD`.** It still sets how many paragraphs two
+  concepts must share, but its default is now 2 (it was 5), and reaching it no
+  longer creates a RELATED edge by itself: each concept chooses its 8
+  strongest partners (`KG_RELATED_TOP_K`), and no concept gets more than 24
+  RELATED edges. Review a value you set for 0.3.0, also as
+  `KG_COOCCURRENCE_THRESHOLD_<SUBJECT>`; the graph report of each build
+  records the parameters and the share of concepts without concept edges.
+- **API responses.** `/ask`, `/ask/stream` (in the `metadata` event) and
+  `/retrieve` gain `related_concepts` and `resolved_terms`.
+  `expanded_concepts` now lists only the concepts the retrieval used; the
+  graph neighbours it used to include are in `related_concepts`. `/retrieve`
+  also returns a `trace` unless the request sets `"include_trace": false`.
+- **torch.**
+  <!-- FILL (the #207 decision: replace if #207 lands before the tag; this item then says torch 2.13, the CUDA 13 GPU image with the driver and macOS versions it needs, and that both entries left osv-scanner.toml) -->
+  torch stays on 2.10 (`>=2.10.0,<2.11` in `pyproject.toml`), and the GPU
+  image stays on CUDA 12.8. The two torch advisories allowlisted in
+  `osv-scanner.toml` (GHSA-rrmf-rvhw-rf47, fixed in torch 2.13, and
+  PYSEC-2026-139, fixed from 2.11) keep their entries and their expiry,
+  2026-12-31. Both are local-only and concern features the code does not use
+  (`torch.jit.script` and loading `.pt2` archives), which a unit test checks.
+  The upgrade to torch 2.13 and a CUDA 13 image
+  ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207))
+  merges right before the re-seed planned for v0.5.0
+  ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)),
+  before the entries expire.
+
 ### Added
 
 - Golden set version 3
@@ -499,5 +594,6 @@ history:
   local LLM through Ollama and a Next.js frontend; OpenSearch replaced Qdrant as
   the vector store.
 
-[Unreleased]: https://github.com/MysterionRise/adaptive-knowledge-graph/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/MysterionRise/adaptive-knowledge-graph/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/MysterionRise/adaptive-knowledge-graph/releases/tag/v0.4.0
 [0.3.0]: https://github.com/MysterionRise/adaptive-knowledge-graph/releases/tag/v0.3.0

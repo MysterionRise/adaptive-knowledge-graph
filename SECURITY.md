@@ -8,10 +8,10 @@ to run on one machine for a single user or a small trusted team. Please read the
 
 | Version | Supported |
 | --- | --- |
-| 0.3.x | Yes |
-| < 0.3 | No |
+| 0.4.x | Yes |
+| < 0.4 | No |
 
-Security fixes land on `main` and ship in the latest 0.3.x release.
+Security fixes land on `main` and ship in the latest 0.4.x release.
 
 ## Reporting a vulnerability
 
