@@ -147,7 +147,6 @@ class Finding:
 # The checker
 # ---------------------------------------------------------------------------
 
-_COMMENT = re.compile(r"<!--.*?-->")
 _TAG = re.compile(r"</?[A-Za-z][^<>]*>")
 # "content" is the text of a <meta name="description"> tag, which link previews show
 _SHOWN_ATTRIBUTE = re.compile(
@@ -175,6 +174,26 @@ _CHARACTERS = str.maketrans(
 _BREAK = "\N{PILCROW SIGN}"
 
 
+def _without_comments(line: str) -> str:
+    """
+    The line without the HTML comments that open and close on it.
+
+    A comment that is still open at the end of the line stays and is read as text, so a phrase
+    in it is reported. This is plain string search and not a pattern, because the gate reads
+    text and must not be mistaken for (or reused as) an HTML sanitiser.
+    """
+    kept: list[str] = []
+    position = 0
+    while (start := line.find("<!--", position)) != -1:
+        end = line.find("-->", start + 4)
+        if end == -1:
+            break
+        kept.append(line[position:start])
+        position = end + 3
+    kept.append(line[position:])
+    return "".join(kept)
+
+
 def _tag_text(tag: re.Match[str]) -> str:
     """What a reader sees of an HTML tag: its alt, title, aria-label and content text."""
     shown = _SHOWN_ATTRIBUTE.findall(tag.group(0))
@@ -183,7 +202,7 @@ def _tag_text(tag: re.Match[str]) -> str:
 
 def _words(line: str) -> list[str]:
     """The words of one source line, without HTML tags, entities and Markdown markup."""
-    line = html.unescape(_TAG.sub(_tag_text, _COMMENT.sub("", line))).translate(_CHARACTERS)
+    line = html.unescape(_TAG.sub(_tag_text, _without_comments(line))).translate(_CHARACTERS)
     line = _LINK.sub(r"\1", _QUOTE_PREFIX.sub("", line)).replace(_BREAK, " ")
     line = _EDGE_UNDERSCORES.sub("", re.sub(r"[*`~]", "", line).replace("|", " "))
     return line.split()
@@ -434,6 +453,9 @@ LAYOUTS = [
     ('<img src="quiz.png" alt="Practice adapts to each learner">\n', 1),
     ('<meta name="description" content="A tutor that adapts to each learner" />\n', 1),
     ("<p>Practice adapts to each<!-- hidden --> learner</p>\n", 1),
+    ("<p>Practice <!-- one -->adapts to <!-- two -->each learner</p>\n", 1),
+    # A comment that does not close on its line is read as text, so the phrase in it is found
+    ("Quizzes. <!-- to do: say that practice adapts to each learner\n-->\n", 1),
     ('Practice [adapts](../adaptivity/README.md "what adaptive means") to each learner.\n', 1),
     ("```text\npractice adapts to each learner\n```\n", 2),
 ]
@@ -490,6 +512,8 @@ CLEAN = [
     "The checks were calibrated\n\ndifficulty is requested by prompt.",
     "* content that was adapted to\n* each learner profile in the store",
     "- mastery is not adaptive\n- quiz generation needs the LLM",
+    # A comment that opens and closes on one line is not shown to a reader
+    "Quizzes are generated. <!-- do not write: practice adapts to each learner -->",
 ]
 
 
