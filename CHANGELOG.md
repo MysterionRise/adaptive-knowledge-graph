@@ -88,6 +88,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of claiming that it adds prerequisite and related concepts.
 - The case hash leaves out `stratum` and `split`, so every case keeps the hash
   it had in version 2 and earlier reports stay comparable.
+- The README, the demo documents and the slides follow the two-label wording
+  of `docs/adaptivity/README.md`
+  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)):
+  - **Wording.** They no longer present the quizzes or the practice as
+    adaptive. They describe what the code does instead: the quiz prompt asks
+    for a difficulty band taken from a mastery estimate, BKT with fixed,
+    unfitted parameters updates that estimate from answers graded in the
+    browser, and neither the delivered difficulty nor the estimate is
+    validated. Interface strings are unchanged.
+  - **Gate.** `backend/tests/test_adaptivity_wording.py` fails, with file and
+    line, when a never-say phrase of the note, "auto-targets" or "adaptive
+    quizzes" appears in `README.md`, `docs/demo/` or `demo-slides/`. A
+    sentence that says the thing is not done passes only as an exact, listed
+    sentence. Other uses of the word "adaptive" are not gated.
+  - **Design note.** `docs/adaptivity/README.md` now says that only the
+    textbook's question sections are to be kept out of retrieval (a proposal
+    on [#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215);
+    the glossary and key terms stay), adds the `ready-first` probe and what
+    waits for the simulator's robustness worlds, corrects the dependencies in
+    its phases table, and lists the interface strings that remain.
 - RELATED edges link each concept to its strongest associations
   ([#291](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/291)):
   - **Scoring.** A pair of concepts is scored by normalised pointwise mutual

@@ -6,8 +6,8 @@ A one-page summary to hand out after a demo.
 
 Adaptive Knowledge Graph is a local prototype for AI over approved learning
 content. It combines KG-aware retrieval, traceable citations, graph
-exploration, adaptive practice and live evaluation signals. The demo runs on
-OpenStax textbooks and synthetic learners.
+exploration, generated quizzes with a mastery estimate and live evaluation
+signals. The demo runs on OpenStax textbooks and synthetic learners.
 
 ## Why it matters
 
@@ -17,7 +17,9 @@ reviewability:
 
 - answers cite approved source material
 - concepts and prerequisites can be inspected
-- practice adapts to each learner's mastery
+- quiz difficulty is requested by prompt from a mastery estimate; neither the
+  delivered difficulty nor the estimate is validated
+  ([what "adaptive" means here](../adaptivity/README.md))
 - unsupported and adversarial questions are measured in the evaluation
 - the local-first setup avoids real student data
 
@@ -26,7 +28,7 @@ reviewability:
 - Grounded Q&A with citations.
 - Knowledge graph exploration.
 - KG-RAG versus plain retrieval comparison.
-- Adaptive quiz and mastery updates.
+- A generated quiz and mastery-estimate updates.
 - A demo readiness dashboard.
 - A golden-set evaluation report.
 

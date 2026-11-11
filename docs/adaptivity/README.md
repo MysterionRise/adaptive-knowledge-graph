@@ -9,7 +9,7 @@ and does not change their definitions of done.
 
 Sources checked on 9 November 2026 against abstracts, publisher records and
 search snippets (full texts were not reachable); numbers that rest on secondary
-summaries say so. File references are to `main` at commit `52f2dbf`.
+summaries say so. File references are to `main` at commit `7b3589c`.
 
 ## Summary
 
@@ -59,7 +59,7 @@ summaries say so. File references are to `main` at commit `52f2dbf`.
 | Decision | Where | What it does |
 | --- | --- | --- |
 | Quiz difficulty band | `backend/app/student/models.py:54`, `backend/app/api/routes/quiz.py:163` | Mastery below 0.4 asks for easy questions, up to 0.7 medium, above that hard. The band is a prompt instruction only: the LLM labels its own difficulty, off-band questions are returned unchanged, and `adapted=True` is hard-coded (`quiz.py:181`). All questions in a quiz use one band, and each quiz is generated from a single retrieved chunk (`quiz_generator.py:76`). |
-| Mastery estimate | `backend/app/student/student_service.py:236-297` | Four-parameter BKT with constants that were never fitted: transit 0.1, slip 0.1, guess 0.25, prior 0.3 (`models.py:27-29`, `core/settings.py:249`). From the prior, one correct answer gives 0.65 and two give about 0.88, so two answers jump from easy to hard. There is no forgetting (`last_assessed` is written, never read) and no attempt history, only counters. |
+| Mastery estimate | `backend/app/student/student_service.py:236-297` | Four-parameter BKT with constants that were never fitted: transit 0.1, slip 0.1, guess 0.25, prior 0.3 (`models.py:27-29`, `core/settings.py:249`). From the prior, one correct answer gives 0.65 and two give about 0.88, so two answers jump from easy to hard. Below 3/26 (about 0.115) a wrong answer raises the estimate: the learning step is added after the Bayes update, so 0.10 becomes 0.1131 (`student_service.py:236-258`). That is how BKT with a learning step behaves, not a defect. There is no forgetting (`last_assessed` is written, never read) and no attempt history, only counters. |
 | What mastery is keyed by | `frontend/components/Quiz.tsx:348`, `backend/app/student/quiz_generator.py:158` | The free-text quiz topic, with no subject. Only 7 of the 23 offered topics resolve to a graph concept ([#108](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/108)). `/student/mastery` accepts `subject` but drops it (`quiz.py:233-237`). |
 | Grading | `backend/app/ui_payloads/quiz.py:15`, `Quiz.tsx:331` | In the browser. The answer key and explanation are sent with the questions, and any caller with the API key can post any mastery update ([#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74)). The interface uses a single `"default"` learner ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73)). |
 | Recommendations | `backend/app/student/recommendation_service.py:55-61` | Remediation below a 50% quiz score, advancement above 80%. Mastery is displayed, not used. Prerequisites come from glossary-derived PREREQ edges, some of them wrong ([#223](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/223)). The "deep dive" is LLM text at temperature 0.7 with no retrieved source (`recommendation_service.py:263-272`). |
@@ -67,12 +67,70 @@ summaries say so. File references are to `main` at commit `52f2dbf`.
 | Tutor (`/ask`) | `backend/app/api/routes/ask.py` | Learner-agnostic, and it answers directly. |
 | Measurement | `scripts/evaluate_rag.py` | Retrieval and answer quality only. Nothing measures quiz quality, decision quality or learning. |
 
-**Overclaims to correct:**
+**Overclaims corrected**
+([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)):
 
-- `demo-slides/index.html:432`: "Difficulty auto-targets student mastery
-  level".
-- `docs/demo/CLIENT_LEAVE_BEHIND.md:20`: "practice adapts to each learner's
-  mastery".
+- `demo-slides/index.html` said "Difficulty auto-targets student mastery
+  level", and `docs/demo/CLIENT_LEAVE_BEHIND.md` said "practice adapts to each
+  learner's mastery".
+- `README.md` and every other document in `docs/demo/` except
+  `TRUST_AND_PRIVACY.md` (eight documents) presented the quizzes or the
+  practice as adaptive.
+- These documents no longer present a behaviour as adaptive. Where they
+  describe the quiz, they say that the difficulty band is requested by prompt
+  and that neither the delivered difficulty nor the mastery estimate is
+  validated.
+- `backend/tests/test_adaptivity_wording.py`, added with these corrections,
+  scans `README.md`, `docs/demo/` and `demo-slides/` for the never-say phrases
+  above, for "auto-targets" and for "adaptive quizzes".
+- The test does not gate other uses of the word "adaptive". The project name,
+  the `/quiz/generate-adaptive` endpoint, the interface labels the documents
+  quote and their statements of what education teams need ("adaptive
+  practice") all use it. A sentence that presents a behaviour as adaptive in
+  other words still needs a reviewer.
+
+**Interface strings in `frontend/` that remain** (not edited here; a
+follow-up on the
+[#313](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/313)
+checklist):
+
+- `frontend/components/MasteryIndicator.tsx:86`: "Personalized for You";
+  `:93`: "Adapting"; `:157`: "Questions are tailored to your current
+  proficiency level".
+- `frontend/components/Quiz.tsx:446`: "Crafting Your Personalized Quiz";
+  `:463`: "Generating ${targetDifficulty}-level questions...", which states
+  the requested band as the delivered one; `:498`: "Adaptive Mode"; `:521`:
+  "Questions will be tailored to your current proficiency level"; `:601`:
+  "Start Adaptive Assessment"; `:888`: "Adaptive Learning"; `:933`: "Continue
+  Learning (Next Level)".
+- `frontend/app/assessment/layout.tsx:6-7`: the page title "Adaptive
+  Assessment" and the description "Quizzes generated from the textbook,
+  adapted to your mastery of each topic."
+- `frontend/app/assessment/page.tsx:19`: "Adaptive Assessment Engine".
+- `frontend/app/page.tsx:71`: "Adaptive learning over open textbooks";
+  `:75-76`: "adaptive practice"; `:310`: "Test your mastery with adaptive
+  quizzes and instant remediation".
+- `frontend/app/about/page.tsx:21-23`: "a proof-of-concept for personalized
+  education using knowledge graphs, local LLMs, and adaptive learning
+  algorithms".
+- `frontend/app/layout.tsx:12`: "Open-source, local-first adaptive learning
+  demo" in the site description.
+- `frontend/README.md:4-5` and `:52` (documentation, not an interface
+  string): "adaptive assessment over synthetic learner state" and "Adaptive
+  quiz and mastery workflow".
+
+**Also not corrected here**, outside `frontend/`:
+
+- The API descriptions served at `/docs`: `backend/app/main.py:148-149`
+  ("Quiz & Adaptive Learning", "Adaptive quiz generation"), `:170` ("a
+  proof-of-concept adaptive learning API") and `:176` ("Adaptive Quizzes"),
+  and `backend/app/api/routes/quiz.py:141-143` ("The difficulty is
+  automatically targeted") and `:303` ("Generate personalized
+  recommendations").
+- `docs/ARCHITECTURE.md:15` and `:103`, with the caveat that follows at
+  `:117-121` ("an adaptive-practice prototype, not a validated assessment
+  engine").
+- The package metadata: `CITATION.cff:6-9` and `pyproject.toml:4`.
 
 ## Assets in the sources, and a contamination problem
 
@@ -100,9 +158,18 @@ inside the retrieval chunks today**:
   only, so it does not catch them.
 
 The quiz generator and `/ask` can therefore retrieve a review question with
-its key. Until the one planned re-seed
-([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215))
-drops these sections from the chunks, they cannot serve as a held-out pool.
+its key. The items cannot serve as a held-out pool until the **question
+sections** are kept out of retrieval: review, self-check and critical-thinking
+questions, problems, exercises and answer keys.
+
+- **How.** Either drop those sections before chunking, or tag each chunk with
+  its section kind and filter the question kinds at query time.
+- **What stays.** The glossary and key terms are in the same
+  `STRUCTURAL_SECTION_TITLES` set (`backend/app/kg/markup.py:117-136`) and
+  stay retrievable.
+- **Status.** This is a proposal in a comment on
+  [#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215),
+  the one planned re-seed. It is not yet in that issue's scope.
 
 ## What the evidence says
 
@@ -195,8 +262,10 @@ adds for persisted quizzes.
 The textbook's own multiple-choice review items become a measurement pool,
 **never served in practice**.
 
-- **Excluded from retrieval.** The pool needs the structural sections dropped
-  from the retrieval chunks first, in #215.
+- **Excluded from retrieval.** The pool needs the question sections kept out
+  of retrieval first, by dropping them or by tagging and filtering. That is
+  proposed on #215 and not yet in its scope. The glossary and key terms stay
+  retrievable.
 - **Mapping.** Items belong to a section, not a concept, so each item maps
   from section to concepts with recorded provenance. Section learning
   objectives are attached alongside.
@@ -247,17 +316,29 @@ robustness extensions in [#311](https://github.com/MysterionRise/adaptive-knowle
 
 | Axis | Values |
 | --- | --- |
-| World structure | A synthetic prerequisite DAG with prerequisite strength none, weak or strong. Learning is gated by prerequisites with some leak, and some learners hold knowledge that contradicts the DAG. Later worlds add IRT-style responses, forgetting and item memorisation. |
+| World structure | A synthetic prerequisite DAG with prerequisite strength none, weak or strong. Learning is gated by prerequisites with some leak, and some learners hold knowledge that contradicts the DAG. The core world has no forgetting and no item difficulty. The robustness worlds ([#311](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/311)) add IRT-style responses, forgetting and item memorisation. |
 | The DAG the policy is given (crossed with the world) | The true DAG; precision 0.6 or 0.8; recall 0.6 or 0.8; 10 to 20% reversed edges; a chapter chain; no DAG; a degree-preserving shuffle |
 | Item-to-concept mapping | Correct, or with a set error rate (robustness extension) |
-| Policies | `random`, `textbook`, `band-v1` (textbook order plus band difficulty), `mastery-textbook`, `frontier-v1` and its DAG ablations, and an `oracle` that applies the policy's own rule to the true state |
+| Policies | `random`; `textbook`; `ready-first`, a selection-only probe that picks the next concept whose prerequisites in the DAG it is given are estimated as mastered (it is not `frontier-v1`); `band-v1` (textbook order plus band difficulty); and an `oracle`, which is `ready-first` on the true DAG with the true learner state. `mastery-textbook` and `frontier-v1` with its DAG ablations plug in later ([#312](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/312)). |
 | Effect of correctives, hints and feedback | Swept, including zero, to find the break-even point |
+
+**The probe.** `ready-first` is the policy that reads the DAG it is given, so
+the crossed DAG axis and the precision and recall sweep for #223 have
+something to measure. It has no correctives and no spaced mastery criterion.
 
 **Primary metric.** The mean, over a fixed and equally weighted set of slice
 concepts, of the true probability of answering a fresh item correctly. It is
 computed analytically from the latent state at a retention delay D. Every
 policy gets the same time budget, and items, hints and reading all cost time,
 so re-teaching is not free.
+
+**What waits for the robustness worlds.** With no forgetting in the core
+world, D is a protocol field that has no effect yet. With no item difficulty,
+`band-v1` must equal `textbook` on the primary metric there and serves as a
+wiring check. Both the delay and the `band-v1` comparison take effect only
+with the worlds of #311. The mapping-error axis, the break-even sweep and
+every secondary metric below other than time to criterion and AUC also arrive
+with #311.
 
 **Secondary metrics:**
 
@@ -278,6 +359,9 @@ so re-teaching is not free.
 - **Decision rule, frozen with the protocol** (`docs/evals/simulation-protocol.md`)
   before `frontier-v1` exists: a policy goes forward when it gains at least
   +δ in the primary cell and loses no more than δ in every other cell.
+- **Protocol versions.** A frozen protocol version is never edited. Later
+  additions, such as the worlds and calibration thresholds of #311, go into a
+  new version.
 
 **What simulation can support:** that the code does what it says; how
 rankings hold up across plausible worlds; how much wrong or missing
@@ -338,15 +422,15 @@ domain milestones' tags do not wait for them.
 | When | Item | Issue | Depends on |
 | --- | --- | --- | --- |
 | v0.5.0 | Counterfactual and BKT property tests, plausibility constraints, the two-label wording | [#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210) (comment) | none |
-| v0.5.0 | Drop the structural sections from the retrieval chunks in the one re-seed | [#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215) (comment) | none |
+| v0.5.0 | Keep the textbook's question sections, with their answer keys, out of retrieval in the one re-seed, by dropping them or by tagging and filtering; the glossary and key terms stay | [#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215) (comment; a proposal, not yet in its scope) | #211 (as #215) |
 | v0.6.0 W5 | Policy interface with decision records; `band-v1` | [#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306) | #210 |
-| v0.6.0 W5-W6 | Simulator core and frozen simulation protocol | [#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307) | policy interface |
-| v0.7.0 W8 | Server-side grading writes attempts; concept-id mastery keys | [#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74), [#108](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/108) (comments) | none |
-| v0.7.0 W8 | Attempt log with mastery replay and the assisted flag | [#308](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/308) | #74 |
-| v0.7.0 W8-W9 | Held-out measurement pool from the textbook review items | [#309](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/309) | #215, #108 |
+| v0.6.0, first pull request ahead of W5 | Simulator core with the `ready-first` probe and a frozen simulation protocol. The sweep reaches #223 before W6 starts (5 January). | [#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307) | #306 |
+| v0.7.0 W8 | Server-side grading writes attempts; concept-id mastery keys | [#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74), [#108](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/108) (comments) | #108 waits for the domain dictionary (#211, #214). #74 follows #108 and takes the attempt schema from #307. |
+| v0.7.0 W8 | Attempt log with mastery replay and the assisted flag | [#308](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/308) | #74, #108; the schema from #307 |
+| v0.7.0 W8-W9 | Held-out measurement pool from the textbook review items | [#309](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/309) | The parser: none. The held-out guarantee: the #215 exclusion. The concept mapping: #108. |
 | v0.7.0 W9 | Per-distractor rationales, rendered citations, correctness gate | [#310](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/310) | #74 |
 | v0.7.0 W9 | Simulator robustness worlds, calibration gate, break-even sweeps | [#311](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/311) | simulator core |
-| Later | `frontier-v1` mastery loop | [#312](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/312) | #223, #108, simulator decision rule |
+| Later | `frontier-v1` mastery loop | [#312](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/312) | #223, #108, #308, the simulator decision rule (#307, #311) |
 | Later | Placement probe, opt-in practice mode for `/ask`, pilot protocol | [#313](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/313) (checklist) | `frontier-v1`, #73 |
 
 ## Deferred
