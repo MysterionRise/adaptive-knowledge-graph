@@ -12,7 +12,7 @@ import contextlib
 import sqlite3
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -30,9 +30,14 @@ from backend.app.student.models import (
     StudentProfileResponse,
     TargetDifficultyResponse,
 )
+from backend.app.student.policy import difficulty_of
+from backend.app.ui_payloads.decisions import DecisionRecordPayload
 
 # (concept, subject_id) -> True if the concept exists; subject_id None = default subject
 ConceptValidator = Callable[[str, str | None], bool]
+
+# Returns the time a decision is stamped with (decided_at); the time has a UTC offset
+Clock = Callable[[], datetime]
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS student_profiles (
@@ -57,6 +62,10 @@ class StudentStorageError(AdaptiveKGException):
 
 class UnknownConceptError(AdaptiveKGException):
     """The concept is not part of the subject's knowledge graph."""
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 def kg_concept_exists(concept: str, subject_id: str | None = None) -> bool:
@@ -84,6 +93,8 @@ class StudentService:
         storage_path: SQLite database file (defaults to STUDENT_PROFILES_DB)
         concept_validator: Called as ``validator(concept, subject_id)`` before a mastery
             update; returning False raises UnknownConceptError. None disables validation.
+        clock: Returns the time a decision is stamped with (``decided_at``), with a UTC
+            offset; defaults to the current UTC time. Policies never see it.
     """
 
     # Mastery update parameters
@@ -98,10 +109,12 @@ class StudentService:
         self,
         storage_path: str | Path | None = None,
         concept_validator: ConceptValidator | None = None,
+        clock: Clock | None = None,
     ):
         """Initialize the service and create the SQLite schema if needed."""
         self.storage_path = Path(storage_path or settings.student_profiles_db)
         self.concept_validator = concept_validator
+        self.clock = clock or _utc_now
         self._initialize_storage()
 
     # ------------------------------------------------------------------
@@ -355,15 +368,23 @@ class StudentService:
         concept: str,
         student_id: str = "default",
     ) -> TargetDifficultyResponse:
-        """Get recommended difficulty for a concept based on student mastery."""
+        """
+        Get the target difficulty for a concept, with the decision record behind it.
+
+        The difficulty is the action of the policy's decision
+        (``StudentProfile.decide_difficulty``). ``mastery_level`` is the mastery rounded to
+        three places; the record's ``state_used`` holds the value the policy read.
+        ``decided_at`` comes from the service's clock and is not part of the record.
+        """
         profile = self.get_profile(student_id)
         mastery = profile.get_mastery(concept)
-        target = profile.get_target_difficulty(concept)
+        record = profile.decide_difficulty(concept)
 
         return TargetDifficultyResponse(
             concept=concept,
             mastery_level=round(mastery, 3),
-            target_difficulty=target,
+            target_difficulty=difficulty_of(record),
+            decision=DecisionRecordPayload.from_record(record, decided_at=self.clock()),
         )
 
     def reset_profile(self, student_id: str = "default") -> StudentProfileResponse:
