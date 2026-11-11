@@ -1,0 +1,863 @@
+# Written by scripts/domain_tool.py draft (docs/DOMAINS.md). The command replaces the
+# entries with review_status: extracted and keeps the values of every other entry. It
+# rewrites the file with sorted keys: comments and formatting are not kept.
+schema_version: 1
+relationships:
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50182
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: African Americans
+  target: Black Power
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50075
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: African Americans
+  target: Colonization
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50117
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: African Americans
+  target: Great Migration
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50023
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Artisan
+  target: Sons of Liberty
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50064
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Civil War
+  target: Antebellum
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Civil War
+  target: Emancipation Proclamation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50085
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Civil War
+  target: Fort Sumter
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50117
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Civil War
+  target: Great Migration
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50091
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Civil War
+  target: Reconstruction
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50022
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Coercive Acts
+  target: Intolerable Acts
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Congress
+  target: Compromise of 1850
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50059
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Congress
+  target: Missouri Compromise
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50038
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Constitution
+  target: Bill of Rights
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50036
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Constitution
+  target: Federalists
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50014
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: England
+  target: Nonconformist
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m49990
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: England
+  target: Pilgrims
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m49995
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: England
+  target: Puritans
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m49990
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: England
+  target: Separatists
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50185
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Europe
+  target: Iron Curtain
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50142
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Europe
+  target: Neutrality
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50129
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Federal Government
+  target: New Freedom
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50213
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Federal Government
+  target: Tea Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50038
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Federalists
+  target: Democratic-Republicans
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50039
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: French
+  target: Terror
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50007
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Great Britain
+  target: French and Indian War
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50021
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Great Britain
+  target: Loyalist
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50164
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Great Depression
+  target: Dust Bowl
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50163
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Hoover
+  target: American Individualism
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m49992
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Indians
+  target: Smallpox
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50088
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Lincoln
+  target: Copperheads
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Lincoln
+  target: Emancipation Proclamation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50026
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Majority Rule
+  target: Popular Sovereignty
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Mexican Cession
+  target: Compromise of 1850
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50061
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Mexico
+  target: Mexican Cession
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Mexico
+  target: Wilmot Proviso
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m49968
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Muslim
+  target: Crusades
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50036
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Political Party
+  target: Federalists
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Political Party
+  target: Free-Soil Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Political Party
+  target: Liberty Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50123
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Political Party
+  target: Populist Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50129
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Political Party
+  target: Progressive Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50080
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Political Party
+  target: Republican Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50052
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Political Party
+  target: Whigs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m49990
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Puritans
+  target: Separatists
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50022
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quartering Act
+  target: Coercive Acts
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50095
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Reconstruction
+  target: Ku Klux Klan
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50129
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Roosevelt
+  target: Progressive Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50139
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Roosevelt
+  target: Roosevelt Corollary
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m49990
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Separatists
+  target: Pilgrims
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50059
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slave States
+  target: Missouri Compromise
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50075
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slavery
+  target: Abolitionist
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50080
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slavery
+  target: Bleeding Kansas
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slavery
+  target: Emancipation Proclamation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slavery
+  target: Free-Soil Party
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50092
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slavery
+  target: Freedmen’s Bureau
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50059
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slavery
+  target: Missouri Compromise
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Slavery
+  target: Wilmot Proviso
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50095
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: South
+  target: Compromise of 1877
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50117
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: South
+  target: Great Migration
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50085
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: South Carolina
+  target: Fort Sumter
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50185
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Soviet Union
+  target: Cold War
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50185
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Soviet Union
+  target: Iron Curtain
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50186
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Soviet Union
+  target: Massive Retaliation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50121
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Spoils System
+  target: Civil Service
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50023
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Stamp Act
+  target: Sons of Liberty
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50086
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Union
+  target: Army of the Potomac
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Union
+  target: Contrabands
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50085
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Union
+  target: Fort Sumter
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50059
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Union
+  target: Missouri Compromise
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50091
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Union
+  target: Reconstruction
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50126
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Urbanization
+  target: Progressivism
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50086
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Washington
+  target: Army of the Potomac
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50114
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Washington
+  target: Tammany Hall
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50047
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: West
+  target: Erie Canal
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50098
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: West
+  target: Manifest Destiny
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50061
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: West
+  target: Mexican Cession
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50142
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: World War I
+  target: Neutrality
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: us-history
+  provenance:
+    method: glossary
+    module_id: m50184
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: World War II
+  target: GI Bill
+  type: PREREQ

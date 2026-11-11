@@ -407,6 +407,87 @@ class TestLearningPathEndpoint:
         assert "PREREQ" in mock_session.run.call_args.args[0]
         assert "PREREQUISITE" not in mock_session.run.call_args.args[0]
 
+    def test_prerequisites_return_the_provenance_of_a_curated_edge(self, client):
+        """#211: after `domain_tool.py apply`, a curated PREREQ edge reads "curated"."""
+        mock_session = MagicMock()
+        mock_session.run.return_value = [
+            {
+                "name": "Trade",
+                "importance": 0.7,
+                "chapter": None,
+                "level": 1,
+                "provenance_source": "curated",
+            },
+            {
+                "name": "Good",
+                "importance": 0.6,
+                "chapter": None,
+                "level": 1,
+                "provenance_source": "glossary",
+            },
+            # An indirect prerequisite stands for a path, so the query returns no source
+            {
+                "name": "Scarcity",
+                "importance": 0.9,
+                "chapter": None,
+                "level": 2,
+                "provenance_source": None,
+            },
+        ]
+        mock_adapter = create_mock_adapter_with_session(mock_session)
+
+        with patch("backend.app.kg.neo4j_adapter.get_neo4j_adapter", return_value=mock_adapter):
+            response = client.get("/api/v1/concepts/Tariff/prerequisites")
+
+        assert response.status_code == 200
+        prerequisites = response.json()["prerequisites"]
+        assert [(p["name"], p["level"], p["provenance_source"]) for p in prerequisites] == [
+            ("Trade", 1, "curated"),
+            ("Good", 1, "glossary"),
+            ("Scarcity", 2, None),
+        ]
+        assert prerequisites[0] == {
+            "name": "Trade",
+            "importance": 0.7,
+            "chapter": None,
+            "level": 1,
+            "provenance_source": "curated",
+        }
+        query = mock_session.run.call_args.args[0]
+        # The source is read from the edge itself, and only for a one-edge path
+        assert "CASE WHEN length(path) = 1" in query
+        assert "[r IN relationships(path) | r.provenance_source][0]" in query
+        # Computing the column is not enough: the rows above stand for what RETURN lists
+        returned = query.split("RETURN DISTINCT", 1)[1].split("ORDER BY", 1)[0]
+        assert [column.split()[-1] for column in returned.split(",\n")] == [
+            "name",
+            "importance",
+            "chapter",
+            "level",
+            "provenance_source",
+        ]
+        assert mock_session.run.call_args.kwargs == {"name": "Tariff"}
+
+    def test_prerequisites_without_a_recorded_source_return_null(self, client):
+        mock_session = MagicMock()
+        mock_session.run.return_value = [
+            {"name": "Prerequisite A", "importance": 0.7, "chapter": "Ch1", "level": 1},
+        ]
+        mock_adapter = create_mock_adapter_with_session(mock_session)
+
+        with patch("backend.app.kg.neo4j_adapter.get_neo4j_adapter", return_value=mock_adapter):
+            response = client.get("/api/v1/concepts/TestConcept/prerequisites")
+
+        assert response.json()["prerequisites"] == [
+            {
+                "name": "Prerequisite A",
+                "importance": 0.7,
+                "chapter": "Ch1",
+                "level": 1,
+                "provenance_source": None,
+            }
+        ]
+
     def test_get_dependents_success(self, client):
         """Test successful dependents retrieval."""
         mock_session = MagicMock()

@@ -40,6 +40,8 @@ REQUIRED_TARGETS = [
     "build-kg",
     "index-rag",
     "pipeline-all",
+    "domain-draft",
+    "domain-apply",
     # run / eval / demo
     "run-api",
     "run-frontend",
@@ -172,6 +174,25 @@ def test_subject_is_forwarded():
     windows = run_make("build-windows", "SUBJECT=economics").stdout
     assert "build_chunk_windows.py --subject economics" in windows
     assert "--reset economics" in run_make("pipeline-all", "SUBJECT=economics").stdout
+
+
+def test_domain_targets_run_the_matching_subcommand():
+    """#211: domain-draft drafts and domain-apply applies, for SUBJECT or the default subject."""
+    draft = run_make("domain-draft", "SUBJECT=economics").stdout
+    assert "poetry run python scripts/domain_tool.py draft --subject economics" in draft
+    assert "apply" not in draft
+    apply = run_make("domain-apply", "SUBJECT=economics").stdout
+    assert "poetry run python scripts/domain_tool.py apply --subject economics" in apply
+    assert "draft" not in apply
+    assert run_make("domain-apply").stdout.strip() == (
+        "poetry run python scripts/domain_tool.py apply"
+    )
+
+
+def test_domain_targets_are_phony_and_documented():
+    for target in ("domain-draft", "domain-apply"):
+        assert target in phony_targets()
+        assert re.search(rf"^{target}:.*## \S", MAKEFILE.read_text(), re.MULTILINE)
 
 
 def test_tribunal_run_skips_the_coverage_gate():

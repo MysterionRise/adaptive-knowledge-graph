@@ -300,6 +300,15 @@ if [ "$DB_READY" = true ] && poetry_env_ready; then
     else
         report_probe fail "$rc" "$out"
     fi
+    # Curated domain entries (data/domains/) are in the graph: a rebuild drops them until
+    # `make domain-apply` runs again. A warning only; nothing is read without such entries.
+    rc=0
+    out="$(poetry run python scripts/stack_check.py domain-overlay "${AKG_DEMO_SUBJECTS[@]}" 2> /dev/null)" || rc=$?
+    if [ -z "$out" ]; then
+        check_warn "Domain overlay check did not run; rerun: poetry run python scripts/stack_check.py domain-overlay ${AKG_DEMO_SUBJECTS[*]}"
+    else
+        report_probe warn "$rc" "$out"
+    fi
 fi
 
 API_URL="${API_URL:-http://localhost:${API_PORT:-8000}}"

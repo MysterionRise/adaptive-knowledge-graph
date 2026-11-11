@@ -1428,6 +1428,120 @@ class TestConceptLookup:
 
 
 @pytest.mark.unit
+class TestDomainOverlayQueries:
+    """The overlay methods (#211): prefixed labels, and every value passed as a parameter."""
+
+    def test_get_concept_overlay_state(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        row = {
+            "name": "Tariff",
+            "definition": "a tax on imports",
+            "aliases": ["Tariffs"],
+            "term_id": "tariff",
+            "review_status": "approved",
+            "definition_source": "economics",
+        }
+        mock_session.run.return_value = _make_mock_result([row, {"name": None, "aliases": []}])
+
+        assert adapter.get_concept_overlay_state() == [row]
+        query = mock_session.run.call_args[0][0]
+        assert "MATCH (c:economics_Concept)" in query
+        assert "coalesce(c.aliases, []) AS aliases" in query
+        for name in ("definition", "term_id", "review_status", "definition_source"):
+            assert f"c.{name} AS {name}" in query
+        assert mock_session.run.call_args[1] == {}
+
+    def test_get_prereq_edges(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        mock_session.run.return_value = _make_mock_result(
+            [
+                {
+                    "source": "Trade",
+                    "target": "Tariff",
+                    "properties": {"weight": 0.8, "provenance_source": "glossary"},
+                },
+                {"source": "Good", "target": "Trade", "properties": None},
+            ]
+        )
+
+        assert adapter.get_prereq_edges() == [
+            {
+                "source": "Trade",
+                "target": "Tariff",
+                "properties": {"weight": 0.8, "provenance_source": "glossary"},
+            },
+            {"source": "Good", "target": "Trade", "properties": {}},
+        ]
+        query = mock_session.run.call_args[0][0]
+        assert "(a:economics_Concept)-[r:PREREQ]->(b:economics_Concept)" in query
+        assert "properties(r) AS properties" in query
+
+    def test_merge_curated_concept(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        properties = {
+            "definition": "a curated definition",
+            "aliases": ["Duty"],
+            "term_id": "tariff",
+        }
+
+        adapter.merge_curated_concept("Tariff", properties)
+
+        query = mock_session.run.call_args[0][0]
+        assert query.startswith("MERGE (c:us_history_Concept {name: $name}) ON CREATE SET ")
+        assert "c.importance_score = 0.0" in query and "c.source_modules = []" in query
+        assert query.endswith("SET c += $properties")
+        assert mock_session.run.call_args[1] == {"name": "Tariff", "properties": properties}
+        assert "Tariff" not in query and "curated" not in query
+
+    def test_delete_concept(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+
+        adapter.delete_concept("Summary")
+
+        mock_session.run.assert_called_once_with(
+            "MATCH (c:us_history_Concept {name: $name}) DETACH DELETE c", name="Summary"
+        )
+
+    def test_merge_curated_prereq(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+        properties = {"provenance_source": "curated", "review_status": "approved"}
+
+        adapter.merge_curated_prereq("Trade", "Tariff", properties, 0.8)
+
+        query = mock_session.run.call_args[0][0]
+        assert "MATCH (a:us_history_Concept {name: $source})" in query
+        assert "MATCH (b:us_history_Concept {name: $target})" in query
+        assert "MERGE (a)-[r:PREREQ]->(b) ON CREATE SET r.weight = $weight" in query
+        assert query.endswith("SET r += $properties")
+        assert mock_session.run.call_args[1] == {
+            "source": "Trade",
+            "target": "Tariff",
+            "weight": 0.8,
+            "properties": properties,
+        }
+        assert "curated" not in query
+
+    def test_delete_prereq(self):
+        adapter, mock_session = _make_adapter(label_prefix="us_history")
+
+        adapter.delete_prereq("Trade", "Tariff")
+
+        mock_session.run.assert_called_once_with(
+            "MATCH (:us_history_Concept {name: $source})"
+            "-[r:PREREQ]->(:us_history_Concept {name: $target}) DELETE r",
+            source="Trade",
+            target="Tariff",
+        )
+
+    def test_unprefixed_adapter_uses_the_plain_label(self):
+        adapter, mock_session = _make_adapter()
+
+        adapter.delete_concept("Summary")
+
+        assert "MATCH (c:Concept {name: $name})" in mock_session.run.call_args[0][0]
+
+
+@pytest.mark.unit
 class TestChunkWindowSizes:
     """get_chunk_window honours zero-sized windows and joins module titles."""
 

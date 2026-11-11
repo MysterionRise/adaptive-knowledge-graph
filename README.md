@@ -101,7 +101,7 @@ flowchart LR
 | [`backend/app/`](backend/app/) | Retrieval (`rag/`), graph access (`kg/`), embeddings, concept extraction and the LLM client (`nlp/`), quizzes and the learner model (`student/`) |
 | [`scripts/`](scripts/) | Ingestion, knowledge-graph build, indexing and evaluation |
 | [`config/subjects.yaml`](config/subjects.yaml) | Subject definitions: books, prompts, indices, theme, attribution |
-| [`data/`](data/) | The normalised OpenStax books (`processed/books_<subject>.jsonl`) and the golden set (`evals/`). The graph itself is not tracked: `make seed` builds it in Neo4j and writes its JSON copy and the quality report `graph_report_<subject>.md` to the ignored `data/processed/build/` |
+| [`data/`](data/) | The normalised OpenStax books (`processed/books_<subject>.jsonl`), the golden set (`evals/`) and the domain artifacts (`domains/<subject>/`, see [docs/DOMAINS.md](docs/DOMAINS.md)). The graph itself is not tracked: `make seed` builds it in Neo4j and writes its JSON copy and the quality report `graph_report_<subject>.md` to the ignored `data/processed/build/` |
 | [`infra/compose/`](infra/compose/) | Docker Compose stack for Neo4j, OpenSearch and the optional API containers |
 
 | Layer | Technology |

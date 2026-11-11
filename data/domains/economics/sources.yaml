@@ -1,0 +1,12 @@
+# Written once by scripts/domain_tool.py draft (docs/DOMAINS.md) and edited by hand
+# since: the command never rewrites this file.
+schema_version: 1
+sources:
+- id: economics
+  title: Economics
+  connector: github_raw
+  uri: https://raw.githubusercontent.com/philschatz/economics-book/master
+  license: CC BY 4.0
+  steward: project maintainer
+  review_status: approved
+  supersedes: null

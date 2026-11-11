@@ -5,6 +5,7 @@ Data pipeline and developer-experience scripts (multi-subject, see config/subjec
 - build_knowledge_graph.py, create_neo4j_indexes.py: build the Neo4j graph and its indexes
 - index_to_opensearch.py: chunk, embed and index the text for retrieval
 - build_chunk_windows.py: Neo4j Chunk nodes with NEXT edges for window retrieval
+- domain_tool.py: validate, draft, apply and export the domain artifacts in data/domains/
 - seed_student_profile.py: demo learner profile (SQLite)
 - evaluate_rag.py, check_demo_eval.py: live KG-RAG evaluation and its gate
 - release_check.py: offline release gate (versions, changelog, evidence, assets)

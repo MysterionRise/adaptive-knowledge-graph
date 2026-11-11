@@ -196,6 +196,20 @@ class TestSubjectBooksEndpoint:
             assert book["content_path"]
             assert book["branch"]
 
+    def test_book_listing_does_not_expose_the_inventory_fields(self, client):
+        """#211 gave BookSource an id and a connector; the endpoint returns what it did before."""
+        github = client.get("/api/v1/subjects/us_history/books").json()
+        openstax = client.get("/api/v1/subjects/world_history/books").json()
+
+        assert {frozenset(book) for book in github} == {
+            frozenset(
+                {"title", "source_type", "repo_url_raw", "summary_path", "content_path", "branch"}
+            )
+        }
+        assert {frozenset(book) for book in openstax} == {
+            frozenset({"title", "source_type", "openstax_slug"})
+        }
+
     def test_get_subject_books_openstax_web(self, client):
         """Test book listing for an openstax_web subject."""
         response = client.get("/api/v1/subjects/world_history/books")

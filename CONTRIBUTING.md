@@ -116,6 +116,7 @@ adaptive-knowledge-graph/
 │   ├── app/
 │   │   ├── api/routes/     # FastAPI routers: ask, quiz, graph, learning_path, subjects, demo
 │   │   ├── core/           # settings, subject config loader, auth, rate limiting, logging, middleware
+│   │   ├── domain/         # domain artifacts: models, loader, lexicon view, graph overlay
 │   │   ├── kg/             # graph schema, builder, Neo4j adapter, Cypher QA
 │   │   ├── nlp/            # embeddings, concept extraction, LLM client
 │   │   ├── rag/            # chunker, retriever, KG expansion, reranker, window retrieval
@@ -124,7 +125,7 @@ adaptive-knowledge-graph/
 │   │   └── main.py         # app setup, middleware and health endpoints
 │   └── tests/              # pytest suite (see docs/TESTING.md)
 ├── config/subjects.yaml    # subject definitions: books, prompts, indices, theme, attribution
-├── data/                   # OpenStax source text, processed data, evaluation golden set
+├── data/                   # OpenStax source text, processed data, evaluation golden set, domain artifacts
 ├── docs/                   # architecture, testing, compliance, evaluation, demo, archive
 ├── frontend/               # Next.js app: app/, components/, lib/, tests/
 ├── infra/                  # Docker Compose stack and Dockerfiles

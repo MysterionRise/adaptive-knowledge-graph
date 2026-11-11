@@ -364,6 +364,97 @@ class Neo4jAdapter:
             ).single()
         return bool(record and record["found"])
 
+    # ==========================================================================
+    # Curated domain overlay (#211, backend/app/domain/overlay.py)
+    # ==========================================================================
+
+    def get_concept_overlay_state(self) -> list[dict[str, Any]]:
+        """Every concept's name, definition, aliases and curated properties, for the overlay."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            result = session.run(
+                f"MATCH (c:{concept_label}) "
+                "RETURN c.name AS name, c.definition AS definition, "
+                "coalesce(c.aliases, []) AS aliases, c.term_id AS term_id, "
+                "c.review_status AS review_status, c.definition_source AS definition_source"
+            )
+            return [dict(record) for record in result if record["name"]]
+
+    def get_prereq_edges(self) -> list[dict[str, Any]]:
+        """Every PREREQ edge of this graph: source name, target name and the edge's properties."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            result = session.run(
+                f"MATCH (a:{concept_label})-[r:PREREQ]->(b:{concept_label}) "
+                "RETURN a.name AS source, b.name AS target, properties(r) AS properties"
+            )
+            return [
+                {
+                    "source": record["source"],
+                    "target": record["target"],
+                    "properties": dict(record["properties"] or {}),
+                }
+                for record in result
+            ]
+
+    def merge_curated_concept(self, name: str, properties: dict[str, Any]) -> None:
+        """
+        Merge a concept on its name and set the given properties (a ``None`` removes one).
+
+        A concept the build did not extract is created with the builder's neutral values,
+        so that queries which read them still work.
+        """
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(
+                f"MERGE (c:{concept_label} {{name: $name}}) "
+                "ON CREATE SET c.key_term = false, c.frequency = 0, "
+                "c.importance_score = 0.0, c.source_modules = [], c.aliases = [] "
+                "SET c += $properties",
+                name=name,
+                properties=properties,
+            )
+
+    def delete_concept(self, name: str) -> None:
+        """Delete the concept with this exact name, with all its edges."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(f"MATCH (c:{concept_label} {{name: $name}}) DETACH DELETE c", name=name)
+
+    def merge_curated_prereq(
+        self, source: str, target: str, properties: dict[str, Any], weight: float
+    ) -> None:
+        """
+        Merge the PREREQ edge source -> target and set the given properties.
+
+        ``weight`` is only set on an edge this call creates. Nothing happens when either
+        concept is missing.
+        """
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(
+                f"MATCH (a:{concept_label} {{name: $source}}) "
+                f"MATCH (b:{concept_label} {{name: $target}}) "
+                "MERGE (a)-[r:PREREQ]->(b) "
+                "ON CREATE SET r.weight = $weight "
+                "SET r += $properties",
+                source=source,
+                target=target,
+                weight=weight,
+                properties=properties,
+            )
+
+    def delete_prereq(self, source: str, target: str) -> None:
+        """Delete the PREREQ edge source -> target; the concepts stay."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(
+                f"MATCH (:{concept_label} {{name: $source}})"
+                f"-[r:PREREQ]->(:{concept_label} {{name: $target}}) DELETE r",
+                source=source,
+                target=target,
+            )
+
     def get_graph_stats(self) -> dict:
         """Get graph statistics from Neo4j."""
         concept_label = self._get_label("Concept")
