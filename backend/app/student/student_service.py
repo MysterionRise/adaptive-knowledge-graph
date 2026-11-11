@@ -23,6 +23,7 @@ from backend.app.core.exceptions import AdaptiveKGException, Neo4jConnectionErro
 from backend.app.core.settings import settings
 from backend.app.core.subjects import get_subject
 from backend.app.kg.neo4j_adapter import get_neo4j_adapter
+from backend.app.student import estimator
 from backend.app.student.models import (
     ConceptMastery,
     MasteryUpdateResponse,
@@ -97,11 +98,11 @@ class StudentService:
             offset; defaults to the current UTC time. Policies never see it.
     """
 
-    # Mastery update parameters
-    CORRECT_DELTA = 0.15  # Increase on correct answer
-    INCORRECT_DELTA = 0.10  # Decrease on incorrect answer (absolute value)
-    MIN_MASTERY = 0.1  # Floor for mastery level
-    MAX_MASTERY = 1.0  # Cap for mastery level
+    # Mastery update parameters (the update itself is in estimator.py)
+    CORRECT_DELTA = estimator.CORRECT_DELTA  # Increase on correct answer
+    INCORRECT_DELTA = estimator.INCORRECT_DELTA  # Decrease on incorrect answer (absolute value)
+    MIN_MASTERY = estimator.MIN_MASTERY  # Floor for mastery level
+    MAX_MASTERY = estimator.MAX_MASTERY  # Cap for mastery level
 
     BUSY_TIMEOUT_SECONDS = 10.0  # How long a writer waits for another writer's lock
 
@@ -239,75 +240,27 @@ class StudentService:
     @staticmethod
     def _update_mastery_linear(mastery_level: float, correct: bool) -> float:
         """Linear mastery update: +0.15 for correct, -0.10 for incorrect."""
-        if correct:
-            delta = StudentService.CORRECT_DELTA
-        else:
-            delta = -StudentService.INCORRECT_DELTA
-        return mastery_level + delta
+        return estimator.update_mastery_linear(mastery_level, correct)
 
     @staticmethod
     def _update_mastery_bkt(mastery: ConceptMastery, correct: bool) -> float:
-        """Bayesian Knowledge Tracing update.
-
-        Standard BKT with 4 parameters:
-        - P(L) = probability student knows the concept
-        - P(T) = probability of learning per attempt
-        - P(S) = probability of slipping (wrong despite knowing)
-        - P(G) = probability of guessing (right despite not knowing)
-        """
-        p_l = mastery.bkt_p_known if mastery.bkt_p_known is not None else mastery.mastery_level
-        p_t = mastery.bkt_p_transit
-        p_s = mastery.bkt_p_slip
-        p_g = mastery.bkt_p_guess
-
-        if correct:
-            denom = p_l * (1 - p_s) + (1 - p_l) * p_g
-            posterior = p_l * (1 - p_s) / denom if denom > 0 else p_l
-        else:
-            denom = p_l * p_s + (1 - p_l) * (1 - p_g)
-            posterior = p_l * p_s / denom if denom > 0 else p_l
-
-        p_l_new = posterior + (1 - posterior) * p_t
-        return max(0.01, min(0.99, p_l_new))
+        """Bayesian Knowledge Tracing update (``estimator.update_mastery_bkt``)."""
+        return estimator.update_mastery_bkt(mastery, correct)
 
     def _apply_answer(self, profile: StudentProfile, concept: str, correct: bool) -> float:
-        """Apply one answer to the profile in place; returns the previous mastery level."""
-        if concept not in profile.mastery_map:
-            profile.mastery_map[concept] = ConceptMastery(
-                concept_name=concept,
-                mastery_level=settings.student_initial_mastery,
-            )
+        """Apply one answer to the profile in place; returns the previous mastery level.
 
-        mastery = profile.mastery_map[concept]
-        previous_mastery = mastery.mastery_level
-
-        if correct:
-            mastery.correct_attempts += 1
-
-        if settings.student_bkt_enabled:
-            # Bootstrap bkt_p_known from mastery_level if not yet set
-            if mastery.bkt_p_known is None:
-                mastery.bkt_p_known = mastery.mastery_level
-
-            mastery.bkt_p_known = self._update_mastery_bkt(mastery, correct)
-            # Map bkt_p_known to mastery_level, clamped to [0.1, 1.0]
-            new_level = max(self.MIN_MASTERY, min(self.MAX_MASTERY, mastery.bkt_p_known))
-        else:
-            new_level = max(
-                self.MIN_MASTERY,
-                min(self.MAX_MASTERY, self._update_mastery_linear(mastery.mastery_level, correct)),
-            )
-
-        mastery.mastery_level = new_level
-        mastery.attempts += 1
-        mastery.last_assessed = datetime.now()
-
-        # Overall ability is the average mastery across tracked concepts
-        total_mastery = sum(m.mastery_level for m in profile.mastery_map.values())
-        profile.overall_ability = total_mastery / len(profile.mastery_map)
-        profile.updated_at = datetime.now()
-
-        return previous_mastery
+        The update is ``estimator.apply_answer``. This method supplies what that function
+        does not read: the two settings and the current time.
+        """
+        return estimator.apply_answer(
+            profile,
+            concept,
+            correct,
+            initial_mastery=settings.student_initial_mastery,
+            bkt_enabled=settings.student_bkt_enabled,
+            now=datetime.now(),
+        )
 
     def update_mastery(
         self,

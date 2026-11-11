@@ -111,6 +111,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-seed
   ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)).
   `ROADMAP.md` gains the track.
+- The core of a learner simulator
+  ([#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307)),
+  the first of two parts. It supports no claim about learners.
+  - **What it is.** `backend/app/student/simulation/` runs simulated learners
+    under a policy for a fixed time budget and reads the outcome from their
+    hidden state. The world is deliberately not the model behind the mastery
+    estimate: skill is continuous, learning is gated by prerequisites with a
+    leak, learning rates differ, and a share of learners is not gated. It has
+    no forgetting and no item difficulty yet
+    ([#311](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/311)).
+  - **Policies.** `random`, `textbook`, `band-v1` (textbook order plus the
+    production difficulty decision, taken by the production policy object from
+    the production mastery estimate; equal to `textbook` in this world, as a
+    wiring check), `ready-first` and `oracle`. `ready-first` is a probe that
+    reads the prerequisite DAG it is given: a concept is ready when it is not
+    estimated as mastered and its given prerequisites are, and the probe
+    applies textbook order to the ready concepts. `oracle` is the same rule
+    on the true DAG and the true skill. The given DAG is the true one or a
+    variant with false, missing or reversed edges, a chapter chain, no edges
+    or rewired edges; each variant can change what `ready-first` chooses. The
+    definition of the probe is a draft until the protocol is frozen.
+  - **Results.** The primary metric is the mean true probability of answering
+    a fresh item correctly, over the slice concepts with equal weights.
+    Effects are paired differences on the same learners, with Monte Carlo
+    standard errors and optional bootstrap intervals. There are no p-values.
+    A run is a function of its protocol: the same seed gives the same bytes.
+    Simulated time is counted in whole milliseconds, so an action that fits
+    the time budget exactly is started.
+  - **Attempt records.** `backend/app/student/attempts.py` defines the record
+    of one answered item: the allowlist of the attempt log with no free-text
+    field (every string is an id of one printable line, at most 200
+    characters), and the source `real` or `sim`. Nothing stores it yet
+    ([#308](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/308)).
+  - **Mastery update.** The update `StudentService` applies after an answer
+    is now a function in `backend/app/student/estimator.py` that reads no
+    setting, no clock and no storage; the service passes those in, and the
+    simulator runs the same function. Mastery values are unchanged. The two
+    timestamps of one answer (`last_assessed` and `updated_at`) are now the
+    same instant, where they were two readings of the clock.
+  - **Not in this part.** The frozen protocol, `make simulate`, a committed
+    run and the precision and recall sweep for
+    [#223](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/223).
+    The CI smoke test runs its own small draft protocol.
 
 ### Changed
 

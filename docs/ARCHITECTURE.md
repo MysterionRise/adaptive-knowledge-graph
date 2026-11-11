@@ -216,6 +216,27 @@ two of them. `POST /api/v1/retrieve` runs the same retrieval without the LLM
 for cheap retrieval-only runs. The metrics are heuristic; see
 [evals/README.md](evals/README.md).
 
+### Learner simulator
+
+`backend/app/student/simulation/` is a synthetic world for checking
+learner-state policies before there are learners
+([#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307)).
+A simulated learner has a hidden, continuous skill per concept. Practice is
+gated by prerequisites, learning rates differ, and a share of learners is not
+gated, so the world is not the model behind the mastery estimate (BKT). Each
+learner practises under a policy for a fixed time budget. The policy sees the
+production mastery estimate and a prerequisite graph that may be wrong. The
+outcome is read from the hidden skill and compared between policies on the
+same learners.
+
+The simulator supports no learning-gain claim. Its numbers hold under its
+assumptions: they can show that the code does what it says and how a ranking
+of policies holds up across assumed worlds, not what a person learns (see
+[the adaptivity note](adaptivity/README.md#the-simulator)). The CI smoke test
+runs a small draft protocol on a hand-written graph. The frozen protocol
+(`docs/evals/simulation-protocol.md`) and `make simulate` follow in the second
+pull request of #307.
+
 ## Key trade-offs
 
 ### Neo4j
