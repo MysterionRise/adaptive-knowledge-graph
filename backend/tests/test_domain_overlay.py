@@ -574,7 +574,7 @@ def test_apply_reads_on_quiet_sessions_and_writes_on_plain_ones(tmp_path):
     opened = [call.kwargs for call in adapter.driver.session.call_args_list]
     # The state is read (two statements), six operations are written, the state is read again
     assert opened == [quiet, quiet, *[plain] * 6, quiet, quiet]
-    assert QUIET_READ_OPTIONS == {"notifications_disabled_classifications": ["UNRECOGNIZED"]}
+    assert list(QUIET_READ_OPTIONS.values()) == [["UNRECOGNIZED"]]
     reads = [query for query, _ in session.calls if "MERGE" not in query and "DELETE" not in query]
     assert len(reads) == 4 and len(session.writes) == 6
 

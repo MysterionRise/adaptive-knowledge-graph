@@ -10,6 +10,7 @@ from typing import Any
 
 from loguru import logger
 from neo4j import Driver, GraphDatabase, Session
+from neo4j import __version__ as neo4j_version
 from neo4j.exceptions import ConfigurationError
 
 from backend.app.core.settings import settings
@@ -47,7 +48,20 @@ def _relationship_properties(rel: Any) -> dict[str, Any]:
     return properties
 
 
-QUIET_READ_OPTIONS: dict[str, Any] = {"notifications_disabled_classifications": ["UNRECOGNIZED"]}
+def notification_filter_option(driver_version: str) -> str:
+    """
+    The session option that turns notification classes off, for a driver version.
+
+    Driver 6 calls it ``notifications_disabled_classifications``. Driver 5 treats that
+    name as a preview feature and warns on every session; its stable name is
+    ``notifications_disabled_categories``, which driver 6 deprecates.
+    """
+    if int(driver_version.split(".")[0]) >= 6:
+        return "notifications_disabled_classifications"
+    return "notifications_disabled_categories"
+
+
+QUIET_READ_OPTIONS: dict[str, Any] = {notification_filter_option(neo4j_version): ["UNRECOGNIZED"]}
 """
 Session options for the reads of the domain overlay.
 

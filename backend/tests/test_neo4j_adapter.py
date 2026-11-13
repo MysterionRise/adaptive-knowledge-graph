@@ -30,6 +30,7 @@ from backend.app.kg.neo4j_adapter import (
     _neo4j_adapters,
     clear_neo4j_adapters,
     get_neo4j_adapter,
+    notification_filter_option,
 )
 from backend.app.kg.schema import (
     ChunkNode,
@@ -1577,13 +1578,28 @@ class TestQuietOverlayReads:
     other session stays plain: there the same notification points at a misspelt name.
     """
 
-    QUIET = {"database": "neo4j", "notifications_disabled_classifications": ["UNRECOGNIZED"]}
+    QUIET = {"database": "neo4j", **QUIET_READ_OPTIONS}
     READS = ("get_concept_overlay_state", "get_prereq_edges")
 
     def test_the_options_hide_unrecognized_notifications_only(self):
-        assert {"database": "neo4j", **QUIET_READ_OPTIONS} == self.QUIET
+        option = notification_filter_option(neo4j.__version__)
+        assert QUIET_READ_OPTIONS == {option: ["UNRECOGNIZED"]}
         # The server refuses a classification it does not know, so the spelling matters
         assert "UNRECOGNIZED" in {c.value for c in neo4j.NotificationDisabledClassification}
+
+    @pytest.mark.parametrize(
+        ("driver_version", "option"),
+        [
+            ("5.28.8", "notifications_disabled_categories"),
+            ("5.28", "notifications_disabled_categories"),
+            ("6.0.0", "notifications_disabled_classifications"),
+            ("6.4.1", "notifications_disabled_classifications"),
+            ("7.0.0", "notifications_disabled_classifications"),
+        ],
+    )
+    def test_the_option_name_follows_the_driver_version(self, driver_version, option):
+        """Driver 5 warns about the new name on every session, and driver 6 about the old one."""
+        assert notification_filter_option(driver_version) == option
 
     def test_the_installed_driver_accepts_the_options(self):
         """
