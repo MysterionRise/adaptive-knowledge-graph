@@ -41,7 +41,7 @@ playbook.
   contracts, a one-command local stack, the frontend platform upgrade, a 75%
   backend coverage floor, evaluation provenance and `make eval-compare`,
   transformers 5 and langchain 1.x.
-- **v0.3.0, the first tagged release (November 2026,
+- **v0.3.0, the first tagged release (October 2026,
   [#104](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/104)):**
   a scorer that counts refusals correctly
   ([#202](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/202)),
