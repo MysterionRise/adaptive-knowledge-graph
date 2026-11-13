@@ -173,7 +173,7 @@ def test_allowlists_have_only_the_keys_in_use(config):
 
 
 # The reason contract of frontend/osv-scanner.toml (#254). A reason starts with the package
-# and every version the lock has of it: "braces 3.0.3 is a dev-only dependency ...", or
+# and every version the lock has of it: "deepmerge 4.3.1 is a dev-only dependency ...", or
 # "minimatch 3.1.5, 9.0.9 and 10.2.6 are dev-only dependencies ...".
 _VERSION = r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?"
 _DEV_ONLY_REASON = re.compile(

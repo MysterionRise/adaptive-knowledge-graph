@@ -109,10 +109,6 @@ If anyone other than you can reach the API, run it in production mode:
     not use (`torch.jit.script` and loading `.pt2` archives). The fixed
     releases switch the Linux wheels to CUDA 13, which is deferred to
     [#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79).
-  - `braces` 3.0.3, a dev-only dependency of the frontend build and lint
-    tooling (tailwindcss, the Next.js ESLint plugin) that is not in the
-    production bundle, until a fixed release exists
-    ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166)).
   - `deepmerge` 4.3.1, `glob` 10 and 13 and `minimatch` 3, 9 and 10, dev-only
     dependencies of the frontend lint and test tooling (ESLint, jest,
     tailwindcss) that are not in the production bundle. `deepmerge` has no
