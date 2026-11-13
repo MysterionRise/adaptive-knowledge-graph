@@ -7,5 +7,6 @@ Data pipeline and developer-experience scripts (multi-subject, see config/subjec
 - build_chunk_windows.py: Neo4j Chunk nodes with NEXT edges for window retrieval
 - seed_student_profile.py: demo learner profile (SQLite)
 - evaluate_rag.py, check_demo_eval.py: live KG-RAG evaluation and its gate
+- release_check.py: offline release gate (versions, changelog, evidence, assets)
 - stack_check.py plus the *.sh scripts: quickstart, doctor, seeding and demo helpers
 """

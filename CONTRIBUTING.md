@@ -23,9 +23,10 @@ never in a public issue.
 
 ## Development setup
 
-You need Python 3.11–3.13, Poetry 2.x, Node.js 24 LTS, Docker with Compose
-v2.24 or newer, and Ollama. The [README quickstart](README.md#quickstart) lists them with
-hardware requirements.
+You need Python 3.11.5 or later (up to 3.13), Poetry 2.x, Node.js 24 LTS,
+Docker with Compose v2.24 or newer, and Ollama. The
+[README quickstart](README.md#quickstart) lists them with hardware
+requirements.
 
 ```bash
 # Fork the repository on GitHub, then:

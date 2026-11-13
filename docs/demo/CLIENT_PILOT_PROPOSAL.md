@@ -6,7 +6,7 @@ partner organisation. Adjust it to the partner's content and goals.
 ## Pilot thesis
 
 Use a limited slice of approved educational content to test whether
-KG-grounded tutoring, citation traceability and adaptive practice make AI
+KG-grounded tutoring, citation traceability and quiz practice make AI
 learning experiences easier to review and more useful.
 
 ## Recommended shape
@@ -34,7 +34,8 @@ learning experiences easier to review and more useful.
 2. Learning experience
    - Grounded Q&A with citations.
    - Graph exploration.
-   - Adaptive quiz generation.
+   - Quiz generation, with a difficulty band requested by prompt from a
+     mastery estimate.
    - Post-quiz remediation and advancement recommendations.
 
 3. Review workflow
@@ -77,4 +78,7 @@ Pilot partner:
 - No certification issuance.
 - No proctoring.
 - No calibrated IRT claims without learner response data.
+- No claim that practice is adaptive. Neither the delivered quiz difficulty
+  nor the mastery estimate is validated; the tests they have to pass first
+  are in [docs/adaptivity/README.md](../adaptivity/README.md).
 - No LMS or LTI integration unless the pilot scope requires it.

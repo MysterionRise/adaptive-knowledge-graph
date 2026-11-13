@@ -2,6 +2,7 @@
 Unit tests for scripts/ingest_books.py: module titles and chapters (no network).
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -219,3 +220,105 @@ def test_openstax_web_records_use_page_title_and_chapter(monkeypatch):
         ("preface", "Preface", None, "Preface"),
         ("1-introduction", "Ch One - Introduction", "Ch One", "Introduction"),
     ]
+
+
+# ---------------------------------------------------------------------------
+# OpenStax web pages: the CSS selectors that pick the content and drop the rest
+# ---------------------------------------------------------------------------
+
+PAGE_BODY = """
+<h1>Trade Routes</h1>
+<p>Merchants crossed the desert.</p>
+<div data-type="note"><p>Link to learning</p></div>
+<figure><figcaption>A caravan</figcaption></figure>
+<nav>On this page</nav>
+<script>var tracked = 1;</script>
+<style>.x { color: red; }</style>
+<footer>Page footer</footer>
+<p>Cities grew along the routes.</p>
+"""
+
+PAGE_TEXT = "Trade Routes\nMerchants crossed the desert.\nCities grew along the routes."
+
+
+class _Response:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+def _serve(monkeypatch, html: str) -> list[str]:
+    """Answer ``requests.get`` in ingest_books with this page; returns the URLs asked for."""
+    asked: list[str] = []
+
+    def fake_get(url: str, timeout: int) -> _Response:
+        asked.append(url)
+        return _Response(html)
+
+    monkeypatch.setattr(ingest_books.requests, "get", fake_get)
+    return asked
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        # The page element wins over the <main> around it: the breadcrumb is not content
+        '<main><p>Breadcrumb</p><div data-type="page">{body}</div></main>',
+        "<main>{body}</main>",
+        '<div id="main-content">{body}</div>',
+    ],
+    ids=["data-type-page", "main", "main-content"],
+)
+def test_openstax_page_text_keeps_the_prose_and_drops_the_rest(monkeypatch, wrapper):
+    """The page text is the content element without notes, figures, navigation and code."""
+    html = (
+        "<html><body><nav>Site menu</nav>"
+        + wrapper.format(body=PAGE_BODY)
+        + "<footer>Site footer</footer></body></html>"
+    )
+    asked = _serve(monkeypatch, html)
+
+    text = ingest_books.fetch_openstax_page("world-history-volume-1", "1-2-trade-routes")
+
+    assert text == PAGE_TEXT
+    assert asked == [
+        f"{ingest_books.OPENSTAX_BASE_URL}/world-history-volume-1/pages/1-2-trade-routes"
+    ]
+
+
+def _client_rendered_page(state: dict) -> str:
+    """A page whose content is only in the embedded state, escaped as OpenStax serves it."""
+    embedded = json.dumps(state).replace("</", "<\\/")
+    return (
+        '<html><body><div id="root"></div>'
+        f"<script>window.__PRELOADED_STATE__ = {embedded};</script>"
+        "<script>var other = 2;</script></body></html>"
+    )
+
+
+@pytest.mark.unit
+def test_preloaded_state_is_read_from_its_script_tag():
+    state = {"content": {"page": {"content": PAGE_BODY}}}
+
+    assert ingest_books._extract_preloaded_state(_client_rendered_page(state)) == state
+    assert ingest_books._extract_preloaded_state("<html><script>var x = 1;</script></html>") is None
+
+
+@pytest.mark.unit
+def test_client_rendered_openstax_page_falls_back_to_the_embedded_state(monkeypatch):
+    """Without a content element the text comes from the embedded page HTML.
+
+    This path drops figures, navigation and code, and keeps notes: its selector list has no
+    ``[data-type='note']``, unlike the one for server-rendered pages.
+    """
+    _serve(monkeypatch, _client_rendered_page({"content": {"page": {"content": PAGE_BODY}}}))
+
+    text = ingest_books.fetch_openstax_page("world-history-volume-1", "1-2-trade-routes")
+
+    assert text == (
+        "Trade Routes\nMerchants crossed the desert.\nLink to learning\n"
+        "Cities grew along the routes."
+    )

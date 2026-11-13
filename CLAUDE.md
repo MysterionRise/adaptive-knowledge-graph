@@ -48,6 +48,7 @@ make eval-rehearsal                   # Rehearsal split only, for pull-request d
 make eval-compare BASE=a.json HEAD=b.json  # Compare two eval reports (exit 1 on a KG citation regression)
 make eval-noise-floor BASE=a.json HEAD=b.json  # Two repeat runs: record the noise floor in docs/evals/noise-floor.json
 make embedding-parity SUBJECT=us_history  # After an embedding-stack upgrade: re-embed 50 indexed chunks, exit 1 below cosine 0.999 (RERANKER=1 adds a reranker check)
+make release-check TAG=v0.4.0         # Offline release gate (scripts/release_check.py): versions and tag, CHANGELOG section, FILL placeholders, eval evidence, demo assets; the Release workflow runs it too (docs/TESTING.md)
 ```
 
 The scripted demo uses `make demo-client-prep`, `make demo-client-check` and `make demo-client-reset` (see `docs/demo/README.md`).
@@ -87,9 +88,9 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 - `backend/app/kg/` - graph schema, builder, Neo4j adapter (label-prefix isolation per subject), Cypher QA
 - `backend/app/rag/` - chunker (512 characters, 128 overlap), retriever (hybrid/RRF), KG expansion, reranker, window retriever
 - `backend/app/nlp/llm_client.py` - Ollama + OpenRouter client
-- `backend/app/student/` - quiz generator, student service (BKT mastery, SQLite storage), recommendations
+- `backend/app/student/` - quiz generator, student service (BKT mastery, SQLite storage), recommendations; `policy/` holds the policy interface, decision records and the difficulty rule as `band-v1` (`get_policy("band-v1")`; `StudentProfile.get_target_difficulty` is a shim over it)
 - `frontend/components/KnowledgeGraph.tsx` - Cytoscape.js visualization
-- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`, KG attribution per subject from `backend/app/core/eval_attribution.py`; `--trace` keeps retrieval traces); `scripts/check_demo_eval.py` validates a report, `scripts/compare_evals.py` compares two. `backend/app/core/eval_stats.py` holds the paired statistics: sign test, seeded bootstrap intervals, the primary endpoint's generated claim and the noise floor (`docs/evals/protocol.md`)
+- `scripts/evaluate_rag.py` - golden-set evaluation over `data/evals/golden_qa.yaml` (report with provenance, history snapshots in `docs/evals/history/`, KG attribution per subject from `backend/app/core/eval_attribution.py`; `--trace` keeps retrieval traces); `scripts/check_demo_eval.py` validates a report (including that the API's app version is the `pyproject.toml` version), `scripts/compare_evals.py` compares two. `backend/app/core/eval_stats.py` holds the paired statistics: sign test, seeded bootstrap intervals, the primary endpoint's generated claim and the noise floor (`docs/evals/protocol.md`)
 
 ## Environment Setup
 

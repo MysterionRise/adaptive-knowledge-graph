@@ -11,7 +11,7 @@
 [[IgnoredVulns]]
 id = "GHSA-vfj7-8cjw-p6xm"
 ignoreUntil = 2026-12-31
-reason = "braces 3.0.3 is a dev-only dependency (via chokidar and micromatch in the build and test tooling: tailwindcss 3, jest 29, the Next.js ESLint plugin) and is not in the production bundle; no fixed release yet; tracked in #166"
+reason = "braces 3.0.3 is a dev-only dependency (via chokidar and micromatch in the build and lint tooling: tailwindcss 3 uses both, and fast-glob, which tailwindcss 3 and the Next.js ESLint plugin use, depends on micromatch) and is not in the production bundle; no fixed release yet; tracked in #166"
 
 # --- deepmerge 4.3.1: no fixed release yet; dev-only (#279)
 [[IgnoredVulns]]
