@@ -89,12 +89,6 @@ make quickstart   # reinstalls the spaCy model en_core_web_sm; safe to re-run
 The spaCy model is not in the lock file, so `poetry sync` also removes it;
 `make quickstart` puts it back, and `make doctor` reports when it is missing.
 
-v0.4.0 raises the minimum Python to 3.11.5. With an environment on 3.11.0 to
-3.11.4, Poetry stops with "Current Python version (3.11.x) is not allowed by
-the project": install 3.11.5 or later and recreate the environment with the
-same three commands. `poetry env use <python>` alone can keep the old
-environment.
-
 If you must repair an environment in place instead, reinstall the locked
 `typer-slim` version (an unpinned install pulls an empty meta-package and spaCy
 still fails):

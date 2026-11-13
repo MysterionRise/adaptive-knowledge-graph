@@ -9,7 +9,9 @@ and does not change their definitions of done.
 
 Sources checked on 9 November 2026 against abstracts, publisher records and
 search snippets (full texts were not reachable); numbers that rest on secondary
-summaries say so. File references are to `main` at commit `7b3589c`.
+summaries say so. File references with line numbers are to `main` at commit
+`7b3589c`, before the policy interface (#306) moved the band rule out of
+`backend/app/student/models.py`.
 
 ## Summary
 
@@ -231,9 +233,9 @@ Shipped in v0.4.0. Learner-state decisions live in
 - **Decision records.** Every decision returns a record holding the policy id
   and version, the action, the learner state it used, and the graph edges it
   used with their provenance.
-- **Uses of the record.** It is what the counterfactual tests and the
-  manipulation check inspect, and what a "why this next?" explanation would
-  show.
+- **Uses of the record.** The counterfactual tests inspect it. The
+  manipulation check, which does not exist yet, would inspect it too, and a
+  "why this next?" explanation would show it.
 - **Off-policy evaluation is not claimed.** It needs stochastic policies with
   consented exploration, and these policies are deterministic.
 

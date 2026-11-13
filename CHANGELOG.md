@@ -105,7 +105,8 @@ From 0.3.0, with data seeded by that release:
   `/quiz/generate-adaptive` and `/student/target-difficulty` gain `decision`:
   the decision record of the policy that picks the difficulty (`band-v1`),
   with its `record_id` and `decided_at`. `decided_at` is the time of the
-  decision, so two identical requests no longer return identical bodies
+  decision, so two identical `/student/target-difficulty` requests no longer
+  return identical bodies
   ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)).
   `/demo/provenance` lists `rag_kg_expansion_max_neighbours` under
   `retrieval`.
