@@ -5,10 +5,12 @@ OpenSearch, the embedding model and the reranker are fakes: nothing is downloade
 """
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
 from scripts import check_embedding_parity as parity
 
@@ -133,6 +135,21 @@ def test_library_versions_reports_missing_packages_as_none(monkeypatch):
 
     assert versions["pytest"]
     assert versions["no-such-package-akg"] is None
+
+
+def test_dependabot_keeps_the_embedding_stack_out_of_the_weekly_group():
+    """A weekly group with one of these packages would wait for an embedding-parity run."""
+    config = yaml.safe_load(Path(".github/dependabot.yml").read_text(encoding="utf-8"))
+    (pip,) = [update for update in config["updates"] if update["package-ecosystem"] == "pip"]
+    groups = pip["groups"]
+    stack, weekly = groups["embedding-stack"], groups["python-minor-patch"]
+
+    # Dependabot puts a package into the first group that matches it
+    assert list(groups) == ["embedding-stack", "python-minor-patch"]
+    assert sorted(stack["patterns"]) == sorted(parity.LIBRARIES)
+    assert weekly["patterns"] == ["*"]
+    assert sorted(weekly["exclude-patterns"]) == sorted(parity.LIBRARIES)
+    assert stack["applies-to"] == weekly["applies-to"] == "version-updates"
 
 
 class TestMain:

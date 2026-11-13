@@ -18,12 +18,33 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
+      # The embedding stack (LIBRARIES in scripts/check_embedding_parity.py) needs
+      # `make embedding-parity` against an index built before the update, so it gets its
+      # own pull request and the weekly group can merge on green CI.
+      # backend/tests/test_embedding_parity.py keeps both lists in step with the script.
+      embedding-stack:
+        applies-to: version-updates
+        patterns:
+          - "transformers"
+          - "sentence-transformers"
+          - "huggingface-hub"
+          - "tokenizers"
+          - "safetensors"
+          - "torch"
+        update-types: ["minor", "patch"]
       python-minor-patch:
         applies-to: version-updates
         patterns: ["*"]
+        exclude-patterns:
+          - "transformers"
+          - "sentence-transformers"
+          - "huggingface-hub"
+          - "tokenizers"
+          - "safetensors"
+          - "torch"
         update-types: ["minor", "patch"]
     ignore:
-      # Deliberate upgrades tracked in issues; keep them out of the weekly group.
+      # Deliberate upgrades tracked in issues; keep them out of the weekly groups.
       - dependency-name: "torch" # 2.11+ switches the Linux wheels to CUDA 13 (#79)
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "neo4j-graphrag" # 1.22 needs the neo4j 6 driver
