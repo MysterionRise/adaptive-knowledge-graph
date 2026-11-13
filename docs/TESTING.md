@@ -172,7 +172,7 @@ project. Both files hold only `[[IgnoredVulns]]` tables with the keys `id`,
 entry goes into its reason.
 
 Every npm entry is accepted because its package is dev-only. Its reason starts
-with the package and every version the lock has of it (`braces 3.0.3 is a
+with the package and every version the lock has of it (`deepmerge 4.3.1 is a
 dev-only dependency ...`, or `glob 10.5.0 and 13.0.6 are dev-only dependencies
 ...`) and says that the package is not in the production bundle. The same test
 file checks each reason:

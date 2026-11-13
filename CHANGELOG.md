@@ -230,6 +230,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`deepmerge`, `glob`, `minimatch`) have no fix the tooling can use and are
   allowlisted in `frontend/osv-scanner.toml` until 2027-01-31
   ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
+- The `braces` entry is gone from `frontend/osv-scanner.toml`
+  ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166)).
+  GitHub withdrew GHSA-vfj7-8cjw-p6xm on 23 October 2026 as not practically
+  exploitable, so osv-scanner no longer reports it for `braces` 3.0.3 and
+  listed the entry as an unused ignore. `SECURITY.md` no longer names it as an
+  accepted risk.
 
 ## [0.3.0] - 2026-10-29
 

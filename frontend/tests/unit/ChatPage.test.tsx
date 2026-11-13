@@ -44,7 +44,7 @@ interface StreamedAnswer {
   sources?: Source[];
   expanded_concepts?: string[] | null;
   related_concepts?: string[] | null;
-  /** Omitted (like a pre-v0.4.0 backend) unless given. */
+  /** Omitted (like an untagged build older than v0.3.0) unless given. */
   kg_expansion_status?: KGExpansionStatus;
   retrieved_count?: number;
   window_expanded_count?: number | null;
