@@ -82,6 +82,9 @@ playbook.
   ([#254](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/254));
   `make release-check` with a tag-time gate in the Release workflow
   ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253));
+  a policy interface with decision records, with the difficulty rule as the
+  policy `band-v1`
+  ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306));
   and the first final-split run under the protocol, reported in the README.
   <!-- FILL (confirm after the release session, then delete this comment: the final-split run exists and the README table reports it; "November 2026" above is the month of the tag; and anything else that merged before the tag and belongs in this entry is named, for example #252) -->
 
@@ -192,14 +195,15 @@ they may slip, and no domain tag waits for them.
   difficulty band is only requested in the prompt, and the BKT mastery
   estimate is unfitted and client-reported.
 - **v0.4.0, done.** The counterfactual tests and the wording rule
-  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)).
+  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)),
+  and a policy interface with decision records
+  ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)).
 - **v0.5.0.** A proposal for the re-seed
   ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)):
   keep the textbook's question sections, which carry their answer keys, out
   of retrieval, by dropping them or by tagging and filtering.
-- **v0.6.0.** A policy interface with decision records ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)), and a
-  seeded learner simulator built as a robust evaluation matrix, with a frozen
-  protocol and decision rule ([#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307)). It runs before the curated
+- **v0.6.0.** A seeded learner simulator built as a robust evaluation matrix,
+  with a frozen protocol and decision rule ([#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307)). It runs before the curated
   prerequisite layer, so the cost of wrong edges is known when #223 starts.
 - **v0.7.0.** An attempt log with a server-set `assisted` flag
   ([#308](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/308)), next to server-side grading

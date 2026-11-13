@@ -55,6 +55,12 @@ expected source and KG retrieval does not:
 
 From 0.3.0, with data seeded by that release:
 
+- **Python 3.11.5 or later.** 3.11.0 to 3.11.4 are no longer supported: the
+  fixed `soupsieve` releases need 3.11.5
+  ([#326](https://github.com/MysterionRise/adaptive-knowledge-graph/pull/326)).
+  With an environment built on an older 3.11, `poetry install` stops with an
+  error. Install 3.11.5 or later, then run `poetry env use <python>` or
+  recreate the environment. Python 3.12 and 3.13 are unaffected.
 - **Rebuild the graph of both seeded subjects.** The concepts
   ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213))
   and the RELATED edges
@@ -88,6 +94,9 @@ From 0.3.0, with data seeded by that release:
   `expanded_concepts` now lists only the concepts the retrieval used; the
   graph neighbours it used to include are in `related_concepts`. `/retrieve`
   also returns a `trace` unless the request sets `"include_trace": false`.
+  `/quiz/generate-adaptive` and `/student/target-difficulty` gain `decision`,
+  the decision record of the policy that picks the difficulty
+  ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)).
 - **torch.**
   <!-- FILL (the #207 decision: replace if #207 lands before the tag; this item then says torch 2.13, the CUDA 13 GPU image with the driver and macOS versions it needs, and that both entries left osv-scanner.toml) -->
   torch stays on 2.10 (`>=2.10.0,<2.11` in `pyproject.toml`), and the GPU
