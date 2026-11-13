@@ -1,7 +1,7 @@
 # Adaptive Knowledge Graph
 
 A local-first AI tutor for open textbooks: knowledge-graph-enhanced retrieval
-with cited answers and adaptive quizzes, running entirely on your own machine.
+with cited answers and generated quizzes, running entirely on your own machine.
 
 [![CI](https://github.com/MysterionRise/adaptive-knowledge-graph/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/MysterionRise/adaptive-knowledge-graph/actions/workflows/ci.yaml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -32,9 +32,14 @@ ideas on top of that structure:
   added to the keyword half of the hybrid search, their graph neighbours are
   shown as related concepts, and every answer cites the passages it used. An
   evaluation harness measures whether the graph actually helps.
-- **Adaptive practice.** Quizzes are generated from the same passages, and a
-  Bayesian Knowledge Tracing (BKT) model updates per-concept mastery after each
-  answer so the next quiz targets a suitable difficulty.
+- **Practice with a mastery estimate.** Quizzes are generated from the same
+  passages. A Bayesian Knowledge Tracing (BKT) model with fixed, unfitted
+  parameters updates a mastery estimate per quiz topic from answers graded in
+  the browser, and by default the next quiz's prompt asks for an easy, medium
+  or hard band taken from that estimate. Neither the delivered difficulty nor
+  the mastery estimate is validated;
+  [docs/adaptivity/README.md](docs/adaptivity/README.md) defines what the
+  project may call adaptive.
 
 Everything runs **local-first**. With the default `PRIVACY_LOCAL_ONLY=true`,
 questions and textbook excerpts go only to your own Ollama server, and learner
@@ -58,10 +63,13 @@ data stays in a local SQLite file.
   reciprocal rank fusion. A cross-encoder reranker is available as an option.
 - **KG versus plain comparison.** A side-by-side page shows what graph
   expansion changes for the same question.
-- **Adaptive quizzes.** The LLM generates multiple-choice questions at a
-  difficulty that follows the learner's mastery. BKT updates mastery after each
-  answer, and recommendations point to prerequisites to review or topics to
-  explore next.
+- **Quizzes with a mastery estimate.** The LLM generates multiple-choice
+  questions. With the interface's Adaptive Mode on (the default; the
+  `/quiz/generate-adaptive` endpoint), the prompt asks for an easy, medium or
+  hard band taken from the learner's mastery estimate; the delivered
+  difficulty is not checked. BKT with fixed parameters updates the estimate
+  after each answer, and recommendations point to prerequisites to review or
+  topics to explore next.
 - **Multiple subjects.** Each subject in
   [`config/subjects.yaml`](config/subjects.yaml) has its own graph labels,
   search index, prompts, theme and attribution. US History and Economics are

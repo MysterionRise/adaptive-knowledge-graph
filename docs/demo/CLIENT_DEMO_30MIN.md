@@ -133,22 +133,28 @@ Say:
 > The graph is not decoration. It drives query expansion, prerequisite
 > explanations and post-assessment recommendations.
 
-### 19–24 min: Adaptive practice
+### 19–24 min: Quiz practice
 
 Open **Assessment** (`/assessment`).
 
 Actions:
 
 1. Use `The American Revolution` or `The Constitution`.
-2. Generate an adaptive quiz.
+2. Generate a quiz with **Adaptive Mode** on (the default).
 3. Answer one question correctly and one incorrectly.
 4. Show how mastery and recommendations change.
 
 Say:
 
-> This is not a validated certification engine. It is adaptive-learning
-> infrastructure. A real pilot would add reviewed question banks and
-> calibration on learner responses before any high-stakes use.
+> This is not a validated certification engine, and it is not adaptive yet.
+> The quiz prompt asks for a difficulty band taken from a mastery estimate;
+> neither the delivered difficulty nor the estimate is validated. A real pilot
+> would add reviewed question banks and calibration on learner responses
+> before any high-stakes use.
+
+The interface still labels this mode "Adaptive";
+[docs/adaptivity/README.md](../adaptivity/README.md) says what has to pass
+before the project uses the word.
 
 ### 24–28 min: Engineering evidence
 
@@ -198,6 +204,7 @@ Describe what a constrained pilot would look like (see the
   instead: "designed so learner data stays on the machine; no compliance
   certification" (see [COMPLIANCE.md](../COMPLIANCE.md))
 - Psychometrically validated
+- Adaptive quizzes or practice (see the note under 19–24 min)
 - Certification-grade
 - Hallucination-free
 - Ready to integrate with an existing content platform without a discovery
