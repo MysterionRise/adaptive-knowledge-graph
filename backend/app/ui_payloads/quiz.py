@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from backend.app.ui_payloads.decisions import DecisionRecordPayload
+
 
 class QuizOption(BaseModel):
     id: str
@@ -33,3 +35,5 @@ class AdaptiveQuiz(Quiz):
     student_mastery: float  # Student's current mastery level for the topic (0.0-1.0)
     target_difficulty: Literal["easy", "medium", "hard"]  # Difficulty level targeted
     adapted: bool = True  # Whether this quiz was adapted to student's level
+    # The decision behind target_difficulty: policy, action and the inputs the policy read
+    decision: DecisionRecordPayload | None = None
