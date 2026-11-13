@@ -18,6 +18,7 @@ Ollama or model downloads.
 | Security and rate limits | `test_auth.py`, `test_exceptions.py`, `test_privacy.py`, `test_rate_limit.py`, `test_api_rate_limits.py` |
 | Retrieval, embeddings and graph | `test_retriever.py`, `test_window_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_embeddings.py`, `test_neo4j_adapter.py`, `test_cypher_qa.py`, `test_chunker.py` |
 | Knowledge-graph building and concept extraction | `test_kg_builder.py`, `test_kg_schema.py`, `test_concept_extractor.py` |
+| Domain artifacts ([DOMAINS.md](DOMAINS.md)) | `test_domains.py` (validates every committed domain), `test_domain_loader.py` (loader errors), `test_domain_overlay.py` (plan, idempotent apply, lexicon view), `test_domain_tool.py` (validate, draft), `test_domain_export.py` (export), `test_domain_apply.py` (apply, the doctor probe and when `make doctor` runs it, the seed script); shared builders in `domain_builders.py` |
 | LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_student_counterfactual.py`, `test_student_bkt_properties.py`, `test_student_policy.py`, `test_recommendation_service.py` |
 | Configuration and tooling | `test_settings.py`, `test_subjects.py`, `test_logging.py`, `test_docker.py`, `test_makefile.py`, `test_poetry.py`, `test_dx_scripts.py`, `test_release_check.py` |
 | Documentation wording ([adaptivity/README.md](adaptivity/README.md)) | `test_adaptivity_wording.py` |

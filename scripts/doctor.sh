@@ -248,6 +248,7 @@ fi
 # ---------------------------------------------------------------------------
 section "Stack"
 DB_READY=false
+NEO4J_READY=false
 if [ "$DOCKER_OK" = true ]; then
     healthy=0
     for service in neo4j opensearch; do
@@ -262,6 +263,9 @@ if [ "$DOCKER_OK" = true ]; then
             healthy)
                 check_pass "$service is healthy ($name)"
                 healthy=$((healthy + 1))
+                if [ "$service" = neo4j ]; then
+                    NEO4J_READY=true
+                fi
                 ;;
             starting) check_warn "$service is starting ($name); rerun in a minute" ;;
             *)
@@ -299,6 +303,19 @@ if [ "$DB_READY" = true ] && poetry_env_ready; then
         report_probe warn 1 "$out"
     else
         report_probe fail "$rc" "$out"
+    fi
+fi
+
+if [ "$NEO4J_READY" = true ] && poetry_env_ready; then
+    # Curated domain entries (data/domains/) are in the graph: a rebuild drops them until
+    # `make domain-apply` runs again. A warning only; nothing is read without such entries.
+    # The check reads Neo4j only, so it also runs while OpenSearch is down.
+    rc=0
+    out="$(poetry run python scripts/stack_check.py domain-overlay "${AKG_DEMO_SUBJECTS[@]}" 2> /dev/null)" || rc=$?
+    if [ -z "$out" ]; then
+        check_warn "Domain overlay check did not run; rerun: poetry run python scripts/stack_check.py domain-overlay ${AKG_DEMO_SUBJECTS[*]}"
+    else
+        report_probe warn "$rc" "$out"
     fi
 fi
 

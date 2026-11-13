@@ -24,6 +24,7 @@ GIT_SHA ?= $(or $(shell git rev-parse HEAD 2> /dev/null),unknown)
 	lint format type-check pre-commit clean \
 	docker-build docker-up docker-down docker-logs docker-ps \
 	ingest-books build-kg index-rag pipeline-all embedding-parity \
+	domain-draft domain-apply \
 	run-api run-frontend dev-setup \
 	eval-rag eval-rag-api eval-rehearsal eval-compare eval-noise-floor eval-rescore \
 	demo-seed demo-check demo-client-prep demo-client-check demo-client-reset demo-eval \
@@ -119,6 +120,12 @@ build-kg: ## Build the knowledge graph of SUBJECT in Neo4j (asks before clearing
 
 index-rag: ## Chunk, embed and index the text of SUBJECT into OpenSearch (RECREATE=1 drops the index first)
 	poetry run python scripts/index_to_opensearch.py $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(RECREATE),--recreate)
+
+domain-draft: ## Draft data/domains/<SUBJECT>/ from the last graph build (extracted entries; reviewed ones are kept)
+	poetry run python scripts/domain_tool.py draft $(if $(SUBJECT),--subject $(SUBJECT))
+
+domain-apply: ## Apply the curated entries of data/domains/<SUBJECT>/ to its Neo4j graph (idempotent)
+	poetry run python scripts/domain_tool.py apply $(if $(SUBJECT),--subject $(SUBJECT))
 
 embedding-parity: ## Re-embed indexed chunks with the installed stack and compare (SUBJECT=..., RERANKER=1)
 	poetry run python scripts/check_embedding_parity.py $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(RERANKER),--reranker)

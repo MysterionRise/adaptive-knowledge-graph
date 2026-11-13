@@ -2,7 +2,8 @@
 Readiness and prerequisite probes shared by the shell scripts (quickstart, doctor, seeding).
 
 Every subcommand prints a one-line summary (plus indented detail lines on problems) and exits
-0 when the check passes and 1 when it does not (`index-fingerprint` exits 2 on warnings only).
+0 when the check passes and 1 when it does not (`index-fingerprint` exits 2 on warnings only;
+`domain-overlay` only warns, so it exits 0 or 2).
 
     python scripts/stack_check.py ollama        # server reachable, model pulled, 1-token generation
     python scripts/stack_check.py node          # `node --version` satisfies frontend engines.node
@@ -11,6 +12,7 @@ Every subcommand prints a one-line summary (plus indented detail lines on proble
     python scripts/stack_check.py wait          # Neo4j (bolt) and OpenSearch are ready
     python scripts/stack_check.py seed-status --subject us_history   # prints "<concepts> <chunks>"
     python scripts/stack_check.py index-fingerprint us_history economics   # vectors still match
+    python scripts/stack_check.py domain-overlay us_history economics      # curated entries applied
 
 `ollama`, `node` and `python-range` only need the standard library, so `make doctor` can run them
 before `poetry install`. `python-range` needs Python >=3.11 for `tomllib`. The other subcommands
@@ -654,6 +656,76 @@ def cmd_index_fingerprint(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_domain_overlay(args: argparse.Namespace) -> int:
+    """Warn when a subject's curated domain entries are not in its graph (#211).
+
+    A rebuild (`make build-kg`) writes the builder's definitions and aliases again and, with
+    --clear, drops everything `make domain-apply` added. The check plans the overlay against
+    the graph and warns when the plan is not empty, when the graph has no concepts, and when
+    the overlay has to skip a curated entry (an apply cannot bring that one in). Subjects
+    without approved, rejected or deprecated entries are skipped without connecting to Neo4j.
+    """
+    _require_backend_settings()
+    from backend.app.domain.loader import DomainValidationError, load_domain
+    from backend.app.domain.overlay import plan_overlay, read_graph_state, skipped_entries
+    from backend.app.kg.neo4j_adapter import get_neo4j_adapter
+
+    warnings: list[str] = []
+    checked: list[str] = []
+    for subject_id in args.subjects:
+        try:
+            domain = load_domain(subject_id)
+        except DomainValidationError as e:
+            warnings.append(
+                f"{subject_id}: the domain files are invalid ({len(e.errors)} error(s)); run: "
+                f"poetry run python scripts/domain_tool.py validate --subject {subject_id}"
+            )
+            continue
+        except ValueError:
+            warnings.append(f"{_truncate(subject_id)!r} is not a subject id; nothing was checked")
+            continue
+        if domain is None or not domain.has_curated_entries:
+            continue
+        try:
+            state = read_graph_state(get_neo4j_adapter(subject_id))
+        except Exception as e:
+            warnings.append(
+                f"{subject_id}: could not read the graph ({_truncate(f'{type(e).__name__}: {e}')})"
+            )
+            continue
+        if not state.concepts:
+            warnings.append(
+                f"{subject_id}: the graph has no concepts, so its curated entries are not "
+                "applied. Run: make seed (it builds the graph, then applies the domain)"
+            )
+            continue
+        checked.append(subject_id)
+        pending = plan_overlay(domain, state)
+        skipped = skipped_entries(domain, state)
+        if pending:
+            removals = sum(1 for operation in pending if operation.is_removal)
+            warnings.append(
+                f"{subject_id}: {len(pending)} curated change(s) are not in the graph "
+                f"({removals} removal(s)); it was probably rebuilt since the last apply. "
+                f"Run: make domain-apply SUBJECT={subject_id}"
+            )
+        if skipped:
+            warnings.append(
+                f"{subject_id}: {len(skipped)} curated entr(ies) cannot be applied to this "
+                "graph and are skipped; list them with: poetry run python "
+                f"scripts/domain_tool.py apply --subject {subject_id} --dry-run"
+            )
+
+    if warnings:
+        _report(f"Domain overlay: {len(warnings)} warning(s)", warnings)
+        return 2
+    if not checked:
+        _report("Domain overlay: no curated entries to check")
+        return 0
+    _report(f"Domain overlay is applied ({', '.join(checked)})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -686,6 +758,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     fingerprint.add_argument("subjects", nargs="+", metavar="SUBJECT")
     fingerprint.set_defaults(func=cmd_index_fingerprint)
+
+    overlay = sub.add_parser(
+        "domain-overlay", help="the curated domain entries (data/domains/) are in the graph"
+    )
+    overlay.add_argument("subjects", nargs="+", metavar="SUBJECT")
+    overlay.set_defaults(func=cmd_domain_overlay)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

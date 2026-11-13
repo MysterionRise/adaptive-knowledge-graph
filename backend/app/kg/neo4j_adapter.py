@@ -10,6 +10,8 @@ from typing import Any
 
 from loguru import logger
 from neo4j import Driver, GraphDatabase, Session
+from neo4j import __version__ as neo4j_version
+from neo4j.exceptions import ConfigurationError
 
 from backend.app.core.settings import settings
 from backend.app.kg.schema import ChunkNode, KnowledgeGraph, RelationshipType
@@ -44,6 +46,31 @@ def _relationship_properties(rel: Any) -> dict[str, Any]:
             value = str(value)
         properties[f"provenance_{key}"] = value
     return properties
+
+
+def notification_filter_option(driver_version: str) -> str:
+    """
+    The session option that turns notification classes off, for a driver version.
+
+    Driver 6 calls it ``notifications_disabled_classifications``. Driver 5 treats that
+    name as a preview feature and warns on every session; its stable name is
+    ``notifications_disabled_categories``, which driver 6 deprecates.
+    """
+    if int(driver_version.split(".")[0]) >= 6:
+        return "notifications_disabled_classifications"
+    return "notifications_disabled_categories"
+
+
+QUIET_READ_OPTIONS: dict[str, Any] = {notification_filter_option(neo4j_version): ["UNRECOGNIZED"]}
+"""
+Session options for the reads of the domain overlay.
+
+Before the first apply the store has no ``term_id``, ``review_status`` or
+``definition_source`` property key, and an unbuilt graph has no label or PREREQ type
+either. The server reports each one as an "unrecognized" notification, which the driver
+logs as a warning. They are expected there, so these sessions ask the server to leave
+that classification out. Every other classification still arrives, deprecations included.
+"""
 
 
 class Neo4jAdapter:
@@ -86,11 +113,27 @@ class Neo4jAdapter:
             return f"{self.label_prefix}_{base_label}"
         return base_label
 
-    def _get_session(self) -> Session:
-        """Get a session for the configured database."""
+    def _get_session(self, **session_options: Any) -> Session:
+        """Get a session for the configured database; extra driver session options pass through."""
         if self.driver is None:
             raise RuntimeError("Not connected. Call connect() first.")
-        return self.driver.session(database=self.database)
+        return self.driver.session(database=self.database, **session_options)
+
+    def _run_quiet_read(self, query: str) -> list[Any]:
+        """
+        Run a read on a session with ``QUIET_READ_OPTIONS`` and return its records.
+
+        A server before Neo4j 5.7 (Bolt before 5.2) cannot filter notifications. The driver
+        then raises ``ConfigurationError`` without sending the query. A driver that does
+        not know the option raises it when the session is opened. In both cases the read
+        runs on a plain session, because the option only hides log lines.
+        """
+        try:
+            with self._get_session(**QUIET_READ_OPTIONS) as session:
+                return list(session.run(query))
+        except ConfigurationError:
+            with self._get_session() as session:
+                return list(session.run(query))
 
     def connect(self):
         """Connect to Neo4j database."""
@@ -363,6 +406,95 @@ class Neo4jAdapter:
                 names=candidates,
             ).single()
         return bool(record and record["found"])
+
+    # ==========================================================================
+    # Curated domain overlay (#211, backend/app/domain/overlay.py)
+    # ==========================================================================
+
+    def get_concept_overlay_state(self) -> list[dict[str, Any]]:
+        """Every concept's name, definition, aliases and curated properties, for the overlay."""
+        concept_label = self._get_label("Concept")
+        records = self._run_quiet_read(
+            f"MATCH (c:{concept_label}) "
+            "RETURN c.name AS name, c.definition AS definition, "
+            "coalesce(c.aliases, []) AS aliases, c.term_id AS term_id, "
+            "c.review_status AS review_status, c.definition_source AS definition_source"
+        )
+        return [dict(record) for record in records if record["name"]]
+
+    def get_prereq_edges(self) -> list[dict[str, Any]]:
+        """Every PREREQ edge of this graph: source name, target name and the edge's properties."""
+        concept_label = self._get_label("Concept")
+        records = self._run_quiet_read(
+            f"MATCH (a:{concept_label})-[r:PREREQ]->(b:{concept_label}) "
+            "RETURN a.name AS source, b.name AS target, properties(r) AS properties"
+        )
+        return [
+            {
+                "source": record["source"],
+                "target": record["target"],
+                "properties": dict(record["properties"] or {}),
+            }
+            for record in records
+        ]
+
+    def merge_curated_concept(self, name: str, properties: dict[str, Any]) -> None:
+        """
+        Merge a concept on its name and set the given properties (a ``None`` removes one).
+
+        A concept the build did not extract is created with the builder's neutral values,
+        so that queries which read them still work.
+        """
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(
+                f"MERGE (c:{concept_label} {{name: $name}}) "
+                "ON CREATE SET c.key_term = false, c.frequency = 0, "
+                "c.importance_score = 0.0, c.source_modules = [], c.aliases = [] "
+                "SET c += $properties",
+                name=name,
+                properties=properties,
+            )
+
+    def delete_concept(self, name: str) -> None:
+        """Delete the concept with this exact name, with all its edges."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(f"MATCH (c:{concept_label} {{name: $name}}) DETACH DELETE c", name=name)
+
+    def merge_curated_prereq(
+        self, source: str, target: str, properties: dict[str, Any], weight: float
+    ) -> None:
+        """
+        Merge the PREREQ edge source -> target and set the given properties.
+
+        ``weight`` is only set on an edge this call creates. Nothing happens when either
+        concept is missing.
+        """
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(
+                f"MATCH (a:{concept_label} {{name: $source}}) "
+                f"MATCH (b:{concept_label} {{name: $target}}) "
+                "MERGE (a)-[r:PREREQ]->(b) "
+                "ON CREATE SET r.weight = $weight "
+                "SET r += $properties",
+                source=source,
+                target=target,
+                weight=weight,
+                properties=properties,
+            )
+
+    def delete_prereq(self, source: str, target: str) -> None:
+        """Delete the PREREQ edge source -> target; the concepts stay."""
+        concept_label = self._get_label("Concept")
+        with self._get_session() as session:
+            session.run(
+                f"MATCH (:{concept_label} {{name: $source}})"
+                f"-[r:PREREQ]->(:{concept_label} {{name: $target}}) DELETE r",
+                source=source,
+                target=target,
+            )
 
     def get_graph_stats(self) -> dict:
         """Get graph statistics from Neo4j."""

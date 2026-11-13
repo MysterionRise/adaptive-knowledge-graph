@@ -112,6 +112,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)).
   `ROADMAP.md` gains the track.
 
+- Versioned domain artifacts
+  ([#211](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/211)):
+  four YAML files per subject in `data/domains/<subject_id>/` (`domain.yaml`,
+  `dictionary.yaml`, `relationships.yaml`, `sources.yaml`, schema version 1),
+  described in `docs/DOMAINS.md`.
+  - **Loader.** `backend/app/domain/` validates the files on load. A dangling
+    `definition_source`, an unknown status or an alias shared by two reviewed
+    terms without `context_terms` fails naming the file and the field, and the
+    test suite validates every committed domain.
+  - **Tool.** `scripts/domain_tool.py validate|draft|apply|export`, with
+    `make domain-draft` and `make domain-apply`. `draft` writes the build as
+    `extracted` entries and keeps the values of reviewed ones (both files are
+    rewritten with sorted keys, so comments are not kept); `export` prints
+    flat CSV or JSON.
+  - **Overlay.** `apply` is idempotent: an approved term is merged on its
+    name, a curated definition wins, aliases are added, an approved PREREQ
+    edge gets `provenance_source: curated`, and a rejected or deprecated term
+    is removed from the graph. It refuses a graph without concepts.
+    `make seed` runs it after the graph build and `make doctor` warns when
+    curated changes are missing from the graph or an entry cannot be applied.
+    That check needs a healthy Neo4j only, so it also runs while OpenSearch
+    is down.
+  - **Drafts.** US History and Economics have drafts from the current build.
+    Every entry in them is `extracted`, so `apply` writes nothing and
+    retrieval is unchanged until an entry is reviewed.
+  - **Configuration and API.** A book in `config/subjects.yaml` may set `id`
+    and `connector`; both have defaults, so existing entries stay valid.
+    `/api/v1/concepts/{name}/prerequisites` returns `provenance_source` for
+    each direct prerequisite.
+
 ### Changed
 
 - **Breaking:** the minimum Python is 3.11.5 (it was 3.11.0); 3.12 and 3.13
