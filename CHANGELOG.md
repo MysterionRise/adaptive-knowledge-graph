@@ -100,6 +100,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `GET /api/v1/student/target-difficulty` gain a `decision` field with the
     record, its `record_id` and `decided_at`, the time of the decision in UTC,
     which is not part of the record.
+- `docs/adaptivity/README.md`, a design note on what the project may call
+  adaptive
+  ([#313](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/313)).
+  It defines two labels, "adaptive" and "beneficial", and the tests behind
+  them, says what the code does today (no behaviour passes them yet), sums up
+  the research, and sets out a learner track: a simulator first, then
+  server-side evidence, then feedback. It proposes keeping the textbook's
+  question sections, which carry their answer keys, out of retrieval in the
+  re-seed
+  ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)).
+  `ROADMAP.md` gains the track.
 
 ### Changed
 
@@ -112,9 +123,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `opentelemetry-api` 1.45.2 (GHSA-mf5v-w3w3-f6cg). No other locked version
   changes. Poetry no longer uses Python 3.11.0 to 3.11.4 for the project:
   with an environment built on one of them, `poetry install` stops with an
-  error. Install 3.11.5 or later, then run `poetry env use <python>` or
-  recreate the environment (CONTRIBUTING.md, "Upgrading an existing
-  checkout").
+  error. Install 3.11.5 or later, then recreate the environment
+  (CONTRIBUTING.md, "Upgrading an existing checkout"); `poetry env use
+  <python>` alone can leave the old environment in place.
 - `check_demo_eval.py`, and so `make demo-eval` and `make demo-client-check`,
   rejects a report whose API app version differs from the version in
   `pyproject.toml`
@@ -163,12 +174,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     quizzes" appears in `README.md`, `docs/demo/` or `demo-slides/`. A
     sentence that says the thing is not done passes only as an exact, listed
     sentence. Other uses of the word "adaptive" are not gated.
-  - **Design note.** `docs/adaptivity/README.md` now says that only the
-    textbook's question sections are to be kept out of retrieval (a proposal
-    on [#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215);
-    the glossary and key terms stay), adds the `ready-first` probe and what
-    waits for the simulator's robustness worlds, corrects the dependencies in
-    its phases table, and lists the interface strings that remain.
+  - **Design note.** The note (new in this release, see "Added") lists the
+    interface strings that remain.
 - RELATED edges link each concept to its strongest associations
   ([#291](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/291)):
   - **Scoring.** A pair of concepts is scored by normalised pointwise mutual
@@ -218,6 +225,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model"), so answers, quizzes, recommendations and graph queries all failed
   with 503. `OPENROUTER_SEND_TEMPERATURE=false` leaves `temperature` out of
   remote requests; the default (`true`) keeps today's behaviour.
+- `follow-redirects` 1.16.2 in the frontend lock (GHSA-mrwp-f3q8-3g9p); it
+  comes in through `axios`. Three advisories in dev-only frontend tooling
+  (`deepmerge`, `glob`, `minimatch`) have no fix the tooling can use and are
+  allowlisted in `frontend/osv-scanner.toml` until 2027-01-31
+  ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
 
 ## [0.3.0] - 2026-10-29
 
