@@ -70,11 +70,11 @@ Wave W2, tracked in
   bootstrap intervals and a noise-floor rule
   ([#209](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/209));
   the remaining dev-only frontend advisories re-justified
-  ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166),
-  [#186](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/186));
+  ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279));
   the Cypher QA smoke test
   ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
-  All five advisory allowlist entries are resolved before 31 December 2026.
+  The two torch allowlist entries are resolved before 31 December 2026; the
+  three frontend entries expire on 31 January 2027.
 
 ## Next: v0.5.0, meaning and lineage (December 2026)
 

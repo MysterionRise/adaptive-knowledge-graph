@@ -7,12 +7,6 @@
 # issue that removes it. Do not extend ignoreUntil without re-checking the
 # advisory.
 
-# --- braces 3.0.3: no fixed release yet; dev-only (#166)
-[[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
-ignoreUntil = 2026-12-31
-reason = "braces 3.0.3 is a dev-only dependency (via chokidar and micromatch in the build and lint tooling: tailwindcss 3 uses both, and fast-glob, which tailwindcss 3 and the Next.js ESLint plugin use, depends on micromatch) and is not in the production bundle; no fixed release yet; tracked in #166"
-
 # --- deepmerge 4.3.1: no fixed release yet; dev-only (#279)
 [[IgnoredVulns]]
 id = "GHSA-gcqx-w48m-w2h4"
