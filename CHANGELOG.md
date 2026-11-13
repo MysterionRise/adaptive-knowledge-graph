@@ -79,6 +79,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepts only `vX.Y.Z`, so the workflow no longer publishes a pre-release
   tag such as `v0.4.0-rc.1` of a tree that has the script. See
   [docs/TESTING.md](docs/TESTING.md#release-check).
+- A policy interface with decision records
+  ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)):
+  - **Policies.** `backend/app/student/policy/` holds a policy protocol (`id`,
+    `version`, `decide(state, context)`) and a registry (`get_policy`). The
+    rule that picks the quiz difficulty is now the policy `band-v1`, with the
+    same boundaries: easy below 0.4 mastery, medium up to 0.7, hard above.
+    `StudentProfile.get_target_difficulty` is a shim over it, and the quiz
+    prompts are unchanged. `frontend/lib/mastery.ts` and
+    `scripts/seed_student_profile.py` still hold their own copies of the rule.
+  - **Decision records.** A decision returns a record: the policy id and
+    version, the action, the learner state and context the policy read, and
+    the graph edges it used with their provenance. `band-v1` reads the asked
+    concept and that concept's mastery level (the initial mastery if it has no
+    history) and nothing else. The record keeps the mastery unrounded. It
+    holds no time and no random id. Two records are equal exactly when their
+    canonical JSON is equal, and `record_id` is a digest of that JSON, so
+    equal records have the same id.
+  - **Responses.** `POST /api/v1/quiz/generate-adaptive` and
+    `GET /api/v1/student/target-difficulty` gain a `decision` field with the
+    record, its `record_id` and `decided_at`, the time of the decision in UTC,
+    which is not part of the record.
 
 ### Changed
 

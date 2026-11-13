@@ -106,13 +106,25 @@ do not pass a size; the Q&A endpoints always pass one.
    for it; a topic with no content returns `404`.
 2. Ask the LLM for multiple-choice questions with difficulty labels and
    explanations at the learner's target difficulty (easy below 0.4 mastery,
-   medium up to 0.7, hard above).
+   medium up to 0.7, hard above). The rule is the policy `band-v1` in
+   `backend/app/student/policy/`. It reads the mastery level of the asked
+   concept, or the initial mastery when the concept has no history, and
+   nothing else.
 3. After each answer, update the concept's mastery. With
    `STUDENT_BKT_ENABLED=true` (the default) this is a four-parameter Bayesian
    Knowledge Tracing update with fixed parameters; otherwise a simple linear
    update.
 4. Recommend prerequisites to review for weak concepts and further topics for
    strong ones.
+
+The responses of `/quiz/generate-adaptive` and `/student/target-difficulty`
+carry the decision record of step 2 in `decision`: the policy id and version,
+the action, the learner state and context the policy read (the mastery
+unrounded), and the graph edges it used (`band-v1` uses none). `record_id` is
+a digest of those fields, so the same decision always has the same id.
+`decided_at`, the time of the decision in UTC, is not part of the record. The
+recommendation thresholds of step 4 and `/learning-path` are not policies yet
+([#312](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/312)).
 
 This is an adaptive-practice prototype, not a validated assessment engine.
 Question difficulty is estimated by the LLM, and the BKT parameters are not
