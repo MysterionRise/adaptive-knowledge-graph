@@ -17,16 +17,22 @@ demo status page (/api/v1/demo/status) applies too:
 
 It must also match the checkout: the server ran the commit the harness ran (an API started
 before a commit keeps reporting the old one, even after ``make run-api`` reloads the new
-code), and the golden set has not changed since the run.
+code), the server's app version is the version in pyproject.toml (an editable install or an
+image built before a version bump keeps reporting the old one), and the golden set has not
+changed since the run.
 """
 
 import argparse
 import hashlib
 import json
+import tomllib
 from pathlib import Path
 from typing import Any, cast
 
 from backend.app.core.eval_report import as_dict, is_set, report_errors
+
+# Read by checkout_errors(), relative to its ``root``.
+PYPROJECT = Path("pyproject.toml")
 
 
 def _load_report(path: Path) -> dict[str, Any]:
@@ -38,11 +44,27 @@ def _load_report(path: Path) -> dict[str, Any]:
         raise SystemExit(f"Invalid eval JSON: {e}") from e
 
 
-def checkout_errors(report: dict[str, Any]) -> list[str]:
-    """Whether the server ran the harness's commit, and the golden set is unchanged."""
+def pyproject_version(path: Path) -> str | None:
+    """``tool.poetry.version`` of a pyproject.toml, or None when it cannot be read."""
+    try:
+        with path.open("rb") as file:
+            version = tomllib.load(file)["tool"]["poetry"]["version"]
+    except (OSError, KeyError, TypeError, tomllib.TOMLDecodeError):
+        return None
+    return version if isinstance(version, str) and version else None
+
+
+def checkout_errors(report: dict[str, Any], root: Path = Path(".")) -> list[str]:
+    """Whether the report belongs to the checkout at ``root``.
+
+    The server ran the harness's commit, the server's app version is the pyproject version,
+    and the golden set is unchanged. The recorded commit is not compared with the checkout's
+    HEAD: the report is committed after the run, so it can never name its own commit.
+    """
     errors: list[str] = []
     provenance = as_dict(report.get("provenance"))
-    server_sha = as_dict(provenance.get("server")).get("git_sha")
+    server = as_dict(provenance.get("server"))
+    server_sha = server.get("git_sha")
     harness_sha = as_dict(provenance.get("harness")).get("git_sha")
     if not is_set(harness_sha):
         errors.append("harness git_sha missing or unknown (run the harness from a git checkout)")
@@ -52,10 +74,24 @@ def checkout_errors(report: dict[str, Any]) -> list[str]:
             f"{str(harness_sha)[:12]}: restart the API on the evaluated commit and re-run"
         )
 
+    if server:  # report_errors() already rejects a report without server provenance
+        app_version = server.get("app_version")
+        project_version = pyproject_version(root / PYPROJECT)
+        if project_version is None:
+            errors.append(f"no tool.poetry.version in {PYPROJECT}: cannot check the app version")
+        elif not is_set(app_version):
+            errors.append("server app_version missing")
+        elif app_version != project_version:
+            errors.append(
+                f"server app_version {app_version} differs from the {PYPROJECT.name} version "
+                f"{project_version}: run `poetry install` (or rebuild the image), restart the "
+                "API and re-run"
+            )
+
     golden_set = as_dict(provenance.get("golden_set"))
     golden_path, golden_sha = golden_set.get("path"), golden_set.get("sha256")
     if is_set(golden_path) and is_set(golden_sha):
-        path = Path(str(golden_path))
+        path = root / str(golden_path)
         if not path.is_file():
             errors.append(f"golden set {golden_path} not found")
         elif hashlib.sha256(path.read_bytes()).hexdigest() != golden_sha:

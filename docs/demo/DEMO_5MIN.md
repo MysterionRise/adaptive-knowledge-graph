@@ -35,8 +35,8 @@ Open `http://localhost:3000` and `/demo-status`.
 Say:
 
 > This is a local demo of AI over approved course content: citations,
-> graph-aware retrieval, adaptive practice and measurable quality checks over
-> OpenStax material.
+> graph-aware retrieval, generated quizzes with a mastery estimate and
+> measurable quality checks over OpenStax material.
 
 ## 0:45–1:35: Knowledge graph
 
@@ -73,7 +73,7 @@ Say:
 > The system shows what it retrieved and why, and the evaluation compares the
 > KG path with plain retrieval.
 
-## 2:45–3:50: Adaptive practice
+## 2:45–3:50: Quiz practice
 
 Open **Assessment** (`/assessment`).
 
@@ -85,8 +85,14 @@ Generate a quiz for `The American Revolution` and show:
 
 Say:
 
-> This is adaptive-practice infrastructure. A production pilot would add
-> reviewed question banks and calibration on learner responses.
+> The quiz prompt asks for a difficulty band taken from a mastery estimate.
+> Neither the delivered difficulty nor the estimate is validated, so this is
+> not adaptive practice yet. A production pilot would add reviewed question
+> banks and calibration on learner responses.
+
+The interface still labels the quiz mode "Adaptive";
+[docs/adaptivity/README.md](../adaptivity/README.md) says what has to pass
+before the project uses the word.
 
 ## 3:50–5:00: Evidence and next steps
 

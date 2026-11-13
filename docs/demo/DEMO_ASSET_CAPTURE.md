@@ -17,7 +17,7 @@ docs/assets/demo/
 - `03-chat-citations.png`: a KG-RAG answer with citations and expanded
   concepts.
 - `04-graph-us-history.png`: the US History graph with a selected concept.
-- `05-assessment-mastery.png`: an adaptive quiz or a mastery update.
+- `05-assessment-mastery.png`: a quiz or a mastery update.
 - `06-eval-report.png`: the latest evaluation report or its summary.
 
 ## Recording

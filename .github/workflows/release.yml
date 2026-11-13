@@ -55,6 +55,25 @@ jobs:
               ;;
           esac
 
+      # Offline gate (scripts/release_check.py, standard library only): versions and
+      # tag, CHANGELOG section, placeholders, evaluation evidence, demo assets. It
+      # runs the script from the tag's tree with the runner's Python, without a
+      # token. Tags that predate the script (v0.3.0 and earlier) skip it, so they
+      # can still be re-published by hand. The check accepts only
+      # vMAJOR.MINOR.PATCH: a pre-release or build tag of a tree that has the
+      # script fails here, so the pre-release handling in the last step is
+      # reached only by tags that predate the script.
+      - name: Check the release tree (versions, changelog, evidence, assets)
+        run: |
+          if [ ! -f scripts/release_check.py ]; then
+            echo "::notice::${TAG} predates scripts/release_check.py; the release check is skipped"
+            exit 0
+          fi
+          if ! python3 -I scripts/release_check.py --tag "${TAG}"; then
+            echo "::error::${TAG} failed the release check (see the FAIL lines above); nothing was published"
+            exit 1
+          fi
+
       - name: Extract release notes from CHANGELOG.md
         id: notes
         run: |

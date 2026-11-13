@@ -32,7 +32,7 @@ packages = [{include = "backend"}]
 "Issues" = "https://github.com/MysterionRise/adaptive-knowledge-graph/issues"
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.14"
+python = ">=3.11.5,<3.14"  # 3.11.5: the fixed soupsieve releases (>= 3.0.2) need it
 # Web framework
 fastapi = ">=0.142.1,<1.0"
 starlette = ">=1.3.1"  # security floor; fastapi itself only requires >=0.46

@@ -58,8 +58,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     cases; `compare_evals.py` names the first stage where a traced flip
     starts. The re-scoring fixture gains the new summary field; scores are
     unchanged.
+- `make release-check TAG=vX.Y.Z` and a gate in the Release workflow
+  ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253)).
+  `scripts/release_check.py` runs offline with the standard library only and
+  exits 1, naming the file and the problem, unless:
+  - **Versions.** `pyproject.toml`, `frontend/package.json`,
+    `frontend/package-lock.json` and `CITATION.cff` agree with each other and
+    with the tag.
+  - **Changelog.** `CHANGELOG.md` has one dated section for the version, with
+    a body and a link reference that ends with the tag, and `CITATION.cff`
+    carries the same date.
+  - **Placeholders.** No `FILL (` HTML comment is left in `README.md` or
+    `CHANGELOG.md`.
+  - **Evidence.** `docs/evals/latest.json` passes the `check_demo_eval.py`
+    rules and has its byte-identical snapshot in `docs/evals/history/`.
+  - **Assets.** `docs/assets/demo/` holds at least one image.
+
+  The Release workflow runs it on the tag's tree before it creates the
+  release; tags that predate the script skip it with a notice. The check
+  accepts only `vX.Y.Z`, so the workflow no longer publishes a pre-release
+  tag such as `v0.4.0-rc.1` of a tree that has the script. See
+  [docs/TESTING.md](docs/TESTING.md#release-check).
+- A policy interface with decision records
+  ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)):
+  - **Policies.** `backend/app/student/policy/` holds a policy protocol (`id`,
+    `version`, `decide(state, context)`) and a registry (`get_policy`). The
+    rule that picks the quiz difficulty is now the policy `band-v1`, with the
+    same boundaries: easy below 0.4 mastery, medium up to 0.7, hard above.
+    `StudentProfile.get_target_difficulty` is a shim over it, and the quiz
+    prompts are unchanged. `frontend/lib/mastery.ts` and
+    `scripts/seed_student_profile.py` still hold their own copies of the rule.
+  - **Decision records.** A decision returns a record: the policy id and
+    version, the action, the learner state and context the policy read, and
+    the graph edges it used with their provenance. `band-v1` reads the asked
+    concept and that concept's mastery level (the initial mastery if it has no
+    history) and nothing else. The record keeps the mastery unrounded. It
+    holds no time and no random id. Two records are equal exactly when their
+    canonical JSON is equal, and `record_id` is a digest of that JSON, so
+    equal records have the same id.
+  - **Responses.** `POST /api/v1/quiz/generate-adaptive` and
+    `GET /api/v1/student/target-difficulty` gain a `decision` field with the
+    record, its `record_id` and `decided_at`, the time of the decision in UTC,
+    which is not part of the record.
 
 ### Changed
+
+- **Breaking:** the minimum Python is 3.11.5 (it was 3.11.0); 3.12 and 3.13
+  are unaffected. The fixed releases of `soupsieve`, which Beautiful Soup uses
+  in `scripts/ingest_books.py`, need 3.11.5: a re-lock with the old floor
+  moves only Python 3.13 to a fixed release and keeps the vulnerable 2.10 for
+  3.11 and 3.12. The lock now has `soupsieve` 4.1 for every Python
+  (GHSA-6655-6qjp-jx7x, GHSA-7g44-g9rc-x53w, GHSA-mmhr-3c5m-f64f) and
+  `opentelemetry-api` 1.45.2 (GHSA-mf5v-w3w3-f6cg). No other locked version
+  changes. Poetry no longer uses Python 3.11.0 to 3.11.4 for the project:
+  with an environment built on one of them, `poetry install` stops with an
+  error. Install 3.11.5 or later, then run `poetry env use <python>` or
+  recreate the environment (CONTRIBUTING.md, "Upgrading an existing
+  checkout").
+- `check_demo_eval.py`, and so `make demo-eval` and `make demo-client-check`,
+  rejects a report whose API app version differs from the version in
+  `pyproject.toml`
+  ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253)).
+  After a version bump, run `poetry install` (or rebuild the image) and
+  restart the API before evaluating.
 
 - Concepts in a question are resolved against the subject's concept names and
   their stored aliases
@@ -88,6 +149,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of claiming that it adds prerequisite and related concepts.
 - The case hash leaves out `stratum` and `split`, so every case keeps the hash
   it had in version 2 and earlier reports stay comparable.
+- The README, the demo documents and the slides follow the two-label wording
+  of `docs/adaptivity/README.md`
+  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)):
+  - **Wording.** They no longer present the quizzes or the practice as
+    adaptive. They describe what the code does instead: the quiz prompt asks
+    for a difficulty band taken from a mastery estimate, BKT with fixed,
+    unfitted parameters updates that estimate from answers graded in the
+    browser, and neither the delivered difficulty nor the estimate is
+    validated. Interface strings are unchanged.
+  - **Gate.** `backend/tests/test_adaptivity_wording.py` fails, with file and
+    line, when a never-say phrase of the note, "auto-targets" or "adaptive
+    quizzes" appears in `README.md`, `docs/demo/` or `demo-slides/`. A
+    sentence that says the thing is not done passes only as an exact, listed
+    sentence. Other uses of the word "adaptive" are not gated.
+  - **Design note.** `docs/adaptivity/README.md` now says that only the
+    textbook's question sections are to be kept out of retrieval (a proposal
+    on [#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215);
+    the glossary and key terms stay), adds the `ready-first` probe and what
+    waits for the simulator's robustness worlds, corrects the dependencies in
+    its phases table, and lists the interface strings that remain.
 - RELATED edges link each concept to its strongest associations
   ([#291](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/291)):
   - **Scoring.** A pair of concepts is scored by normalised pointwise mutual
