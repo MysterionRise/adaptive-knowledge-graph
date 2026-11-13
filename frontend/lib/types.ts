@@ -53,7 +53,7 @@ export interface QuestionResponse {
   expanded_concepts?: string[] | null;
   /** Their graph neighbours, not searched; omitted by backends older than v0.4.0. */
   related_concepts?: string[] | null;
-  /** Omitted by backends older than v0.4.0. */
+  /** Sent since v0.3.0, the first tagged release. Only older, untagged builds omit it. */
   kg_expansion_status?: KGExpansionStatus;
   retrieved_count: number;
   /** Chunks after window expansion; null when window retrieval is off. */
@@ -228,6 +228,45 @@ export interface LearningPathResponse {
 }
 
 // =============================================================================
+// Decision records
+// =============================================================================
+
+/** A JSON scalar: the only kind of value the mappings of a decision record hold. */
+export type JsonScalar = string | number | boolean | null;
+
+/** A graph edge the decision used, with where the edge came from. */
+export interface EdgeUsePayload {
+  source: string;
+  target: string;
+  relation: string;
+  provenance: string;
+}
+
+/**
+ * What a policy decided and every input it read. Mirrors `DecisionRecordPayload` in
+ * `backend/app/ui_payloads/decisions.py`.
+ */
+export interface DecisionRecordPayload {
+  /** Digest of the fields below except `decided_at`: equal records share it. */
+  record_id: string;
+  policy_id: string;
+  policy_version: string;
+  /** What the policy chose. */
+  action: Record<string, JsonScalar>;
+  /** The learner state the policy read, with the exact values (not rounded). */
+  state_used: Record<string, JsonScalar>;
+  /** The context fields the policy read. */
+  context_used: Record<string, JsonScalar>;
+  /** The graph edges the policy read. The OpenAPI schema does not require the field. */
+  edges_used?: EdgeUsePayload[];
+  /**
+   * When the decision was taken: a date-time string with a UTC offset. Not part of the record
+   * or of `record_id`.
+   */
+  decided_at: string;
+}
+
+// =============================================================================
 // Quizzes
 // =============================================================================
 
@@ -263,6 +302,11 @@ export interface AdaptiveQuiz extends Quiz {
   student_mastery: number;
   target_difficulty: Difficulty;
   adapted: boolean;
+  /**
+   * The decision behind `target_difficulty`: the policy, its action and the inputs the policy
+   * read. The backend may send null, and v0.3.0 does not send the field.
+   */
+  decision?: DecisionRecordPayload | null;
 }
 
 // =============================================================================
