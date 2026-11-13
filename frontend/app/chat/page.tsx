@@ -411,7 +411,7 @@ const KG_STATUS_BADGES: Record<
 
 /** One line on what retrieval did: KG expansion outcome, chunk count, window expansion. */
 function RetrievalSummary({ response }: { response: QuestionResponse }) {
-  // Backends older than v0.4.0 send no status; an unknown value gets no badge either
+  // Only untagged builds older than v0.3.0 send no status; an unknown value gets no badge either
   const badge = response.kg_expansion_status
     ? KG_STATUS_BADGES[response.kg_expansion_status]
     : undefined;
