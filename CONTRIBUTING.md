@@ -73,6 +73,54 @@ Regenerating the lock (`poetry lock`) needs access to
 `download.pytorch.org`, which some cloud sandboxes block; run it on a machine
 that can reach it. The torch version bump is tracked separately (#207).
 
+### Fixing an advisory in a transitive dependency
+
+The weekly dependency audit opens or updates a tracking issue titled
+"Dependency audit: open advisories and expiring allowlist entries" when
+`osv-scanner` finds an advisory on `main` that no allowlist covers, whether or
+not a fixed release exists, or when an allowlist entry expires within 30 days
+(see `.github/workflows/dependency-audit.yml`). The weekly version-update
+groups only bump packages the project declares directly, in `pyproject.toml`
+and `frontend/package.json`, so a transitive package named in that issue will
+not appear in them. Dependabot security updates sometimes open a fix pull
+request for it; check for one before updating by hand.
+
+Clear it with a deliberate lockfile update for the package that needs the
+fixed release:
+
+```bash
+# Python (poetry.lock)
+poetry update <package>
+
+# Frontend (frontend/package-lock.json)
+cd frontend && npm update <package>
+```
+
+Both commands stay within the range the parent package allows, so if the fixed
+release is outside that range the lockfile does not change. In that case, bump
+the parent package to a release that allows the fix, or, for npm, add an
+`overrides` entry to `frontend/package.json` and say why in the pull request.
+
+Keep a deliberate upgrade to one lockfile, and merge lockfile changes one at a
+time: if another open pull request changes the same lockfile, update your
+branch and re-lock after it merges (see
+[#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164)).
+If the package is part of the embedding stack (`torch`, `transformers`,
+`sentence-transformers`, `tokenizers`), also run `make embedding-parity`
+against a seeded index and paste the result into the pull request (see
+[docs/evals/README.md](docs/evals/README.md)).
+The required **Dependency Audit (new advisories)** job compares the change to
+the base branch and fails only if the pull request adds an advisory; see
+[docs/TESTING.md](docs/TESTING.md).
+
+If no fixed release exists yet, do not bump a lockfile. Add a time-boxed entry
+to [`osv-scanner.toml`](osv-scanner.toml) or
+[`frontend/osv-scanner.toml`](frontend/osv-scanner.toml) with a reason that
+names an issue and an `ignoreUntil` date at most 90 days out, as
+[SECURITY.md](SECURITY.md#accepted-risks) and `backend/tests/test_osv_audit.py`
+require. Prefer clearing the advisory with an update when a fixed release is
+available.
+
 ### Upgrading an existing checkout
 
 The v0.3.0 release removes many unused Python dependencies. Syncing an
