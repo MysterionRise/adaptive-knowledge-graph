@@ -107,7 +107,7 @@ flowchart LR
 | Layer | Technology |
 | --- | --- |
 | Frontend | Next.js 16 and React 19 on Node 24, Cytoscape.js for the graph |
-| API | FastAPI on Python 3.11–3.13 |
+| API | FastAPI on Python 3.11.5 or later, up to 3.13 |
 | Knowledge graph | Neo4j 5.26 Community, APOC limited to `apoc.meta.*` |
 | Search | OpenSearch 3.9.0 (BM25 and kNN) |
 | Embeddings and reranking | BGE-M3 and the optional bge-reranker-v2-m3 via sentence-transformers, PyTorch 2.10 and NumPy 2 |
@@ -201,7 +201,7 @@ downloads.
 
 | Tool | Version |
 | --- | --- |
-| Python | 3.11, 3.12 or 3.13 |
+| Python | 3.11 (3.11.5 or later), 3.12 or 3.13 |
 | [Poetry](https://python-poetry.org/docs/#installation) | 2.x |
 | [Node.js](https://nodejs.org/) | 24 LTS (pinned in [`.node-version`](.node-version) and [`.nvmrc`](.nvmrc)) |
 | Docker with Compose v2 | Compose 2.24 or newer (Docker Desktop or Docker Engine) |

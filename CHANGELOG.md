@@ -82,6 +82,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** the minimum Python is 3.11.5 (it was 3.11.0); 3.12 and 3.13
+  are unaffected. The fixed releases of `soupsieve`, which Beautiful Soup uses
+  in `scripts/ingest_books.py`, need 3.11.5: a re-lock with the old floor
+  moves only Python 3.13 to a fixed release and keeps the vulnerable 2.10 for
+  3.11 and 3.12. The lock now has `soupsieve` 4.1 for every Python
+  (GHSA-6655-6qjp-jx7x, GHSA-7g44-g9rc-x53w, GHSA-mmhr-3c5m-f64f) and
+  `opentelemetry-api` 1.45.2 (GHSA-mf5v-w3w3-f6cg). No other locked version
+  changes. Poetry no longer uses Python 3.11.0 to 3.11.4 for the project:
+  with an environment built on one of them, `poetry install` stops with an
+  error. Install 3.11.5 or later, then run `poetry env use <python>` or
+  recreate the environment (CONTRIBUTING.md, "Upgrading an existing
+  checkout").
 - `check_demo_eval.py`, and so `make demo-eval` and `make demo-client-check`,
   rejects a report whose API app version differs from the version in
   `pyproject.toml`
