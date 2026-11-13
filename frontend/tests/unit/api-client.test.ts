@@ -10,6 +10,7 @@ import ApiClient, {
   STREAM_IDLE_TIMEOUT_MS,
 } from '@/lib/api-client';
 import { ApiError, isAbortError } from '@/lib/api-errors';
+import type { AdaptiveQuiz } from '@/lib/types';
 import { MockApi, json, pending } from './helpers/mockApi';
 
 const BASE_URL = 'http://localhost:8000';
@@ -207,6 +208,47 @@ describe('ApiClient', () => {
         num_questions: '3',
       });
       expect(request.config.timeout).toBe(LLM_TIMEOUT_MS);
+    });
+
+    it('returns the adaptive quiz with its decision record', async () => {
+      // A response body of the backend (quiz generator stubbed, fixed clock) for a learner at mastery 0.3 on the topic
+      const adaptiveQuiz: AdaptiveQuiz = {
+        id: 'quiz-1',
+        title: 'The Civil War',
+        questions: [
+          {
+            id: 'q1',
+            text: 'Which battle is often called the turning point of the Civil War?',
+            options: [
+              { id: 'a', text: 'Gettysburg' },
+              { id: 'b', text: 'Bull Run' },
+            ],
+            correct_option_id: 'a',
+            explanation: "Gettysburg ended the Confederacy's second invasion of the North.",
+            source_chunk_id: null,
+            related_concept: 'Battle of Gettysburg',
+            difficulty: 'easy',
+            difficulty_score: 0.25,
+          },
+        ],
+        average_difficulty: 0.25,
+        student_mastery: 0.3,
+        target_difficulty: 'easy',
+        adapted: true,
+        decision: {
+          record_id: 'a6294985463dfffd',
+          policy_id: 'band',
+          policy_version: 'v1',
+          action: { kind: 'difficulty', difficulty: 'easy' },
+          state_used: { mastery: 0.3, mastery_source: 'tracked' },
+          context_used: { concept: 'The Civil War' },
+          edges_used: [],
+          decided_at: '2026-11-11T12:00:00Z',
+        },
+      };
+      api.on('POST /api/v1/quiz/generate-adaptive', json(adaptiveQuiz));
+
+      await expect(client.generateAdaptiveQuiz('The Civil War')).resolves.toEqual(adaptiveQuiz);
     });
 
     it('posts quiz results for recommendations', async () => {
