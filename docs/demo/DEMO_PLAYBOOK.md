@@ -49,8 +49,8 @@ Say:
 
 > This is a local KG-RAG prototype over OpenStax textbooks. The interesting
 > parts are graph-aware retrieval, a local-first LLM that can be swapped for a
-> hosted one by configuration, streaming UX, adaptive practice, live readiness
-> checks and clearly stated production boundaries.
+> hosted one by configuration, streaming UX, generated quizzes with a mastery
+> estimate, live readiness checks and clearly stated production boundaries.
 
 Show:
 
@@ -116,20 +116,23 @@ Framing:
 > KG-RAG is not claimed to win every query. The point is that retrieval
 > behaviour is inspectable and evaluated against plain retrieval.
 
-### 18–23 min: Adaptive assessment
+### 18–23 min: Assessment
 
 Open **Assessment** (`/assessment`).
 
 Actions:
 
 1. Use `The American Revolution` or `The Constitution`.
-2. Generate an adaptive quiz.
+2. Generate a quiz with **Adaptive Mode** on (the default).
 3. Answer one item.
 4. Show how mastery and recommendations change.
 
 Say:
 
-> This is adaptive-learning infrastructure. It is not a validated psychometric
+> The quiz prompt asks for a difficulty band taken from a mastery estimate.
+> BKT with fixed, unfitted parameters updates that estimate from answers
+> graded in the browser. Neither the delivered difficulty nor the estimate is
+> validated, so this is not adaptive yet. It is not a validated psychometric
 > exam or certification engine.
 
 ### 23–26 min: Evaluation
@@ -194,6 +197,9 @@ Use the [5-minute script](DEMO_5MIN.md).
   accurate statement is "designed so learner data stays on the machine; no
   compliance certification" (see [COMPLIANCE.md](../COMPLIANCE.md)).
 - Certification-grade.
+- Adaptive quizzes or practice. The interface still labels the mode
+  "Adaptive"; [docs/adaptivity/README.md](../adaptivity/README.md) says what
+  has to pass before the project uses the word.
 - Full IRT or psychometric validation.
 - A teacher authoring workflow (none is implemented).
 - Remote LLM calls as privacy-preserving.

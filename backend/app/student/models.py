@@ -11,6 +11,17 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from backend.app.core.settings import settings
+from backend.app.student.policy import (
+    DecisionContext,
+    DecisionRecord,
+    LearnerState,
+    difficulty_of,
+    get_policy,
+)
+from backend.app.ui_payloads.decisions import DecisionRecordPayload
+
+DIFFICULTY_POLICY = "band-v1"
+"""Registry key of the policy that chooses the target difficulty."""
 
 
 class ConceptMastery(BaseModel):
@@ -51,23 +62,34 @@ class StudentProfile(BaseModel):
             return self.mastery_map[concept].mastery_level
         return settings.student_initial_mastery
 
+    def learner_state(self, concept: str) -> LearnerState:
+        """
+        The view of this learner that a policy gets for one concept.
+
+        It holds the mastery level stored for the concept (nothing if the concept has no
+        history) and the initial mastery (STUDENT_INITIAL_MASTERY). No other field of the
+        profile is in it: no attempts, dates or BKT values, and no other concept's mastery.
+        """
+        record = self.mastery_map.get(concept)
+        mastery = {} if record is None else {concept: record.mastery_level}
+        return LearnerState(mastery=mastery, initial_mastery=settings.student_initial_mastery)
+
+    def decide_difficulty(self, concept: str) -> DecisionRecord:
+        """The target-difficulty decision for a concept, as the policy's decision record."""
+        policy = get_policy(DIFFICULTY_POLICY)
+        return policy.decide(self.learner_state(concept), DecisionContext(concept=concept))
+
     def get_target_difficulty(self, concept: str) -> Literal["easy", "medium", "hard"]:
         """
         Determine target difficulty based on mastery level.
 
-        Difficulty Targeting:
+        A shim: it returns the action of ``decide_difficulty``. The rule is the policy
+        band-v1 (``backend/app/student/policy/band.py``):
         - mastery < 0.4 -> "easy" questions
         - mastery 0.4-0.7 -> "medium" questions
         - mastery > 0.7 -> "hard" questions
         """
-        mastery = self.get_mastery(concept)
-
-        if mastery < 0.4:
-            return "easy"
-        elif mastery <= 0.7:
-            return "medium"
-        else:
-            return "hard"
+        return difficulty_of(self.decide_difficulty(concept))
 
 
 class MasteryUpdate(BaseModel):
@@ -111,3 +133,10 @@ class TargetDifficultyResponse(BaseModel):
     concept: str
     mastery_level: float
     target_difficulty: Literal["easy", "medium", "hard"]
+    decision: DecisionRecordPayload | None = Field(
+        default=None,
+        description=(
+            "The decision record behind target_difficulty: the policy, its action and the "
+            "inputs it read"
+        ),
+    )

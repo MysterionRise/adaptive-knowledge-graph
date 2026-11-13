@@ -57,7 +57,7 @@ Open `demo-slides/index.html` in a browser and walk through slides 1–3.
 
 Talking points per slide:
 
-- **Slide 1:** why: expensive APIs, generic content, privacy concerns.
+- **Slide 1:** why: expensive APIs, generic answers, privacy concerns.
 - **Slide 2:** how: regular RAG (5 steps) compared with KG-aware RAG, which
   adds concept extraction, graph traversal and cross-encoder reranking.
 - **Slide 3:** architecture, all local: Next.js, FastAPI, Neo4j, OpenSearch
@@ -124,23 +124,28 @@ curl 'http://localhost:8000/api/v1/graph/data?subject=us_history&limit=50'
 # Returns the nodes and edges used by the Cytoscape.js view
 ```
 
-### Step 3: Take an adaptive quiz (3 min)
+### Step 3: Take a quiz (3 min)
 
 Generate a quiz. The endpoint takes **query parameters**, not a JSON body:
 
 ```bash
-# Check the starting difficulty (a fresh learner has 0.30 mastery, so "easy")
+# Check the target difficulty band (a fresh learner has a 0.30 mastery estimate, so "easy")
 curl 'http://localhost:8000/api/v1/student/target-difficulty?concept=The+Civil+War'
-# -> {"concept":"The Civil War","mastery_level":0.3,"target_difficulty":"easy"}
+# -> {"concept":"The Civil War","mastery_level":0.3,"target_difficulty":"easy","decision":{...}}
+#    "decision" holds the record of the band-v1 policy (the action, the mastery it read) with its record_id and decided_at
 
-# Generate an adaptive quiz
+# Generate a quiz; the prompt asks the LLM for that band
 curl -X POST 'http://localhost:8000/api/v1/quiz/generate-adaptive?topic=The+Civil+War&subject=us_history&num_questions=3'
 ```
 
-- The starting difficulty is "easy" (default mastery 0.30).
+- The requested band is "easy" (default mastery estimate 0.30). It is a prompt
+  instruction; the delivered difficulty is not checked.
 - The quiz returns multiple-choice questions with options, the correct answer
   and an explanation.
-- After each answer, the mastery update sets the difficulty of the next quiz.
+- After each answer, the mastery update sets the band requested for the next
+  quiz. Neither the delivered difficulty nor the mastery estimate is
+  validated, so do not present the quiz as adaptive; see
+  [docs/adaptivity/README.md](../adaptivity/README.md).
 
 ### Step 4: BKT mastery progression (3 min)
 
@@ -181,8 +186,8 @@ Answer 5 (correct): 0.819 → 0.948 | bkt=0.9479 | difficulty=hard
   P(Guess) = 0.25.
 - The response includes `bkt_p_known`, the Bayesian probability that the
   learner knows the skill.
-- Three correct answers reach near-mastery (0.97); one wrong answer drops it to
-  0.82 because the model accounts for slips and guesses.
+- Three correct answers raise the estimate to 0.97; one wrong answer drops it
+  to 0.82 because the model accounts for slips and guesses.
 - BKT is a standard model from the learning-science literature (Corbett and
   Anderson, 1994). The parameters here are fixed defaults, not fitted to
   learner data.
@@ -238,7 +243,7 @@ curl http://localhost:8000/api/v1/graph/stats
 | `/api/v1/student/profile` | GET | none | Mastery levels |
 | `/api/v1/student/target-difficulty` | GET | query: concept | Difficulty for a concept |
 | `/api/v1/student/reset` | POST | none | Reset the profile for a demo |
-| `/api/v1/quiz/generate-adaptive` | POST | query: topic, subject, num_questions | Adaptive quiz generation |
+| `/api/v1/quiz/generate-adaptive` | POST | query: topic, subject, num_questions | Quiz generation with a difficulty band requested by prompt |
 | `/api/v1/graph/stats` | GET | none | Knowledge-graph statistics |
 | `/api/v1/graph/data` | GET | query: subject, limit | Graph visualization data |
 | `/api/v1/subjects` | GET | none | Available subjects |

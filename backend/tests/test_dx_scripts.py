@@ -129,6 +129,10 @@ def test_fetch_text_preserves_none_for_unexpected_failure(mocker):
         ("3.10.20", ">=3.11,<3.14", False),
         ("3.14.0", ">=3.11,<3.14", False),
         ("3.14.0", ">=3.11,<3.15", True),
+        # A patch-level floor, as pyproject.toml has it
+        ("3.11.4", ">=3.11.5,<3.14", False),
+        ("3.11.5", ">=3.11.5,<3.14", True),
+        ("3.11", ">=3.11.5,<3.14", False),
         ("3.11.9", ">=3.12,<3.15", False),
         ("3.12.1", ">=3.12, !=3.12.1, <3.15", False),
         ("3.12.0", ">3.12,<=3.13", False),
@@ -138,6 +142,20 @@ def test_fetch_text_preserves_none_for_unexpected_failure(mocker):
 )
 def test_python_version_satisfies_declared_range(version, requirement, expected):
     assert stack_check.satisfies_python(version, requirement) is expected
+
+
+def test_repository_python_floor_is_3_11_5(capsys):
+    """The fixed soupsieve releases need Python 3.11.5, so the project does too.
+
+    With a lower floor Poetry locks a second, vulnerable soupsieve for the older interpreters
+    (GHSA-6655-6qjp-jx7x, GHSA-7g44-g9rc-x53w, GHSA-mmhr-3c5m-f64f).
+    """
+    assert stack_check.main(["python-range"]) == 0
+    requirement = capsys.readouterr().out.strip()
+
+    assert stack_check.satisfies_python("3.11.4", requirement) is False
+    assert stack_check.satisfies_python("3.11.5", requirement) is True
+    assert stack_check.satisfies_python("3.13.12", requirement) is True
 
 
 def test_python_range_reads_pyproject_and_rejects_unsupported_version(

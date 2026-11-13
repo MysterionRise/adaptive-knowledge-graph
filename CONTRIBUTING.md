@@ -23,9 +23,10 @@ never in a public issue.
 
 ## Development setup
 
-You need Python 3.11–3.13, Poetry 2.x, Node.js 24 LTS, Docker with Compose
-v2.24 or newer, and Ollama. The [README quickstart](README.md#quickstart) lists them with
-hardware requirements.
+You need Python 3.11.5 or later (up to 3.13), Poetry 2.x, Node.js 24 LTS,
+Docker with Compose v2.24 or newer, and Ollama. The
+[README quickstart](README.md#quickstart) lists them with hardware
+requirements.
 
 ```bash
 # Fork the repository on GitHub, then:
@@ -143,6 +144,13 @@ still fails):
 ```bash
 poetry run pip install --force-reinstall --no-deps "typer-slim==0.20.0"
 ```
+
+v0.4.0 raises the minimum Python to 3.11.5. With an environment on 3.11.0 to
+3.11.4, Poetry stops with "Current Python version (3.11.x) is not allowed by
+the project": install 3.11.5 or later and recreate the environment with the
+three commands at the top of this section. It cannot be repaired in place,
+because `poetry run` stops with the same error, and `poetry env use <python>`
+alone can keep the old environment.
 
 The local Docker stack also changed (new Compose project name and images); see
 [infra/compose/README.md](infra/compose/README.md#upgrading-from-an-older-checkout)

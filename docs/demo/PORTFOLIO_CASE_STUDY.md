@@ -8,9 +8,10 @@ concept relationships that authors can inspect, adaptive practice that
 educators can review, and quality metrics that engineers can track for
 regressions.
 
-This project builds that shape as a local OpenStax prototype: KG-aware RAG plus
-adaptive assessment over open textbooks. It is a pilot prototype, not
-production certification infrastructure.
+This project builds that shape as a local OpenStax prototype, except for the
+adaptive part: KG-aware RAG plus generated quizzes with an unvalidated mastery
+estimate over open textbooks. It is a pilot prototype, not production
+certification infrastructure.
 
 ## Product thesis
 
@@ -60,11 +61,16 @@ Education data has privacy constraints. The default Ollama mode shows that the
 whole architecture runs locally, and `PRIVACY_LOCAL_ONLY=true` blocks remote
 models unless someone deliberately turns it off.
 
-### Honest adaptive learning
+### No adaptive claim yet
 
-The system implements Bayesian Knowledge Tracing with fixed parameters and
-LLM-estimated question difficulty. It makes no claims of calibrated IRT
-without learner response data.
+The quiz prompt asks for an easy, medium or hard band taken from a mastery
+estimate. Bayesian Knowledge Tracing with fixed, unfitted parameters updates
+that estimate from answers graded in the browser, and question difficulty is
+the LLM's own label. Neither the delivered difficulty nor the estimate is
+validated, so the project does not claim adaptive behaviour yet; the tests a
+behaviour has to pass first are in
+[docs/adaptivity/README.md](../adaptivity/README.md). The project makes no
+claims of calibrated IRT without learner response data.
 
 ## Evidence
 

@@ -13,12 +13,15 @@ repository-root `.env` through the optional `env_file` syntax, which needs
 
 | Service | Image | Profiles | Host port (on `127.0.0.1`) |
 | --- | --- | --- | --- |
-| `neo4j` | `neo4j:5.26-community`, APOC restricted to `apoc.meta.*` | always | 7474 Browser, 7687 Bolt |
-| `opensearch` | `opensearchproject/opensearch:3.9.0`, single node | always | 9200 |
+| `neo4j` | `neo4j` 5 Community, APOC restricted to `apoc.meta.*` | always | 7474 Browser, 7687 Bolt |
+| `opensearch` | `opensearchproject/opensearch` 3, single node | always | 9200 |
 | `api-cpu` | API image, CPU (`infra/docker/api.cpu.Dockerfile`) | `cpu`, `full` | 8000 |
 | `api-gpu` | API image, CUDA 12.8 (`infra/docker/api.gpu.Dockerfile`) | `gpu` | 8000 |
 | `frontend` | Next.js production build (`infra/docker/frontend.Dockerfile`) | `full` | 3000 |
-| `ollama` | `ollama/ollama:0.40.10` | `ollama` | 11434 |
+| `ollama` | `ollama/ollama` | `ollama` | 11434 |
+
+[`compose.yaml`](compose.yaml) pins the exact tag of each image, and Dependabot
+updates the tags there.
 
 - **No profile:** Neo4j and OpenSearch only. This is what `make up` starts.
 - **`cpu`:** adds the API container on CPU.

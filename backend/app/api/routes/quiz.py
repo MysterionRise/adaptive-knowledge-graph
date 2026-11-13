@@ -145,6 +145,9 @@ async def generate_adaptive_quiz(
     - mastery 0.4-0.7: medium questions
     - mastery > 0.7: hard questions
 
+    The rule is the policy `band-v1`. The response's `decision` is its decision record:
+    the policy id and version, the action, and the learner state and context it read.
+
     Args:
         topic: Topic to generate quiz for
         num_questions: Number of questions to generate
@@ -179,6 +182,7 @@ async def generate_adaptive_quiz(
             student_mastery=target_info.mastery_level,
             target_difficulty=target_info.target_difficulty,
             adapted=True,
+            decision=target_info.decision,
         )
 
 
@@ -257,6 +261,8 @@ async def get_target_difficulty(
     - mastery < 0.4: "easy"
     - mastery 0.4-0.7: "medium"
     - mastery > 0.7: "hard"
+
+    The rule is the policy `band-v1`; `decision` is its decision record.
     """
     try:
         student_service = get_student_service()

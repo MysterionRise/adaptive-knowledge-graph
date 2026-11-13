@@ -6,9 +6,11 @@ Tests cover:
 - Parameter validation (topic, subject, student_id, recommendation payloads)
 - Error handling (content not found 404, invalid LLM output 502, LLM outage 503)
 - Adaptive quizzes and post-quiz recommendations
+- The decision record in the adaptive quiz and target-difficulty responses (#306)
 """
 
 import json
+import math
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,7 +24,9 @@ from backend.app.core.exceptions import (
 )
 from backend.app.core.settings import settings
 from backend.app.main import app
-from backend.app.student.models import TargetDifficultyResponse
+from backend.app.student.models import ConceptMastery, StudentProfile, TargetDifficultyResponse
+from backend.app.student.policy import BandPolicyV1, DecisionRecord
+from backend.app.student.student_service import StudentService
 from backend.app.ui_payloads.quiz import Quiz, QuizOption, QuizQuestion
 from backend.app.ui_payloads.recommendations import MAX_QUESTION_RESULTS, RecommendationResponse
 
@@ -796,3 +800,389 @@ class TestQuizRecommendationsEndpoint:
 
         assert response.status_code == 500
         assert response.json()["detail"] == "An internal error occurred"
+
+
+# =============================================================================
+# Decision record (#306)
+# =============================================================================
+
+DECIDED_AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
+
+DECISION_FIELDS = {
+    "record_id",
+    "policy_id",
+    "policy_version",
+    "action",
+    "state_used",
+    "context_used",
+    "edges_used",
+    "decided_at",
+}
+
+ADAPTIVE_QUIZ_FIELDS = {
+    "id",
+    "title",
+    "questions",
+    "average_difficulty",
+    "student_mastery",
+    "target_difficulty",
+    "adapted",
+    "decision",
+}
+
+# (stored mastery, band): the boundaries of the band rule with the nearest floats on either side.
+BOUNDARIES = [
+    (0.0, "easy"),
+    (math.nextafter(0.4, 0.0), "easy"),
+    (0.4, "medium"),
+    (math.nextafter(0.4, 1.0), "medium"),
+    (math.nextafter(0.7, 0.0), "medium"),
+    (0.7, "medium"),
+    (math.nextafter(0.7, 1.0), "hard"),
+    (1.0, "hard"),
+]
+
+
+@pytest.fixture
+def learner_store(tmp_path):
+    """A real StudentService on a temporary SQLite file, served to the quiz routes.
+
+    Its clock always says DECIDED_AT.
+    """
+    service = StudentService(storage_path=tmp_path / "profiles.sqlite3", clock=lambda: DECIDED_AT)
+    with patch("backend.app.api.routes.quiz.get_student_service", return_value=service):
+        yield service
+
+
+def _learner(mastery: float) -> StudentProfile:
+    """learner_1 with history on Photosynthesis at the given mastery."""
+    return StudentProfile(
+        student_id="learner_1",
+        mastery_map={
+            "Photosynthesis": ConceptMastery(
+                concept_name="Photosynthesis", mastery_level=mastery, attempts=4, correct_attempts=3
+            )
+        },
+    )
+
+
+def _adaptive_quiz(client, generator, **params) -> dict:
+    """POST /quiz/generate-adaptive for learner_1 on Photosynthesis; returns the JSON body."""
+    with patch("backend.app.api.routes.quiz.get_quiz_generator", return_value=generator):
+        response = client.post(
+            "/api/v1/quiz/generate-adaptive",
+            params={"topic": "Photosynthesis", "student_id": "learner_1", **params},
+        )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@pytest.mark.unit
+class TestDecisionRecord:
+    """The record of the band-v1 decision in two responses.
+
+    ``POST /quiz/generate-adaptive`` and ``GET /student/target-difficulty`` carry it.
+    ``POST /student/mastery`` also reports a target difficulty and carries no record.
+    """
+
+    @pytest.mark.parametrize(
+        ("mastery", "difficulty"), [(0.2, "easy"), (0.55, "medium"), (0.75, "hard")]
+    )
+    def test_adaptive_quiz_carries_the_decision_record(
+        self, client, mock_quiz_generator, learner_store, mastery, difficulty
+    ):
+        profile = _learner(mastery)
+        learner_store.save_profile(profile)
+
+        with patch(
+            "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
+        ):
+            response = client.post(
+                "/api/v1/quiz/generate-adaptive",
+                params={"topic": "Photosynthesis", "student_id": "learner_1"},
+            )
+
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["target_difficulty"] == difficulty
+        assert data["student_mastery"] == mastery
+        assert data["adapted"] is True
+        assert data["decision"] == {
+            "record_id": profile.decide_difficulty("Photosynthesis").record_id(),
+            "policy_id": "band",
+            "policy_version": "v1",
+            "action": {"kind": "difficulty", "difficulty": difficulty},
+            "state_used": {"mastery": mastery, "mastery_source": "tracked"},
+            "context_used": {"concept": "Photosynthesis"},
+            "edges_used": [],
+            "decided_at": "2026-11-11T12:00:00Z",
+        }
+        # The prompt is asked for the difficulty the record names.
+        mock_quiz_generator.generate_from_topic.assert_called_once_with(
+            topic="Photosynthesis", num_questions=3, target_difficulty=difficulty
+        )
+
+    def test_adaptive_quiz_record_for_a_topic_without_history(
+        self, client, mock_quiz_generator, learner_store, monkeypatch
+    ):
+        monkeypatch.setattr(settings, "student_initial_mastery", 0.5)
+
+        with patch(
+            "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
+        ):
+            response = client.post(
+                "/api/v1/quiz/generate-adaptive", params={"topic": " Photosynthesis "}
+            )
+
+        assert response.status_code == 200, response.text
+        decision = response.json()["decision"]
+        assert set(decision) == DECISION_FIELDS
+        assert decision["action"] == {"kind": "difficulty", "difficulty": "medium"}
+        assert decision["state_used"] == {"mastery": 0.5, "mastery_source": "initial"}
+        assert decision["context_used"] == {"concept": "Photosynthesis"}
+
+    def test_adaptive_quiz_record_id_ignores_the_time_of_the_request(
+        self, client, mock_quiz_generator, tmp_path
+    ):
+        """Two requests for the same learner state: one record id, two decided_at values."""
+        times = iter([DECIDED_AT, datetime(2026, 11, 12, 8, 30, tzinfo=UTC)])
+        service = StudentService(
+            storage_path=tmp_path / "profiles.sqlite3", clock=lambda: next(times)
+        )
+        service.save_profile(_learner(0.55))
+
+        with (
+            patch("backend.app.api.routes.quiz.get_student_service", return_value=service),
+            patch(
+                "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
+            ),
+        ):
+            first, second = (
+                client.post(
+                    "/api/v1/quiz/generate-adaptive",
+                    params={"topic": "Photosynthesis", "student_id": "learner_1"},
+                ).json()["decision"]
+                for _ in range(2)
+            )
+
+        assert first["decided_at"] == "2026-11-11T12:00:00Z"
+        assert second["decided_at"] == "2026-11-12T08:30:00Z"
+        assert first["record_id"] == second["record_id"]
+        assert {**first, "decided_at": None} == {**second, "decided_at": None}
+
+    def test_decision_is_null_when_the_service_gives_none(
+        self, client, mock_quiz_generator, student_service_stub
+    ):
+        """A service stub that returns no record: the field is present and null."""
+        with patch(
+            "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
+        ):
+            response = client.post(
+                "/api/v1/quiz/generate-adaptive", params={"topic": "Photosynthesis"}
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "decision" in data
+        assert data["decision"] is None
+        assert data["target_difficulty"] == "easy"
+
+    def test_target_difficulty_carries_the_decision_record(self, client, learner_store):
+        stored = 0.39999999999999997  # the nearest float below 0.4
+        profile = _learner(stored)
+        learner_store.save_profile(profile)
+
+        response = client.get(
+            "/api/v1/student/target-difficulty",
+            params={"concept": "Photosynthesis", "student_id": "learner_1"},
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json() == {
+            "concept": "Photosynthesis",
+            "mastery_level": 0.4,
+            "target_difficulty": "easy",
+            "decision": {
+                "record_id": profile.decide_difficulty("Photosynthesis").record_id(),
+                "policy_id": "band",
+                "policy_version": "v1",
+                "action": {"kind": "difficulty", "difficulty": "easy"},
+                "state_used": {"mastery": stored, "mastery_source": "tracked"},
+                "context_used": {"concept": "Photosynthesis"},
+                "edges_used": [],
+                "decided_at": "2026-11-11T12:00:00Z",
+            },
+        }
+
+    def test_target_difficulty_decision_is_null_when_the_service_gives_none(
+        self, client, student_service_stub
+    ):
+        response = client.get(
+            "/api/v1/student/target-difficulty", params={"concept": "Photosynthesis"}
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "concept": "Photosynthesis",
+            "mastery_level": 0.2,
+            "target_difficulty": "easy",
+            "decision": None,
+        }
+
+    def test_openapi_documents_the_decision_record(self):
+        schemas = app.openapi()["components"]["schemas"]
+        record = schemas["DecisionRecordPayload"]
+
+        assert set(record["properties"]) == DECISION_FIELDS
+        assert set(record["required"]) == DECISION_FIELDS - {"edges_used"}
+        assert record["properties"]["decided_at"]["format"] == "date-time"
+        for model in ("AdaptiveQuiz", "TargetDifficultyResponse"):
+            decision = schemas[model]["properties"]["decision"]
+            assert {"$ref": "#/components/schemas/DecisionRecordPayload"} in decision["anyOf"]
+            assert {"type": "null"} in decision["anyOf"]
+            assert "decision" not in schemas[model]["required"]
+
+    @pytest.mark.parametrize(("mastery", "difficulty"), BOUNDARIES)
+    def test_both_routes_return_the_same_record_at_the_boundaries(
+        self, client, mock_quiz_generator, learner_store, mastery, difficulty
+    ):
+        """The reported mastery is rounded; the record holds the stored value behind the band."""
+        profile = _learner(mastery)
+        learner_store.save_profile(profile)
+
+        quiz = _adaptive_quiz(client, mock_quiz_generator)
+        response = client.get(
+            "/api/v1/student/target-difficulty",
+            params={"concept": "Photosynthesis", "student_id": "learner_1"},
+        )
+
+        assert response.status_code == 200, response.text
+        target = response.json()
+        assert set(quiz) == ADAPTIVE_QUIZ_FIELDS
+        assert set(target) == {"concept", "mastery_level", "target_difficulty", "decision"}
+        assert quiz["target_difficulty"] == target["target_difficulty"] == difficulty
+        assert quiz["student_mastery"] == target["mastery_level"] == round(mastery, 3)
+        assert quiz["decision"] == target["decision"]
+        assert quiz["decision"] == {
+            "record_id": profile.decide_difficulty("Photosynthesis").record_id(),
+            "policy_id": "band",
+            "policy_version": "v1",
+            "action": {"kind": "difficulty", "difficulty": difficulty},
+            "state_used": {"mastery": mastery, "mastery_source": "tracked"},
+            "context_used": {"concept": "Photosynthesis"},
+            "edges_used": [],
+            "decided_at": "2026-11-11T12:00:00Z",
+        }
+        mock_quiz_generator.generate_from_topic.assert_called_once_with(
+            topic="Photosynthesis", num_questions=3, target_difficulty=difficulty
+        )
+
+    @pytest.mark.parametrize(
+        "params", [{"num_questions": 1}, {"num_questions": 7}, {"subject": "economics"}]
+    )
+    def test_request_parameters_outside_the_decision_keep_the_record(
+        self, client, mock_quiz_generator, learner_store, params
+    ):
+        learner_store.save_profile(_learner(0.55))
+
+        plain = _adaptive_quiz(client, mock_quiz_generator)
+        other = _adaptive_quiz(client, mock_quiz_generator, **params)
+
+        assert other["decision"] == plain["decision"]
+        assert other["decision"]["action"] == {"kind": "difficulty", "difficulty": "medium"}
+
+    def test_two_learners_with_the_same_mastery_get_the_same_decision(
+        self, client, mock_quiz_generator, learner_store
+    ):
+        """Who the learner is and how often they answered are not inputs of band-v1."""
+        other = _learner(0.71).model_copy(update={"student_id": "learner_2"})
+        other.mastery_map["Photosynthesis"].attempts = 40
+        other.mastery_map["Photosynthesis"].correct_attempts = 1
+        learner_store.save_profile(_learner(0.71))
+        learner_store.save_profile(other)
+
+        first = _adaptive_quiz(client, mock_quiz_generator)
+        second = _adaptive_quiz(client, mock_quiz_generator, student_id="learner_2")
+
+        assert first["decision"] == second["decision"]
+        assert first["decision"]["action"] == {"kind": "difficulty", "difficulty": "hard"}
+
+    def test_routes_take_the_difficulty_from_the_policy(
+        self, client, mock_quiz_generator, learner_store, monkeypatch
+    ):
+        """With the policy replaced by one that always says "hard", both routes say "hard".
+
+        The learner is in the easy band, so a copy of the rule in a route or in the service
+        would answer "easy".
+        """
+
+        def always_hard(self, state, context):
+            return DecisionRecord(
+                policy_id="band",
+                policy_version="v1",
+                action={"kind": "difficulty", "difficulty": "hard"},
+                state_used={"mastery": 0.1, "mastery_source": "tracked"},
+                context_used={"concept": context.concept},
+            )
+
+        learner_store.save_profile(_learner(0.1))
+        monkeypatch.setattr(BandPolicyV1, "decide", always_hard)
+
+        quiz = _adaptive_quiz(client, mock_quiz_generator)
+        target = client.get(
+            "/api/v1/student/target-difficulty",
+            params={"concept": "Photosynthesis", "student_id": "learner_1"},
+        ).json()
+
+        assert quiz["student_mastery"] == target["mastery_level"] == 0.1
+        assert quiz["target_difficulty"] == target["target_difficulty"] == "hard"
+        assert quiz["decision"]["action"] == {"kind": "difficulty", "difficulty": "hard"}
+        mock_quiz_generator.generate_from_topic.assert_called_once_with(
+            topic="Photosynthesis", num_questions=3, target_difficulty="hard"
+        )
+
+    def test_non_adaptive_quiz_has_no_decision(self, client, mock_quiz_generator):
+        with patch(
+            "backend.app.api.routes.quiz.get_quiz_generator", return_value=mock_quiz_generator
+        ):
+            response = client.post("/api/v1/quiz/generate", params={"topic": "Photosynthesis"})
+
+        assert response.status_code == 200
+        assert "decision" not in response.json()
+
+    @pytest.mark.parametrize(
+        "concept", ["Révolution française", "Reconstruction (1865-1877)", "x" * 200]
+    )
+    def test_record_names_the_concept_of_the_request(self, client, learner_store, concept):
+        response = client.get("/api/v1/student/target-difficulty", params={"concept": concept})
+
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["concept"] == concept
+        assert data["decision"]["context_used"] == {"concept": concept}
+        assert len(data["decision"]["record_id"]) == 16
+
+    def test_concept_with_invalid_utf8_bytes_gets_a_record(self, client, learner_store):
+        """The query decoder replaces the bytes; the record names the string the service got."""
+        response = client.get("/api/v1/student/target-difficulty?concept=%ED%A0%80")
+
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["decision"]["context_used"] == {"concept": data["concept"]}
+        assert len(data["decision"]["record_id"]) == 16
+
+    def test_whole_number_mastery_is_written_as_a_float(self, client, learner_store):
+        """1.0 stays "1.0" in the response, as in the canonical JSON the id is a digest of."""
+        profile = _learner(1.0)
+        learner_store.save_profile(profile)
+
+        response = client.get(
+            "/api/v1/student/target-difficulty",
+            params={"concept": "Photosynthesis", "student_id": "learner_1"},
+        )
+
+        assert response.status_code == 200, response.text
+        assert '"mastery":1.0' in response.text.replace(" ", "")
+        assert response.json()["decision"]["record_id"] == (
+            profile.decide_difficulty("Photosynthesis").record_id()
+        )
