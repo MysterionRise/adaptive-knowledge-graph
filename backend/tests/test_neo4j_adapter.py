@@ -14,11 +14,18 @@ Tests cover:
 - Factory functions (caching, cleanup)
 """
 
+import ast
+import inspect
+import warnings
 from unittest.mock import MagicMock, patch
 
+import neo4j
 import pytest
+from neo4j.exceptions import ConfigurationError, ServiceUnavailable
 
+from backend.app.kg import neo4j_adapter
 from backend.app.kg.neo4j_adapter import (
+    QUIET_READ_OPTIONS,
     Neo4jAdapter,
     _neo4j_adapters,
     clear_neo4j_adapters,
@@ -292,6 +299,14 @@ class TestGetSession:
 
         mock_driver.session.assert_called_once_with(database="testdb")
         assert session == mock_driver.session(database="testdb")
+
+    def test_passes_session_options_to_the_driver(self):
+        adapter = Neo4jAdapter(database="testdb")
+        adapter.driver = MagicMock()
+
+        adapter._get_session(fetch_size=10)
+
+        adapter.driver.session.assert_called_once_with(database="testdb", fetch_size=10)
 
 
 @pytest.mark.unit
@@ -1539,6 +1554,163 @@ class TestDomainOverlayQueries:
         adapter.delete_concept("Summary")
 
         assert "MATCH (c:Concept {name: $name})" in mock_session.run.call_args[0][0]
+
+
+def _method_calls(tree: ast.AST, name: str) -> list[ast.Call]:
+    """The ``<object>.<name>(...)`` calls under ``tree``."""
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == name
+    ]
+
+
+@pytest.mark.unit
+class TestQuietOverlayReads:
+    """
+    The overlay's two reads hide the server's "unrecognized" notifications.
+
+    Before the first apply the store has no ``term_id``, ``review_status`` or
+    ``definition_source`` property key, and the driver logs one warning per key. Every
+    other session stays plain: there the same notification points at a misspelt name.
+    """
+
+    QUIET = {"database": "neo4j", "notifications_disabled_classifications": ["UNRECOGNIZED"]}
+    READS = ("get_concept_overlay_state", "get_prereq_edges")
+
+    def test_the_options_hide_unrecognized_notifications_only(self):
+        assert {"database": "neo4j", **QUIET_READ_OPTIONS} == self.QUIET
+        # The server refuses a classification it does not know, so the spelling matters
+        assert "UNRECOGNIZED" in {c.value for c in neo4j.NotificationDisabledClassification}
+
+    def test_the_installed_driver_accepts_the_options(self):
+        """
+        The real driver builds the session without connecting.
+
+        It raises ConfigurationError for a session option it does not know. The adapter
+        would then fall back to a plain session, so only this test would notice.
+        """
+        driver = neo4j.GraphDatabase.driver("bolt://127.0.0.1:7687", auth=("neo4j", "password"))
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")  # neither deprecated nor a preview option
+                driver.session(database="neo4j", **QUIET_READ_OPTIONS).close()
+            with pytest.raises(ConfigurationError, match="Unexpected config keys"):
+                driver.session(database="neo4j", notifications_disabled_classes=["UNRECOGNIZED"])
+        finally:
+            driver.close()
+
+    @pytest.mark.parametrize("read", READS)
+    def test_overlay_reads_open_a_quiet_session(self, read):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        mock_session.run.return_value = _make_mock_result([])
+
+        assert getattr(adapter, read)() == []
+
+        adapter.driver.session.assert_called_once_with(**self.QUIET)
+        mock_session.run.assert_called_once()
+
+    @pytest.mark.parametrize(
+        ("method", "arguments"),
+        [
+            ("merge_curated_concept", ("Tariff", {"term_id": "tariff"})),
+            ("delete_concept", ("Summary",)),
+            ("merge_curated_prereq", ("Trade", "Tariff", {"review_status": "approved"}, 0.8)),
+            ("delete_prereq", ("Trade", "Tariff")),
+            ("get_all_concept_names", ()),
+            ("get_concept_aliases", ()),
+            ("count_concepts", ()),
+            ("concept_exists", ("Tariff",)),
+            ("query_concept_neighbors", ("Tariff",)),
+        ],
+    )
+    def test_other_methods_open_a_plain_session(self, method, arguments):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        mock_session.run.return_value = _make_mock_result([])
+
+        getattr(adapter, method)(*arguments)
+
+        adapter.driver.session.assert_called_once_with(database="neo4j")
+
+    def test_only_the_overlay_reads_ask_for_a_quiet_session(self):
+        """Structural, for the methods the test above does not call."""
+        adapter_class = next(
+            node
+            for node in ast.parse(inspect.getsource(neo4j_adapter)).body
+            if isinstance(node, ast.ClassDef) and node.name == "Neo4jAdapter"
+        )
+        methods = [node for node in adapter_class.body if isinstance(node, ast.FunctionDef)]
+        with_options = {
+            method.name
+            for method in methods
+            for call in _method_calls(method, "_get_session")
+            if call.args or call.keywords
+        }
+        quiet_readers = {
+            method.name for method in methods if _method_calls(method, "_run_quiet_read")
+        }
+        opens_driver_sessions = {
+            method.name for method in methods if _method_calls(method, "session")
+        }
+
+        assert with_options == {"_run_quiet_read"}
+        assert quiet_readers == set(self.READS)
+        assert opens_driver_sessions == {"_get_session"}
+
+    @pytest.mark.parametrize(
+        ("read", "row"),
+        [
+            ("get_concept_overlay_state", {"name": "Tariff", "term_id": None}),
+            ("get_prereq_edges", {"source": "Trade", "target": "Tariff", "properties": {}}),
+        ],
+    )
+    def test_a_server_that_cannot_filter_notifications_gets_a_plain_session(self, read, row):
+        """Before Neo4j 5.7 the driver refuses the option when the statement runs."""
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        refused = ConfigurationError(
+            "Notification filtering is not supported for the Bolt Protocol 4.4."
+        )
+        mock_session.run.side_effect = [refused, _make_mock_result([row])]
+
+        assert getattr(adapter, read)() == [row]
+        assert [call.kwargs for call in adapter.driver.session.call_args_list] == [
+            self.QUIET,
+            {"database": "neo4j"},
+        ]
+        queries = [call.args[0] for call in mock_session.run.call_args_list]
+        assert len(queries) == 2 and queries[0] == queries[1]
+
+    def test_a_driver_that_does_not_know_the_option_gets_a_plain_session(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        plain_session = adapter.driver.session.return_value
+        adapter.driver.session.side_effect = [
+            ConfigurationError("Unexpected config keys: notifications_disabled_classifications"),
+            plain_session,
+        ]
+        mock_session.run.return_value = _make_mock_result([{"name": "Tariff"}])
+
+        assert adapter.get_concept_overlay_state() == [{"name": "Tariff"}]
+        assert adapter.driver.session.call_args_list[-1].kwargs == {"database": "neo4j"}
+
+    def test_other_errors_are_not_retried(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        mock_session.run.side_effect = ServiceUnavailable("connection refused")
+
+        with pytest.raises(ServiceUnavailable, match="connection refused"):
+            adapter.get_concept_overlay_state()
+
+        adapter.driver.session.assert_called_once_with(**self.QUIET)
+
+    def test_a_refusal_of_the_plain_session_is_raised(self):
+        adapter, mock_session = _make_adapter(label_prefix="economics")
+        mock_session.run.side_effect = ConfigurationError("database selection is not supported")
+
+        with pytest.raises(ConfigurationError, match="database selection"):
+            adapter.get_prereq_edges()
+
+        assert adapter.driver.session.call_count == 2
 
 
 @pytest.mark.unit

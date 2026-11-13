@@ -515,3 +515,123 @@ def test_doctor_reports_the_overlay_check_as_a_warning():
     following = code[probe : probe + 6]
     assert 'report_probe warn "$rc" "$out"' in following
     assert not [line for line in following if line.startswith("report_probe fail")]
+
+
+OVERLAY_WARNING = (
+    "Domain overlay: 1 warning(s)\n"
+    "  economics: 1 curated change(s) are not in the graph (0 removal(s)); it was probably "
+    "rebuilt since the last apply. Run: make domain-apply SUBJECT=economics\n"
+)
+"""What the recording `poetry` prints for `stack_check.py domain-overlay` (it exits 2)."""
+
+FAKE_COMPOSE_DOCKER = """#!/bin/bash
+# `docker compose ... ps -q <service>` prints a container id for a service that has a state;
+# `docker inspect --format <template> <id>` prints that state, or the container name.
+for last in "$@"; do :; done
+state_of() {
+    case "$1" in
+        *neo4j) printf '%s' "$FAKE_NEO4J" ;;
+        *opensearch) printf '%s' "$FAKE_OPENSEARCH" ;;
+    esac
+}
+case "$1 $*" in
+    "compose "*" ps -q "*) if [ -n "$(state_of "$last")" ]; then echo "cid-$last"; fi ;;
+    "inspect "*Health*) state_of "$last"; echo ;;
+    "inspect "*) echo "/adaptive-kg-${last#cid-}" ;;
+esac
+exit 0
+"""
+
+
+def _run_doctor_stack(tmp_path: Path, neo4j: str, opensearch: str) -> tuple[str, list[str]]:
+    """
+    Run the "Stack" section of scripts/doctor.sh in a copy, with fake `docker` and `poetry`.
+
+    ``neo4j`` and ``opensearch`` are the container states `docker inspect` reports
+    ("healthy", "starting", "exited"); an empty string means the container does not exist.
+    The `poetry` records its arguments and answers the probes: both subjects are seeded,
+    the index fingerprints match and the overlay check warns (``OVERLAY_WARNING``).
+    Returns the section's output and the arguments of the recorded `stack_check.py` calls.
+    """
+    doctor = Path("scripts/doctor.sh").read_text(encoding="utf-8")
+    header = doctor.split('section "Tools"')[0]
+    stack = doctor.split('section "Stack"')[1].split('section "Models"')[0]
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    (root / "scripts" / "lib.sh").write_text(Path("scripts/lib.sh").read_text(encoding="utf-8"))
+    (root / "scripts" / "doctor-stack.sh").write_text(
+        header + 'DOCKER_OK=true\nsection "Stack"' + stack
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "poetry.log"
+    log.touch()  # `poetry` is not called at all while neither probe group may run
+    (bin_dir / "docker").write_text(FAKE_COMPOSE_DOCKER)
+    (bin_dir / "poetry").write_text(
+        f'#!/bin/bash\necho "$*" >> "{log}"\ncase "$*" in\n'
+        '  *"stack_check.py seed-status"*) echo "12 34" ;;\n'
+        '  *"stack_check.py index-fingerprint"*) echo "Index fingerprints match" ;;\n'
+        f"  *\"stack_check.py domain-overlay\"*) printf '%s' '{OVERLAY_WARNING}'; exit 2 ;;\n"
+        "esac\nexit 0\n"
+    )
+    (bin_dir / "curl").write_text("#!/bin/bash\nexit 7\n")  # no API, no frontend
+    for tool in ("docker", "poetry", "curl"):
+        (bin_dir / tool).chmod(0o755)
+
+    result = subprocess.run(
+        ["bash", "scripts/doctor-stack.sh"],
+        cwd=root,
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "NO_COLOR": "1",
+            "FAKE_NEO4J": neo4j,
+            "FAKE_OPENSEARCH": opensearch,
+        },
+        capture_output=True,
+        text=True,
+        timeout=40,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    probe = "run python scripts/stack_check.py "
+    recorded = log.read_text(encoding="utf-8").splitlines()
+    return result.stdout, [line.removeprefix(probe) for line in recorded if line.startswith(probe)]
+
+
+@pytest.mark.parametrize("opensearch", ["", "starting", "exited"])
+def test_doctor_runs_the_overlay_check_without_opensearch(tmp_path, opensearch):
+    """The check reads Neo4j only: with OpenSearch down the warning must still appear."""
+    out, calls = _run_doctor_stack(tmp_path, neo4j="healthy", opensearch=opensearch)
+
+    assert "✓ neo4j is healthy (adaptive-kg-neo4j)" in out
+    assert "opensearch is healthy" not in out
+    # The seed status and the index fingerprint need OpenSearch; the overlay check does not
+    assert calls == ["domain-overlay us_history economics"]
+    assert "  ⚠ Domain overlay: 1 warning(s)\n" in out
+    assert (
+        "      economics: 1 curated change(s) are not in the graph (0 removal(s)); it was "
+        "probably rebuilt since the last apply. Run: make domain-apply SUBJECT=economics\n"
+    ) in out
+
+
+def test_doctor_runs_the_overlay_check_after_the_other_probes_on_a_healthy_stack(tmp_path):
+    out, calls = _run_doctor_stack(tmp_path, neo4j="healthy", opensearch="healthy")
+
+    assert calls == [
+        "seed-status --subject us_history",
+        "seed-status --subject economics",
+        "index-fingerprint us_history economics",
+        "domain-overlay us_history economics",
+    ]
+    assert "✓ economics seeded: 12 concepts in Neo4j, 34 chunks in OpenSearch" in out
+    assert out.count("Domain overlay: 1 warning(s)") == 1
+
+
+@pytest.mark.parametrize("neo4j", ["", "starting", "exited"])
+def test_doctor_skips_the_overlay_check_while_neo4j_is_not_healthy(tmp_path, neo4j):
+    out, calls = _run_doctor_stack(tmp_path, neo4j=neo4j, opensearch="healthy")
+
+    assert "✓ opensearch is healthy (adaptive-kg-opensearch)" in out
+    assert calls == []
+    assert "Domain overlay" not in out

@@ -10,6 +10,7 @@ from typing import Any
 
 from loguru import logger
 from neo4j import Driver, GraphDatabase, Session
+from neo4j.exceptions import ConfigurationError
 
 from backend.app.core.settings import settings
 from backend.app.kg.schema import ChunkNode, KnowledgeGraph, RelationshipType
@@ -44,6 +45,18 @@ def _relationship_properties(rel: Any) -> dict[str, Any]:
             value = str(value)
         properties[f"provenance_{key}"] = value
     return properties
+
+
+QUIET_READ_OPTIONS: dict[str, Any] = {"notifications_disabled_classifications": ["UNRECOGNIZED"]}
+"""
+Session options for the reads of the domain overlay.
+
+Before the first apply the store has no ``term_id``, ``review_status`` or
+``definition_source`` property key, and an unbuilt graph has no label or PREREQ type
+either. The server reports each one as an "unrecognized" notification, which the driver
+logs as a warning. They are expected there, so these sessions ask the server to leave
+that classification out. Every other classification still arrives, deprecations included.
+"""
 
 
 class Neo4jAdapter:
@@ -86,11 +99,27 @@ class Neo4jAdapter:
             return f"{self.label_prefix}_{base_label}"
         return base_label
 
-    def _get_session(self) -> Session:
-        """Get a session for the configured database."""
+    def _get_session(self, **session_options: Any) -> Session:
+        """Get a session for the configured database; extra driver session options pass through."""
         if self.driver is None:
             raise RuntimeError("Not connected. Call connect() first.")
-        return self.driver.session(database=self.database)
+        return self.driver.session(database=self.database, **session_options)
+
+    def _run_quiet_read(self, query: str) -> list[Any]:
+        """
+        Run a read on a session with ``QUIET_READ_OPTIONS`` and return its records.
+
+        A server before Neo4j 5.7 (Bolt before 5.2) cannot filter notifications. The driver
+        then raises ``ConfigurationError`` without sending the query. A driver that does
+        not know the option raises it when the session is opened. In both cases the read
+        runs on a plain session, because the option only hides log lines.
+        """
+        try:
+            with self._get_session(**QUIET_READ_OPTIONS) as session:
+                return list(session.run(query))
+        except ConfigurationError:
+            with self._get_session() as session:
+                return list(session.run(query))
 
     def connect(self):
         """Connect to Neo4j database."""
@@ -371,31 +400,29 @@ class Neo4jAdapter:
     def get_concept_overlay_state(self) -> list[dict[str, Any]]:
         """Every concept's name, definition, aliases and curated properties, for the overlay."""
         concept_label = self._get_label("Concept")
-        with self._get_session() as session:
-            result = session.run(
-                f"MATCH (c:{concept_label}) "
-                "RETURN c.name AS name, c.definition AS definition, "
-                "coalesce(c.aliases, []) AS aliases, c.term_id AS term_id, "
-                "c.review_status AS review_status, c.definition_source AS definition_source"
-            )
-            return [dict(record) for record in result if record["name"]]
+        records = self._run_quiet_read(
+            f"MATCH (c:{concept_label}) "
+            "RETURN c.name AS name, c.definition AS definition, "
+            "coalesce(c.aliases, []) AS aliases, c.term_id AS term_id, "
+            "c.review_status AS review_status, c.definition_source AS definition_source"
+        )
+        return [dict(record) for record in records if record["name"]]
 
     def get_prereq_edges(self) -> list[dict[str, Any]]:
         """Every PREREQ edge of this graph: source name, target name and the edge's properties."""
         concept_label = self._get_label("Concept")
-        with self._get_session() as session:
-            result = session.run(
-                f"MATCH (a:{concept_label})-[r:PREREQ]->(b:{concept_label}) "
-                "RETURN a.name AS source, b.name AS target, properties(r) AS properties"
-            )
-            return [
-                {
-                    "source": record["source"],
-                    "target": record["target"],
-                    "properties": dict(record["properties"] or {}),
-                }
-                for record in result
-            ]
+        records = self._run_quiet_read(
+            f"MATCH (a:{concept_label})-[r:PREREQ]->(b:{concept_label}) "
+            "RETURN a.name AS source, b.name AS target, properties(r) AS properties"
+        )
+        return [
+            {
+                "source": record["source"],
+                "target": record["target"],
+                "properties": dict(record["properties"] or {}),
+            }
+            for record in records
+        ]
 
     def merge_curated_concept(self, name: str, properties: dict[str, Any]) -> None:
         """

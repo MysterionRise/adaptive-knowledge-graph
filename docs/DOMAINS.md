@@ -186,9 +186,9 @@ What it does not do:
 - It applies `PREREQ` edges only. A curated `RELATED` entry is reported as
   skipped.
 - It skips an approved edge whose endpoint is not in the graph, and one that
-  would close a cycle with the `PREREQ` edges already there. Reject the edge
-  that runs the other way to apply it. A skipped entry is printed and does
-  not change the exit status.
+  would close a cycle with the `PREREQ` edges already there. Reject an edge
+  on the path that leads back from the target to the source to apply it. A
+  skipped entry is printed and does not change the exit status.
 - It does not undo. Changing an approved entry back to `proposed` leaves what
   an earlier run wrote. Rebuild the graph and apply again.
 - It does not touch OpenSearch. Chunks are not re-indexed.
@@ -209,7 +209,8 @@ rebuild (`make build-kg`) writes the builder's definitions and aliases again,
 and with `--clear` drops everything `apply` added. `make doctor` warns when
 curated changes are missing from the graph and names the command
 (`make domain-apply SUBJECT=<id>`), when the graph has no concepts, and when
-a curated entry is skipped, which another `apply` cannot fix.
+a curated entry is skipped, which another `apply` cannot fix. The check reads
+Neo4j only, so it also runs while OpenSearch is down.
 
 ## Review workflow
 

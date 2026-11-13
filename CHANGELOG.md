@@ -132,6 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     is removed from the graph. It refuses a graph without concepts.
     `make seed` runs it after the graph build and `make doctor` warns when
     curated changes are missing from the graph or an entry cannot be applied.
+    That check needs a healthy Neo4j only, so it also runs while OpenSearch
+    is down.
   - **Drafts.** US History and Economics have drafts from the current build.
     Every entry in them is `extracted`, so `apply` writes nothing and
     retrieval is unchanged until an entry is reviewed.

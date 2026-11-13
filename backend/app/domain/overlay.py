@@ -308,8 +308,9 @@ def _plan_edges(
             skipped.append(
                 Skipped(
                     _label(relationship),
-                    "it would close a cycle with the PREREQ edges in the graph; reject the "
-                    "edge that runs the other way to apply this one",
+                    "it would close a cycle with the PREREQ edges in the graph; reject an "
+                    "edge on the path that leads back from its target to its source to "
+                    "apply this one",
                 )
             )
             continue

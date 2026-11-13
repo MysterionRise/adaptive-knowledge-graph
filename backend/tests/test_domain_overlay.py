@@ -31,6 +31,7 @@ from backend.app.domain.overlay import (
     read_graph_state,
     skipped_entries,
 )
+from backend.app.kg.neo4j_adapter import QUIET_READ_OPTIONS
 from backend.tests.domain_builders import (
     SOURCE_ID,
     SUBJECT,
@@ -141,6 +142,13 @@ def _state() -> GraphState:
             ("Trade", "Tariff"): {"weight": 0.8, "confidence": 0.8, "provenance_source": "glossary"}
         },
     )
+
+
+CYCLE_HINT = (
+    "it would close a cycle with the PREREQ edges in the graph; reject an edge on the path "
+    "that leads back from its target to its source to apply this one"
+)
+"""Why an approved PREREQ edge is skipped when the graph already leads back from its target."""
 
 
 def _run(state: GraphState, operations: list[Operation]) -> GraphState:
@@ -337,10 +345,7 @@ def test_edges_the_overlay_cannot_apply_are_skipped_with_a_reason(tmp_path):
     skipped = {entry.entry: entry.reason for entry in skipped_entries(domain, _state())}
     assert skipped == {
         "PREREQ 'Embargo' -> 'Tariff' (approved)": "'Embargo' is not a concept in the graph",
-        "PREREQ 'Tariff' -> 'Trade' (approved)": (
-            "it would close a cycle with the PREREQ edges in the graph; reject the edge that "
-            "runs the other way to apply this one"
-        ),
+        "PREREQ 'Tariff' -> 'Trade' (approved)": CYCLE_HINT,
         "RELATED 'Quota' -> 'Trade' (approved)": "only PREREQ edges are applied",
         "RELATED 'Quota' -> 'Tariff' (rejected)": "only PREREQ edges are applied",
     }
@@ -367,6 +372,44 @@ def test_rejecting_the_reverse_edge_lets_the_curated_direction_in(tmp_path):
     assert set(after.prereq_edges) == {("Tariff", "Trade")}
     assert after.prereq_edges[("Tariff", "Trade")]["provenance_source"] == "curated"
     assert plan_overlay(domain, after) == []
+
+
+def test_the_cycle_hint_fits_a_cycle_of_three_edges(tmp_path):
+    """No edge runs the other way here: the way back from the target has two edges."""
+    state = _state()  # Trade -> Tariff
+    state.prereq_edges[("Tariff", "Quota")] = {"weight": 0.8, "provenance_source": "glossary"}
+    closing = relationship("Quota", "Trade", "approved")  # Quota -> Trade -> Tariff -> Quota
+
+    domain = make_domain(tmp_path / "skipped", None, [closing])
+
+    assert ("Trade", "Quota") not in state.prereq_edges
+    assert plan_overlay(domain, state) == []
+    assert [entry.describe() for entry in skipped_entries(domain, state)] == [
+        f"PREREQ 'Quota' -> 'Trade' (approved): {CYCLE_HINT}"
+    ]
+
+    # Rejecting either edge of the path Trade -> Tariff -> Quota lets the approved one in
+    for on_path in (("Trade", "Tariff"), ("Tariff", "Quota")):
+        edges = [closing, relationship(*on_path, "rejected")]
+        domain = make_domain(tmp_path / "-".join(on_path), None, edges)
+
+        plan = plan_overlay(domain, state)
+
+        assert [(op.kind.value, op.name, op.target) for op in plan] == [
+            ("remove_prereq", *on_path),
+            ("merge_prereq", "Quota", "Trade"),
+        ]
+        assert skipped_entries(domain, state) == []
+        assert plan_overlay(domain, _run(state, plan)) == []
+
+
+def test_the_documentation_gives_the_same_cycle_advice():
+    text = " ".join(Path("docs/DOMAINS.md").read_text(encoding="utf-8").split())
+
+    assert (
+        "Reject an edge on the path that leads back from the target to the source to apply it."
+    ) in text
+    assert "runs the other way" not in text
 
 
 def test_an_edge_of_a_removed_concept_is_not_removed_twice(tmp_path):
@@ -512,6 +555,28 @@ def test_apply_twice_is_identical(tmp_path):
         "confidence": 0.8,
         "rule": "taught first",
     }
+
+
+def test_apply_reads_on_quiet_sessions_and_writes_on_plain_ones(tmp_path):
+    """
+    Only the two state reads hide the server's "unrecognized" notifications.
+
+    On a store without the curated property keys the first reads would log a warning per
+    key. A write keeps its notifications.
+    """
+    domain = _curated_domain(tmp_path)
+    adapter, session = _seeded_adapter()
+
+    apply_overlay(adapter, domain)
+
+    quiet = {"database": "neo4j", **QUIET_READ_OPTIONS}
+    plain = {"database": "neo4j"}
+    opened = [call.kwargs for call in adapter.driver.session.call_args_list]
+    # The state is read (two statements), six operations are written, the state is read again
+    assert opened == [quiet, quiet, *[plain] * 6, quiet, quiet]
+    assert QUIET_READ_OPTIONS == {"notifications_disabled_classifications": ["UNRECOGNIZED"]}
+    reads = [query for query, _ in session.calls if "MERGE" not in query and "DELETE" not in query]
+    assert len(reads) == 4 and len(session.writes) == 6
 
 
 def test_apply_acts_on_a_domain_whose_only_curated_entry_is_a_relationship(tmp_path):
