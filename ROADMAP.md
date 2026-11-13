@@ -79,7 +79,9 @@ playbook.
   and BKT property tests
   ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210));
   tests that back the dev-only advisory allowlist
-  ([#254](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/254));
+  ([#254](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/254)),
+  and the `braces` entry removed after its advisory was withdrawn
+  ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166));
   `make release-check` with a tag-time gate in the Release workflow
   ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253));
   a policy interface with decision records, with the difficulty rule as the
@@ -120,17 +122,15 @@ Waves W3 and W4, tracked in
 - torch 2.13 and the CUDA 13 GPU image, gated on embedding parity
   ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207)),
   merged right before the re-seed.
-- Six advisory allowlist entries remain: two for torch in `osv-scanner.toml`
-  and four for dev-only frontend tooling in `frontend/osv-scanner.toml`. Three
-  expire on 31 December 2026 (the torch pair,
-  [#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207);
-  braces,
-  [#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166))
-  and three on 31 January 2027 (deepmerge, glob and minimatch,
-  [#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
+- Five advisory allowlist entries remain: two for torch in `osv-scanner.toml`
+  and three for dev-only frontend tooling in `frontend/osv-scanner.toml`. The
+  torch pair expires on 31 December 2026
+  ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207)),
+  and deepmerge, glob and minimatch on 31 January 2027
+  ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
   An entry is removed when its fix lands and is not extended without
   re-checking the advisory.
-  <!-- FILL (the #207 decision: replace if #207 lands before the tag; then move the torch item above into the v0.4.0 entry under Done, and this item counts four entries, one of them expiring on 31 December 2026) -->
+  <!-- FILL (the #207 decision: replace if #207 lands before the tag; then move the torch item above into the v0.4.0 entry under Done, and this item counts three entries, all expiring on 31 January 2027) -->
 
 ## Next: v0.6.0, showcase domain and playbook (January 2027)
 
