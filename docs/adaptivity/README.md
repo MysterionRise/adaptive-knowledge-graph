@@ -222,10 +222,11 @@ and the frontier would say nothing.
 
 ### Policy interface and decision records ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306))
 
-Learner-state decisions move into `backend/app/student/policy/`:
+Shipped in v0.4.0. Learner-state decisions live in
+`backend/app/student/policy/`:
 
-- **Policies.** Each policy has an id and a version. The band rule becomes
-  `band-v1`, and `StudentProfile.get_target_difficulty` stays as a shim, so
+- **Policies.** Each policy has an id and a version. The band rule is
+  `band-v1`, and `StudentProfile.get_target_difficulty` is a shim over it, so
   the #210 tests keep pinning it.
 - **Decision records.** Every decision returns a record holding the policy id
   and version, the action, the learner state it used, and the graph edges it
@@ -425,9 +426,9 @@ domain milestones' tags do not wait for them.
 
 | When | Item | Issue | Depends on |
 | --- | --- | --- | --- |
-| v0.5.0 | Counterfactual and BKT property tests, plausibility constraints, the two-label wording | [#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210) (comment) | none |
+| v0.4.0, done | Counterfactual and BKT property tests, plausibility constraints, the two-label wording | [#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210) (comment) | none |
 | v0.5.0 | Keep the textbook's question sections, with their answer keys, out of retrieval in the one re-seed, by dropping them or by tagging and filtering; the glossary and key terms stay | [#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215) (comment; a proposal, not yet in its scope) | #211 (as #215) |
-| v0.6.0 W5 | Policy interface with decision records; `band-v1` | [#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306) | #210 |
+| v0.4.0, done | Policy interface with decision records; `band-v1` | [#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306) | #210 |
 | v0.6.0, first pull request ahead of W5 | Simulator core with the `ready-first` probe and a frozen simulation protocol. The sweep reaches #223 before W6 starts (5 January). | [#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307) | #306 |
 | v0.7.0 W8 | Server-side grading writes attempts; concept-id mastery keys | [#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74), [#108](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/108) (comments) | #108 waits for the domain dictionary (#211, #214). #74 follows #108 and takes the attempt schema from #307. |
 | v0.7.0 W8 | Attempt log with mastery replay and the assisted flag | [#308](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/308) | #74, #108; the schema from #307 |

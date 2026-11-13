@@ -58,9 +58,14 @@ From 0.3.0, with data seeded by that release:
 - **Python 3.11.5 or later.** 3.11.0 to 3.11.4 are no longer supported: the
   fixed `soupsieve` releases need 3.11.5
   ([#326](https://github.com/MysterionRise/adaptive-knowledge-graph/pull/326)).
-  With an environment built on an older 3.11, `poetry install` stops with an
-  error. Install 3.11.5 or later, then run `poetry env use <python>` or
-  recreate the environment. Python 3.12 and 3.13 are unaffected.
+  With an environment that still runs an older 3.11, `poetry install` and
+  `poetry run` stop with "Current Python version (3.11.x) is not allowed by
+  the project". Install 3.11.5 or later, then recreate the environment:
+  `poetry env remove --all`, `poetry install` and `make quickstart`, which
+  puts the spaCy model back (CONTRIBUTING.md, "Upgrading an existing
+  checkout"). `poetry env use <python>` alone is not always enough: with a
+  later 3.11 it can keep an environment in Poetry's default location on the
+  old interpreter. Python 3.12 and 3.13 are unaffected.
 - **Rebuild the graph of both seeded subjects.** The concepts
   ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213))
   and the RELATED edges
@@ -93,10 +98,17 @@ From 0.3.0, with data seeded by that release:
   `/retrieve` gain `related_concepts` and `resolved_terms`.
   `expanded_concepts` now lists only the concepts the retrieval used; the
   graph neighbours it used to include are in `related_concepts`. `/retrieve`
-  also returns a `trace` unless the request sets `"include_trace": false`.
-  `/quiz/generate-adaptive` and `/student/target-difficulty` gain `decision`,
-  the decision record of the policy that picks the difficulty
+  also returns a `trace` unless the request sets `"include_trace": false`;
+  `/ask` has the field too, `null` unless the request sets
+  `"include_trace": true`, and the `metadata` event of `/ask/stream` carries
+  it only then.
+  `/quiz/generate-adaptive` and `/student/target-difficulty` gain `decision`:
+  the decision record of the policy that picks the difficulty (`band-v1`),
+  with its `record_id` and `decided_at`. `decided_at` is the time of the
+  decision, so two identical requests no longer return identical bodies
   ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)).
+  `/demo/provenance` lists `rag_kg_expansion_max_neighbours` under
+  `retrieval`.
 - **torch.**
   <!-- FILL (the #207 decision: replace if #207 lands before the tag; this item then says torch 2.13, the CUDA 13 GPU image with the driver and macOS versions it needs, and that both entries left osv-scanner.toml) -->
   torch stays on 2.10 (`>=2.10.0,<2.11` in `pyproject.toml`), and the GPU

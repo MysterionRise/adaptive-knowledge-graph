@@ -132,7 +132,7 @@ Generate a quiz. The endpoint takes **query parameters**, not a JSON body:
 # Check the target difficulty band (a fresh learner has a 0.30 mastery estimate, so "easy")
 curl 'http://localhost:8000/api/v1/student/target-difficulty?concept=The+Civil+War'
 # -> {"concept":"The Civil War","mastery_level":0.3,"target_difficulty":"easy","decision":{...}}
-#    "decision" holds the record of the band-v1 policy (the action, the mastery it read) with its record_id and decided_at
+#    "decision" is the record of the band-v1 policy: the action, the mastery it read, record_id and decided_at
 
 # Generate a quiz; the prompt asks the LLM for that band
 curl -X POST 'http://localhost:8000/api/v1/quiz/generate-adaptive?topic=The+Civil+War&subject=us_history&num_questions=3'

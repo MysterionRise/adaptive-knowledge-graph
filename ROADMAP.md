@@ -85,6 +85,8 @@ playbook.
   a policy interface with decision records, with the difficulty rule as the
   policy `band-v1`
   ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306));
+  the minimum Python raised to 3.11.5 for the fixed `soupsieve` releases
+  ([#326](https://github.com/MysterionRise/adaptive-knowledge-graph/pull/326));
   and the first final-split run under the protocol, reported in the README.
   <!-- FILL (confirm after the release session, then delete this comment: the final-split run exists and the README table reports it; "November 2026" above is the month of the tag; and anything else that merged before the tag and belongs in this entry is named, for example #252) -->
 
