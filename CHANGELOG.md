@@ -58,8 +58,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     cases; `compare_evals.py` names the first stage where a traced flip
     starts. The re-scoring fixture gains the new summary field; scores are
     unchanged.
+- `make release-check TAG=vX.Y.Z` and a gate in the Release workflow
+  ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253)).
+  `scripts/release_check.py` runs offline with the standard library only and
+  exits 1, naming the file and the problem, unless:
+  - **Versions.** `pyproject.toml`, `frontend/package.json`,
+    `frontend/package-lock.json` and `CITATION.cff` agree with each other and
+    with the tag.
+  - **Changelog.** `CHANGELOG.md` has one dated section for the version, with
+    a body and a link reference that ends with the tag, and `CITATION.cff`
+    carries the same date.
+  - **Placeholders.** No `FILL (` HTML comment is left in `README.md` or
+    `CHANGELOG.md`.
+  - **Evidence.** `docs/evals/latest.json` passes the `check_demo_eval.py`
+    rules and has its byte-identical snapshot in `docs/evals/history/`.
+  - **Assets.** `docs/assets/demo/` holds at least one image.
+
+  The Release workflow runs it on the tag's tree before it creates the
+  release; tags that predate the script skip it with a notice. The check
+  accepts only `vX.Y.Z`, so the workflow no longer publishes a pre-release
+  tag such as `v0.4.0-rc.1` of a tree that has the script. See
+  [docs/TESTING.md](docs/TESTING.md#release-check).
 
 ### Changed
+
+- `check_demo_eval.py`, and so `make demo-eval` and `make demo-client-check`,
+  rejects a report whose API app version differs from the version in
+  `pyproject.toml`
+  ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253)).
+  After a version bump, run `poetry install` (or rebuild the image) and
+  restart the API before evaluating.
 
 - Concepts in a question are resolved against the subject's concept names and
   their stored aliases

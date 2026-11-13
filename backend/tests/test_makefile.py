@@ -53,6 +53,8 @@ REQUIRED_TARGETS = [
     "demo-client-check",
     "demo-client-reset",
     "demo-eval",
+    # release
+    "release-check",
 ]
 
 REMOVED_TARGETS = [
@@ -181,3 +183,13 @@ def test_run_api_binds_loopback_by_default():
     result = run_make("run-api")
     assert "--host 127.0.0.1" in result.stdout
     assert "--port 8000" in result.stdout
+
+
+def test_release_check_runs_the_release_gate_and_forwards_the_tag():
+    # TAG is a common variable in release shells (the Release workflow exports it), and make
+    # reads `TAG ?=` from the environment: the untagged case sets it on the command line
+    assert re.search(r"^TAG \?=$", MAKEFILE.read_text(), re.MULTILINE)
+    untagged = run_make("release-check", "TAG=").stdout.strip()
+    assert untagged == "poetry run python scripts/release_check.py"
+    tagged = run_make("release-check", "TAG=v1.2.3").stdout.strip()
+    assert tagged == "poetry run python scripts/release_check.py --tag v1.2.3"
