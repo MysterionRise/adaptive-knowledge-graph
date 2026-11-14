@@ -389,7 +389,7 @@ reports case by case.
 The table reports the v0.4.0 release run behind
 [`docs/evals/latest.json`](docs/evals/latest.json): the final split of golden
 set version 3 (29 cases).
-<!-- FILL (one sentence from the report's provenance: the answer model with its temperature and seed, the retrieval mode and whether the reranker was on. The sentence above and the table are written for a run of the final split alone. A run of every case, which is what "make demo-eval" does, reports its rates and paired counts over all 57 cases: then replace "the final split of golden set version 3 (29 cases)" above with "all 57 cases of golden set version 3", and keep the primary-endpoint sentence, which covers the final-split cases in both kinds of run) -->
+<!-- FILL (one sentence from the report's provenance: the answer model with its temperature and seed, the retrieval mode and whether the reranker was on.) -->
 Commit, models and data counts are in the report's provenance. Each case is
 asked in both modes, so the paired counts carry the comparison, not the
 difference between the two rates; see

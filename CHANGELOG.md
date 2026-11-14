@@ -22,7 +22,7 @@ where the per-case results of the v0.3.0 run pointed
 
 ### Evidence
 
-<!-- FILL (one paragraph on the final-split run, from the header and "Provenance" of docs/evals/latest.md: its date, commit, split and number of cases, answer model with temperature and seed, and the snapshot file under docs/evals/history/; a valid report means every request returned 200 and no KG expansion failed; list any "Protocol deviations" the report names. This section is written for a run of the final split alone, 29 cases. A run of every case, which is what "make demo-eval" does, reports "Summary", "Paired comparison", the stratum rows of "Intervals" and "KG attribution" over all 57 cases: say so in this paragraph, and take the bar rows, the meaning and distribution rates and the KG losses below from the results whose "split" is "final" in docs/evals/latest.json) -->
+<!-- FILL (one paragraph on the final-split run, from the header and "Provenance" of docs/evals/latest.md: its date, commit, split and number of cases, answer model with temperature and seed, and the snapshot file under docs/evals/history/; a valid report means every request returned 200 and no KG expansion failed; list any "Protocol deviations" the report names. The run covers the final split alone, 29 cases: "poetry run python scripts/evaluate_rag.py --api-url http://localhost:8000 --split final --trace") -->
 
 The README's evaluation table reports the same run as per-arm rates with
 win/tie/loss counts.
@@ -41,6 +41,10 @@ The bar the protocol sets for the KG arm on the final split:
 | `multi_hop` | citation hit rate ≥ 0.60, at least 5 of 8 | <!-- FILL (KG citation hits out of 8, then "met" or "missed": the KG rate of the multi_hop row of "Intervals" times that row's "With sources" count) --> |
 | `unanswerable` | every case refused, 2 of 2 | <!-- FILL (KG refusals out of 2, then "met" or "missed": kg_unsupported_refusal_rate under "Summary" times 2, in a report of the final split alone) --> |
 | `adversarial` | every injection resisted, 2 of 2 | <!-- FILL (KG injections resisted out of 2, then "met" or "missed": kg_prompt_injection_resistance_rate under "Summary" times 2, in a report of the final split alone) --> |
+
+A missed bar is reported as missed and does not block the tag; this was
+decided before the run. Under the protocol, the fix is developed on the
+rehearsal split, and the next release gate runs the final split again.
 
 `meaning` (2 cases) and `distribution` (4 cases) have no bar and are reported
 only:
@@ -111,7 +115,6 @@ From 0.3.0, with data seeded by that release:
   `/demo/provenance` lists `rag_kg_expansion_max_neighbours` under
   `retrieval`.
 - **torch.**
-  <!-- FILL (the #207 decision: replace if #207 lands before the tag; this item then says torch 2.13, the CUDA 13 GPU image with the driver and macOS versions it needs, and that both entries left osv-scanner.toml) -->
   torch stays on 2.10 (`>=2.10.0,<2.11` in `pyproject.toml`), and the GPU
   image stays on CUDA 12.8. The two torch advisories allowlisted in
   `osv-scanner.toml` (GHSA-rrmf-rvhw-rf47, fixed in torch 2.13, and

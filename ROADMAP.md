@@ -130,7 +130,6 @@ Waves W3 and W4, tracked in
   ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
   An entry is removed when its fix lands and is not extended without
   re-checking the advisory.
-  <!-- FILL (the #207 decision: replace if #207 lands before the tag; then move the torch item above into the v0.4.0 entry under Done, and this item counts three entries, all expiring on 31 January 2027) -->
 
 ## Next: v0.6.0, showcase domain and playbook (January 2027)
 
