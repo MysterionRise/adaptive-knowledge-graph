@@ -105,21 +105,29 @@ Keep a deliberate upgrade to one lockfile, and merge lockfile changes one at a
 time: if another open pull request changes the same lockfile, update your
 branch and re-lock after it merges (see
 [#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164)).
-If the package is part of the embedding stack (`torch`, `transformers`,
-`sentence-transformers`, `tokenizers`), also run `make embedding-parity`
-against a seeded index and paste the result into the pull request (see
-[docs/evals/README.md](docs/evals/README.md)).
+If the package is part of the embedding stack (`transformers`,
+`sentence-transformers`, `huggingface-hub`, `tokenizers`, `safetensors`,
+`torch`: `LIBRARIES` in `scripts/check_embedding_parity.py`), also run
+`make embedding-parity` against an index that was built before the update,
+and paste the result into the pull request (see
+[docs/evals/README.md](docs/evals/README.md)). An index seeded after the
+update was embedded by the new versions, so the check would pass without
+testing anything.
 The required **Dependency Audit (new advisories)** job compares the change to
 the base branch and fails only if the pull request adds an advisory; see
 [docs/TESTING.md](docs/TESTING.md).
 
-If no fixed release exists yet, do not bump a lockfile. Add a time-boxed entry
+Allowlist the advisory only when an update cannot clear it: no fixed release
+exists yet, or the fix is only in a new major (or another wheel set) that the
+parent packages do not accept yet. Do not force a new major with an
+`overrides` entry. Open an issue for the upgrade, then add a time-boxed entry
 to [`osv-scanner.toml`](osv-scanner.toml) or
 [`frontend/osv-scanner.toml`](frontend/osv-scanner.toml) with a reason that
-names an issue and an `ignoreUntil` date at most 90 days out, as
+names the issue and an `ignoreUntil` date at most 90 days out, as
 [SECURITY.md](SECURITY.md#accepted-risks) and `backend/tests/test_osv_audit.py`
-require. Prefer clearing the advisory with an update when a fixed release is
-available.
+require, and list it under "Accepted risks" in `SECURITY.md`. When a later
+update clears the advisory, delete the entry and its `SECURITY.md` line in the
+same pull request.
 
 ### Upgrading an existing checkout
 

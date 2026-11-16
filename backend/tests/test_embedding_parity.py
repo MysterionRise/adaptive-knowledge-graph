@@ -152,6 +152,18 @@ def test_dependabot_keeps_the_embedding_stack_out_of_the_weekly_group():
     assert stack["applies-to"] == weekly["applies-to"] == "version-updates"
 
 
+def test_contributing_names_the_whole_embedding_stack():
+    """The advisory section must not send an upgrade of one of these past the parity check."""
+    text = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+    start = text.index("### Fixing an advisory in a transitive dependency")
+    section = text[start : text.index("\n### ", start + 1)]
+    sentence = section[section.index("part of the embedding stack") :]
+    sentence = sentence[: sentence.index("make embedding-parity")]
+
+    assert [name for name in parity.LIBRARIES if f"`{name}`" not in sentence] == []
+    assert "before the update" in section
+
+
 class TestMain:
     @pytest.fixture
     def fake_stack(self, monkeypatch):
