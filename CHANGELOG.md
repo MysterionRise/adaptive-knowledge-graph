@@ -236,6 +236,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exploitable, so osv-scanner no longer reports it for `braces` 3.0.3 and
   listed the entry as an unused ignore. `SECURITY.md` no longer names it as an
   accepted risk.
+- The chat no longer scrolls the window to a blank page after a long answer
+  ([#341](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/341)).
+  The visually hidden "Source" labels of the source chips made the page
+  taller than the viewport, and the auto-scroll moved the window along with
+  the message log. The log now contains those labels and scrolls itself, so
+  the header and the question box stay in place.
 
 ## [0.3.0] - 2026-10-29
 

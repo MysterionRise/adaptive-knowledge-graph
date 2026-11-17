@@ -6,9 +6,6 @@ import { ApiError } from '@/lib/api-errors';
 import { useAppStore } from '@/lib/store';
 import type { KGExpansionStatus, Source } from '@/lib/types';
 
-// Mock scrollIntoView (not implemented in jsdom)
-Element.prototype.scrollIntoView = jest.fn();
-
 // Mock the API client
 jest.mock('@/lib/api-client', () => ({
   apiClient: {

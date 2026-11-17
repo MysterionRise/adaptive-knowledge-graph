@@ -69,7 +69,7 @@ function ChatPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [useKgExpansion, setUseKgExpansion] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const nextMessageIdRef = useRef(0);
 
@@ -85,9 +85,13 @@ function ChatPageContent() {
     };
   }, []);
 
-  // Auto-scroll to bottom when messages change
+  // Keep the newest message in view by scrolling the log itself: scrollIntoView on an end
+  // marker also scrolls the window, which left a blank page after long answers (#341)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const log = logRef.current;
+    if (log) {
+      log.scrollTop = log.scrollHeight;
+    }
   }, [messages, isThinking]);
 
   const updateMessage = (id: number, update: (message: Message) => Message) => {
@@ -270,13 +274,16 @@ function ChatPageContent() {
 
       {/* Chat Area: min-h-0 lets the message list scroll instead of growing the page */}
       <main id="main-content" className="flex min-h-0 flex-1 flex-col max-w-5xl mx-auto w-full">
-        {/* Messages: a polite live region, busy while an answer streams in */}
+        {/* Messages: a polite live region, busy while an answer streams in. `relative` keeps
+            the absolutely positioned sr-only labels inside the log, so they cannot make the
+            page taller than the viewport (#341) */}
         <div
+          ref={logRef}
           role="log"
           aria-live="polite"
           aria-busy={isLoading}
           aria-label="Conversation"
-          className="flex-1 overflow-y-auto px-4 py-6 space-y-6"
+          className="relative flex-1 overflow-y-auto px-4 py-6 space-y-6"
         >
           {messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
@@ -336,7 +343,6 @@ function ChatPageContent() {
 
           {/* Thinking indicator — shown while retrieving context before tokens start */}
           {isThinking && <TypingIndicator />}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
