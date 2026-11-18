@@ -3,6 +3,22 @@ import type { Page } from '@playwright/test';
 
 const answerText = tutorAnswer.tokens.join('').trim();
 
+/** An answer taller than the message log at any viewport: 14 paragraphs and 5 sources. */
+const longAnswer = {
+  ...tutorAnswer,
+  sources: Array.from({ length: 5 }, (_, index) => ({
+    ...tutorAnswer.sources[index % tutorAnswer.sources.length],
+    module_title: `Imperial Reforms and Colonial Protests, 1763-1774 - Section ${index + 1}`,
+    section: `Section ${index + 1}`,
+  })),
+  tokens: Array.from(
+    { length: 14 },
+    (_, index) =>
+      `Paragraph ${index + 1}: Parliament pressed new taxes on the colonies, and colonial ` +
+      'protest grew into organised resistance and, in the end, a war for independence.\n\n'
+  ),
+};
+
 const questionInput = (page: Page) => page.getByRole('textbox', { name: 'Your question' });
 const kgToggle = (page: Page) => page.getByRole('checkbox', { name: 'KG Expansion' });
 
@@ -168,6 +184,49 @@ test.describe('Chat Page', () => {
     await expect(page).toHaveURL('/graph');
     await expect(page.getByText(/Highlighting 3 concepts/)).toBeVisible();
   });
+
+  // #341: a long answer used to scroll the whole window to a blank page
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 375, height: 667 },
+  ]) {
+    test(`only the message log scrolls after a long answer at ${viewport.width}x${viewport.height}`, async ({
+      page,
+      api,
+    }) => {
+      await page.setViewportSize(viewport);
+      api.on('POST /ask/stream', {
+        body: tutorStream(longAnswer),
+        contentType: 'text/event-stream',
+      });
+
+      await questionInput(page).fill('What caused the American Revolution?');
+      await page.getByRole('button', { name: 'Send' }).click();
+      const log = page.getByRole('log', { name: 'Conversation' });
+      await expect(log.getByText(/^Paragraph 14:/)).toBeVisible();
+      await expect(log.getByRole('list', { name: 'Sources' }).getByRole('listitem')).toHaveCount(5);
+      await expect(log).toHaveAttribute('aria-busy', 'false');
+
+      // The window stays put and the document is no taller than the viewport
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      expect(await page.evaluate(() => document.scrollingElement?.scrollHeight)).toBe(
+        viewport.height
+      );
+      // The log itself is scrolled to the end of the answer, and the input stays on screen
+      await expect
+        .poll(() => log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
+        .toBeLessThanOrEqual(1);
+      await expect(questionInput(page)).toBeInViewport();
+
+      // A follow-up typed straight after the answer is sent (the 30-minute demo's second step)
+      await questionInput(page).fill('What was the Stamp Act?');
+      await page.getByRole('button', { name: 'Send' }).click();
+      await expect.poll(() => api.calls('POST /ask/stream').length).toBe(2);
+      expect(api.calls('POST /ask/stream')[1].postDataJSON().question).toBe(
+        'What was the Stamp Act?'
+      );
+    });
+  }
 });
 
 test.describe('Chat Page with a question in the URL', () => {
