@@ -172,10 +172,10 @@ project. Both files hold only `[[IgnoredVulns]]` tables with the keys `id`,
 entry goes into its reason.
 
 Every npm entry is accepted because its package is dev-only. Its reason starts
-with the package and every version the lock has of it (`deepmerge 4.3.1 is a
-dev-only dependency ...`, or `glob 10.5.0 and 13.0.6 are dev-only dependencies
-...`) and says that the package is not in the production bundle. The same test
-file checks each reason:
+with the package and every version the lock has of it (`picomatch 2.3.2 and
+4.0.7 are dev-only dependencies ...`, or `glob 10.5.0 and 13.0.6 are dev-only
+dependencies ...`) and says that the package is not in the production bundle.
+The same test file checks each reason:
 
 - **Lock.** In `frontend/package-lock.json`, every copy of the package, nested
   ones included, is marked `"dev": true`, the locked versions are exactly the

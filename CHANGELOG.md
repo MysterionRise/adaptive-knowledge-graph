@@ -236,6 +236,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exploitable, so osv-scanner no longer reports it for `braces` 3.0.3 and
   listed the entry as an unused ignore. `SECURITY.md` no longer names it as an
   accepted risk.
+- The frontend allowlist follows the advisories again
+  ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
+  osv-scanner no longer reports GHSA-gcqx-w48m-w2h4 for `deepmerge` 4.3.1 and
+  listed its entry as an unused ignore, so the entry is gone. A new advisory,
+  GHSA-fc5q-39xc-vjpf, affects `picomatch` 2.3.2 and 4.0.7, which come in
+  through jest 30, tailwindcss 3 and `eslint-config-next` 16 and are not in the
+  production bundle. No fixed release exists, so it is allowlisted until
+  2027-01-31. The advisory job in CI failed on `main` because of it.
 - The chat no longer scrolls the window to a blank page after a long answer
   ([#341](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/341)).
   The visually hidden "Source" labels of the source chips made the page
