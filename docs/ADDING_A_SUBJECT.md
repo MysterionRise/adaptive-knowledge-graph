@@ -37,6 +37,8 @@ subjects:
 
 For an OpenStax web source, set `source_type: openstax_web` and provide its `openstax_slug` instead of the GitHub repository paths. Copy the matching shape from an existing entry in `config/subjects.yaml`.
 
+A book may also set `id` and `connector`. Both are optional: `id` defaults to the title in lower case with hyphens (`Book title` gives `book-title`) and `connector` to the `source_type`. The `id` is what the subject's source inventory cites (see [DOMAINS.md](DOMAINS.md)), so set it explicitly before renaming a book that an inventory already names, and give two books of one subject different ids.
+
 GitHub content downloads use a 30-second request timeout and an identifying
 User-Agent. Transient HTTP 429/5xx responses, timeouts and connection failures
 are retried up to three attempts with 1-second then 2-second backoff; other
@@ -83,6 +85,16 @@ The graph build uses the processed records for that subject and writes two files
 ## 4. Verify the subject in the UI
 
 Start the API and frontend using the README's development commands, then open the local frontend at `http://localhost:3000`. Use the subject picker to select `My Subject`; confirm the configured name, description, and theme appear. Ask a question from the ingested material and check that the answer uses the expected subject context and includes its attribution. Restart the API if a configuration change is not visible, because subject configuration is cached while the process runs.
+
+## Optional: domain artifacts
+
+A subject works without them. To start a reviewed dictionary for it, draft the domain artifacts from the build:
+
+```bash
+make domain-draft SUBJECT=my_subject
+```
+
+The command writes `data/domains/my_subject/` with every concept and `PREREQ` edge of the build as an `extracted` entry. Extracted entries change nothing in the graph. [DOMAINS.md](DOMAINS.md) describes the files, the review statuses and `make domain-apply`.
 
 ## Source rights and attribution
 

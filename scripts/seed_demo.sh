@@ -8,8 +8,10 @@
 #   bash scripts/seed_demo.sh --reset [subject]  # re-ingest, rebuild the graph, recreate the index
 #
 # Subjects that already have concepts in Neo4j and chunks in OpenSearch are skipped unless
-# --reset is given. Starts the compose databases when they are not reachable and waits until
-# they accept requests (a running container is not necessarily a ready one).
+# --reset is given. The curated domain entries of data/domains/<subject>/ are applied after the
+# graph step on every run (scripts/domain_tool.py apply; idempotent). Starts the compose
+# databases when they are not reachable and waits until they accept requests (a running
+# container is not necessarily a ready one).
 #
 # Environment: NEO4J_BOLT_PORT / OPENSEARCH_PORT (host ports, see infra/compose/compose.yaml),
 # DATA_PROCESSED_DIR, STUDENT_PROFILES_DB (backend settings), KG_COOCCURRENCE_THRESHOLD[_<SUBJECT>],
@@ -81,6 +83,10 @@ for subj in "${SUBJECTS[@]}"; do
     else
         ok "[$subj] Graph already has $concepts concepts (use --reset to rebuild)"
     fi
+
+    # Idempotent: the curated entries of data/domains/<subject>/ on top of the build. A subject
+    # without a domain directory, or with extracted and proposed entries only, is left as built.
+    poetry run python scripts/domain_tool.py apply --subject "$subj"
 
     # Idempotent: fulltext concept index (concept search, KG expansion) and vector/lookup indexes
     poetry run python scripts/create_neo4j_indexes.py --subject "$subj" --skip-tests

@@ -5,20 +5,51 @@ Loads subject configuration from config/subjects.yaml and provides
 Pydantic models for type-safe access to subject settings.
 """
 
+import hashlib
+import re
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+"""Identifiers of the domain artifacts (#211): lower-case words joined by single hyphens."""
+
+_SLUG_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
+
+
+def slug(text: str) -> str:
+    """
+    Lower-case hyphenated identifier of a title or name.
+
+    "Biology 2e" -> "biology-2e", "World War II" -> "world-war-ii". Accents are dropped and
+    every other run of characters outside a-z and 0-9 becomes one hyphen. The result is
+    empty when the text has no letter or digit.
+    """
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return _SLUG_SEPARATOR_RE.sub("-", ascii_text.lower()).strip("-")
 
 
 class BookSource(BaseModel):
-    """Configuration for a book source."""
+    """
+    Configuration for a book source.
+
+    ``id`` and ``connector`` tie a book to its entry in the subject's source inventory
+    (``data/domains/<subject_id>/sources.yaml``, #211). Both have defaults, so an entry
+    without them stays valid: ``id`` is ``slug(title)`` ("US History" -> "us-history") and
+    ``connector`` is the ``source_type``. A title without a letter or digit in a-z and 0-9
+    gets "book-" and the first eight hex digits of its SHA-256. Set ``id`` explicitly before
+    renaming a book whose id the inventory already uses.
+    """
 
     title: str
+    id: str = ""  # default: slug(title)
     source_type: str = "github_raw"  # "github_raw" or "openstax_web"
+    connector: str = ""  # the ingestion connector; default: source_type
     # github_raw fields (existing, optional for openstax_web sources)
     repo_url_raw: str | None = None
     summary_path: str = "SUMMARY.md"
@@ -26,6 +57,20 @@ class BookSource(BaseModel):
     branch: str = "master"
     # openstax_web fields
     openstax_slug: str | None = None  # e.g. "world-history-volume-1"
+
+    @model_validator(mode="after")
+    def _default_id_and_connector(self) -> "BookSource":
+        if not self.id:
+            digest = hashlib.sha256(self.title.encode("utf-8")).hexdigest()
+            self.id = slug(self.title) or f"book-{digest[:8]}"
+        if not re.fullmatch(SLUG_PATTERN, self.id):
+            raise ValueError(
+                f"book id {self.id!r} (title {self.title!r}) must be lower-case words joined "
+                "by hyphens"
+            )
+        if not self.connector:
+            self.connector = self.source_type
+        return self
 
 
 class SubjectPrompts(BaseModel):

@@ -1,0 +1,2931 @@
+# Written by scripts/domain_tool.py draft (docs/DOMAINS.md). The command replaces the
+# entries with review_status: extracted and keeps the values of every other entry. It
+# rewrites the file with sorted keys: comments and formatting are not kept.
+schema_version: 1
+relationships:
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48753
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Aggregate Demand
+  target: Expansionary Fiscal Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48766
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Asset
+  target: Balance Sheet
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48687
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Asset
+  target: Wealth
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48732
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Balance of Trade
+  target: Current Account Balance
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48770
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Banking System
+  target: Central Bank
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48699
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Bonds
+  target: Mutual Funds
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48766
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Bonds
+  target: Reserves
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Bonds
+  target: Treasury Bond
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48722
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Business Cycle
+  target: Cyclical Unemployment
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48758
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Business Cycle
+  target: Neoclassical Perspective
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Consumption
+  target: Budget Constraint
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48641
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Consumption
+  target: Marginal Utility
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Consumption
+  target: Substitute
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Corporation
+  target: Bonds
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Cost
+  target: Comparative Advantage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Cost
+  target: Economic Profit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Cost
+  target: Economies of Scale
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Cost
+  target: Marginal Cost
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Cost
+  target: Opportunity Cost
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Cost
+  target: Variable Cost
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Demand
+  target: Aggregate Demand/Aggregate Supply Model
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Demand
+  target: Market
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Demand
+  target: Market Economy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Demand
+  target: Shortage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48614
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Economics
+  target: Elasticity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Economics
+  target: Macroeconomics
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Economics
+  target: Microeconomics
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Exports
+  target: Trade Balance
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Exports
+  target: Trade Deficit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Exports
+  target: Trade Surplus
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Federal Government
+  target: Bonds
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48792
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Federal Government
+  target: Budget Deficit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Federal Government
+  target: Treasury Bond
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48790
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Financial Capital
+  target: International Capital Flows
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Aggregate Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Aggregate Supply Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48766
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Asset
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48648
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Entry
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48648
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Exit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48696
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Insurance
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Labor Market
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48766
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Liability
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48646
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Market Structure
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Microeconomics
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48659
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Monopolistic Competition
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48651
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Monopoly
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48659
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Oligopoly
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48646
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Perfect Competition
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48716
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Physical Capital
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Private Company
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Shares
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48676
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Social Benefits
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Specialization
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Firm
+  target: Stock
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48762
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Function
+  target: Money
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48711
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: GDP
+  target: GDP per Capita
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Aggregate Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Aggregate Demand Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Allocative Efficiency
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Budget Constraint
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Comparative Advantage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48726
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Consumer Price Index
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48732
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Current Account Balance
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Demand Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Division of Labor
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Exports
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Imports
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Inputs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Law of Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Market Economy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Price
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Quantity Demanded
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Quantity Supplied
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48750
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Real GDP
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Scarcity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Service
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Substitute
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48823
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Tariffs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Good
+  target: Utility
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48753
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Government Spending
+  target: Expansionary Fiscal Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Government Spending
+  target: Fiscal Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48813
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: High-Income Country
+  target: Middle-Income Country
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48825
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Imports
+  target: Protectionism
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Imports
+  target: Trade Balance
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Imports
+  target: Trade Deficit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Imports
+  target: Trade Surplus
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: Budget Constraint
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48732
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: Current Account Balance
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48813
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: High-Income Country
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48813
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: Low-Income Countries
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48813
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: Middle-Income Country
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48683
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: Poverty
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48683
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: Poverty Line
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Income
+  target: Revenue
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48726
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Inflation
+  target: Consumer Price Index
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48727
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Inflation
+  target: Deflation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Inflation
+  target: Macroeconomics
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Inputs
+  target: Firm
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Inputs
+  target: SRAS
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48716
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Inputs
+  target: Technology
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48685
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Insurance
+  target: Medicaid
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48696
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Insurance
+  target: Premium
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Interest Rate
+  target: Monetary Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48699
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Interest Rate
+  target: Savings Account
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48651
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Invention
+  target: Patent
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Labor
+  target: Firm
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Labor
+  target: Inputs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Labor
+  target: Labor Market
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Labor
+  target: Potential GDP
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48720
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Labor
+  target: Unemployment Rate
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48766
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Liability
+  target: Balance Sheet
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Liability
+  target: Corporation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48784
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Foreign Exchange Market
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Globalization
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48638
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Interest Rate
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Labor Market
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48651
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Monopoly
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48669
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Negative Externality
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48669
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Positive Externality
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Price Control
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48712
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Market
+  target: Standard of Living
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Model
+  target: Aggregate Demand/Aggregate Supply Model
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48770
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Monetary Policy
+  target: Central Bank
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Monetary Policy
+  target: Contractionary Monetary Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Monetary Policy
+  target: Expansionary Monetary Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48792
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Budget Deficit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48792
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Budget Surplus
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Contractionary Monetary Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48763
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Credit Card
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Expansionary Monetary Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48734
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Financial Capital
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48687
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Income
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48699
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Savings Account
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48687
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Money
+  target: Wealth
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Opportunity Cost
+  target: Comparative Advantage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Aggregate Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Aggregate Supply Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48710
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Depression
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Economies of Scale
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Firm
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48651
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Monopoly
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48758
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Neoclassical Perspective
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Production
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48710
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: Recession
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Output
+  target: SRAS
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48687
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Pensions
+  target: Wealth
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48813
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Physical Capital
+  target: High-Income Country
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Physical Capital
+  target: Potential GDP
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48685
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Poverty Line
+  target: Medicaid
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Budget Constraint
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48727
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Deflation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Demand Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Equilibrium
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Equilibrium Price
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Excess Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48711
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Exchange Rate
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48725
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Inflation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48638
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Interest Rate
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Law of Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Price Ceiling
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Price Control
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Price Floor
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Quantity Demanded
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Quantity Supplied
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Revenue
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: SRAS
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Shortage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Supply Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price
+  target: Surplus
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48637
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price Floor
+  target: Minimum Wage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price Level
+  target: Aggregate Demand Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price Level
+  target: Aggregate Supply Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48726
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price Level
+  target: Consumer Price Index
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price Level
+  target: Equilibrium Quantity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Price Level
+  target: SRAS
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: Comparative Advantage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48648
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: Exit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: Fixed Cost
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: GDP
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48716
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: Physical Capital
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: Specialization
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: Total Costs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Production
+  target: Variable Cost
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Profit
+  target: Corporation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48648
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Profit
+  target: Entry
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Demand Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Equilibrium
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Equilibrium Price
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Equilibrium Quantity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Excess Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Law of Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Shortage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Demanded
+  target: Surplus
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Equilibrium
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Equilibrium Price
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Equilibrium Quantity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Excess Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Shortage
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Supply Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Quantity Supplied
+  target: Surplus
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Real GDP
+  target: Aggregate Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Real GDP
+  target: Aggregate Supply Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Real GDP
+  target: SRAS
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48710
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Recession
+  target: Business Cycle
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48722
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Recession
+  target: Cyclical Unemployment
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48753
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Recession
+  target: Expansionary Fiscal Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Scarcity
+  target: Economics
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Aggregate Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Aggregate Demand Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48726
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Consumer Price Index
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48732
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Current Account Balance
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Demand Curve
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Division of Labor
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Exports
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Imports
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48715
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Innovation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Inputs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Law of Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Market Economy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Price
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Quantity Demanded
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Quantity Supplied
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48750
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Real GDP
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Scarcity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Supply
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Service
+  target: Utility
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Shares
+  target: Corporation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Shortage
+  target: Equilibrium
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48683
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Standard of Living
+  target: Poverty
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48683
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Standard of Living
+  target: Poverty Line
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Stock
+  target: Corporation
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48699
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Stock
+  target: Mutual Funds
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Stock
+  target: Shares
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Supply
+  target: Aggregate Demand/Aggregate Supply Model
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Supply
+  target: Contractionary Monetary Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Supply
+  target: Expansionary Monetary Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Supply
+  target: Market
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Supply
+  target: Market Economy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Supply
+  target: Scarcity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Surplus
+  target: Equilibrium
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48792
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Tax
+  target: Budget Deficit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48792
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Tax
+  target: Budget Surplus
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48753
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Tax
+  target: Expansionary Fiscal Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Tax
+  target: Fiscal Policy
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48823
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Tax
+  target: Tariffs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48813
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Technology
+  target: Middle-Income Country
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Technology
+  target: Potential GDP
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Theory
+  target: Model
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Total Costs
+  target: Economic Profit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Total Revenue
+  target: Economic Profit
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Trade Balance
+  target: Macroeconomics
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48722
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Unemployment
+  target: Cyclical Unemployment
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Unemployment
+  target: Macroeconomics
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48723
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Unemployment Rate
+  target: Natural Rate of Unemployment
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48641
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Utility
+  target: Marginal Utility
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48614
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Variable
+  target: Elasticity
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Variable
+  target: Law of Demand
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Variable Cost
+  target: Total Costs
+  type: PREREQ
+- confidence: 0.8
+  evidence_source: economics
+  provenance:
+    method: glossary
+    module_id: m48691
+    origin: builder
+  review_status: extracted
+  rule: glossary_definition
+  source: Wages
+  target: Labor Union
+  type: PREREQ

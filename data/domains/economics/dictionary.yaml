@@ -1,0 +1,2150 @@
+# Written by scripts/domain_tool.py draft (docs/DOMAINS.md). The command replaces the
+# entries with review_status: extracted and keeps the values of every other entry. It
+# rewrites the file with sorted keys: comments and formatting are not kept.
+schema_version: 1
+terms:
+- aliases:
+  - ACA
+  definition: null
+  definition_source: null
+  id: affordable-care-act
+  name: Affordable Care Act
+  provenance:
+    method: key_term
+    module_id: m48636
+    origin: builder
+  review_status: extracted
+- aliases:
+  - AD
+  definition: the amount of total spending on domestic goods and services in an economy
+  definition_source: economics
+  id: aggregate-demand
+  name: Aggregate Demand
+  provenance:
+    method: key_term
+    module_id: m48705
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a model that shows what determines total supply or total demand for the economy, and how
+    total demand and total supply interact at the macroeconomic level
+  definition_source: economics
+  id: aggregate-demand-aggregate-supply-model
+  name: Aggregate Demand/Aggregate Supply Model
+  provenance:
+    method: key_term
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+- aliases:
+  - AD
+  - Aggregate Demand Curves
+  definition: the total spending on domestic goods and services at each price level
+  definition_source: economics
+  id: aggregate-demand-curve
+  name: Aggregate Demand Curve
+  provenance:
+    method: key_term
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+- aliases:
+  - AS
+  definition: the total quantity of output (i.e. real GDP) firms will produce and sell
+  definition_source: economics
+  id: aggregate-supply
+  name: Aggregate Supply
+  provenance:
+    method: key_term
+    module_id: m48705
+    origin: builder
+  review_status: extracted
+- aliases:
+  - AS
+  definition: the total quantity of output (i.e. real GDP) that firms will produce and sell at each price
+    level
+  definition_source: economics
+  id: aggregate-supply-curve
+  name: Aggregate Supply Curve
+  provenance:
+    method: key_term
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: when the mix of goods being produced represents the mix that society most desires
+  definition_source: economics
+  id: allocative-efficiency
+  name: Allocative Efficiency
+  provenance:
+    method: key_term
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Assets
+  definition: item of value owned by a firm or an individual
+  definition_source: economics
+  id: asset
+  name: Asset
+  provenance:
+    method: key_term
+    module_id: m48697
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Average Cost Curves
+  definition: null
+  definition_source: null
+  id: average-cost-curve
+  name: Average Cost Curve
+  provenance:
+    method: key_term
+    module_id: m48626
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: balance-of-trade
+  name: Balance of Trade
+  provenance:
+    method: key_term
+    module_id: m48731
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an accounting tool that lists assets and liabilities
+  definition_source: economics
+  id: balance-sheet
+  name: Balance Sheet
+  provenance:
+    method: key_term
+    module_id: m48766
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: bank-regulation
+  name: Bank Regulation
+  provenance:
+    method: key_term
+    module_id: m48771
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: banking-system
+  name: Banking System
+  provenance:
+    method: key_term
+    module_id: m48763
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: bankrupt
+  name: Bankrupt
+  provenance:
+    method: key_term
+    module_id: m48788
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Bond
+  definition: a financial contract through which a borrower like a corporation, a city or state, or the
+    federal government agrees to repay the amount that was borrowed and also a rate of interest over a
+    period of time in the future
+  definition_source: economics
+  id: bonds
+  name: Bonds
+  provenance:
+    method: key_term
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Budget Constraints
+  definition: all possible consumption combinations of goods that someone can afford, given the prices
+    of goods, when all income is spent; the boundary of the opportunity set
+  definition_source: economics
+  id: budget-constraint
+  name: Budget Constraint
+  provenance:
+    method: key_term
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Budget Deficits
+  definition: when the federal government spends more money than it receives in taxes in a given year
+  definition_source: economics
+  id: budget-deficit
+  name: Budget Deficit
+  provenance:
+    method: key_term
+    module_id: m48792
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: when the government receives more money in taxes than it spends in a year
+  definition_source: economics
+  id: budget-surplus
+  name: Budget Surplus
+  provenance:
+    method: key_term
+    module_id: m48792
+    origin: builder
+  review_status: extracted
+- aliases:
+  - BEA
+  definition: null
+  definition_source: null
+  id: bureau-of-economic-analysis
+  name: Bureau of Economic Analysis
+  provenance:
+    method: key_term
+    module_id: m48732
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: bureau-of-labor-statistics
+  name: Bureau of Labor Statistics
+  provenance:
+    method: key_term
+    module_id: m48712
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the relatively short-term movement of the economy in and out of recession
+  definition_source: economics
+  id: business-cycle
+  name: Business Cycle
+  provenance:
+    method: key_term
+    module_id: m48710
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Central Banks
+  definition: institution which conducts a nation’s monetary policy and regulates its banking system
+  definition_source: economics
+  id: central-bank
+  name: Central Bank
+  provenance:
+    method: key_term
+    module_id: m48768
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: when a country can produce a good at a lower cost in terms of other goods; or, when a country
+    has a lower opportunity cost of production
+  definition_source: economics
+  id: comparative-advantage
+  name: Comparative Advantage
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: competition
+  name: Competition
+  provenance:
+    method: key_term
+    module_id: m48620
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Competitive Markets
+  definition: null
+  definition_source: null
+  id: competitive-market
+  name: Competitive Market
+  provenance:
+    method: key_term
+    module_id: m48645
+    origin: builder
+  review_status: extracted
+- aliases:
+  - CPI
+  definition: a measure of inflation calculated by U.S. government statisticians based on the price level
+    from a fixed basket of goods and services that represents the purchases of the average consumer
+  definition_source: economics
+  id: consumer-price-index
+  name: Consumer Price Index
+  provenance:
+    method: key_term
+    module_id: m48726
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: consumption
+  name: Consumption
+  provenance:
+    method: key_term
+    module_id: m48640
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a monetary policy that reduces the supply of money and loans
+  definition_source: economics
+  id: contractionary-monetary-policy
+  name: Contractionary Monetary Policy
+  provenance:
+    method: key_term
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a business owned by shareholders who have limited liability for the company’s debt yet a
+    share of the company’s profits; may be private or public and may or may not have publicly-traded stock
+  definition_source: economics
+  id: corporation
+  name: Corporation
+  provenance:
+    method: key_term
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Costs
+  definition: null
+  definition_source: null
+  id: cost
+  name: Cost
+  provenance:
+    method: key_term
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Credit Cards
+  definition: immediately transfers money from the credit card company’s checking account to the seller,
+    and at the end of the month the user owes the money to the credit card company; a credit card is a
+    short-term loan
+  definition_source: economics
+  id: credit-card
+  name: Credit Card
+  provenance:
+    method: key_term
+    module_id: m48638
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a broad measure of the balance of trade that includes trade in goods and services, as well
+    as international flows of income and foreign aid
+  definition_source: economics
+  id: current-account-balance
+  name: Current Account Balance
+  provenance:
+    method: key_term
+    module_id: m48732
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: unemployment closely tied to the business cycle, like higher unemployment during a recession
+  definition_source: economics
+  id: cyclical-unemployment
+  name: Cyclical Unemployment
+  provenance:
+    method: key_term
+    module_id: m48722
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: dealers
+  name: Dealers
+  provenance:
+    method: key_term
+    module_id: m48784
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Deficits
+  definition: null
+  definition_source: null
+  id: deficit
+  name: Deficit
+  provenance:
+    method: key_term
+    module_id: m48731
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: negative inflation; most prices in the economy are falling
+  definition_source: economics
+  id: deflation
+  name: Deflation
+  provenance:
+    method: key_term
+    module_id: m48727
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the relationship between price and the quantity demanded of a certain good or service
+  definition_source: economics
+  id: demand
+  name: Demand
+  provenance:
+    method: key_term
+    module_id: m48628
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: demand-and-supply-models
+  name: Demand and Supply Models
+  provenance:
+    method: key_term
+    module_id: m48639
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Demand Curves
+  definition: a graphic representation of the relationship between price and quantity demanded of a certain
+    good or service, with quantity on the horizontal axis and the price on the vertical axis
+  definition_source: economics
+  id: demand-curve
+  name: Demand Curve
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the process by which capital ages over time and therefore loses its value
+  definition_source: economics
+  id: depreciation
+  name: Depreciation
+  provenance:
+    method: key_term
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an especially lengthy and deep decline in output
+  definition_source: economics
+  id: depression
+  name: Depression
+  provenance:
+    method: key_term
+    module_id: m48710
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: actions based on the belief that members of a certain group or groups are in some way inferior
+    solely because of a factor such as race, gender, or religion
+  definition_source: economics
+  id: discrimination
+  name: Discrimination
+  provenance:
+    method: key_term
+    module_id: m48689
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the way in which the work required to produce a good or service is divided into tasks performed
+    by different workers
+  definition_source: economics
+  id: division-of-labor
+  name: Division of Labor
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: economic-growth
+  name: Economic Growth
+  provenance:
+    method: key_term
+    module_id: m49468
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: total revenues minus total costs (explicit plus implicit costs)
+  definition_source: economics
+  id: economic-profit
+  name: Economic Profit
+  provenance:
+    method: key_term
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the study of how humans make choices under conditions of scarcity
+  definition_source: economics
+  id: economics
+  name: Economics
+  provenance:
+    method: key_term
+    module_id: m49468
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: when the average cost of producing each individual unit declines as total output increases
+  definition_source: economics
+  id: economies-of-scale
+  name: Economies of Scale
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: efficiency
+  name: Efficiency
+  provenance:
+    method: key_term
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an economics concept that measures responsiveness of one variable to changes in another
+    variable
+  definition_source: economics
+  id: elasticity
+  name: Elasticity
+  provenance:
+    method: key_term
+    module_id: m48611
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the long-run process of firms entering an industry in response to industry profits
+  definition_source: economics
+  id: entry
+  name: Entry
+  provenance:
+    method: key_term
+    module_id: m48648
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the situation where quantity demanded is equal to the quantity supplied; the combination
+    of price and quantity where there is no economic pressure from surpluses or shortages that would cause
+    price or quantity to change
+  definition_source: economics
+  id: equilibrium
+  name: Equilibrium
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the price where quantity demanded is equal to quantity supplied
+  definition_source: economics
+  id: equilibrium-price
+  name: Equilibrium Price
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the quantity at which quantity demanded and quantity supplied are equal for a certain price
+    level
+  definition_source: economics
+  id: equilibrium-quantity
+  name: Equilibrium Quantity
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases:
+  - EU
+  definition: null
+  definition_source: null
+  id: european-union
+  name: European Union
+  provenance:
+    method: key_term
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: at the existing price, quantity supplied exceeds the quantity demanded; also called a surplus
+  definition_source: economics
+  id: excess-supply
+  name: Excess Supply
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Exchange Rates
+  definition: the price of one currency in terms of another currency
+  definition_source: economics
+  id: exchange-rate
+  name: Exchange Rate
+  provenance:
+    method: key_term
+    module_id: m48711
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the long-run process of firms reducing production and shutting down in response to industry
+    losses
+  definition_source: economics
+  id: exit
+  name: Exit
+  provenance:
+    method: key_term
+    module_id: m48648
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: tax cuts or increases in government spending designed to stimulate aggregate demand and
+    move the economy out of recession
+  definition_source: economics
+  id: expansionary-fiscal-policy
+  name: Expansionary Fiscal Policy
+  provenance:
+    method: key_term
+    module_id: m48753
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a monetary policy that increases the supply of money and the quantity of loans
+  definition_source: economics
+  id: expansionary-monetary-policy
+  name: Expansionary Monetary Policy
+  provenance:
+    method: key_term
+    module_id: m48773
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Export
+  definition: products (goods and services) made domestically and sold abroad
+  definition_source: economics
+  id: exports
+  name: Exports
+  provenance:
+    method: key_term
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: federal-government
+  name: Federal Government
+  provenance:
+    method: keyword
+    module_id: m48678
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: federal-reserve
+  name: Federal Reserve
+  provenance:
+    method: key_term
+    module_id: m48763
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Federal Reserve Banks
+  definition: null
+  definition_source: null
+  id: federal-reserve-bank
+  name: Federal Reserve Bank
+  provenance:
+    method: key_term
+    module_id: m48749
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the international flows of money that facilitates trade and investment
+  definition_source: economics
+  id: financial-capital
+  name: Financial Capital
+  provenance:
+    method: key_term
+    module_id: m48638
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Financial Capital Market
+  definition: null
+  definition_source: null
+  id: financial-capital-markets
+  name: Financial Capital Markets
+  provenance:
+    method: key_term
+    module_id: m48695
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Firms
+  definition: an organization that combines inputs of labor, capital, land, and raw or finished component
+    materials to produce outputs.
+  definition_source: economics
+  id: firm
+  name: Firm
+  provenance:
+    method: key_term
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: economic policies that involve government spending and taxes
+  definition_source: economics
+  id: fiscal-policy
+  name: Fiscal Policy
+  provenance:
+    method: key_term
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Fixed Costs
+  definition: expenditure that must be made before production starts and that does not change regardless
+    of the level of production
+  definition_source: economics
+  id: fixed-cost
+  name: Fixed Cost
+  provenance:
+    method: key_term
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Foreign Exchange Markets
+  definition: the market in which people use one currency to buy another currency
+  definition_source: economics
+  id: foreign-exchange-market
+  name: Foreign Exchange Market
+  provenance:
+    method: key_term
+    module_id: m48776
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: foreign-financial-capital
+  name: Foreign Financial Capital
+  provenance:
+    method: key_term
+    module_id: m48736
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: free-trade
+  name: Free Trade
+  provenance:
+    method: key_term
+    module_id: m48828
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: function
+  name: Function
+  provenance:
+    method: key_term
+    module_id: m48831
+    origin: builder
+  review_status: extracted
+- aliases:
+  - GDPs
+  - Gross Domestic Product
+  definition: measure of the size of total production in an economy
+  definition_source: economics
+  id: gdp
+  name: GDP
+  provenance:
+    method: key_term
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: GDP divided by the population
+  definition_source: economics
+  id: gdp-per-capita
+  name: GDP per Capita
+  provenance:
+    method: key_term
+    module_id: m48711
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the trend in which buying and selling in markets have increasingly crossed national borders
+  definition_source: economics
+  id: globalization
+  name: Globalization
+  provenance:
+    method: key_term
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Goods
+  definition: null
+  definition_source: null
+  id: good
+  name: Good
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: government-spending
+  name: Government Spending
+  provenance:
+    method: keyword
+    module_id: m48678
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: great-depression
+  name: Great Depression
+  provenance:
+    method: key_term
+    module_id: m48710
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: great-recession
+  name: Great Recession
+  provenance:
+    method: key_term
+    module_id: m48640
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Growth Rates
+  definition: null
+  definition_source: null
+  id: growth-rate
+  name: Growth Rate
+  provenance:
+    method: key_term
+    module_id: m48715
+    origin: builder
+  review_status: extracted
+- aliases:
+  - High-Income Countries
+  definition: nation with a per capita income of $12,475 or more; typically has high levels of human and
+    physical capital
+  definition_source: economics
+  id: high-income-country
+  name: High-Income Country
+  provenance:
+    method: key_term
+    module_id: m48673
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the accumulated skills and education of workers
+  definition_source: economics
+  id: human-capital
+  name: Human Capital
+  provenance:
+    method: key_term
+    module_id: m48715
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: products (goods and services) made abroad and then sold domestically
+  definition_source: economics
+  id: imports
+  name: Imports
+  provenance:
+    method: key_term
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Incomes
+  definition: a flow of money received, often measured on a monthly or an annual basis
+  definition_source: economics
+  id: income
+  name: Income
+  provenance:
+    method: key_term
+    module_id: m48619
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: inequality
+  name: Inequality
+  provenance:
+    method: key_term
+    module_id: m48681
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a general and ongoing rise in the level of prices in an economy
+  definition_source: economics
+  id: inflation
+  name: Inflation
+  provenance:
+    method: key_term
+    module_id: m48705
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Inflation Rates
+  definition: null
+  definition_source: null
+  id: inflation-rate
+  name: Inflation Rate
+  provenance:
+    method: key_term
+    module_id: m48724
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a component of physical capital such as roads, rail systems, and so on
+  definition_source: economics
+  id: infrastructure
+  name: Infrastructure
+  provenance:
+    method: key_term
+    module_id: m48716
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: putting advances in knowledge to use in a new product or service
+  definition_source: economics
+  id: innovation
+  name: Innovation
+  provenance:
+    method: key_term
+    module_id: m48715
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the combination of labor, materials, and machinery that is used to produce goods and services;
+    also called factors of production
+  definition_source: economics
+  id: inputs
+  name: Inputs
+  provenance:
+    method: key_term
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: method of protecting a person from financial loss, whereby policy holders make regular payments
+    to an insurance entity; the insurance firm then remunerates a group member who suffers significant
+    financial damage from an event covered by the policy
+  definition_source: economics
+  id: insurance
+  name: Insurance
+  provenance:
+    method: key_term
+    module_id: m48694
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Interest Rates
+  definition: the “price” of borrowing in the financial market; a rate of return on an investment
+  definition_source: economics
+  id: interest-rate
+  name: Interest Rate
+  provenance:
+    method: key_term
+    module_id: m48638
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: flow of financial capital across national boundaries either as portfolio investment or direct
+    investment
+  definition_source: economics
+  id: international-capital-flows
+  name: International Capital Flows
+  provenance:
+    method: key_term
+    module_id: m48790
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: international-trade
+  name: International Trade
+  provenance:
+    method: key_term
+    module_id: m49468
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: advances in knowledge
+  definition_source: economics
+  id: invention
+  name: Invention
+  provenance:
+    method: key_term
+    module_id: m48715
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: john-maynard-keynes
+  name: John Maynard Keynes
+  provenance:
+    method: key_term
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: key-input
+  name: Key Input
+  provenance:
+    method: key_term
+    module_id: m48618
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: keynesian-economics
+  name: Keynesian Economics
+  provenance:
+    method: key_term
+    module_id: m48753
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: labor
+  name: Labor
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Labor Markets
+  definition: the market in which households sell their labor as workers to business firms or other employers
+  definition_source: economics
+  id: labor-market
+  name: Labor Market
+  provenance:
+    method: key_term
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Labor Unions
+  definition: an organization of workers that negotiates with employers over wages and working conditions
+  definition_source: economics
+  id: labor-union
+  name: Labor Union
+  provenance:
+    method: key_term
+    module_id: m48689
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the common relationship that a higher price leads to a lower quantity demanded of a certain
+    good or service and a lower price leads to a higher quantity demanded, while all other variables are
+    held constant
+  definition_source: economics
+  id: law-of-demand
+  name: Law of Demand
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Liabilities
+  definition: any amount or debt owed by a firm or an individual
+  definition_source: economics
+  id: liability
+  name: Liability
+  provenance:
+    method: key_term
+    module_id: m48766
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Low-Income Country
+  definition: a nation that has a per capita income of less than $1,025; a third of the world’s population
+  definition_source: economics
+  id: low-income-countries
+  name: Low-Income Countries
+  provenance:
+    method: key_term
+    module_id: m48673
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the branch of economics that focuses on broad issues such as growth, unemployment, inflation,
+    and trade balance.
+  definition_source: economics
+  id: macroeconomics
+  name: Macroeconomics
+  provenance:
+    method: key_term
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Marginal Costs
+  definition: the additional cost of producing one more unit
+  definition_source: economics
+  id: marginal-cost
+  name: Marginal Cost
+  provenance:
+    method: key_term
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Marginal Cost Curves
+  definition: null
+  definition_source: null
+  id: marginal-cost-curve
+  name: Marginal Cost Curve
+  provenance:
+    method: key_term
+    module_id: m48647
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the additional utility provided by one additional unit of consumption
+  definition_source: economics
+  id: marginal-utility
+  name: Marginal Utility
+  provenance:
+    method: key_term
+    module_id: m48641
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Markets
+  definition: interaction between potential buyers and sellers; a combination of demand and supply
+  definition_source: economics
+  id: market
+  name: Market
+  provenance:
+    method: key_term
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Market Economies
+  definition: an economy where economic decisions are decentralized, resources are owned by private individuals,
+    and businesses supply goods and services based on demand
+  definition_source: economics
+  id: market-economy
+  name: Market Economy
+  provenance:
+    method: key_term
+    module_id: m48594
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: market-price
+  name: Market Price
+  provenance:
+    method: key_term
+    module_id: m50323
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the conditions in an industry, such as number of sellers, how easy or difficult it is for
+    a new firm to enter, and the type of products that are sold
+  definition_source: economics
+  id: market-structure
+  name: Market Structure
+  provenance:
+    method: key_term
+    module_id: m48645
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: median
+  name: Median
+  provenance:
+    method: key_term
+    module_id: m48831
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a federal–state joint program enacted in 1965 that provides medical insurance for certain
+    (not all) low-income people, including the near-poor as well as those below the poverty line, and
+    focusing on low-income families with children, the low-income elderly, and the disabled
+  definition_source: economics
+  id: medicaid
+  name: Medicaid
+  provenance:
+    method: key_term
+    module_id: m48683
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the branch of economics that focuses on actions of particular agents within the economy,
+    like households, workers, and business firms
+  definition_source: economics
+  id: microeconomics
+  name: Microeconomics
+  provenance:
+    method: key_term
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a nation with per capita income between $1,025 and $12, 475 and that has shown some ability,
+    even if not always sustained, to catch up to the technology leaders in high-income countries
+  definition_source: economics
+  id: middle-income-country
+  name: Middle-Income Country
+  provenance:
+    method: key_term
+    module_id: m48813
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a price floor that makes it illegal for an employer to pay employees less than a certain
+    hourly rate
+  definition_source: economics
+  id: minimum-wage
+  name: Minimum Wage
+  provenance:
+    method: key_term
+    module_id: m48637
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Models
+  definition: see theory
+  definition_source: economics
+  id: model
+  name: Model
+  provenance:
+    method: key_term
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: policy that involves altering the level of interest rates, the availability of credit in
+    the economy, and the extent of borrowing
+  definition_source: economics
+  id: monetary-policy
+  name: Monetary Policy
+  provenance:
+    method: key_term
+    module_id: m48592
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: 'whatever serves society in four functions: as a medium of exchange, a store of value, a
+    unit of account, and a standard of deferred payment.'
+  definition_source: economics
+  id: money
+  name: Money
+  provenance:
+    method: key_term
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: many firms competing to sell similar but differentiated products
+  definition_source: economics
+  id: monopolistic-competition
+  name: Monopolistic Competition
+  provenance:
+    method: key_term
+    module_id: m48658
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Monopolies
+  definition: a situation in which one firm produces all of the output in a market
+  definition_source: economics
+  id: monopoly
+  name: Monopoly
+  provenance:
+    method: key_term
+    module_id: m48650
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: funds that buy a range of stocks or bonds from different companies, thus allowing an investor
+    an easy way to diversify
+  definition_source: economics
+  id: mutual-funds
+  name: Mutual Funds
+  provenance:
+    method: key_term
+    module_id: m48699
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the unemployment rate that would exist in a growing and healthy economy from the combination
+    of economic, social, and political factors that exist at a given time
+  definition_source: economics
+  id: natural-rate-of-unemployment
+  name: Natural Rate of Unemployment
+  provenance:
+    method: key_term
+    module_id: m48723
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Negative Externalities
+  definition: a situation where a third party, outside the transaction, suffers from a market transaction
+    by others
+  definition_source: economics
+  id: negative-externality
+  name: Negative Externality
+  provenance:
+    method: key_term
+    module_id: m48669
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the philosophy that, in the long run, the business cycle will fluctuate around the potential,
+    or full-employment, level of output
+  definition_source: economics
+  id: neoclassical-perspective
+  name: Neoclassical Perspective
+  provenance:
+    method: key_term
+    module_id: m48756
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: when a few large firms have all or most of the sales in an industry
+  definition_source: economics
+  id: oligopoly
+  name: Oligopoly
+  provenance:
+    method: key_term
+    module_id: m48658
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: measures cost by what is given up in exchange; opportunity cost measures the value of the
+    forgone alternative
+  definition_source: economics
+  id: opportunity-cost
+  name: Opportunity Cost
+  provenance:
+    method: key_term
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: output
+  name: Output
+  provenance:
+    method: key_term
+    module_id: m48660
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Patents
+  definition: a government rule that gives the inventor the exclusive legal right to make, use, or sell
+    the invention for a limited time
+  definition_source: economics
+  id: patent
+  name: Patent
+  provenance:
+    method: key_term
+    module_id: m48651
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: pensions
+  name: Pensions
+  provenance:
+    method: key_term
+    module_id: m48729
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: percentage-change
+  name: Percentage Change
+  provenance:
+    method: key_term
+    module_id: m48614
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: each firm faces many competitors that sell identical products
+  definition_source: economics
+  id: perfect-competition
+  name: Perfect Competition
+  provenance:
+    method: key_term
+    module_id: m48645
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Perfectly Competitive Firms
+  definition: null
+  definition_source: null
+  id: perfectly-competitive-firm
+  name: Perfectly Competitive Firm
+  provenance:
+    method: key_term
+    module_id: m48645
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the plant and equipment used by firms in production; this includes infrastructure
+  definition_source: economics
+  id: physical-capital
+  name: Physical Capital
+  provenance:
+    method: key_term
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Positive Externalities
+  definition: a situation where a third party, outside the transaction, benefits from a market transaction
+    by others
+  definition_source: economics
+  id: positive-externality
+  name: Positive Externality
+  provenance:
+    method: key_term
+    module_id: m48669
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the maximum quantity that an economy can produce given full employment of its existing levels
+    of labor, physical capital, technology, and institutions
+  definition_source: economics
+  id: potential-gdp
+  name: Potential GDP
+  provenance:
+    method: key_term
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the situation of being below a certain level of income needed for a basic standard of living
+  definition_source: economics
+  id: poverty
+  name: Poverty
+  provenance:
+    method: key_term
+    module_id: m48681
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Poverty Lines
+  definition: the specific amount of income needed for a basic standard of living
+  definition_source: economics
+  id: poverty-line
+  name: Poverty Line
+  provenance:
+    method: key_term
+    module_id: m48681
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Premiums
+  definition: payment made to an insurance company
+  definition_source: economics
+  id: premium
+  name: Premium
+  provenance:
+    method: key_term
+    module_id: m48696
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Prices
+  definition: what a buyer pays for a unit of the specific good or service
+  definition_source: economics
+  id: price
+  name: Price
+  provenance:
+    method: key_term
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Price Ceilings
+  definition: a legal maximum price
+  definition_source: economics
+  id: price-ceiling
+  name: Price Ceiling
+  provenance:
+    method: key_term
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Price Controls
+  definition: government laws to regulate prices instead of letting market forces determine prices
+  definition_source: economics
+  id: price-control
+  name: Price Control
+  provenance:
+    method: key_term
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Price Floors
+  definition: a legal minimum price
+  definition_source: economics
+  id: price-floor
+  name: Price Floor
+  provenance:
+    method: key_term
+    module_id: m48632
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Price Levels
+  definition: null
+  definition_source: null
+  id: price-level
+  name: Price Level
+  provenance:
+    method: key_term
+    module_id: m48725
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a firm owned by the people who run it on a day-to-day basis
+  definition_source: economics
+  id: private-company
+  name: Private Company
+  provenance:
+    method: key_term
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the process of combining inputs to produce outputs, ideally of a value greater than the
+    value of the inputs
+  definition_source: economics
+  id: production
+  name: Production
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: productivity
+  name: Productivity
+  provenance:
+    method: key_term
+    module_id: m48715
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: productivity-growth
+  name: Productivity Growth
+  provenance:
+    method: key_term
+    module_id: m48715
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Profits
+  definition: null
+  definition_source: null
+  id: profit
+  name: Profit
+  provenance:
+    method: key_term
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: profit-maximizing
+  name: Profit-Maximizing
+  provenance:
+    method: key_term
+    module_id: m48659
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the legal rights of ownership on which others are not allowed to infringe without paying
+    compensation
+  definition_source: economics
+  id: property-rights
+  name: Property Rights
+  provenance:
+    method: key_term
+    module_id: m48671
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: government policies to reduce or block imports
+  definition_source: economics
+  id: protectionism
+  name: Protectionism
+  provenance:
+    method: key_term
+    module_id: m48825
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: public-policy
+  name: Public Policy
+  provenance:
+    method: key_term
+    module_id: m48687
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the total number of units of a good or service consumers are willing to purchase at a given
+    price
+  definition_source: economics
+  id: quantity-demanded
+  name: Quantity Demanded
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the total number of units of a good or service producers are willing to sell at a given
+    price
+  definition_source: economics
+  id: quantity-supplied
+  name: Quantity Supplied
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the amount of goods and services actually being sold in a nation
+  definition_source: economics
+  id: real-gdp
+  name: Real GDP
+  provenance:
+    method: key_term
+    module_id: m48709
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Recessions
+  definition: a significant decline in national output
+  definition_source: economics
+  id: recession
+  name: Recession
+  provenance:
+    method: key_term
+    module_id: m48710
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Reserve
+  definition: funds that a bank keeps on hand and that are not loaned out or invested in bonds
+  definition_source: economics
+  id: reserves
+  name: Reserves
+  provenance:
+    method: key_term
+    module_id: m48763
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: income from selling a firm’s product; defined as price times quantity sold
+  definition_source: economics
+  id: revenue
+  name: Revenue
+  provenance:
+    method: key_term
+    module_id: m48618
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a measure of the uncertainty of that project’s profitability
+  definition_source: economics
+  id: risk
+  name: Risk
+  provenance:
+    method: key_term
+    module_id: m48696
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: salary
+  name: Salary
+  provenance:
+    method: key_term
+    module_id: m48637
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a bank account that pays an interest rate, but withdrawing money typically requires a trip
+    to the bank or an automatic teller machine
+  definition_source: economics
+  id: savings-account
+  name: Savings Account
+  provenance:
+    method: key_term
+    module_id: m48699
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: when human wants for goods and services exceed the available supply
+  definition_source: economics
+  id: scarcity
+  name: Scarcity
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Services
+  definition: product which is intangible (in contrast to goods) such as entertainment, healthcare, or
+    education
+  definition_source: economics
+  id: service
+  name: Service
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Share
+  definition: the stock of a firm, divided into individual portions
+  definition_source: economics
+  id: shares
+  name: Shares
+  provenance:
+    method: key_term
+    module_id: m48686
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Shortages
+  definition: at the existing price, the quantity demanded exceeds the quantity supplied; also called
+    excess demand
+  definition_source: economics
+  id: shortage
+  name: Shortage
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: slope
+  name: Slope
+  provenance:
+    method: key_term
+    module_id: m48607
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Social Benefit
+  definition: the dollar value of all benefits of a new product or process invented by a company that
+    can be captured by other firms and by society as a whole
+  definition_source: economics
+  id: social-benefits
+  name: Social Benefits
+  provenance:
+    method: key_term
+    module_id: m48676
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: when workers or firms focus on particular tasks for which they are well-suited within the
+    overall production process
+  definition_source: economics
+  id: specialization
+  name: Specialization
+  provenance:
+    method: key_term
+    module_id: m48591
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Short Run Aggregate Supply Curve
+  definition: positive short run relationship between the price level for output and real GDP, holding
+    the prices of inputs fixed
+  definition_source: economics
+  id: sras
+  name: SRAS
+  provenance:
+    method: key_term
+    module_id: m48741
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Standards of Living
+  definition: all elements that affect people’s happiness, whether these elements are bought and sold
+    in the market or not
+  definition_source: economics
+  id: standard-of-living
+  name: Standard of Living
+  provenance:
+    method: key_term
+    module_id: m48712
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: sticky
+  name: Sticky
+  provenance:
+    method: key_term
+    module_id: m48722
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Stocks
+  definition: a claim on partial ownership of a specific firm
+  definition_source: economics
+  id: stock
+  name: Stock
+  provenance:
+    method: key_term
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Structures
+  definition: building used as residence, factory, office building, retail store, or for other purposes
+  definition_source: economics
+  id: structure
+  name: Structure
+  provenance:
+    method: key_term
+    module_id: m48620
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: subsidies
+  name: Subsidies
+  provenance:
+    method: key_term
+    module_id: m48825
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a good that can replace another to some extent, so that greater consumption of one good
+    can mean less of the other
+  definition_source: economics
+  id: substitute
+  name: Substitute
+  provenance:
+    method: key_term
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the relationship between price and the quantity supplied of a certain good or service
+  definition_source: economics
+  id: supply
+  name: Supply
+  provenance:
+    method: key_term
+    module_id: m48628
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Supply Curves
+  definition: a line that shows the relationship between price and quantity supplied on a graph, with
+    quantity supplied on the horizontal axis and price on the vertical axis
+  definition_source: economics
+  id: supply-curve
+  name: Supply Curve
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: at the existing price, quantity supplied exceeds the quantity demanded; also called excess
+    supply
+  definition_source: economics
+  id: surplus
+  name: Surplus
+  provenance:
+    method: key_term
+    module_id: m48629
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Tariff
+  definition: taxes that governments place on imported goods
+  definition_source: economics
+  id: tariffs
+  name: Tariffs
+  provenance:
+    method: key_term
+    module_id: m48701
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Taxes
+  definition: null
+  definition_source: null
+  id: tax
+  name: Tax
+  provenance:
+    method: key_term
+    module_id: m48611
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: all the ways in which existing inputs produce more or higher quality, as well as different
+    and altogether new products
+  definition_source: economics
+  id: technology
+  name: Technology
+  provenance:
+    method: key_term
+    module_id: m48675
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Theories
+  definition: a representation of an object or situation that is simplified while including enough of
+    the key features to help us understand the object or situation
+  definition_source: economics
+  id: theory
+  name: Theory
+  provenance:
+    method: key_term
+    module_id: m48593
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Total Cost
+  definition: the sum of fixed and variable costs of production
+  definition_source: economics
+  id: total-costs
+  name: Total Costs
+  provenance:
+    method: key_term
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Total Revenues
+  definition: null
+  definition_source: null
+  id: total-revenue
+  name: Total Revenue
+  provenance:
+    method: key_term
+    module_id: m48621
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Trade Balances
+  definition: gap between exports and imports
+  definition_source: economics
+  id: trade-balance
+  name: Trade Balance
+  provenance:
+    method: key_term
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Trade Deficits
+  definition: exists when a nation's imports exceed its exports and is calculated as imports –exports
+  definition_source: economics
+  id: trade-deficit
+  name: Trade Deficit
+  provenance:
+    method: key_term
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: exists when a nation's exports exceed its imports and is calculated as exports – imports
+  definition_source: economics
+  id: trade-surplus
+  name: Trade Surplus
+  provenance:
+    method: key_term
+    module_id: m48708
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Tradeoff
+  definition: null
+  definition_source: null
+  id: tradeoffs
+  name: Tradeoffs
+  provenance:
+    method: key_term
+    module_id: m48608
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Treasury Bonds
+  definition: a bond issued by the federal government through the U.S. Department of the Treasury
+  definition_source: economics
+  id: treasury-bond
+  name: Treasury Bond
+  provenance:
+    method: key_term
+    module_id: m48698
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: u-s-census-bureau
+  name: U.S. Census Bureau
+  provenance:
+    method: key_term
+    module_id: m48630
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: unemployment
+  name: Unemployment
+  provenance:
+    method: key_term
+    module_id: m48705
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Unemployment Rates
+  definition: the percentage of adults who are in the labor force and thus seeking jobs, but who do not
+    have jobs
+  definition_source: economics
+  id: unemployment-rate
+  name: Unemployment Rate
+  provenance:
+    method: key_term
+    module_id: m48719
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: satisfaction, usefulness, or value one obtains from consuming goods and services
+  definition_source: economics
+  id: utility
+  name: Utility
+  provenance:
+    method: key_term
+    module_id: m48605
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: utility-maximizing
+  name: Utility-Maximizing
+  provenance:
+    method: key_term
+    module_id: m48702
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: variable
+  name: Variable
+  provenance:
+    method: key_term
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Variable Costs
+  definition: cost of production that increases with the quantity produced
+  definition_source: economics
+  id: variable-cost
+  name: Variable Cost
+  provenance:
+    method: key_term
+    module_id: m48625
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Wage
+  definition: null
+  definition_source: null
+  id: wages
+  name: Wages
+  provenance:
+    method: key_term
+    module_id: m48637
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the sum of the value of all assets, including money in bank accounts, financial investments,
+    a pension fund, and the value of a home
+  definition_source: economics
+  id: wealth
+  name: Wealth
+  provenance:
+    method: key_term
+    module_id: m48687
+    origin: builder
+  review_status: extracted

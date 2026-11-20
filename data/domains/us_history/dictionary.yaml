@@ -1,0 +1,2142 @@
+# Written by scripts/domain_tool.py draft (docs/DOMAINS.md). The command replaces the
+# entries with review_status: extracted and keeps the values of every other entry. It
+# rewrites the file with sorted keys: comments and formatting are not kept.
+schema_version: 1
+terms:
+- aliases: []
+  definition: a believer in the complete elimination of slavery
+  definition_source: us-history
+  id: abolitionist
+  name: Abolitionist
+  provenance:
+    method: key_term
+    module_id: m50075
+    origin: builder
+  review_status: extracted
+- aliases:
+  - African American
+  definition: null
+  definition_source: null
+  id: african-americans
+  name: African Americans
+  provenance:
+    method: keyword
+    module_id: m50071
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a militant Islamist group originally founded by Osama bin Laden
+  definition_source: us-history
+  id: al-qaeda
+  name: Al-Qaeda
+  provenance:
+    method: key_term
+    module_id: m50209
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the belief, strongly held by Herbert Hoover and others, that hard work and individual effort,
+    absent government interference, comprised the formula for success in the U.S.
+  definition_source: us-history
+  id: american-individualism
+  name: American Individualism
+  provenance:
+    method: key_term
+    module_id: m50163
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: american-revolution
+  name: American Revolution
+  provenance:
+    method: keyword
+    module_id: m50025
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: american-river
+  name: American River
+  provenance:
+    method: key_term
+    module_id: m50061
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a term meaning “before the war” and used to describe the decades before the American Civil
+    War began in 1861
+  definition_source: us-history
+  id: antebellum
+  name: Antebellum
+  provenance:
+    method: key_term
+    module_id: m50064
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the Union fighting force operating outside Washington, DC
+  definition_source: us-history
+  id: army-of-the-potomac
+  name: Army of the Potomac
+  provenance:
+    method: key_term
+    module_id: m50086
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: articles-of-confederation
+  name: Articles of Confederation
+  provenance:
+    method: key_term
+    module_id: m50035
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Artisans
+  definition: skilled, experienced worker who produces specialized goods by hand
+  definition_source: us-history
+  id: artisan
+  name: Artisan
+  provenance:
+    method: key_term
+    module_id: m50044
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: atlantic-world
+  name: Atlantic World
+  provenance:
+    method: keyword
+    module_id: m49967
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Bank Runs
+  definition: the withdrawal by a large number of individuals or investors of money from a bank due to
+    fears of the bank’s instability, with the ironic effect of increasing the bank’s vulnerability to
+    failure
+  definition_source: us-history
+  id: bank-run
+  name: Bank Run
+  provenance:
+    method: key_term
+    module_id: m50162
+    origin: builder
+  review_status: extracted
+- aliases:
+  - BELL
+  definition: null
+  definition_source: null
+  id: bell
+  name: Bell
+  provenance:
+    method: key_term
+    module_id: m50104
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the first ten amendments to the United States Constitution, which guarantee individual rights
+  definition_source: us-history
+  id: bill-of-rights
+  name: Bill of Rights
+  provenance:
+    method: key_term
+    module_id: m50038
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political ideology encouraging African Americans to create their own institutions and
+    develop their own economic resources independent of whites
+  definition_source: us-history
+  id: black-power
+  name: Black Power
+  provenance:
+    method: key_term
+    module_id: m50182
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a reference to the violent clashes in Kansas between Free-Soilers and slavery supporters
+  definition_source: us-history
+  id: bleeding-kansas
+  name: Bleeding Kansas
+  provenance:
+    method: key_term
+    module_id: m50080
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: boston-harbor
+  name: Boston Harbor
+  provenance:
+    method: key_term
+    module_id: m50026
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: boxer-rebellion
+  name: Boxer Rebellion
+  provenance:
+    method: key_term
+    module_id: m50133
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: british-empire
+  name: British Empire
+  provenance:
+    method: keyword
+    module_id: m50018
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the period between 1848 and 1849 when prospectors found large strikes of gold in California,
+    leading others to rush in and follow suit; this period led to a cycle of boom and bust through the
+    area, as gold was discovered, mined, and stripped
+  definition_source: us-history
+  id: california-gold-rush
+  name: California Gold Rush
+  provenance:
+    method: key_term
+    module_id: m50061
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a crop grown to be sold for profit instead of consumption by the farmer’s family
+  definition_source: us-history
+  id: cash-crop
+  name: Cash Crop
+  provenance:
+    method: key_term
+    module_id: m50064
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a system of servitude in which people are treated as personal property to be bought and
+    sold
+  definition_source: us-history
+  id: chattel-slavery
+  name: Chattel Slavery
+  provenance:
+    method: key_term
+    module_id: m49981
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the contrast to the spoils system, where political appointments were based on merit, not
+    favoritism
+  definition_source: us-history
+  id: civil-service
+  name: Civil Service
+  provenance:
+    method: key_term
+    module_id: m50121
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: civil-war
+  name: Civil War
+  provenance:
+    method: keyword
+    module_id: m50084
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: four acts (Administration of Justice Act, Massachusetts Government Act, Port Act, Quartering
+    Act) that Lord North passed to punish Massachusetts for destroying the tea and refusing to pay for
+    the damage
+  definition_source: us-history
+  id: coercive-acts
+  name: Coercive Acts
+  provenance:
+    method: key_term
+    module_id: m50019
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the prolonged period of tension between the United States and the Soviet Union, based on
+    ideological conflicts and competition for military, economic, social, and technological superiority,
+    and marked by surveillance and espionage, political assassinations, an arms race, attempts to secure
+    alliances with developing nations, and proxy wars
+  definition_source: us-history
+  id: cold-war
+  name: Cold War
+  provenance:
+    method: key_term
+    module_id: m50183
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the strategy of moving African Americans out of the United States, usually to Africa
+  definition_source: us-history
+  id: colonization
+  name: Colonization
+  provenance:
+    method: key_term
+    module_id: m50075
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the movement of plants, animals, and diseases across the Atlantic due to European exploration
+    of the Americas
+  definition_source: us-history
+  id: columbian-exchange
+  name: Columbian Exchange
+  provenance:
+    method: key_term
+    module_id: m49991
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: comanche
+  name: Comanche
+  provenance:
+    method: key_term
+    module_id: m50060
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: five separate laws passed by Congress in September 1850 to resolve issues stemming from
+    the Mexican Cession and the sectional crisis
+  definition_source: us-history
+  id: compromise-of-1850
+  name: Compromise of 1850
+  provenance:
+    method: key_term
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the agreement between Republicans and Democrats, after the contested election of 1876, in
+    which Rutherford B. Hayes was awarded the presidency in exchange for withdrawing the last of the federal
+    troops from the South
+  definition_source: us-history
+  id: compromise-of-1877
+  name: Compromise of 1877
+  provenance:
+    method: key_term
+    module_id: m50095
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the new nation formed by the seceding southern states, also known as the Confederate States
+    of America (CSA)
+  definition_source: us-history
+  id: confederacy
+  name: Confederacy
+  provenance:
+    method: key_term
+    module_id: m50085
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: congress
+  name: Congress
+  provenance:
+    method: keyword
+    module_id: m50020
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: constitution
+  name: Constitution
+  provenance:
+    method: keyword
+    module_id: m50035
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the U.S. policy that sought to limit the expansion of Communism abroad
+  definition_source: us-history
+  id: containment
+  name: Containment
+  provenance:
+    method: key_term
+    module_id: m50185
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: slaves who escaped to the Union army’s lines
+  definition_source: us-history
+  id: contrabands
+  name: Contrabands
+  provenance:
+    method: key_term
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Democrats who opposed Lincoln in the 1864 election
+  definition_source: us-history
+  id: copperheads
+  name: Copperheads
+  provenance:
+    method: key_term
+    module_id: m50088
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the term that Andrew Jackson’s supporters applied to John Quincy Adams’s 1824 election,
+    which had occurred through the machinations of Henry Clay in the U.S. House of Representatives
+  definition_source: us-history
+  id: corrupt-bargain
+  name: Corrupt Bargain
+  provenance:
+    method: key_term
+    module_id: m50050
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a device, patented by Eli Whitney in 1794, that separated the seeds from raw cotton quickly
+    and easily
+  definition_source: us-history
+  id: cotton-gin
+  name: Cotton Gin
+  provenance:
+    method: key_term
+    module_id: m50064
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a culture that develops in opposition to the dominant culture of a society
+  definition_source: us-history
+  id: counterculture
+  name: Counterculture
+  provenance:
+    method: key_term
+    module_id: m50192
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a series of military expeditions made by Christian Europeans to recover the Holy Land from
+    the Muslims in the eleventh, twelfth, and thirteenth centuries
+  definition_source: us-history
+  id: crusades
+  name: Crusades
+  provenance:
+    method: key_term
+    module_id: m49968
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: well-born British colonial women who led a non-importation movement against British goods
+  definition_source: us-history
+  id: daughters-of-liberty
+  name: Daughters of Liberty
+  provenance:
+    method: key_term
+    module_id: m50023
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a system of government in which the majority rules
+  definition_source: us-history
+  id: democracy
+  name: Democracy
+  provenance:
+    method: key_term
+    module_id: m50031
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: democratic-party
+  name: Democratic Party
+  provenance:
+    method: keyword
+    module_id: m50051
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: advocates of limited government who were troubled by the expansive domestic policies of
+    Washington’s administration and opposed the Federalists
+  definition_source: us-history
+  id: democratic-republicans
+  name: Democratic-Republicans
+  provenance:
+    method: key_term
+    module_id: m50038
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the removal of laws and policies requiring the separation of different racial or ethnic
+    groups
+  definition_source: us-history
+  id: desegregation
+  name: Desegregation
+  provenance:
+    method: key_term
+    module_id: m50189
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a tax that consumers pay directly, rather than through merchants’ higher prices
+  definition_source: us-history
+  id: direct-tax
+  name: Direct Tax
+  provenance:
+    method: key_term
+    module_id: m50023
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Taft’s foreign policy, which involved using American economic power to push for favorable
+    foreign policies
+  definition_source: us-history
+  id: dollar-diplomacy
+  name: Dollar Diplomacy
+  provenance:
+    method: key_term
+    module_id: m50132
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the trading of slaves within the borders of the United States
+  definition_source: us-history
+  id: domestic-slave-trade
+  name: Domestic Slave Trade
+  provenance:
+    method: key_term
+    module_id: m50064
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the area in the middle of the country that had been badly overfarmed in the 1920s and suffered
+    from a terrible drought that coincided with the Great Depression; the name came from the “black blizzard”
+    of topsoil and dust that blew through the area
+  definition_source: us-history
+  id: dust-bowl
+  name: Dust Bowl
+  provenance:
+    method: key_term
+    module_id: m50164
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: edison
+  name: Edison
+  provenance:
+    method: key_term
+    module_id: m50104
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the mechanism by which electors, based on the number of representatives from each state,
+    choose the president
+  definition_source: us-history
+  id: electoral-college
+  name: Electoral College
+  provenance:
+    method: key_term
+    module_id: m50036
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: signed on January 1, 1863, the document with which President Lincoln transformed the Civil
+    War into a struggle to end slavery
+  definition_source: us-history
+  id: emancipation-proclamation
+  name: Emancipation Proclamation
+  provenance:
+    method: key_term
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: legal rights to native labor as granted by the Spanish crown
+  definition_source: us-history
+  id: encomienda
+  name: Encomienda
+  provenance:
+    method: key_term
+    module_id: m49992
+    origin: builder
+  review_status: extracted
+- aliases:
+  - ENGLAND
+  definition: null
+  definition_source: null
+  id: england
+  name: England
+  provenance:
+    method: keyword
+    module_id: m49995
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an eighteenth-century intellectual and cultural movement that emphasized reason and science
+    over superstition, religion, and tradition
+  definition_source: us-history
+  id: enlightenment
+  name: Enlightenment
+  provenance:
+    method: key_term
+    module_id: m50015
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a canal that connected the Hudson River to Lake Erie and markets in the West
+  definition_source: us-history
+  id: erie-canal
+  name: Erie Canal
+  provenance:
+    method: key_term
+    module_id: m50047
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: europe
+  name: Europe
+  provenance:
+    method: keyword
+    module_id: m49968
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: President Harry Truman’s program of economic and social reform
+  definition_source: us-history
+  id: fair-deal
+  name: Fair Deal
+  provenance:
+    method: key_term
+    module_id: m50184
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political ideology that places a heightened focus on national unity, through dictatorial
+    rule, and militarism
+  definition_source: us-history
+  id: fascism
+  name: Fascism
+  provenance:
+    method: key_term
+    module_id: m50172
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: federal-government
+  name: Federal Government
+  provenance:
+    method: keyword
+    module_id: m50038
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Federalist
+  definition: those who supported the 1787 Constitution and a strong central government; these advocates
+    of the new national government formed the ruling political party in the 1790s
+  definition_source: us-history
+  id: federalists
+  name: Federalists
+  provenance:
+    method: key_term
+    module_id: m50036
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a person who engages in an unofficial military operation intended to seize land from foreign
+    countries or foment revolution there
+  definition_source: us-history
+  id: filibuster
+  name: Filibuster
+  provenance:
+    method: key_term
+    module_id: m50057
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a young, modern woman who embraced the new morality and fashions of the Jazz Age
+  definition_source: us-history
+  id: flapper
+  name: Flapper
+  provenance:
+    method: key_term
+    module_id: m50152
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a fort in the harbor of Charleston, South Carolina, where the Union garrison came under
+    siege by Confederate forces in an attack on April 12, 1861, beginning the Civil War
+  definition_source: us-history
+  id: fort-sumter
+  name: Fort Sumter
+  provenance:
+    method: key_term
+    module_id: m50085
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political party that sought to exclude slavery from the western territories, leaving these
+    areas open for settlement by white farmers and ensuring that white laborers would not have to compete
+    with slaves
+  definition_source: us-history
+  id: free-soil-party
+  name: Free-Soil Party
+  provenance:
+    method: key_term
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the Bureau of Refugees, Freedmen, and Abandoned Lands, which was created in 1865 to ease
+    blacks’ transition from slavery to freedom
+  definition_source: us-history
+  id: freedmens-bureau
+  name: Freedmen’s Bureau
+  provenance:
+    method: key_term
+    module_id: m50092
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: french
+  name: French
+  provenance:
+    method: keyword
+    module_id: m50006
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the last eighteenth-century imperial struggle between Great Britain and France, leading
+    to a decisive British victory; this war lasted from 1754 to 1763 and was also called the Seven Years’
+    War
+  definition_source: us-history
+  id: french-and-indian-war
+  name: French and Indian War
+  provenance:
+    method: key_term
+    module_id: m50007
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a program that gave substantial benefits to those who served in World War II
+  definition_source: us-history
+  id: gi-bill
+  name: GI Bill
+  provenance:
+    method: key_term
+    module_id: m50184
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the period in American history during which materialism, a quest for personal gain, and
+    corruption dominated both politics and society
+  definition_source: us-history
+  id: gilded-age
+  name: Gilded Age
+  provenance:
+    method: key_term
+    module_id: m50121
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: globalization
+  name: Globalization
+  provenance:
+    method: key_term
+    module_id: m49994
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the overthrow of James II in 1688
+  definition_source: us-history
+  id: glorious-revolution
+  name: Glorious Revolution
+  provenance:
+    method: key_term
+    module_id: m50018
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the financial kickback provided to city bosses in exchange for political favors
+  definition_source: us-history
+  id: graft
+  name: Graft
+  provenance:
+    method: key_term
+    module_id: m50114
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: great-britain
+  name: Great Britain
+  provenance:
+    method: keyword
+    module_id: m50018
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: great-depression
+  name: Great Depression
+  provenance:
+    method: keyword
+    module_id: m50161
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the name for the large wave of African Americans who left the South after the Civil War,
+    mostly moving to cities in the Northeast and Upper Midwest
+  definition_source: us-history
+  id: great-migration
+  name: Great Migration
+  provenance:
+    method: key_term
+    module_id: m50108
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the economic recession that began in 2008, following the collapse of the housing boom, and
+    was driven by risky and misleading subprime mortgages and a deregulated bond market
+  definition_source: us-history
+  id: great-recession
+  name: Great Recession
+  provenance:
+    method: key_term
+    module_id: m50210
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Lyndon Johnson’s plan to eliminate poverty and racial injustice in the United States and
+    to improve the lives of all Americans
+  definition_source: us-history
+  id: great-society
+  name: Great Society
+  provenance:
+    method: key_term
+    module_id: m50178
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the right of those arrested to be brought before a judge or court to determine whether there
+    is cause to hold the prisoner
+  definition_source: us-history
+  id: habeas-corpus
+  name: Habeas Corpus
+  provenance:
+    method: key_term
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: hippies
+  name: Hippies
+  provenance:
+    method: key_term
+    module_id: m50192
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the island in the Caribbean, present-day Haiti and Dominican Republic, where Columbus first
+    landed and established a Spanish colony
+  definition_source: us-history
+  id: hispaniola
+  name: Hispaniola
+  provenance:
+    method: key_term
+    module_id: m49994
+    origin: builder
+  review_status: extracted
+- aliases:
+  - HOLLYWOOD
+  definition: a small town north of Los Angeles, California, whose reliable sunshine and cheaper production
+    costs attracted filmmakers and producers starting in the 1910s; by the 1920s, Hollywood was the center
+    of American movie production with five movie studios dominating the industry
+  definition_source: us-history
+  id: hollywood
+  name: Hollywood
+  provenance:
+    method: key_term
+    module_id: m50149
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: homestead-act
+  name: Homestead Act
+  provenance:
+    method: key_term
+    module_id: m50098
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: hoover
+  name: Hoover
+  provenance:
+    method: key_term
+    module_id: m50153
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: political movements or actions intended to further the interests of a particular group membership,
+    based on culture, race, ethnicity, religion, sex, gender, or sexual orientation
+  definition_source: us-history
+  id: identity-politics
+  name: Identity Politics
+  provenance:
+    method: key_term
+    module_id: m50191
+    origin: builder
+  review_status: extracted
+- aliases:
+  - INCA
+  definition: null
+  definition_source: null
+  id: inca
+  name: Inca
+  provenance:
+    method: key_term
+    module_id: m49986
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: indian-removal-act
+  name: Indian Removal Act
+  provenance:
+    method: key_term
+    module_id: m50053
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Indian
+  definition: null
+  definition_source: null
+  id: indians
+  name: Indians
+  provenance:
+    method: keyword
+    module_id: m49992
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a proposed law, or initiative, placed on the ballot by public petition
+  definition_source: us-history
+  id: initiative
+  name: Initiative
+  provenance:
+    method: key_term
+    module_id: m50127
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the name American Patriots gave to the Coercive Acts and the Quebec Act
+  definition_source: us-history
+  id: intolerable-acts
+  name: Intolerable Acts
+  provenance:
+    method: key_term
+    module_id: m50022
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a term coined by Winston Churchill to refer to portions of Eastern Europe that the Soviet
+    Union had incorporated into its sphere of influence and that no longer were free to manage their own
+    affairs
+  definition_source: us-history
+  id: iron-curtain
+  name: Iron Curtain
+  provenance:
+    method: key_term
+    module_id: m50185
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: jim-crow
+  name: Jim Crow
+  provenance:
+    method: key_term
+    module_id: m50092
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: johnson
+  name: Johnson
+  provenance:
+    method: keyword
+    module_id: m50091
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a white vigilante organization that engaged in terroristic violence with the aim of stopping
+    Reconstruction
+  definition_source: us-history
+  id: ku-klux-klan
+  name: Ku Klux Klan
+  provenance:
+    method: key_term
+    module_id: m50095
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Woodrow Wilson’s idea for a group of countries that would promote a new world order and
+    territorial integrity through open discussions, rather than intimidation and war
+  definition_source: us-history
+  id: league-of-nations
+  name: League of Nations
+  provenance:
+    method: key_term
+    module_id: m50146
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political party formed in 1840 by those who believed political measures were the best
+    means by which abolition could be accomplished
+  definition_source: us-history
+  id: liberty-party
+  name: Liberty Party
+  provenance:
+    method: key_term
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: lincoln
+  name: Lincoln
+  provenance:
+    method: keyword
+    module_id: m50081
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the U.S. purchase of the large territory of Louisiana from France in 1803
+  definition_source: us-history
+  id: louisiana-purchase
+  name: Louisiana Purchase
+  provenance:
+    method: key_term
+    module_id: m50041
+    origin: builder
+  review_status: extracted
+- aliases:
+  - LOYALISTS
+  - Loyalists
+  definition: colonists in America who were loyal to Great Britain
+  definition_source: us-history
+  id: loyalist
+  name: Loyalist
+  provenance:
+    method: key_term
+    module_id: m50019
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the process by which citizens of a city used their local ward alderman to work the “machine”
+    of local politics to meet local needs within a neighborhood
+  definition_source: us-history
+  id: machine-politics
+  name: Machine Politics
+  provenance:
+    method: key_term
+    module_id: m50114
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a fundamental principle of democracy, providing that the majority should have the power
+    to make decisions binding upon the whole
+  definition_source: us-history
+  id: majority-rule
+  name: Majority Rule
+  provenance:
+    method: key_term
+    module_id: m50031
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the code name given to the research project that developed the atomic bomb
+  definition_source: us-history
+  id: manhattan-project
+  name: Manhattan Project
+  provenance:
+    method: key_term
+    module_id: m50175
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the phrase, coined by journalist John O’Sullivan, which came to stand for the idea that
+    white Americans had a calling and a duty to seize and settle the American West with Protestant democratic
+    values
+  definition_source: us-history
+  id: manifest-destiny
+  name: Manifest Destiny
+  provenance:
+    method: key_term
+    module_id: m50098
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Manumissions
+  definition: the freeing of a slave by his or her owner
+  definition_source: us-history
+  id: manumission
+  name: Manumission
+  provenance:
+    method: key_term
+    module_id: m50034
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a defense strategy, sometimes called “mutually assured destruction” or MAD, adopted by Eisenhower
+    that called for launching a large-scale nuclear attack on the Soviet Union in response to a first
+    Soviet strike at the United States
+  definition_source: us-history
+  id: massive-retaliation
+  name: Massive Retaliation
+  provenance:
+    method: key_term
+    module_id: m50186
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: equipment and supplies used by the military
+  definition_source: us-history
+  id: materiel
+  name: Materiel
+  provenance:
+    method: key_term
+    module_id: m50172
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the lands west of the Rio Grande ceded to the United States by Mexico in 1848, including
+    California, Arizona, New Mexico, Nevada, Utah, and parts of Wyoming and Colorado
+  definition_source: us-history
+  id: mexican-cession
+  name: Mexican Cession
+  provenance:
+    method: key_term
+    module_id: m50061
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: mexico
+  name: Mexico
+  provenance:
+    method: keyword
+    module_id: m49986
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: middle-class
+  name: Middle Class
+  provenance:
+    method: key_term
+    module_id: m50048
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the perilous, often deadly transatlantic crossing of slave ships from the African coast
+    to the New World
+  definition_source: us-history
+  id: middle-passage
+  name: Middle Passage
+  provenance:
+    method: key_term
+    module_id: m49999
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: missionaries
+  name: Missionaries
+  provenance:
+    method: key_term
+    module_id: m49998
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an agreement reached in Congress in 1820 that allowed Missouri to enter the Union as a slave
+    state, brought Maine into the Union as a free state, and prohibited slavery north of 36° 30' latitude
+  definition_source: us-history
+  id: missouri-compromise
+  name: Missouri Compromise
+  provenance:
+    method: key_term
+    module_id: m50059
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a form of government with a monarch at its head
+  definition_source: us-history
+  id: monarchy
+  name: Monarchy
+  provenance:
+    method: key_term
+    module_id: m50031
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the ownership or control of all enterprises comprising an entire industry
+  definition_source: us-history
+  id: monopoly
+  name: Monopoly
+  provenance:
+    method: key_term
+    module_id: m50105
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: moral-majority
+  name: Moral Majority
+  provenance:
+    method: key_term
+    module_id: m50201
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: investigative journalists and authors who wrote about social ills, from child labor to the
+    corrupt business practices of big businesses, and urged the public to take action
+  definition_source: us-history
+  id: muckrakers
+  name: Muckrakers
+  provenance:
+    method: key_term
+    module_id: m50126
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Muslims
+  definition: null
+  definition_source: null
+  id: muslim
+  name: Muslim
+  provenance:
+    method: key_term
+    module_id: m49968
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the National Association for the Advancement of Colored People, a civil rights organization
+    formed in 1909 by an interracial coalition including W. E. B. Du Bois and Florence Kelley
+  definition_source: us-history
+  id: naacp
+  name: NAACP
+  provenance:
+    method: key_term
+    module_id: m50128
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: national-bank
+  name: National Bank
+  provenance:
+    method: key_term
+    module_id: m50038
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a series of English mercantilist laws enacted between 1651 and 1696 in order to control
+    trade with the colonies
+  definition_source: us-history
+  id: navigation-acts
+  name: Navigation Acts
+  provenance:
+    method: key_term
+    module_id: m50016
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Woodrow Wilson’s policy of maintaining commercial ties with all belligerents and insisting
+    on open markets throughout Europe during World War I
+  definition_source: us-history
+  id: neutrality
+  name: Neutrality
+  provenance:
+    method: key_term
+    module_id: m50142
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: new-deal
+  name: New Deal
+  provenance:
+    method: key_term
+    module_id: m50167
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Woodrow Wilson’s campaign platform for the 1912 election that called for a small federal
+    government to protect public interests from the evils associated with bad businesses
+  definition_source: us-history
+  id: new-freedom
+  name: New Freedom
+  provenance:
+    method: key_term
+    module_id: m50129
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Nonconformists
+  definition: Protestants who did not conform to the doctrines or practices of the Church of England
+  definition_source: us-history
+  id: nonconformist
+  name: Nonconformist
+  provenance:
+    method: key_term
+    module_id: m50014
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: north-america
+  name: North America
+  provenance:
+    method: keyword
+    module_id: m49986
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the theory, advocated in response to the Tariff of 1828, that states could void federal
+    law at their discretion
+  definition_source: us-history
+  id: nullification
+  name: Nullification
+  provenance:
+    method: key_term
+    module_id: m50052
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: panic-of-1819
+  name: Panic of 1819
+  provenance:
+    method: key_term
+    module_id: m50060
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: panic-of-1873
+  name: Panic of 1873
+  provenance:
+    method: key_term
+    module_id: m50122
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the premise that southern white slaveholders acted in the best interests of their slaves
+  definition_source: us-history
+  id: paternalism
+  name: Paternalism
+  provenance:
+    method: key_term
+    module_id: m50065
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Separatists, led by William Bradford, who established the first English settlement in New
+    England
+  definition_source: us-history
+  id: pilgrims
+  name: Pilgrims
+  provenance:
+    method: key_term
+    module_id: m49990
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Political Parties
+  definition: null
+  definition_source: null
+  id: political-party
+  name: Political Party
+  provenance:
+    method: keyword
+    module_id: m50037
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the practice of allowing the citizens of a state or territory to decide issues based on
+    the principle of majority rule
+  definition_source: us-history
+  id: popular-sovereignty
+  name: Popular Sovereignty
+  provenance:
+    method: key_term
+    module_id: m50026
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political party formed in 1890 that sought to represent the rights of primarily farmers
+    but eventually all workers in regional and federal elections
+  definition_source: us-history
+  id: populist-party
+  name: Populist Party
+  provenance:
+    method: key_term
+    module_id: m50120
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a doctrine supported by philosopher William James, which held that Americans needed to experiment
+    and find the truth behind underlying institutions, religions, and ideas in American life, rather than
+    accepting them on faith
+  definition_source: us-history
+  id: pragmatism
+  name: Pragmatism
+  provenance:
+    method: key_term
+    module_id: m50119
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: sea captains to whom the British government had given permission to raid Spanish ships at
+    will
+  definition_source: us-history
+  id: privateers
+  name: Privateers
+  provenance:
+    method: key_term
+    module_id: m49990
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: progressive-era
+  name: Progressive Era
+  provenance:
+    method: keyword
+    module_id: m50125
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political party started by Roosevelt and other Progressive Republicans who were unhappy
+    with Taft and wanted Roosevelt to run for a nonconsecutive third term in 1912
+  definition_source: us-history
+  id: progressive-party
+  name: Progressive Party
+  provenance:
+    method: key_term
+    module_id: m50127
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a broad movement between 1896 and 1916 led by white, middle-class professionals for legal,
+    scientific, managerial, and institutional solutions to the ills of urbanization, industrialization,
+    and corruption
+  definition_source: us-history
+  id: progressivism
+  name: Progressivism
+  provenance:
+    method: key_term
+    module_id: m50125
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the campaign for a ban on the sale and manufacturing of alcoholic beverages, which came
+    to fruition during the war, bolstered by anti-German sentiment and a call to preserve resources for
+    the war effort
+  definition_source: us-history
+  id: prohibition
+  name: Prohibition
+  provenance:
+    method: key_term
+    module_id: m50144
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the schism in Catholicism that began with Martin Luther and John Calvin in the early sixteenth
+    century
+  definition_source: us-history
+  id: protestant-reformation
+  name: Protestant Reformation
+  provenance:
+    method: key_term
+    module_id: m49995
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Puritan
+  definition: a group of religious reformers in the sixteenth and seventeenth centuries who wanted to
+    “purify” the Church of England by ridding it of practices associated with the Catholic Church and
+    advocating greater purity of doctrine and worship
+  definition_source: us-history
+  id: puritans
+  name: Puritans
+  provenance:
+    method: key_term
+    module_id: m49995
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: quartering-act
+  name: Quartering Act
+  provenance:
+    method: key_term
+    module_id: m50023
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: northern Republicans who contested Lincoln’s treatment of Confederate states and proposed
+    harsher punishments
+  definition_source: us-history
+  id: radical-republicans
+  name: Radical Republicans
+  provenance:
+    method: key_term
+    module_id: m50091
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: to remove a public official from office by virtue of a petition and vote process
+  definition_source: us-history
+  id: recall
+  name: Recall
+  provenance:
+    method: key_term
+    module_id: m50127
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Spain’s nearly eight-hundred-year holy war against Islam, which ended in 1492
+  definition_source: us-history
+  id: reconquista
+  name: Reconquista
+  provenance:
+    method: key_term
+    module_id: m49968
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the twelve-year period after the Civil War in which the rebel Southern states were integrated
+    back into the Union
+  definition_source: us-history
+  id: reconstruction
+  name: Reconstruction
+  provenance:
+    method: key_term
+    module_id: m50090
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the term used to describe the fear that Americans felt about the possibility of a Bolshevik
+    revolution in the United States; fear over Communist infiltrators led Americans to restrict and discriminate
+    against any forms of radical dissent, whether Communist or not
+  definition_source: us-history
+  id: red-scare
+  name: Red Scare
+  provenance:
+    method: key_term
+    module_id: m50147
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a process that allows voters to counteract legislation by putting an existing law on the
+    ballot for voters to either affirm or reject
+  definition_source: us-history
+  id: referendum
+  name: Referendum
+  provenance:
+    method: key_term
+    module_id: m50127
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an antislavery political party formed in 1854 in response to Stephen Douglas’s Kansas-Nebraska
+    Act
+  definition_source: us-history
+  id: republican-party
+  name: Republican Party
+  provenance:
+    method: key_term
+    module_id: m50077
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political philosophy that holds that states should be governed by representatives, not
+    a monarch; as a social philosophy, republicanism required civic virtue of its citizens
+  definition_source: us-history
+  id: republicanism
+  name: Republicanism
+  provenance:
+    method: key_term
+    module_id: m50026
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the colonies King Charles II established or supported during the Restoration (the Carolinas,
+    New York, New Jersey, and Pennsylvania)
+  definition_source: us-history
+  id: restoration-colonies
+  name: Restoration Colonies
+  provenance:
+    method: key_term
+    module_id: m50018
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the campaign promise made by Warren Harding in the presidential election of 1920
+  definition_source: us-history
+  id: return-to-normalcy
+  name: Return to Normalcy
+  provenance:
+    method: key_term
+    module_id: m50153
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Robber Barons
+  definition: a negative term for the big businessmen who made their fortunes in the massive railroad
+    boom of the late nineteenth century
+  definition_source: us-history
+  id: robber-baron
+  name: Robber Baron
+  provenance:
+    method: key_term
+    module_id: m50105
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: roosevelt
+  name: Roosevelt
+  provenance:
+    method: keyword
+    module_id: m50129
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a statement by Theodore Roosevelt that the United States would use military force to act
+    as an international police power and correct any chronic wrongdoing by any Latin American nation threatening
+    the stability of the region
+  definition_source: us-history
+  id: roosevelt-corollary
+  name: Roosevelt Corollary
+  provenance:
+    method: key_term
+    module_id: m50139
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: mechanical engineer Fredrick Taylor’s management style, also called “stop-watch management,”
+    which divided manufacturing tasks into short, repetitive segments and encouraged factory owners to
+    seek efficiency and profitability over any benefits of personal interaction
+  definition_source: us-history
+  id: scientific-management
+  name: Scientific Management
+  provenance:
+    method: key_term
+    module_id: m50106
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a revival of evangelical Protestantism in the early nineteenth century
+  definition_source: us-history
+  id: second-great-awakening
+  name: Second Great Awakening
+  provenance:
+    method: key_term
+    module_id: m50071
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a faction of Puritans who advocated complete separation from the Church of England
+  definition_source: us-history
+  id: separatists
+  name: Separatists
+  provenance:
+    method: key_term
+    module_id: m49990
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an early progressive reform movement, largely spearheaded by women, which sought to offer
+    services such as childcare and free healthcare to help the working poor
+  definition_source: us-history
+  id: settlement-house-movement
+  name: Settlement House Movement
+  provenance:
+    method: key_term
+    module_id: m50109
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a term northerners used to describe the disproportionate influence that they felt elite
+    southern slaveholders wielded in both domestic and international affairs
+  definition_source: us-history
+  id: slave-power
+  name: Slave Power
+  provenance:
+    method: key_term
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Slave State
+  definition: null
+  definition_source: null
+  id: slave-states
+  name: Slave States
+  provenance:
+    method: keyword
+    module_id: m50059
+    origin: builder
+  review_status: extracted
+- aliases:
+  - SLAVERY
+  definition: null
+  definition_source: null
+  id: slavery
+  name: Slavery
+  provenance:
+    method: key_term
+    module_id: m49981
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a disease that Europeans accidentally brought to the New World, killing millions of Indians,
+    who had no immunity to the disease
+  definition_source: us-history
+  id: smallpox
+  name: Smallpox
+  provenance:
+    method: key_term
+    module_id: m49992
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: Herbert Spencer’s theory, based upon Charles Darwin’s scientific theory, which held that
+    society developed much like plant or animal life through a process of evolution in which the most
+    fit and capable enjoyed the greatest material and social success
+  definition_source: us-history
+  id: social-darwinism
+  name: Social Darwinism
+  provenance:
+    method: key_term
+    module_id: m50105
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a series of programs designed to help the population’s most vulnerable—the unemployed, those
+    over age sixty-five, unwed mothers, and the disabled—through various pension, insurance, and aid programs
+  definition_source: us-history
+  id: social-security
+  name: Social Security
+  provenance:
+    method: key_term
+    module_id: m50169
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: artisans, shopkeepers, and small-time merchants who opposed the Stamp Act and considered
+    themselves British patriots
+  definition_source: us-history
+  id: sons-of-liberty
+  name: Sons of Liberty
+  provenance:
+    method: key_term
+    module_id: m50023
+    origin: builder
+  review_status: extracted
+- aliases:
+  - SOUTH
+  definition: null
+  definition_source: null
+  id: south
+  name: South
+  provenance:
+    method: keyword
+    module_id: m49986
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: south-carolina
+  name: South Carolina
+  provenance:
+    method: keyword
+    module_id: m50016
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political strategy that called for appealing to southern whites by resisting calls for
+    greater advancements in civil rights
+  definition_source: us-history
+  id: southern-strategy
+  name: Southern Strategy
+  provenance:
+    method: key_term
+    module_id: m50028
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: soviet-union
+  name: Soviet Union
+  provenance:
+    method: keyword
+    module_id: m50172
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: spain
+  name: Spain
+  provenance:
+    method: keyword
+    module_id: m49968
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: spanish-american-war
+  name: Spanish-American War
+  provenance:
+    method: key_term
+    module_id: m50129
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: “hard” money, usually in the form of gold and silver coins
+  definition_source: us-history
+  id: specie
+  name: Specie
+  provenance:
+    method: key_term
+    module_id: m50045
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the practice of investing in risky financial opportunities in the hopes of a fast payout
+    due to market fluctuations
+  definition_source: us-history
+  id: speculation
+  name: Speculation
+  provenance:
+    method: key_term
+    module_id: m50162
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the political system of rewarding friends and supporters with political appointments
+  definition_source: us-history
+  id: spoils-system
+  name: Spoils System
+  provenance:
+    method: key_term
+    module_id: m50050
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: stamp-act
+  name: Stamp Act
+  provenance:
+    method: key_term
+    module_id: m50019
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the political belief that states possess authority beyond federal law, which is usually
+    seen as the supreme law of the land, and thus can act in opposition to federal law
+  definition_source: us-history
+  id: states-rights
+  name: States Rights
+  provenance:
+    method: key_term
+    module_id: m50189
+    origin: builder
+  review_status: extracted
+- aliases:
+  - SNCC
+  definition: null
+  definition_source: null
+  id: student-nonviolent-coordinating-committee
+  name: Student Nonviolent Coordinating Committee
+  provenance:
+    method: key_term
+    module_id: m50182
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: one of the primary crops of the Americas, which required a tremendous amount of labor to
+    cultivate
+  definition_source: us-history
+  id: sugarcane
+  name: Sugarcane
+  provenance:
+    method: key_term
+    module_id: m49992
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: susquehannock
+  name: Susquehannock
+  provenance:
+    method: key_term
+    module_id: m49996
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political machine in New York, run by machine boss William Tweed with assistance from
+    George Washington Plunkitt
+  definition_source: us-history
+  id: tammany-hall
+  name: Tammany Hall
+  provenance:
+    method: key_term
+    module_id: m50114
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a conservative movement focused primarily on limiting government spending and the size of
+    the federal government
+  definition_source: us-history
+  id: tea-party
+  name: Tea Party
+  provenance:
+    method: key_term
+    module_id: m50213
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a social movement encouraging moderation or self-restraint in the consumption of alcoholic
+    beverages
+  definition_source: us-history
+  id: temperance
+  name: Temperance
+  provenance:
+    method: key_term
+    module_id: m50074
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a period during the French Revolution characterized by extreme violence and the execution
+    of numerous enemies of the revolutionary government, from 1793 through 1794
+  definition_source: us-history
+  id: terror
+  name: Terror
+  provenance:
+    method: key_term
+    module_id: m50039
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a state of war in which the government makes no distinction between military and civilian
+    targets, and mobilizes all resources, extending its reach into all areas of citizens’ lives
+  definition_source: us-history
+  id: total-war
+  name: Total War
+  provenance:
+    method: key_term
+    module_id: m50087
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: treaty-of-paris
+  name: Treaty of Paris
+  provenance:
+    method: key_term
+    module_id: m50007
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a legal arrangement where a small group of trustees have legal ownership of a business that
+    they operate for the benefit of other investors
+  definition_source: us-history
+  id: trust
+  name: Trust
+  provenance:
+    method: key_term
+    module_id: m50105
+    origin: builder
+  review_status: extracted
+- aliases:
+  - Unions
+  definition: null
+  definition_source: null
+  id: union
+  name: Union
+  provenance:
+    method: keyword
+    module_id: m50059
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: urbanization
+  name: Urbanization
+  provenance:
+    method: key_term
+    module_id: m50108
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: British royal courts without juries that settled disputes occurring at sea
+  definition_source: us-history
+  id: vice-admiralty-courts
+  name: Vice-Admiralty Courts
+  provenance:
+    method: key_term
+    module_id: m50021
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: washington
+  name: Washington
+  provenance:
+    method: keyword
+    module_id: m50027
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: west
+  name: West
+  provenance:
+    method: keyword
+    module_id: m49967
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a political party that emerged in the early 1830s to oppose what members saw as President
+    Andrew Jackson’s abuses of power
+  definition_source: us-history
+  id: whigs
+  name: Whigs
+  provenance:
+    method: key_term
+    module_id: m50052
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: white-house
+  name: White House
+  provenance:
+    method: keyword
+    module_id: m50049
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: an amendment to a revenue bill that would have barred slavery from all the territory acquired
+    from Mexico
+  definition_source: us-history
+  id: wilmot-proviso
+  name: Wilmot Proviso
+  provenance:
+    method: key_term
+    module_id: m50062
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: a program run by Harry Hopkins that provided jobs for over eight million Americans from
+    its inception to its closure in 1943
+  definition_source: us-history
+  id: works-progress-administration
+  name: Works Progress Administration
+  provenance:
+    method: key_term
+    module_id: m50166
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: world-war-i
+  name: World War I
+  provenance:
+    method: keyword
+    module_id: m50141
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: null
+  definition_source: null
+  id: world-war-ii
+  name: World War II
+  provenance:
+    method: keyword
+    module_id: m50144
+    origin: builder
+  review_status: extracted
+- aliases: []
+  definition: the Virginia port where British General Cornwallis surrendered to American forces
+  definition_source: us-history
+  id: yorktown
+  name: Yorktown
+  provenance:
+    method: key_term
+    module_id: m50028
+    origin: builder
+  review_status: extracted

@@ -48,6 +48,9 @@ OpenStax material included in this repository
     the mirror listed above.
   * data/processed/ holds sections normalized to JSON Lines and knowledge
     graphs extracted from US History and Economics.
+  * data/domains/ holds term dictionaries drafted from US History and
+    Economics: concept names, aliases and glossary definitions taken from
+    the books.
 
 Changes made to the material: the text was converted to Markdown and JSON,
 split into sections and retrieval chunks, embedded for vector search, and used
