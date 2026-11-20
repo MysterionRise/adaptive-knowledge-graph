@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "adaptive-knowledge-graph"
-version = "0.3.0"
+version = "0.4.0"
 description = "Local-first adaptive learning with knowledge graphs, hybrid retrieval and local LLMs"
 authors = ["Konstantin Perikov"]
 readme = "README.md"

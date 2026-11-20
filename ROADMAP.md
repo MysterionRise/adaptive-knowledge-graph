@@ -28,7 +28,7 @@ playbook.
 
 ## Done
 
-- The golden evaluation set covers 53 questions across US History and
+- The golden evaluation set covers 57 questions across US History and
   Economics, including unsupported-claim and prompt-injection cases.
 - The adversarial (tribunal) tests run as their own suite (`-m tribunal`,
   `make test-tribunal`) and CI job, separate from the regular tests.
@@ -54,29 +54,45 @@ playbook.
   the first valid evaluation run on golden set v2 reported in the README,
   containers that report their version, and the tribunal, E2E, link-check and
   shellcheck jobs promoted to required checks.
-
-## Now: v0.4.0 (November 2026)
-
-Wave W2, tracked in
-[#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164).
-
-- **v0.4.0, tagged by 22 November:** golden set v3 with strata, a
-  rehearsal/final split and a frozen protocol
+- **v0.4.0, evidence and graph quality (November 2026,
+  [#164](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/164)):**
+  golden set v3 with strata, a rehearsal/final split and a frozen protocol
   ([#206](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/206));
-  torch 2.13 and the CUDA 13 image, gated on embedding parity
-  ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207));
-  the evidence-state index and the advisory evaluation-delta check
-  ([#208](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/208));
-  bootstrap intervals and a noise-floor rule
+  bootstrap intervals, a generated sentence for the primary endpoint and a
+  noise-floor rule
   ([#209](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/209));
-  the remaining dev-only frontend advisories re-justified
-  ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279));
-  the Cypher QA smoke test
-  ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
-  The two torch allowlist entries are resolved before 31 December 2026; the
-  three frontend entries expire on 31 January 2027.
+  KG expansion that feeds the keyword channel only, with graph neighbours
+  shown as related concepts
+  ([#282](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/282));
+  concept names and aliases resolved at query time, without generic-word
+  matches
+  ([#212](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/212)),
+  and builder fixes
+  ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213)),
+  closing
+  [#158](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/158);
+  RELATED edges by association strength
+  ([#291](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/291));
+  a retrieval trace per request and KG attribution in evaluation reports
+  ([#216](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/216));
+  the two-label wording for learner-state behaviour and the counterfactual
+  and BKT property tests
+  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210));
+  tests that back the dev-only advisory allowlist
+  ([#254](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/254)),
+  and the `braces` entry removed after its advisory was withdrawn
+  ([#166](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/166));
+  `make release-check` with a tag-time gate in the Release workflow
+  ([#253](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/253));
+  a policy interface with decision records, with the difficulty rule as the
+  policy `band-v1`
+  ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306));
+  the minimum Python raised to 3.11.5 for the fixed `soupsieve` releases
+  ([#326](https://github.com/MysterionRise/adaptive-knowledge-graph/pull/326));
+  and the first final-split run under the protocol, reported in the README.
+  <!-- FILL (confirm after the release session, then delete this comment: the final-split run exists and the README table reports it; "November 2026" above is the month of the tag; and anything else that merged before the tag and belongs in this entry is named, for example #252) -->
 
-## Next: v0.5.0, meaning and lineage (December 2026)
+## Now: v0.5.0, meaning and lineage (December 2026)
 
 Waves W3 and W4, tracked in
 [#236](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/236).
@@ -84,12 +100,8 @@ Waves W3 and W4, tracked in
 - Versioned domain artifacts: dictionary, relationship map and source
   inventory with a validated loader and an idempotent overlay
   ([#211](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/211)).
-- Aliases and senses resolved at query time, no more generic-word matching
-  ([#212](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/212)),
-  and builder fixes
-  ([#213](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/213)),
-  closing
-  [#158](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/158).
+  Telling the senses of an ambiguous alias apart, which v0.4.0 leaves out,
+  builds on them.
 - Curated US History and Economics dictionaries, AI-drafted and
   steward-reviewed
   ([#214](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/214)).
@@ -97,14 +109,27 @@ Waves W3 and W4, tracked in
   and an origin per citation
   ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)),
   the one planned re-seed.
-- A request-scoped answer trace with KG-attributable accounting
-  ([#216](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/216)).
 - Positioning docs
-  ([#217](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/217)),
-  learner-state counterfactual tests
-  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210))
+  ([#217](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/217))
   and the review log with governance docs
   ([#218](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/218)).
+- The evidence-state index and the advisory evaluation-delta check
+  ([#208](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/208),
+  closing
+  [#156](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/156))
+  and the Cypher QA smoke test
+  ([#72](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/72)).
+- torch 2.13 and the CUDA 13 GPU image, gated on embedding parity
+  ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207)),
+  merged right before the re-seed.
+- Five advisory allowlist entries remain: two for torch in `osv-scanner.toml`
+  and three for dev-only frontend tooling in `frontend/osv-scanner.toml`. The
+  torch pair expires on 31 December 2026
+  ([#207](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/207)),
+  and deepmerge, glob and minimatch on 31 January 2027
+  ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
+  An entry is removed when its fix lands and is not extended without
+  re-checking the advisory.
 
 ## Next: v0.6.0, showcase domain and playbook (January 2027)
 
@@ -170,15 +195,16 @@ they may slip, and no domain tag waits for them.
 - **Today.** No behaviour passes the two tests for "adaptive": the
   difficulty band is only requested in the prompt, and the BKT mastery
   estimate is unfitted and client-reported.
-- **v0.5.0.** The counterfactual tests and the wording rule
-  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)).
-  The re-seed
-  ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215))
-  drops the textbook's review questions, which carry their answer keys, from
-  the retrieval chunks.
-- **v0.6.0.** A policy interface with decision records ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)), and a
-  seeded learner simulator built as a robust evaluation matrix, with a frozen
-  protocol and decision rule ([#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307)). It runs before the curated
+- **v0.4.0, done.** The counterfactual tests and the wording rule
+  ([#210](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/210)),
+  and a policy interface with decision records
+  ([#306](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/306)).
+- **v0.5.0.** A proposal for the re-seed
+  ([#215](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/215)):
+  keep the textbook's question sections, which carry their answer keys, out
+  of retrieval, by dropping them or by tagging and filtering.
+- **v0.6.0.** A seeded learner simulator built as a robust evaluation matrix,
+  with a frozen protocol and decision rule ([#307](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/307)). It runs before the curated
   prerequisite layer, so the cost of wrong edges is known when #223 starts.
 - **v0.7.0.** An attempt log with a server-set `assisted` flag
   ([#308](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/308)), next to server-side grading

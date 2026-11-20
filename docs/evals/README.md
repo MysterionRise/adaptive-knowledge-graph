@@ -4,11 +4,12 @@ This directory holds the latest KG-RAG evaluation report and, in
 [`history/`](history/), snapshots of earlier runs, used for regression
 tracking. The harness compares knowledge-graph-expanded retrieval with plain
 retrieval on the golden set in
-[`data/evals/golden_qa.yaml`](../../data/evals/golden_qa.yaml): 53 questions,
-27 for US History and 26 for Economics. Since version 3 every question has a
-stratum and belongs to the rehearsal or the final split; the
-[evaluation protocol](protocol.md) says how they were drawn, which split to
-use when, and the bar a release has to meet.
+[`data/evals/golden_qa.yaml`](../../data/evals/golden_qa.yaml): 57 questions,
+30 for US History and 27 for Economics. Since version 3 every question has a
+stratum. 53 of them belong to the rehearsal or the final split, and 4 newer
+ones are pending until the next version. The
+[evaluation protocol](protocol.md) says how the splits were drawn, which split
+to use when, and the bar a release has to meet.
 
 ## Running it
 
@@ -38,8 +39,9 @@ not a branch SHA, so squash merges cannot orphan them.
 
 The evaluator paces its requests to the `/api/v1/ask` rate limit
 (`RATE_LIMIT_ASK`, 10 per minute by default, so one request every 6.25
-seconds) and retries `429` responses. A full run of 106 requests therefore
-takes about 11 minutes. Useful options:
+seconds) and retries `429` responses. A run of all 57 cases is 114 requests
+and therefore takes about 12 minutes or longer; the final split alone is 58
+requests. Useful options:
 
 | Option | Effect |
 | --- | --- |
@@ -342,7 +344,7 @@ ingest, regenerate the processed data and re-check the golden set with:
 poetry run pytest backend/tests/test_citations.py
 ```
 
-Reports from before v0.4.0 matched titles and text previews as substrings and
+Reports from before v0.3.0 matched titles and text previews as substrings and
 used looser expected sources, so their citation metrics are not comparable
 with current ones.
 
@@ -352,10 +354,11 @@ is which.
 
 ## Reporting a comparison
 
-Each case is asked in both modes, so the case is the paired unit. With 49 cases
-that have expected sources, one citation flip moves the hit rate by two points,
-and a bare mean difference cannot carry a claim. The rule for the README table,
-the release notes and pull requests:
+Each case is asked in both modes, so the case is the paired unit. With 53 cases
+that have expected sources (49 in the split and 4 pending), one citation flip
+moves the hit rate by about two points, and by almost four on the final
+split's 27. A bare mean difference cannot carry a claim. The rule for the
+README table, the release notes and pull requests:
 
 - Quote per-arm rates with the win/tie/loss counts and the sign-test p-value,
   for this golden set. For example: "citation hit rate: KG 0.84, plain 0.80;
