@@ -69,8 +69,9 @@ langchain-core = ">=1.0,<2.0"
 langchain-neo4j = ">=0.10,<0.12"
 langchain-ollama = ">=1.0,<2.0"  # ChatOllama (LLM_MODE=local)
 langchain-openai = ">=1.0,<2.0"  # ChatOpenAI (LLM_MODE=remote/hybrid)
-# 1.22 needs the neo4j 6 driver; 1.21 brings pypdf >= 6.19 and tenacity >= 9.1.4
-neo4j-graphrag = ">=1.21,<1.22"
+# Cypher QA uses its schema helpers (backend/app/kg/cypher_qa.py). 1.22 caps fsspec below
+# 2026.9; 1.23 lifts that cap. Needs the neo4j 6 driver, pypdf >= 6.19 and tenacity >= 9.1.4
+neo4j-graphrag = ">=1.24,<1.25"
 langsmith = ">=0.8.18,<1.0"  # security floor for the langchain-core dependency
 
 # Numerics

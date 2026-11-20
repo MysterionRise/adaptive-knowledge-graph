@@ -198,6 +198,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with "Price", "Firm" and "Market".
   - **Build report.** It records the builder's parameters, the share of
     concepts without concept edges and the median degree.
+- `neo4j-graphrag` 1.24 (was 1.21), whose schema helpers Cypher QA uses
+  ([#252](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/252)).
+  It needs the `neo4j` 6 driver, which the lock already has. 1.24 rather than
+  1.22: 1.22 caps `fsspec` below 2026.9, which would have moved the locked
+  `fsspec` back from 2026.9.0 to 2026.7.0, and 1.23 lifts the cap. No other
+  locked version changes. Minor updates of `neo4j-graphrag` now come through
+  the weekly Dependabot group again.
 
 ### Fixed
 
