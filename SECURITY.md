@@ -112,11 +112,11 @@ If anyone other than you can reach the API, run it in production mode:
     not use (`torch.jit.script` and loading `.pt2` archives). The fixed
     releases switch the Linux wheels to CUDA 13, which is deferred to
     [#79](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/79).
-  - `deepmerge` 4.3.1, `glob` 10 and 13 and `minimatch` 3, 9 and 10, dev-only
-    dependencies of the frontend lint and test tooling (ESLint, jest,
-    tailwindcss) that are not in the production bundle. `deepmerge` has no
-    fixed release; `glob` and `minimatch` are fixed only in new majors the
-    tooling has not adopted
+  - `glob` 10 and 13, `minimatch` 3, 9 and 10 and `picomatch` 2 and 4,
+    dev-only dependencies of the frontend lint and test tooling (ESLint, jest,
+    tailwindcss) that are not in the production bundle. `glob` and `minimatch`
+    are fixed only in new majors the tooling has not adopted; `picomatch` has
+    no fixed release
     ([#279](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/279)).
 - **`NEXT_PUBLIC_API_KEY` is public.** Next.js compiles every `NEXT_PUBLIC_*`
   variable into the JavaScript bundle, so anyone who can load the frontend can
