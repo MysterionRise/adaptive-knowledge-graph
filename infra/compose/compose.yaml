@@ -107,7 +107,7 @@ services:
 
   # OpenSearch vector + BM25 search
   opensearch:
-    image: opensearchproject/opensearch:3.9.0
+    image: opensearchproject/opensearch:3.10.0
     container_name: ${COMPOSE_PROJECT_NAME:-adaptive-kg}-opensearch
     environment:
       cluster.name: opensearch-cluster
