@@ -3147,20 +3147,20 @@ pyarrow = ["pyarrow (>=6.0.0,<26.0.0)"]
 
 [[package]]
 name = "neo4j-graphrag"
-version = "1.21.0"
+version = "1.24.0"
 description = "Python package to allow easy integration to Neo4j's GraphRAG features"
 optional = false
 python-versions = "<3.15,>=3.10.0"
 groups = ["main"]
 files = [
-    {file = "neo4j_graphrag-1.21.0-py3-none-any.whl", hash = "sha256:d9a6befd9f44fa73ac2d52f168d8c61646f1a1c84275c552a920cbe1d6965b73"},
-    {file = "neo4j_graphrag-1.21.0.tar.gz", hash = "sha256:9479b5423b47224486f167152d7db2eef977a02fda60a81793659708ac4c87a4"},
+    {file = "neo4j_graphrag-1.24.0-py3-none-any.whl", hash = "sha256:4ccb3d9fef23051b4c1d0fba6c774e1ed98f7ead72798ad42ae2849224ebf96c"},
+    {file = "neo4j_graphrag-1.24.0.tar.gz", hash = "sha256:36171d77d477235b1109f4a01c43693be57718e68ff6d23523d16d74ebe9fb6e"},
 ]
 
 [package.dependencies]
-fsspec = ">=2024.12.0"
+fsspec = ">=2024.12.0,<2027.0.0"
 json-repair = ">=0.44.1,<1.0.0"
-neo4j = ">=5.28.4,<7.0.0"
+neo4j = ">=6.3.1,<7.0.0"
 numpy = [
     {version = ">=2.1.0,<3.0.0", markers = "python_version >= \"3.13\" and python_version < \"3.15\""},
     {version = ">=2.0.0,<3.0.0", markers = "python_version >= \"3.9\" and python_version < \"3.13\""},
@@ -3179,20 +3179,21 @@ types-pyyaml = ">=6.0.12.20260906,<7.0.0"
 anthropic = ["anthropic (>=0.77.0,<2.0.0)"]
 bedrock = ["boto3 (>=1.35.0,<2.0.0)"]
 cohere = ["cohere (>=5.9.0,<6.0.0)"]
-examples = ["langchain-huggingface (>=0.1.0,<2.0.0)", "langchain-openai (>=0.2.2,<2.0.0)", "python-dotenv (>=1.0.0,<2.0.0)", "requests (>=2.31.0,<3.0.0)"]
-experimental = ["langchain-text-splitters (>=0.3.0,<2.0.0)", "llama-index (>=0.14.24,<0.15.0)", "neo4j-viz (>=0.4.2,<0.5.0)", "pyarrow (>=20.0.0)"]
+examples = ["langchain-huggingface (>=0.1.0,<2.0.0)", "langchain-openai (>=0.2.2,<2.0.0)", "python-dotenv (>=1.0.0,<2.0.0)", "requests (>=2.31.0,<3.0.0)", "torch (>=2.5.0,<3.0.0)"]
+experimental = ["langchain-text-splitters (>=0.3.0,<2.0.0)", "llama-index (>=0.14.24,<0.15.0)", "neo4j-viz (>=0.7.0,<0.8.0)", "pyarrow (>=20.0.0)"]
 fuzzy-matching = ["rapidfuzz (>=3.12.2,<4.0.0)"]
 google = ["google-cloud-aiplatform (>=1.66.0,<2.0.0)"]
 google-genai = ["google-genai (>=1.62.0,<3.0.0)"]
-kg-creation-tools = ["neo4j-viz (>=0.4.2,<0.5.0)"]
+gpu = ["sentence-transformers (>=3.0.0,<7.0.0)", "torch (>=2.5.0,<3.0.0)"]
+kg-creation-tools = ["neo4j-viz (>=0.7.0,<0.8.0)"]
 litellm = ["litellm (>=1.101.0,<2.0.0)"]
 mistralai = ["mistralai (>=2.7.1,<3.0.0)"]
 nlp = ["spacy (==3.8.16) ; python_version < \"3.14\""]
-ollama = ["ollama (>=0.4.4,<0.5.0)"]
+ollama = ["ollama (>=0.6.3,<0.7.0)"]
 openai = ["openai (>=1.51.1,<4.0.0)"]
 pinecone = ["pinecone-client (>=4.1.0,<5.0.0)"]
 qdrant = ["qdrant-client (>=1.11.3,<2.0.0)"]
-sentence-transformers = ["sentence-transformers (>=3.0.0,<7.0.0)"]
+sentence-transformers = ["sentence-transformers (>=3.0.0,<7.0.0)", "torch (>=2.5.0,<3.0.0)"]
 weaviate = ["weaviate-client (>=4.6.1,<5.0.0)"]
 
 [[package]]
@@ -7169,4 +7170,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.5,<3.14"
-content-hash = "23ab00768d1b9c8950ba473a0ab5f70856843e545f6379308d08a42869025ae8"
+content-hash = "cfb2440ef00be005c3f2abe04cf27c7df890b91e537810aa05332e2b5cce48ee"
