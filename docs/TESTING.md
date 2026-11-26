@@ -18,7 +18,8 @@ Ollama or model downloads.
 | Security and rate limits | `test_auth.py`, `test_exceptions.py`, `test_privacy.py`, `test_rate_limit.py`, `test_api_rate_limits.py` |
 | Retrieval, embeddings and graph | `test_retriever.py`, `test_window_retriever.py`, `test_kg_expansion.py`, `test_reranker.py`, `test_embeddings.py`, `test_neo4j_adapter.py`, `test_cypher_qa.py`, `test_chunker.py` |
 | Knowledge-graph building and concept extraction | `test_kg_builder.py`, `test_kg_schema.py`, `test_concept_extractor.py` |
-| LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_student_counterfactual.py`, `test_student_bkt_properties.py`, `test_student_policy.py`, `test_recommendation_service.py` |
+| LLM, quizzes and learner model | `test_llm_client.py`, `test_quiz_generator.py`, `test_student_service.py`, `test_student_counterfactual.py`, `test_student_bkt_properties.py`, `test_student_estimator.py`, `test_student_policy.py`, `test_attempts.py`, `test_recommendation_service.py` |
+| Learner simulator | `test_simulation_worlds.py`, `test_simulation_dags.py`, `test_simulation_policies.py`, `test_simulation_metrics.py`, `test_simulation_protocol.py`, `test_simulation_runner.py` (the smoke test) |
 | Configuration and tooling | `test_settings.py`, `test_subjects.py`, `test_logging.py`, `test_docker.py`, `test_makefile.py`, `test_poetry.py`, `test_dx_scripts.py`, `test_release_check.py` |
 | Documentation wording ([adaptivity/README.md](adaptivity/README.md)) | `test_adaptivity_wording.py` |
 | Adversarial review | `test_tribunal_prosecution.py` |
@@ -90,6 +91,25 @@ test targets one charge, a weakness the review found.
   ([#73](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/73))
   and server-side quiz grading
   ([#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74)).
+
+### The simulator smoke test
+
+`test_simulation_runner.py` runs the learner simulator
+(`backend/app/student/simulation/`) on a hand-written graph with a small draft
+protocol. It checks that the same seed gives the same bytes, that the oracle
+beats `random` and `random` beats a deliberately bad policy, that the
+production policy and mastery update are the ones in use, and that a degraded
+prerequisite graph moves what `ready-first` reaches. It never asserts that a
+candidate policy wins, and its numbers support no claim about learners.
+
+The test pins the SHA-256 of the rendered report, so the three Python versions
+in CI must produce the same numbers at six decimals. A change to the
+simulator, to the mastery update, to `eval_stats.bootstrap_interval` or to the
+smoke protocol changes the digest: update the literal in the same change and
+say in the commit what moved. A change to `band-v1` does not change it,
+because the core world ignores the difficulty band;
+`test_band_v1_is_the_production_policy` and
+`test_band_v1_decides_from_the_production_estimate` catch that.
 
 ### Writing backend tests
 
