@@ -74,7 +74,7 @@ data stays in a local SQLite file.
   [`config/subjects.yaml`](config/subjects.yaml) has its own graph labels,
   search index, prompts, theme and attribution. US History and Economics are
   seeded by default.
-- **Evaluation harness.** A golden set of 53 questions compares KG-expanded
+- **Evaluation harness.** A golden set of 57 questions compares KG-expanded
   retrieval with plain retrieval. See [Evaluation](#evaluation).
 - **Operational basics.** Dependency-aware readiness checks, request IDs,
   response-time headers, rate limits and an optional production mode that
@@ -358,14 +358,22 @@ prefixed with `NEXT_PUBLIC_` end up in the browser bundle, so read
 ## Evaluation
 
 [`scripts/evaluate_rag.py`](scripts/evaluate_rag.py) sends each question in the
-golden set ([`data/evals/golden_qa.yaml`](data/evals/golden_qa.yaml): 27 US
-History and 26 Economics cases) to a running API twice, with and without
+golden set ([`data/evals/golden_qa.yaml`](data/evals/golden_qa.yaml): 30 US
+History and 27 Economics cases) to a running API twice, with and without
 knowledge-graph expansion. It reports answer term recall (quote the non-echo
 variant, over the expected terms the question does not already name), citation
 hit rate, expected-source MRR, how often questions the book cannot support are
 refused, and latency. The set mixes answerable questions with cross-chapter
 synthesis, ambiguous and conflicting-source questions, unsupported claims and
 prompt-injection attempts.
+
+Since version 3 of the set, 53 of the 57 cases are drawn into a rehearsal
+split (24 cases, for development: `make eval-rehearsal`) and a final split
+(29 cases, run only at a release gate). The other 4 are pending until the
+next version. The [evaluation protocol](docs/evals/protocol.md) fixes the
+split, the primary endpoint and the bar before a final run. `make demo-eval`
+asks all 57 cases, the final split included, and overwrites
+`docs/evals/latest.*`; while developing, use `make eval-rehearsal`.
 
 ```bash
 make demo-eval   # run the evaluator, then check that the report is valid
@@ -378,28 +386,34 @@ when `environment_valid` is `true`: every request returned `200` and KG
 expansion never failed. `make eval-compare BASE=… HEAD=…` compares two
 reports case by case.
 
-The table reports the run behind [`docs/evals/latest.json`](docs/evals/latest.json)
-(golden set version 2, 53 cases, `llama3.1:8b-instruct-q4_K_M`, hybrid
-retrieval without the reranker; commit, models and data counts are in the
-report's provenance). Each case is asked in both modes, so the paired counts
-carry the comparison, not the difference between the two rates; see
+The table reports the v0.4.0 release run behind
+[`docs/evals/latest.json`](docs/evals/latest.json): the final split of golden
+set version 3 (29 cases).
+<!-- FILL (one sentence from the report's provenance: the answer model with its temperature and seed, the retrieval mode and whether the reranker was on.) -->
+Commit, models and data counts are in the report's provenance. Each case is
+asked in both modes, so the paired counts carry the comparison, not the
+difference between the two rates; see
 [Reporting a comparison](docs/evals/README.md#reporting-a-comparison).
 
 | Metric | KG | Plain | KG wins | Ties | Plain wins | Sign test p |
 | --- | --- | --- | --- | --- | --- | --- |
-| Citation hit rate | 0.714 | 0.816 | 2 | 40 | 7 | 0.18 |
-| Expected-source MRR | 0.574 | 0.608 | 11 | 28 | 14 | 0.69 |
-| Term recall (non-echo) | 0.645 | 0.640 | 10 | 32 | 11 | 1.00 |
-| Unsupported refusal rate | 1.000 | 1.000 | 0 | 4 | 0 | n/a |
-| Prompt-injection resistance | 0.750 | 0.750 | 0 | 4 | 0 | n/a |
+| Citation hit rate | <!-- FILL (this row, from docs/evals/latest.md: kg_citation_hit_rate and plain_citation_hit_rate in "Summary", then the citation_hit row of "Paired comparison") --> | | | | | |
+| Expected-source MRR | <!-- FILL (this row: kg_mrr_avg and plain_mrr_avg, then the mrr row of "Paired comparison") --> | | | | | |
+| Term recall (non-echo) | <!-- FILL (this row: kg_answer_term_recall_non_echo_avg and plain_answer_term_recall_non_echo_avg, then the answer_term_recall_non_echo row of "Paired comparison") --> | | | | | |
+| Unsupported refusal rate | <!-- FILL (this row: kg_unsupported_refusal_rate and plain_unsupported_refusal_rate, then the unsupported_refusal row of "Paired comparison"; n/a for a sign test without discordant pairs) --> | | | | | |
+| Prompt-injection resistance | <!-- FILL (this row: kg_prompt_injection_resistance_rate and plain_prompt_injection_resistance_rate, then the prompt_injection_resisted row of "Paired comparison"; n/a for a sign test without discordant pairs) --> | | | | | |
 
-On this run no metric shows a difference the discordant pairs support. The
-largest, citation hit rate, is 2 KG wins against 7 plain wins (sign test
-p = 0.18), so KG expansion is not shown to help or hurt on this set.
+<!-- FILL (the primary-endpoint sentence, copied as written from "Primary endpoint" in docs/evals/latest.md, which is summary.primary_endpoint.claim in latest.json) -->
+
+That sentence is the report's own wording for the primary endpoint, the
+KG-minus-plain citation hit rate over the final-split cases that name expected
+sources, and it is the only comparative claim made here. It says that one mode
+cites better only when the 95% bootstrap interval of the difference excludes
+zero and the difference is at least the noise floor; see the
+[evaluation protocol](docs/evals/protocol.md).
 
 Each rate is over the cases that define the metric; a win means that mode did
-better on that case. A difference between the rates is a claim only when the
-discordant pairs support it.
+better on that case.
 
 The metrics are heuristic (keyword and source-title matching). They are meant
 for regression tracking, not as a benchmark; see
@@ -415,7 +429,7 @@ This is a proof of concept and pilot prototype. Known limitations:
 - **No server-side grading.** Quiz answers are sent to the browser and graded
   there ([#74](https://github.com/MysterionRise/adaptive-knowledge-graph/issues/74)).
 - **Heuristic evaluation.** The metrics come from keyword and source matching
-  on a 53-question golden set, not from human review.
+  on a 57-question golden set, not from human review.
 - **Uncalibrated learner model.** BKT runs with fixed parameters (transit 0.1,
   slip 0.1, guess 0.25, initial mastery 0.3) that were not fitted to learner
   data, and question difficulty is estimated by the LLM. There is no item

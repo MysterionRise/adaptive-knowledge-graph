@@ -26,7 +26,7 @@ follow the [Quickstart](../../README.md#quickstart).
 | Local-first LLM | Ollama by default; with `PRIVACY_LOCAL_ONLY=true` remote providers cannot be used. A hosted model (`LLM_MODE=remote`, `PRIVACY_LOCAL_ONLY=false`, `OPENROUTER_BASE_URL` pointing at any OpenAI-compatible endpoint) shows on `/demo-status` as the model that answers; the evaluation evidence is still produced in local mode |
 | Quiz practice | LLM-generated quizzes, synthetic mastery state, a target difficulty band requested by prompt, and recommendations. Neither the delivered difficulty nor the mastery estimate is validated, so the demo scripts do not present it as adaptive; the interface still labels the mode "Adaptive" ([docs/adaptivity/README.md](../adaptivity/README.md)) |
 | Demo operations | `/demo-status` page, strict `make demo-client-check`, reset script, Node version pinned in `.node-version` |
-| Evaluation | 53 OpenStax golden cases comparing KG-expanded retrieval with plain retrieval |
+| Evaluation | 57 OpenStax golden cases comparing KG-expanded retrieval with plain retrieval |
 
 ## Workflow
 
