@@ -43,6 +43,8 @@ make ingest-books SUBJECT=economics   # Fetch and normalize a subject's books
 make build-kg SUBJECT=economics       # Build that subject's knowledge graph in Neo4j
 make index-rag SUBJECT=economics      # Embed and index its chunks in OpenSearch (RECREATE=1 drops the index first)
 make build-windows SUBJECT=economics  # Chunk NEXT edges in Neo4j for one subject (only for opt-in window retrieval)
+make domain-draft SUBJECT=economics   # Draft data/domains/<subject>/ from the last graph build (extracted entries; reviewed ones are kept)
+make domain-apply SUBJECT=economics   # Apply the curated domain entries to the subject's graph in Neo4j (idempotent; docs/DOMAINS.md)
 make demo-eval                        # Golden-set evaluation against the running API
 make eval-rehearsal                   # Rehearsal split only, for pull-request deltas (docs/evals/protocol.md)
 make eval-compare BASE=a.json HEAD=b.json  # Compare two eval reports (exit 1 on a KG citation regression)
@@ -86,6 +88,7 @@ Frontend (Next.js)          Backend (FastAPI, backend/app/)            Services
 - `backend/app/core/settings.py` - all settings (pydantic-settings, reads `.env`)
 - `backend/app/core/subjects.py` - loads `config/subjects.yaml`
 - `backend/app/kg/` - graph schema, builder, Neo4j adapter (label-prefix isolation per subject), Cypher QA
+- `backend/app/domain/` - versioned domain artifacts in `data/domains/<subject>/` (`docs/DOMAINS.md`): models, validated loader, lexicon view (not wired into requests) and the idempotent graph overlay; `scripts/domain_tool.py validate|draft|apply|export`. Only approved, rejected and deprecated entries change the graph
 - `backend/app/rag/` - chunker (512 characters, 128 overlap), retriever (hybrid/RRF), KG expansion, reranker, window retriever
 - `backend/app/nlp/llm_client.py` - Ollama + OpenRouter client
 - `backend/app/student/` - quiz generator, student service (BKT mastery, SQLite storage), recommendations; `policy/` holds the policy interface, decision records and the difficulty rule as `band-v1` (`get_policy("band-v1")`; `StudentProfile.get_target_difficulty` is a shim over it)

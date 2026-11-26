@@ -134,6 +134,12 @@ async def get_prerequisites(
     """
     Get prerequisites for a concept up to N levels deep.
 
+    Each prerequisite has a ``provenance_source``. For a direct prerequisite (level 1) it
+    is the source recorded on its PREREQ edge: "glossary" or "cue_phrase" from the build,
+    "curated" for an edge the domain overlay merged (#211), or null when the build
+    recorded none. For an indirect prerequisite it is null: the row stands for a path of
+    several edges, not for one.
+
     Args:
         concept_name: Name of the concept
         depth: Maximum depth to traverse (1-10, default 2)
@@ -151,13 +157,17 @@ async def get_prerequisites(
                 f"""
                 MATCH (target:{concept_label} {{name: $name}})
                 OPTIONAL MATCH path = (prereq:{concept_label})-[:PREREQ*1..{depth:d}]->(target)
-                WITH prereq, length(path) as level
+                WITH prereq, length(path) as level,
+                     CASE WHEN length(path) = 1
+                          THEN [r IN relationships(path) | r.provenance_source][0]
+                     END as provenance_source
                 WHERE prereq IS NOT NULL
                 RETURN DISTINCT
                     prereq.name as name,
                     coalesce(prereq.importance_score, 0.5) as importance,
                     prereq.chapter as chapter,
-                    level
+                    level,
+                    provenance_source
                 ORDER BY level ASC, importance DESC
                 """,
                 name=concept_name,
@@ -169,6 +179,7 @@ async def get_prerequisites(
                     "importance": float(record["importance"]),
                     "chapter": record["chapter"],
                     "level": record["level"],
+                    "provenance_source": record.get("provenance_source"),
                 }
                 for record in result
             ]

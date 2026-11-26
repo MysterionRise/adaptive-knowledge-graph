@@ -10,6 +10,9 @@ configuration.
 - [ADDING_A_SUBJECT.md](ADDING_A_SUBJECT.md): add a subject, from the
   `config/subjects.yaml` entry through ingestion, graph build, indexing and
   verification.
+- [DOMAINS.md](DOMAINS.md): the versioned domain artifacts in
+  `data/domains/<subject_id>/` (dictionary, relationships, source inventory),
+  their review statuses and what `make domain-apply` writes to the graph.
 - [TESTING.md](TESTING.md): backend and frontend test suites, markers and the
   commands CI runs.
 - [COMPLIANCE.md](COMPLIANCE.md): OpenStax licensing, privacy modes and what
