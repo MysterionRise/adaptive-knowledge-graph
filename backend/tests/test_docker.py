@@ -52,7 +52,10 @@ def test_container_names_are_project_scoped(services):
 
 def test_images_are_pinned(services):
     assert services["neo4j"]["image"] == "neo4j:5.26-community"
-    assert services["opensearch"]["image"] == "opensearchproject/opensearch:3.9.0"
+    # Dependabot moves the minor and patch version; a new major is a deliberate upgrade
+    assert re.fullmatch(
+        r"opensearchproject/opensearch:3\.\d+\.\d+", services["opensearch"]["image"]
+    )
     for service in services.values():
         if "image" in service:
             assert not service["image"].endswith(":latest")
