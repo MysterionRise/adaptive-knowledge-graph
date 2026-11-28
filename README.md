@@ -109,7 +109,7 @@ flowchart LR
 | Frontend | Next.js 16 and React 19 on Node 24, Cytoscape.js for the graph |
 | API | FastAPI on Python 3.11.5 or later, up to 3.13 |
 | Knowledge graph | Neo4j 5.26 Community, APOC limited to `apoc.meta.*` |
-| Search | OpenSearch 3.9.0 (BM25 and kNN) |
+| Search | OpenSearch 3.10.0 (BM25 and kNN) |
 | Embeddings and reranking | BGE-M3 and the optional bge-reranker-v2-m3 via sentence-transformers, PyTorch 2.10 and NumPy 2 |
 | Concept extraction | spaCy (`en_core_web_sm`) and YAKE |
 | LLM | Ollama with `llama3.1:8b-instruct-q4_K_M`; OpenRouter as an opt-in remote provider |
